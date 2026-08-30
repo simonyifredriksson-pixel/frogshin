@@ -75,6 +75,12 @@ class Box {
     this.minX = minX; this.minY = minY; this.minZ = minZ;
     this.maxX = maxX; this.maxY = maxY; this.maxZ = maxZ;
     this.tag = tag || 'solid';
+    // Two switches used by the story's barred cell door:
+    //   disabled       — ignored entirely (an opened door)
+    //   rayTransparent — blocks bodies but not rays, so you can see and
+    //                    reach a tongue through a portcullis
+    this.disabled = false;
+    this.rayTransparent = false;
   }
 }
 
@@ -140,6 +146,7 @@ export class CollisionWorld {
         if (!arr) continue;
         for (let i = 0; i < arr.length; i++) {
           const b = arr[i];
+          if (b.disabled) continue;
           if (b._mark === this._queryId) continue;
           b._mark = this._queryId;
           out.push(b);
@@ -403,6 +410,7 @@ export class CollisionWorld {
       if (arr) {
         for (let i = 0; i < arr.length; i++) {
           const b = arr[i];
+          if (b.disabled || b.rayTransparent) continue;
           if (seen.has(b)) continue;
           seen.add(b);
           const t = rayBox(ox, oy, oz, dx, dy, dz, b, best);
