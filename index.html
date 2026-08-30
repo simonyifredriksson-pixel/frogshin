@@ -132,6 +132,17 @@
           </div>
 
           <div class="how-col">
+            <h3>GAME MODES</h3>
+            <ul class="tips">
+              <li><b>Everyone votes</b> between rounds. Most votes wins; with 3+ players you also pick how many taggers there are (up to one fewer than the player count).</li>
+              <li><b>🏃 Tag.</b> Taggers have unlimited kunai. Hit a runner and you swap — they become it, you go free. Brief immunity stops instant tag-backs.</li>
+              <li><b>☣ Infection.</b> Same throw, but the runner <i>joins</i> the taggers. Ends when everyone is infected, or the survivors run out the clock.</li>
+              <li><b>⚔ Classic FFA.</b> Normal deathmatch — katana, kunai, damage and respawns. Most kills wins.</li>
+              <li>In Tag and Infection there is <b>no damage at all</b>. Only the kunai tag counts, so it is a pure chase.</li>
+            </ul>
+          </div>
+
+          <div class="how-col">
             <h3>NINJA TECHNIQUE</h3>
             <ul class="tips">
               <li><b>Wall jump.</b> Hug any wall in mid-air and press <kbd>SPACE</kbd> to kick off it.</li>
@@ -246,6 +257,16 @@
   </div>
   <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
 
+  <!-- top-centre: round banner -->
+  <div id="round-banner">
+    <div class="rb-mode"><span id="rb-icon"></span><b id="rb-name">—</b></div>
+    <div class="rb-time" id="rb-time">0:00</div>
+    <div class="rb-role" id="rb-role"></div>
+  </div>
+
+  <!-- big centre announcements: countdown, tagged, results -->
+  <div id="round-announce"></div>
+
   <!-- top-left: room -->
   <div id="room-info">
     <div class="ri-code">ROOM <b id="room-code">—</b></div>
@@ -306,6 +327,51 @@
     <div class="rs-killer" id="respawn-killer"></div>
     <div class="rs-count" id="respawn-count">3</div>
     <div class="rs-sub">respawning…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ VOTE SCREEN ══ -->
+<div id="vote">
+  <div class="vote-inner">
+    <div class="vote-head">
+      <h2>VOTE — NEXT ROUND</h2>
+      <div class="vote-timer">starts in <b id="vote-timer">22</b>s</div>
+    </div>
+
+    <div class="vote-modes">
+      <button class="vote-card" data-mode="tag">
+        <div class="vc-icon">🏃</div>
+        <div class="vc-name">TAG</div>
+        <div class="vc-blurb">Taggers have unlimited kunai. Get hit and you become it — and they go free.</div>
+        <div class="vc-votes"><span data-count="tag">0</span> votes</div>
+      </button>
+
+      <button class="vote-card" data-mode="infection">
+        <div class="vc-icon">☣</div>
+        <div class="vc-name">INFECTION</div>
+        <div class="vc-blurb">Get hit and you join the taggers. Survive to the end, or convert everyone.</div>
+        <div class="vc-votes"><span data-count="infection">0</span> votes</div>
+      </button>
+
+      <button class="vote-card" data-mode="ffa">
+        <div class="vc-icon">⚔</div>
+        <div class="vc-name">CLASSIC FFA</div>
+        <div class="vc-blurb">Everyone for themselves. Katana, kunai, no teams. Most kills wins.</div>
+        <div class="vc-votes"><span data-count="ffa">0</span> votes</div>
+      </button>
+    </div>
+
+    <div id="tagger-picker">
+      <label>HOW MANY TAGGERS?</label>
+      <div class="tp-row">
+        <button class="tp-btn" id="tp-minus">−</button>
+        <div class="tp-value"><b id="tp-count">1</b><span id="tp-max">of 1 max</span></div>
+        <button class="tp-btn" id="tp-plus">+</button>
+      </div>
+      <div class="tp-note" id="tp-note">Needs 3+ players to change</div>
+    </div>
+
+    <div class="vote-foot" id="vote-foot">Click a mode to vote · the most votes wins</div>
   </div>
 </div>
 
