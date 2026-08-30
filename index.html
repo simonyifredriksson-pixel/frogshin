@@ -99,8 +99,14 @@
           private code — share it and your friends join from their own machines.
         </p>
 
+        <div class="divider"><span>STORY</span></div>
+        <button class="btn btn-story" id="btn-story"><span>STORY — THE BURNING VILLAGE</span></button>
+        <p class="note">Play alone or with up to 8. You are just a swamp frog —
+           no weapons yet, but you keep your dash and tongue. Host a room first
+           if you want company, then start the story.</p>
+
         <div class="divider"><span>OR</span></div>
-        <button class="btn btn-quiet" id="btn-solo"><span>SOLO PRACTICE (OFFLINE)</span></button>
+        <button class="btn btn-quiet" id="btn-solo"><span>ARENA PRACTICE (OFFLINE)</span></button>
 
         <div id="play-status" class="status"></div>
         <button class="btn btn-back"><span>◀ BACK</span></button>
@@ -257,6 +263,28 @@
   </div>
   <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
 
+  <!-- story: objectives (top-left, under the room plate) -->
+  <div id="objectives">
+    <div class="obj-title">OBJECTIVES</div>
+    <ul id="obj-list"></ul>
+  </div>
+
+  <!-- story: boss health bar -->
+  <div id="boss-bar">
+    <div class="bb-name" id="boss-name">TOADEL</div>
+    <div class="bb-frame">
+      <div class="bb-cap left"></div>
+      <div class="bb-track"><div id="boss-fill"></div><div id="boss-chip"></div></div>
+      <div class="bb-cap right"></div>
+      <div class="bb-filigree"></div>
+    </div>
+  </div>
+
+  <!-- story: cinematic bars + subtitle -->
+  <div id="cinebar-top"></div>
+  <div id="cinebar-bottom"></div>
+  <div id="subtitle"><b id="sub-speaker"></b><span id="sub-text"></span></div>
+
   <!-- top-centre: round banner -->
   <div id="round-banner">
     <div class="rb-mode"><span id="rb-icon"></span><b id="rb-name">—</b></div>
@@ -340,21 +368,18 @@
 
     <div class="vote-modes">
       <button class="vote-card" data-mode="tag">
-        <div class="vc-icon">🏃</div>
         <div class="vc-name">TAG</div>
         <div class="vc-blurb">Taggers have unlimited kunai. Get hit and you become it — and they go free.</div>
         <div class="vc-votes"><span data-count="tag">0</span> votes</div>
       </button>
 
       <button class="vote-card" data-mode="infection">
-        <div class="vc-icon">☣</div>
         <div class="vc-name">INFECTION</div>
         <div class="vc-blurb">Get hit and you join the taggers. Survive to the end, or convert everyone.</div>
         <div class="vc-votes"><span data-count="infection">0</span> votes</div>
       </button>
 
       <button class="vote-card" data-mode="ffa">
-        <div class="vc-icon">⚔</div>
         <div class="vc-name">CLASSIC FFA</div>
         <div class="vc-blurb">Everyone for themselves. Katana, kunai, no teams. Most kills wins.</div>
         <div class="vc-votes"><span data-count="ffa">0</span> votes</div>
