@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js';
-import { CFG } from './config.js';
-import { clamp } from './util.js';
+import * as THREE from '../lib/three.module.js?v=v9';
+import { CFG } from './config.js?v=v9';
+import { clamp } from './util.js?v=v9';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
