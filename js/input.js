@@ -48,7 +48,7 @@ export class Input {
 
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
-      if (!this.locked) { this.keys.clear(); this._mouseDown = false; }
+      if (!this.locked) { this.keys.clear(); this._mouseDown = false; this._rightDown = false; }
       // Drop anything buffered while unlocked so a stale Space press from the
       // menu cannot fire the instant the mouse is captured.
       this.pressed.clear();
@@ -66,10 +66,11 @@ export class Input {
     this.canvas.addEventListener('mousedown', (e) => {
       if (!this.locked) return;
       if (e.button === 0) { this._mouseDown = true; this._mousePressed = true; }
-      if (e.button === 2) this.pressed.add('MouseRight');
+      if (e.button === 2) { this._rightDown = true; this.pressed.add('MouseRight'); }
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this._mouseDown = false;
+      if (e.button === 2) this._rightDown = false;
     });
     this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -99,6 +100,8 @@ export class Input {
   }
 
   get attackHeld() { return this._mouseDown; }
+  /** Right button held — used for the story-mode parry. */
+  get rightHeld() { return !!this._rightDown; }
   consumeAttack() {
     if (this._mousePressed) { this._mousePressed = false; return true; }
     return false;
