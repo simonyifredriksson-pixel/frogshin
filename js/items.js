@@ -62,6 +62,23 @@ export class Inventory {
     ];
     this.selected = 0;
     this.dirty = true;        // tells the HUD to redraw
+    // Taggers get an endless supply, so the chase never stalls for ammo.
+    this.unlimitedKunai = false;
+  }
+
+  setUnlimitedKunai(v) {
+    if (this.unlimitedKunai === v) return;
+    this.unlimitedKunai = v;
+    this.dirty = true;
+  }
+
+  /** Index of the kunai stack, or -1. */
+  kunaiSlotIndex() {
+    for (let i = 0; i < this.slots.length; i++) {
+      const s = this.slots[i];
+      if (s && s.item === ITEMS.kunai) return i;
+    }
+    return -1;
   }
 
   get selectedSlot() { return this.slots[this.selected] || null; }
@@ -103,7 +120,9 @@ export class Inventory {
   /** Consume one kunai from the selected slot. */
   useSelectedKunai() {
     const s = this.selectedSlot;
-    if (!s || s.item !== ITEMS.kunai || s.count <= 0) return false;
+    if (!s || s.item !== ITEMS.kunai) return false;
+    if (this.unlimitedKunai) return true;      // taggers never run dry
+    if (s.count <= 0) return false;
     s.count--;
     this.dirty = true;
     return true;
