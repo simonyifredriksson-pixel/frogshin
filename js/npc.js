@@ -8,8 +8,8 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v10';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v10';
+import * as THREE from '../lib/three.module.js?v=v11';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v11';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
