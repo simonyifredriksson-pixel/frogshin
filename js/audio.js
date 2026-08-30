@@ -217,6 +217,13 @@ export class AudioEngine {
     this.tone({ freq: 1500, to: 520, dur: 0.12, type: 'triangle', volume: 0.10, pos });
   }
 
+  /** Steel turning steel aside — bright, metallic, satisfying. */
+  parry(pos) {
+    this.tone({ freq: 2400, to: 1500, dur: 0.22, type: 'triangle', volume: 0.2, pos });
+    this.tone({ freq: 3600, to: 2600, dur: 0.14, type: 'sine', volume: 0.13, pos });
+    this.noise({ dur: 0.16, volume: 0.24, pos, filter: 6000, filterTo: 2400, q: 4 });
+  }
+
   /** Bright two-tone ping that cuts through everything else. */
   headshot(pos) {
     this.tone({ freq: 1750, dur: 0.1, type: 'square', volume: 0.16, pos });
