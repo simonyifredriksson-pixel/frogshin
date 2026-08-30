@@ -306,6 +306,23 @@ html, body {
 }
 .btn-go:hover { background: linear-gradient(180deg, #f0bb4f 0%, #cc8a22 58%, #9d6416 100%); }
 
+.btn-story {
+  background: linear-gradient(180deg, #8e3a24 0%, #632515 58%, #421a0e 100%);
+  border-color: #2a0d06;
+  box-shadow:
+    inset 0 0 0 2px rgba(255,170,110,0.22),
+    inset 0 4px 0 rgba(255,255,255,0.10),
+    0 5px 0 #240a06,
+    0 8px 16px rgba(0,0,0,0.45);
+}
+.btn-story:hover {
+  background: linear-gradient(180deg, #b04c2e 0%, #7c2f1a 58%, #55220f 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,190,130,0.34),
+    0 8px 0 #240a06,
+    0 12px 22px rgba(0,0,0,0.55);
+}
+
 .btn-quiet {
   background: linear-gradient(180deg, #2b2b38 0%, #20202a 60%, #191921 100%);
   font-size: clamp(8px, 1.2vw, 11px);
@@ -1105,6 +1122,185 @@ kbd {
 .rs-sub { font-size: 19px; color: var(--parch-dim); letter-spacing: 2px; }
 
 /* ==========================================================================
+   STORY: OBJECTIVES / BOSS BAR / CINEMATIC
+   ========================================================================== */
+
+#objectives {
+  position: absolute;
+  left: 26px; top: 92px;
+  display: none;
+  min-width: 220px;
+  padding: 10px 14px 12px;
+  background: rgba(10,14,20,0.66);
+  border-left: 4px solid var(--gold);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+}
+#objectives.show { display: block; }
+.obj-title {
+  font-family: var(--font-px);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--gold);
+  margin-bottom: 9px;
+}
+#obj-list { list-style: none; }
+#obj-list li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 7px;
+  font-family: var(--font-px);
+  font-size: 9px;
+  line-height: 1.7;
+  color: var(--parch-dim);
+}
+#obj-list li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 3px;
+  width: 9px; height: 9px;
+  border: 2px solid var(--parch-dim);
+}
+#obj-list li.active { color: var(--parch); }
+#obj-list li.active::before { border-color: var(--gold); box-shadow: 0 0 8px rgba(255,200,90,0.8); }
+#obj-list li.done { color: #5f6b52; text-decoration: line-through; }
+#obj-list li.done::before {
+  border-color: #4e7a34;
+  background: #4e7a34;
+}
+#obj-list li.new { animation: objIn 0.45s ease-out; }
+@keyframes objIn {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ---- boss bar: ornate gilded frame over a deep red fill ---- */
+#boss-bar {
+  position: absolute;
+  left: 50%; top: 26px;
+  transform: translateX(-50%);
+  width: min(820px, 84vw);
+  display: none;
+  text-align: center;
+}
+#boss-bar.show { display: block; animation: bossIn 0.7s ease-out; }
+@keyframes bossIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-18px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.bb-name {
+  font-family: var(--font-px);
+  font-size: clamp(10px, 1.5vw, 15px);
+  letter-spacing: 3px;
+  color: #efe6cf;
+  text-shadow: 0 3px 0 #1a0c06, 0 0 20px rgba(200,40,30,0.6);
+  margin-bottom: 8px;
+}
+.bb-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 26px;
+  background: linear-gradient(180deg, #241d14 0%, #14100b 100%);
+  border-top: 3px solid #8a6f2e;
+  border-bottom: 3px solid #6b551f;
+  box-shadow: inset 0 0 14px rgba(0,0,0,0.9), 0 4px 12px rgba(0,0,0,0.7);
+}
+/* Gilded end caps, drawn with clipped gradients rather than images. */
+.bb-cap {
+  position: absolute;
+  top: -6px;
+  width: 30px; height: 42px;
+  background: linear-gradient(180deg, #d8b76a 0%, #9a7d33 45%, #5f4a18 100%);
+}
+.bb-cap.left  { left: -8px;  clip-path: polygon(0% 50%, 45% 0%, 100% 14%, 100% 86%, 45% 100%); }
+.bb-cap.right { right: -8px; clip-path: polygon(100% 50%, 55% 0%, 0% 14%, 0% 86%, 55% 100%); }
+.bb-track {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  background: #1a0705;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.95);
+  overflow: hidden;
+}
+#boss-fill {
+  position: absolute; inset: 0;
+  width: 100%;
+  background: linear-gradient(180deg, #b8221c 0%, #7e1310 55%, #4d0a08 100%);
+  box-shadow: inset 0 3px 0 rgba(255,120,100,0.28);
+  transition: width 0.25s ease-out;
+}
+/* Lagging white "chip" showing damage just taken. */
+#boss-chip {
+  position: absolute; top: 0; bottom: 0;
+  width: 100%;
+  background: rgba(255,225,215,0.55);
+  transition: width 0.7s ease-out 0.15s;
+  z-index: -1;
+}
+.bb-filigree {
+  position: absolute;
+  left: 50%; bottom: -13px;
+  transform: translateX(-50%);
+  width: 190px; height: 16px;
+  background: linear-gradient(180deg, #c2a256, #6b551f);
+  clip-path: polygon(0% 0%, 12% 55%, 26% 15%, 40% 70%, 50% 20%,
+                     60% 70%, 74% 15%, 88% 55%, 100% 0%);
+  opacity: 0.95;
+}
+
+/* ---- cinematic ---- */
+#cinebar-top, #cinebar-bottom {
+  position: absolute;
+  left: 0; right: 0;
+  height: 0;
+  background: #000;
+  transition: height 0.7s ease;
+  z-index: 5;
+}
+#cinebar-top { top: 0; }
+#cinebar-bottom { bottom: 0; }
+#hud.cinematic #cinebar-top,
+#hud.cinematic #cinebar-bottom { height: 13vh; }
+
+#subtitle {
+  position: absolute;
+  left: 50%; bottom: 17vh;
+  transform: translateX(-50%);
+  width: min(880px, 88vw);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.35s;
+  z-index: 6;
+}
+#subtitle.show { opacity: 1; }
+#sub-speaker {
+  display: block;
+  font-family: var(--font-px);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #d9603c;
+  margin-bottom: 10px;
+  text-shadow: 0 2px 0 #000;
+}
+#sub-text {
+  font-family: var(--font-px);
+  font-size: clamp(9px, 1.25vw, 12px);
+  line-height: 2.1;
+  color: #efe6cf;
+  text-shadow: 0 2px 0 #000, 0 0 16px rgba(0,0,0,0.9);
+}
+
+/* While a cutscene runs, everything else gets out of the way. */
+#hud.cinematic #vitals,
+#hud.cinematic #hotbar,
+#hud.cinematic #crosshair,
+#hud.cinematic #round-banner,
+#hud.cinematic #objectives,
+#hud.cinematic #killfeed,
+#hud.cinematic #room-info { opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+
+/* ==========================================================================
    ROUND BANNER + ANNOUNCEMENTS
    ========================================================================== */
 
@@ -1212,8 +1408,8 @@ kbd {
   letter-spacing: 2px;
   text-shadow: 0 3px 0 #2a1a04;
 }
-.vote-timer { font-size: 20px; color: var(--parch-dim); }
-.vote-timer b { color: var(--parch); font-size: 24px; }
+.vote-timer { font-family: var(--font-px); font-size: 10px; color: var(--parch-dim); }
+.vote-timer b { color: var(--parch); font-size: 14px; }
 
 .vote-modes { display: flex; gap: 14px; flex-wrap: wrap; }
 .vote-card {
@@ -1242,16 +1438,25 @@ kbd {
   background: linear-gradient(180deg, #45607f 0%, #2b3d52 60%, #202c3a 100%);
   box-shadow: inset 0 0 0 2px rgba(255,215,107,0.5), 0 0 18px rgba(255,200,90,0.5), 0 5px 0 #0a0f14;
 }
-.vc-icon { font-size: 34px; line-height: 1; }
+/* All-pixel type on the cards — no emoji, no mixed typefaces. */
 .vc-name {
   font-family: var(--font-px);
-  font-size: 13px;
-  letter-spacing: 1px;
+  font-size: clamp(12px, 1.5vw, 16px);
+  letter-spacing: 2px;
   color: var(--gold);
+  text-shadow: 0 3px 0 #2a1a04;
+  padding: 4px 0 6px;
 }
-.vc-blurb { font-size: 17px; line-height: 1.3; color: var(--parch-dim); min-height: 3.2em; }
+.vc-blurb {
+  font-family: var(--font-px);
+  font-size: 9px;
+  line-height: 1.85;
+  letter-spacing: 0.5px;
+  color: var(--parch-dim);
+  min-height: 5.4em;
+}
 .vc-votes {
-  margin-top: 2px;
+  margin-top: 4px;
   font-family: var(--font-px);
   font-size: 10px;
   color: #8fe05c;
@@ -1297,13 +1502,21 @@ kbd {
   color: var(--gold);
   text-shadow: 0 3px 0 #2a1a04;
 }
-.tp-value span { font-size: 16px; color: var(--parch-dim); }
-.tp-note { margin-top: 10px; font-size: 16px; color: var(--parch-dim); }
+.tp-value span { font-family: var(--font-px); font-size: 8px; color: var(--parch-dim); }
+.tp-note {
+  margin-top: 12px;
+  font-family: var(--font-px);
+  font-size: 8px;
+  line-height: 1.7;
+  color: var(--parch-dim);
+}
 
 .vote-foot {
-  margin-top: 16px;
+  margin-top: 18px;
   text-align: center;
-  font-size: 18px;
+  font-family: var(--font-px);
+  font-size: 9px;
+  line-height: 1.7;
   color: var(--parch-dim);
 }
 
