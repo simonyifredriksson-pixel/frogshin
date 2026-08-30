@@ -1619,6 +1619,53 @@ kbd {
   line-height: 1.7;
   color: var(--parch-dim);
 }
+/* Leaving has to be reachable from the vote screen — it is the only moment
+   between rounds where the mouse is free. */
+#vote-leave { width: min(320px, 70%); margin: 16px auto 0; }
+
+/* ---- lobby ---- */
+.lobby-code {
+  text-align: center;
+  padding: 16px 0 18px;
+}
+.lobby-code span {
+  display: block;
+  font-family: var(--font-px);
+  font-size: 8px;
+  letter-spacing: 2px;
+  color: var(--jade);
+  margin-bottom: 12px;
+}
+.lobby-code b {
+  font-family: var(--font-px);
+  font-size: clamp(26px, 5vw, 46px);
+  letter-spacing: 10px;
+  color: var(--gold);
+  text-shadow: 0 4px 0 #2a1a04, 0 0 26px rgba(255,200,90,0.5);
+}
+.lobby-players {
+  text-align: center;
+  font-family: var(--font-px);
+  font-size: 10px;
+  color: var(--parch-dim);
+  margin-bottom: 6px;
+}
+.lobby-players b { color: var(--parch); font-size: 14px; }
+#panel-lobby .btn { margin-bottom: 12px; }
+#lobby-host-controls { display: none; }
+#lobby-host-controls.show { display: block; }
+#lobby-waiting {
+  display: none;
+  padding: 22px 0;
+  text-align: center;
+  font-family: var(--font-px);
+  font-size: 10px;
+  line-height: 1.9;
+  letter-spacing: 1px;
+  color: var(--gold);
+  animation: critPulse 1.6s ease-in-out infinite;
+}
+#lobby-waiting.show { display: block; }
 
 /* ==========================================================================
    CLICK TO PLAY
