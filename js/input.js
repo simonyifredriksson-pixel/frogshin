@@ -83,7 +83,13 @@ export class Input {
   }
 
   requestLock() {
-    if (!this.locked && this.canvas.requestPointerLock) this.canvas.requestPointerLock();
+    if (this.locked || !this.canvas.requestPointerLock) return;
+    // Chrome returns a promise here and rejects it if the request comes too
+    // soon after the user exited the lock. That is expected and harmless —
+    // the click-to-play overlay simply stays up until the next click — so
+    // the rejection is swallowed rather than surfacing as a page error.
+    const r = this.canvas.requestPointerLock();
+    if (r && typeof r.catch === 'function') r.catch(() => { /* retried on next click */ });
   }
   releaseLock() {
     if (this.locked && document.exitPointerLock) document.exitPointerLock();
