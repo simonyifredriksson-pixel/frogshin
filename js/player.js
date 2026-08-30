@@ -50,6 +50,7 @@ export class Player {
 
     // --- story mode ---
     this.cinematic = false;        // frozen for a cutscene
+    this.frozen = false;           // frozen for the defeat sequence
     this.storyParry = false;       // right mouse becomes parry, not throw
     this.parrying = false;
     this.parryHits = 0;            // blows absorbed during the current parry
@@ -177,6 +178,7 @@ export class Player {
    * @param targets remote players available to hit
    */
   update(dt, input, cam, targets) {
+    this._lastInput = input;     // so the dead/frozen paths can flush it too
     this.health.update(dt);
     this.combat.update(dt);
     this.stamina.update(dt);
@@ -191,14 +193,11 @@ export class Player {
       return;
     }
 
-    // Cutscenes and knockdowns both take control away, but a knockdown still
-    // needs gravity and collision so the body settles on the ground.
-    if (this.knockdown > 0) {
-      this.knockdown -= dt;
-      this._updateHelpless(dt, cam);
-      return;
-    }
-    if (this.cinematic) {
+    // Cutscenes, knockdowns and the defeat sequence all take control away.
+    // Gravity and collision still run so the body settles on the ground.
+    if (this.knockdown > 0 || this.cinematic || this.frozen) {
+      if (this.knockdown > 0) this.knockdown -= dt;
+      this._makeHelpless(input);
       this._updateHelpless(dt, cam);
       return;
     }
@@ -812,17 +811,27 @@ export class Player {
     }
 
     // Unblocked.
-    const dmg = this.health.max * S.boss.damageFraction;
     this.vel.x += nx * 16;
     this.vel.y = Math.max(this.vel.y, 0) + 7;
     this.vel.z += nz * 16;
-    this.health.damage(dmg, 'toadel');
     _tmp.set(this.pos.x, this.pos.y + 1.1, this.pos.z);
     this.effects.hitBurst(_tmp, { x: -nx, y: 0, z: -nz }, true);
-    this.effects.damageNumber(_tmp, Math.round(dmg), true);
     Audio.hit(this.pos, true);
     Audio.hurt(this.pos);
-    if (this.health.justDied) this._die(null);
+
+    // A blow that starts a tutorial beat lands visibly but does not wound —
+    // otherwise the lesson would kill you before you could practise it.
+    if (story && story.onBossLanded()) return;
+
+    const dmg = this.health.max * S.boss.damageFraction;
+    this.health.damage(dmg, 'toadel');
+    this.effects.damageNumber(_tmp, Math.round(dmg), true);
+
+    if (this.health.justDied) {
+      // The story owns what defeat looks like; no ordinary respawn here.
+      if (story) { this.deathPending = false; story.beginDefeat(this); }
+      else this._die(null);
+    }
   }
 
   _knockDown(nx, nz) {
@@ -842,11 +851,32 @@ export class Player {
     Audio.hurt(this.pos);
   }
 
+  /**
+   * Strip every means of moving under your own power.
+   *
+   * Cancelling the abilities is not enough on its own: queued key presses sit
+   * in the input buffer and would all fire the instant control came back, so
+   * the buffer is flushed every frame too. Without this you could dash or
+   * grapple out of a knockdown.
+   */
+  _makeHelpless(input) {
+    if (input) input.flush();
+    if (this.grapple.active) this.grapple.cancel();
+    this.dashTimer = 0;
+    this.sprinting = false;
+    this.parrying = false;
+    this.jumpBuffer = 0;
+    this.coyote = 0;
+    this.wallCoyote = 0;
+    this.combat.active = false;
+  }
+
   /** Physics only: used for cutscenes and while knocked flat. */
   _updateHelpless(dt, cam) {
     this.vel.y += CFG.move.gravity * dt;
-    this.vel.x *= Math.exp(-4 * dt);
-    this.vel.z *= Math.exp(-4 * dt);
+    // Heavy damping: knockback still carries you, but you cannot steer.
+    this.vel.x *= Math.exp(-9 * dt);
+    this.vel.z *= Math.exp(-9 * dt);
     const cs = this._cstate;
     cs.pos = this.pos; cs.vel = this.vel;
     this.collision.moveCharacter(cs, dt);
@@ -862,10 +892,12 @@ export class Player {
   }
 
   _updateDead(dt, cam) {
+    // A corpse has no agency either — same lockout as a knockdown.
+    this._makeHelpless(this._lastInput);
     // Corpse keeps falling so it settles somewhere sensible.
     this.vel.y += CFG.move.gravity * dt;
-    this.vel.x *= Math.exp(-3 * dt);
-    this.vel.z *= Math.exp(-3 * dt);
+    this.vel.x *= Math.exp(-5 * dt);
+    this.vel.z *= Math.exp(-5 * dt);
     const cs = this._cstate;
     cs.pos = this.pos; cs.vel = this.vel;
     this.collision.moveCharacter(cs, dt);
