@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v11';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v11';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v11';
-import { Input } from './input.js?v=v11';
-import { Audio } from './audio.js?v=v11';
-import { World } from './world.js?v=v11';
-import { Effects } from './effects.js?v=v11';
-import { Atmosphere } from './atmosphere.js?v=v11';
-import { FollowCamera } from './camera.js?v=v11';
-import { Player } from './player.js?v=v11';
-import { RemotePlayer } from './remote.js?v=v11';
-import { HUD } from './hud.js?v=v11';
-import { KunaiSystem, PickupSystem } from './items.js?v=v11';
-import { DummyField } from './dummy.js?v=v11';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v11';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v11';
-import { MenuScene } from './menu.js?v=v11';
-import { Network, NetRole } from './net.js?v=v11';
+import * as THREE from '../lib/three.module.js?v=v12';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v12';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v12';
+import { Input } from './input.js?v=v12';
+import { Audio } from './audio.js?v=v12';
+import { World } from './world.js?v=v12';
+import { Effects } from './effects.js?v=v12';
+import { Atmosphere } from './atmosphere.js?v=v12';
+import { FollowCamera } from './camera.js?v=v12';
+import { Player } from './player.js?v=v12';
+import { RemotePlayer } from './remote.js?v=v12';
+import { HUD } from './hud.js?v=v12';
+import { KunaiSystem, PickupSystem } from './items.js?v=v12';
+import { DummyField } from './dummy.js?v=v12';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v12';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v12';
+import { MenuScene } from './menu.js?v=v12';
+import { Network, NetRole } from './net.js?v=v12';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -717,6 +717,9 @@ class Game {
     this.player.storyParry = true;
     this.followCam.snapTo(this.player.pos);
 
+    // Anyone who joined while the level was still building gets created now.
+    this._flushPendingJoins();
+
     this.hud.buildHotbar(this.player.inventory);
     this.hud.setObjectives(this.story.objectives);
     // The HUD is shared with the arena, so anything left over from a match
@@ -831,6 +834,12 @@ class Game {
     this.clock = t;
 
     if (this.mode === 'playing' || this.mode === 'paused') {
+      // Players who connected before the world existed were parked in a
+      // queue. Draining it here — rather than only on one entry path — means
+      // no game mode can forget to do it. Story mode used to, which left
+      // joining clients unable to see the host at all.
+      this._flushPendingJoins();
+
       // Story and arena are two separate loops that share the renderer.
       if (this.isStory) this._updateStory(dt, t);
       else this._updateGame(dt, t);
