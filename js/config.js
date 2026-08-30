@@ -62,6 +62,18 @@ export const CFG = {
     recoverTo: 0.70,
   },
 
+  // --------------------------------------------------------------- rounds
+  rounds: {
+    voteTime: 22,            // seconds to pick a mode
+    startCountdown: 5,       // "get ready" before a round begins
+    endTime: 9,              // results screen before voting again
+    duration: { tag: 180, infection: 180, ffa: 300 },
+    defaultMode: 'ffa',      // used if nobody votes
+    tagImmunity: 2.5,        // stops instant tag-backs
+    taggerCooldown: 0.2,     // taggers throw faster (they have infinite kunai)
+    syncInterval: 1.0,       // authority state rebroadcast
+  },
+
   // ---------------------------------------------------------------- items
   kunai: {
     damage: 25,
