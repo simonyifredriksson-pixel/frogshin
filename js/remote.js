@@ -255,6 +255,7 @@ export class RemotePlayer {
     this.dashing = !!s.dt;
     this.swimming = !!s.sw;
     this.sprinting = !!s.sp;
+    this.storyPhase = s.st || 0;
     if (s.at) this.attackIndex = s.at - 1;
 
     if (s.gr) {
