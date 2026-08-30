@@ -19,6 +19,7 @@ import { RemotePlayer } from './remote.js';
 import { HUD } from './hud.js';
 import { KunaiSystem, PickupSystem } from './items.js';
 import { DummyField } from './dummy.js';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js';
 import { MenuScene } from './menu.js';
 import { Network, NetRole } from './net.js';
 
@@ -300,6 +301,7 @@ class Game {
 
     net.onLeave = (id) => {
       this._pendingJoins.delete(id);
+      if (this.round) this.round.removePlayer(id);
       const r = this.remotes.get(id);
       if (!r) return;
       if (this.hud) this.hud.toast(`${r.name} left`);
@@ -324,6 +326,22 @@ class Game {
         if (this.pickups) this.pickups.remove(ev.id, true);
         return;
       }
+      if (ev.t === 'round') {
+        if (this.round) this.round.applyState(ev);
+        return;
+      }
+      if (ev.t === 'vote') {
+        // Only the authority tallies; everyone else waits for the broadcast.
+        if (this.round && this.round.authority) {
+          this.round.castVote(id, ev.m, ev.c, this._playerIds().length);
+          this.round.broadcast();
+        }
+        return;
+      }
+      if (ev.t === 'tag') {
+        if (this.round && this.round.authority) this.round.applyTag(ev.id, id);
+        return;
+      }
       if (ev.t === 'kunai') {
         // Visual only — the thrower owns hit detection for their own kunai.
         if (this.kunaiSystem) {
@@ -343,6 +361,8 @@ class Game {
 
     net.onHit = (d) => {
       if (!this.player || this.player.health.dead) return;
+      // Tag and Infection have no damage at all — only tagging.
+      if (this.round && !this.round.combatEnabled) return;
       const landed = this.player.receiveHit(d.dmg, d.kx, d.ky, d.kz, d.from, this.followCam);
       // Death itself is picked up from `deathPending` in the game loop.
       if (landed) this.hud.damageFlash(clamp(d.dmg / 40, 0.2, 0.9));
@@ -468,6 +488,8 @@ class Game {
     this.hud.onSlotClick = (i) => {
       if (this.player.inventory.select(i)) Audio.uiClick();
     };
+
+    this._setupRounds(authority);
     this.player.spawn(this.world.randomSpawn());
     this.followCam.snapTo(this.player.pos);
     this._flushPendingJoins();
@@ -597,6 +619,19 @@ class Game {
       this.hud.showScoreboard(this.input.down('Tab'));
       if (this.input.down('Tab')) this._refreshScoreboard();
 
+      // ---- round flow -------------------------------------------------
+      this.round.update(dt, this._playerIds());
+      const isIt = this.round.isTagger(p.id);
+      // Taggers get endless kunai and a snappier throw; runners keep theirs.
+      p.inventory.setUnlimitedKunai(this.round.isTagMode && isIt);
+      p.throwCooldownOverride = (this.round.isTagMode && isIt)
+        ? CFG.rounds.taggerCooldown : 0;
+      p.combatEnabled = this.round.combatEnabled;
+      p.model.setTagger(this.round.isTagMode && isIt);
+      for (const r of this.remotes.values()) {
+        r.model.setTagger(this.round.isTagMode && this.round.isTagger(r.id));
+      }
+
       const targets = this._buildTargets();
       p.update(dt, this.input, this.followCam, targets);
       // Locally-owned kunai resolve their own hits against the same list.
@@ -674,6 +709,116 @@ class Game {
     p.events.length = 0;
   }
 
+  // ----------------------------------------------------------- round flow
+
+  _setupRounds(authority) {
+    if (!this.round) {
+      this.round = new RoundManager(authority, (state) => this.net.sendEvent(state));
+      this.myVote = null;
+      this.myTaggerCount = 1;
+
+      this.hud.buildVote(
+        (mode) => this._castVote(mode, this.myTaggerCount),
+        (delta) => {
+          const cap = maxTaggers(this._playerIds().length);
+          const next = clamp(this.myTaggerCount + delta, 1, cap);
+          if (next === this.myTaggerCount) return;
+          this.myTaggerCount = next;
+          Audio.uiClick();
+          if (this.myVote) this._castVote(this.myVote, next);
+        }
+      );
+
+      this.round.onPhaseChange = (phase) => this._onPhaseChange(phase);
+      this.round.onTag = (victimId, byId, mode) => this._onTag(victimId, byId, mode);
+    } else {
+      this.round.authority = authority;
+    }
+    this._onPhaseChange(this.round.phase);
+  }
+
+  /** Everyone in the match, local player first. */
+  _playerIds() {
+    const ids = [this.player ? this.player.id : 'local'];
+    for (const id of this.remotes.keys()) ids.push(id);
+    return ids;
+  }
+
+  _castVote(mode, count) {
+    this.myVote = mode;
+    const players = this._playerIds().length;
+    this.round.castVote(this.player.id, mode, count, players);
+    Audio.uiClick();
+    // Mirrors have to ask the authority to record it.
+    if (!this.round.authority) {
+      this.net.sendEvent({ t: 'vote', m: mode, c: count });
+    }
+  }
+
+  _onPhaseChange(phase) {
+    if (!this.hud || !this.player) return;
+
+    if (phase === PHASE.VOTING) {
+      this.myVote = null;
+      this.hud.showVote(true);
+      this.hud.hideRound();
+      this.hud.clearAnnounce();
+      // Release the mouse so the vote screen can actually be clicked.
+      this.input.releaseLock();
+      return;
+    }
+
+    this.hud.showVote(false);
+
+    if (phase === PHASE.STARTING) {
+      // Fresh spawn for everyone, so no one starts a chase cornered.
+      this.player.spawn(this.world.randomSpawn());
+      this.followCam.snapTo(this.player.pos);
+      const info = this.round.modeInfo;
+      this.hud.announce(info.name, '', true);
+    } else if (phase === PHASE.PLAYING) {
+      const it = this.round.isTagger(this.player.id);
+      if (this.round.isTagMode) {
+        this.hud.announce(it ? 'YOU ARE IT!' : 'RUN!', it ? 'danger' : 'good');
+        if (it) {
+          // Put the kunai in hand — a tagger has nothing else to do with it.
+          const slot = this.player.inventory.kunaiSlotIndex();
+          if (slot >= 0) this.player.inventory.select(slot);
+          Audio.exhausted(this.player.pos);
+        }
+      } else {
+        this.hud.announce('FIGHT!', '', false);
+      }
+    } else if (phase === PHASE.ENDING) {
+      this.hud.announce(this.round.result || 'ROUND OVER', 'good', true);
+      Audio.refreshed(this.player.pos);
+    }
+  }
+
+  _onTag(victimId, byId) {
+    const me = this.player.id;
+    const victimName = victimId === me ? 'You' : this.net.nameOf(victimId);
+    const byName = byId === me ? 'You' : this.net.nameOf(byId);
+
+    if (victimId === me) {
+      this.hud.announce('TAGGED — YOU ARE IT!', 'danger');
+      this.followCam.shake(0.6);
+      this.hud.damageFlash(0.7);
+      const slot = this.player.inventory.kunaiSlotIndex();
+      if (slot >= 0) this.player.inventory.select(slot);
+    } else if (byId === me) {
+      this.hud.announce(`TAGGED ${this.net.nameOf(victimId).toUpperCase()}!`, 'good');
+    }
+    this.hud.addKill(byName, victimName, 'You');
+    Audio.headshot(this.player.pos);
+  }
+
+  /** Ask for a tag. The authority is the only place the rule is applied. */
+  _requestTag(victimId) {
+    if (this.round.authority) this.round.applyTag(victimId, this.player.id);
+    else this.net.sendEvent({ t: 'tag', id: victimId });
+  }
+
   /**
    * Everything the local player can hit: other frogs plus training dummies.
    * Each entry carries its own `onHit`, which is what lets the katana and
@@ -690,10 +835,24 @@ class Game {
         id: r.id, pos: r.pos, dead: r.dead, isDummy: false,
         hitbox: CFG.hitbox.player,
         onHit: (dmg, dx, dz, head, at) => {
+          _hitPos.copy(at || r.pos);
+
+          // In Tag and Infection a kunai does not wound — it tags.
+          if (this.round.isTagMode) {
+            const me = this.player.id;
+            if (!this.round.playing) return;
+            if (!this.round.isTagger(me)) return;        // runners cannot tag
+            if (this.round.isTagger(r.id)) return;       // already it
+            if (this.round.immunityFor(r.id) > 0) return; // no instant tag-back
+            this._requestTag(r.id);
+            this.hud.hitmarker(true);
+            this.effects.ring(_hitPos, 0.3, 3.2, 0.4, 0xff8a3c, true);
+            return;
+          }
+
           this.net.sendHit(r.id, dmg,
             dx * K.knockback, K.knockbackUp, dz * K.knockback, 3);
           this.hud.hitmarker(true);
-          _hitPos.copy(at || r.pos);
           this.effects.damageNumber(_hitPos, dmg, true);
           if (head) this._headshotFeedback(_hitPos);
         },
@@ -790,6 +949,20 @@ class Game {
           : (this._hasGrappleTarget && p.grapple.cooldown <= 0) ? 'target' : 'idle'
     );
     this.hud.setSpeed(speed, p.sprinting);
+
+    // ---- round HUD ----
+    const R = this.round;
+    if (R.phase === PHASE.VOTING) {
+      const players = this._playerIds().length;
+      this.hud.updateVote(R, players, this.myVote, this.myTaggerCount, maxTaggers(players));
+    } else if (R.phase === PHASE.STARTING) {
+      this.hud.setRound(R.modeInfo, R.timer, '', R.taggerCount);
+      this.hud.announce(Math.max(1, Math.ceil(R.timer)) + '', '', true);
+    } else if (R.phase === PHASE.PLAYING) {
+      const role = R.isTagMode ? (R.isTagger(p.id) ? 'it' : 'runner') : '';
+      this.hud.setRound(R.modeInfo, R.timer, role, R.taggers.size || R.taggerCount);
+    }
+
     this.hud.update(dt);
 
     if (this._comboReset > 0) {
