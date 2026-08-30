@@ -3,6 +3,16 @@
  * Every "feel" number lives here so movement can be tuned in one place.
  */
 
+/**
+ * Build identifier, bumped on every deploy.
+ *
+ * Players exchange this when they connect. Two people on different builds
+ * can look connected while silently disagreeing about the rules — one seeing
+ * the other but not vice versa, for instance — so a mismatch is surfaced
+ * loudly instead of being left to look like a game bug.
+ */
+export const BUILD = 'v10';
+
 export const CFG = {
   // ---------------------------------------------------------------- world
   world: {
