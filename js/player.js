@@ -48,6 +48,16 @@ export class Player {
     this.throwCooldownOverride = 0;
     this.combatEnabled = true;
 
+    // --- story mode ---
+    this.cinematic = false;        // frozen for a cutscene
+    this.storyParry = false;       // right mouse becomes parry, not throw
+    this.parrying = false;
+    this.parryHits = 0;            // blows absorbed during the current parry
+    this.knockdown = 0;            // seconds face-down and helpless
+    this.damageMultiplier = 1;     // broken sword scales this down
+    this.justParried = 0;
+    this.justKnockedDown = false;
+
     this.model = new FrogModel(this.color, this.name, true);
     this.scene.add(this.model.root);
 
@@ -181,6 +191,18 @@ export class Player {
       return;
     }
 
+    // Cutscenes and knockdowns both take control away, but a knockdown still
+    // needs gravity and collision so the body settles on the ground.
+    if (this.knockdown > 0) {
+      this.knockdown -= dt;
+      this._updateHelpless(dt, cam);
+      return;
+    }
+    if (this.cinematic) {
+      this._updateHelpless(dt, cam);
+      return;
+    }
+
     const active = input && input.locked;
     if (active) input.moveAxis(_axis); else { _axis.x = 0; _axis.y = 0; }
 
@@ -222,7 +244,20 @@ export class Player {
       }
       const wheel = input.takeWheel();
       if (wheel) this._cycleSlot(wheel);
-      if (input.consume('MouseRight')) this._tryThrowKunai(cam);
+      // In story mode the right button is a held parry rather than a throw.
+      if (this.storyParry) {
+        const held = input.rightHeld;
+        if (held !== this.parrying) {
+          this.parrying = held;
+          // Releasing the parry clears the tally, so each guard is judged
+          // on its own — that is what makes holding it forever a risk.
+          if (!held) this.parryHits = 0;
+          else Audio.uiHover();
+        }
+        input.consume('MouseRight');
+      } else if (input.consume('MouseRight')) {
+        this._tryThrowKunai(cam);
+      }
       if (input.consume('KeyE')) this._tryPickup();
     } else {
       this.jumpHeld = false;
@@ -674,14 +709,16 @@ export class Player {
       // Training dummies are purely local practice targets: they show their
       // own short damage flash and never touch the network.
       if (h.target.isDummy) {
-        if (h.target.onHit) h.target.onHit(h.damage, h.dirX, h.dirZ);
+        if (h.target.onHit) {
+          h.target.onHit(Math.round(h.damage * this.damageMultiplier), h.dirX, h.dirZ);
+        }
         continue;
       }
 
       // Chase modes have no damage — the katana swing stays purely cosmetic.
       if (!this.combatEnabled) continue;
 
-      this.effects.damageNumber(_tmp, h.damage, h.heavy);
+      this.effects.damageNumber(_tmp, Math.round(h.damage * this.damageMultiplier), h.heavy);
       this.events.push({
         t: 'hit',
         id: h.target.id,
@@ -740,6 +777,88 @@ export class Player {
     this.lastHitBy = null;
     this.health.kill();
     this._die(cam);
+  }
+
+  /**
+   * A blow from Toadel. Either it is turned aside by a parry, or it takes
+   * 80% of your maximum health — so two clean hits finish you.
+   * @param from  world position the blow came from
+   * @param story StoryMode, for feedback hooks
+   */
+  onBossBlow(from, yaw, story) {
+    const S = CFG.story;
+    const dirX = this.pos.x - from.x;
+    const dirZ = this.pos.z - from.z;
+    const len = Math.hypot(dirX, dirZ) || 1;
+    const nx = dirX / len, nz = dirZ / len;
+
+    if (this.parrying) {
+      this.parryHits++;
+      this.justParried = 0.2;
+      // Absorbing a second blow inside one parry breaks your guard.
+      if (this.parryHits >= S.parry.knockdownAfter) {
+        this._knockDown(nx, nz);
+        return;
+      }
+      // Turned aside: sparks, a shove, no damage.
+      this.vel.x += nx * 7;
+      this.vel.z += nz * 7;
+      this.combat.hitstop = S.parry.chipStagger;
+      _tmp.set(this.pos.x + nx * 0.6, this.pos.y + 1.1, this.pos.z + nz * 0.6);
+      this.effects.hitBurst(_tmp, { x: -nx, y: 0, z: -nz }, true);
+      this.effects.ring(_tmp, 0.3, 2.6, 0.3, 0xbfe3ff, false, { x: nx, y: 0, z: nz });
+      Audio.parry(this.pos);
+      return;
+    }
+
+    // Unblocked.
+    const dmg = this.health.max * S.boss.damageFraction;
+    this.vel.x += nx * 16;
+    this.vel.y = Math.max(this.vel.y, 0) + 7;
+    this.vel.z += nz * 16;
+    this.health.damage(dmg, 'toadel');
+    _tmp.set(this.pos.x, this.pos.y + 1.1, this.pos.z);
+    this.effects.hitBurst(_tmp, { x: -nx, y: 0, z: -nz }, true);
+    this.effects.damageNumber(_tmp, Math.round(dmg), true);
+    Audio.hit(this.pos, true);
+    Audio.hurt(this.pos);
+    if (this.health.justDied) this._die(null);
+  }
+
+  _knockDown(nx, nz) {
+    this.knockdown = CFG.story.parry.knockdownTime;
+    this.parrying = false;
+    this.parryHits = 0;
+    this.justKnockedDown = true;
+    this.combat.reset();
+    this.grapple.cancel();
+    this.dashTimer = 0;
+    this.vel.x += nx * 13;
+    this.vel.y = Math.max(this.vel.y, 0) + 5;
+    this.vel.z += nz * 13;
+    _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
+    this.effects.dustPuff(_tmp, 14, 4, 0xa89878);
+    Audio.land(this.pos, true);
+    Audio.hurt(this.pos);
+  }
+
+  /** Physics only: used for cutscenes and while knocked flat. */
+  _updateHelpless(dt, cam) {
+    this.vel.y += CFG.move.gravity * dt;
+    this.vel.x *= Math.exp(-4 * dt);
+    this.vel.z *= Math.exp(-4 * dt);
+    const cs = this._cstate;
+    cs.pos = this.pos; cs.vel = this.vel;
+    this.collision.moveCharacter(cs, dt);
+    this.grounded = cs.grounded;
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.visualYaw);
+    this.model.update(dt, {
+      speed: 0, vy: this.vel.y, grounded: this.grounded, moving: false,
+      // Reuse the collapse pose for a knockdown; a cutscene just stands still.
+      dead: this.knockdown > 0,
+    });
+    if (this.knockdown <= 0 && !this.cinematic) this.model.root.rotation.z = 0;
   }
 
   _updateDead(dt, cam) {
@@ -889,6 +1008,7 @@ export class Player {
       sprinting: this.sprinting,
       swimming: this.inWater,
       swimPitch: this.inWater ? clamp(this.vel.y / 10, -1, 1) : 0,
+      parrying: this.parrying,
       dead: this.health.dead,
     });
   }
