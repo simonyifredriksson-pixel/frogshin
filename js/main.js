@@ -20,6 +20,7 @@ import { HUD } from './hud.js';
 import { KunaiSystem, PickupSystem } from './items.js';
 import { DummyField } from './dummy.js';
 import { RoundManager, PHASE, maxTaggers } from './rounds.js';
+import { StoryMode, STORY_PHASE } from './story.js';
 import { MenuScene } from './menu.js';
 import { Network, NetRole } from './net.js';
 
@@ -218,6 +219,12 @@ class Game {
     };
     $('btn-quickplay').onclick = () => this._connect('host', 'FROG');
     $('btn-solo').onclick = () => this._connect('solo', null);
+    $('btn-story').onclick = () => {
+      // Story runs in whatever session you already have: solo if none.
+      this.pendingStory = true;
+      if (this.net.isOnline && this.net.connected) this._enterGame();
+      else this._connect('solo', null);
+    };
 
     // --- settings controls ---
     const bind = (id, key, fn) => {
@@ -326,6 +333,14 @@ class Game {
         if (this.pickups) this.pickups.remove(ev.id, true);
         return;
       }
+      if (ev.t === 'boss') {
+        if (this.story) this.story.applyBossState(ev);
+        return;
+      }
+      if (ev.t === 'bossHit') {
+        if (this.story && this.story.authority) this.story.damageBoss(ev.d);
+        return;
+      }
       if (ev.t === 'round') {
         if (this.round) this.round.applyState(ev);
         return;
@@ -417,6 +432,13 @@ class Game {
     const label = $('loading-label');
 
     const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+    // Story mode builds its own level in its own scene.
+    if (this.pendingStory) {
+      this.pendingStory = false;
+      await this._enterStory(loading, bar, label, frame);
+      return;
+    }
 
     if (!this.world) {
       // --- first-time world build, one step per frame ---
@@ -510,6 +532,108 @@ class Game {
     this._resize();
   }
 
+  /** Build and start the story level. */
+  async _enterStory(loading, bar, label, frame) {
+    this.isStory = true;
+    this.storyScene = new THREE.Scene();
+    this.scene = this.storyScene;
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight, CFG.camera.near, CFG.camera.far);
+
+    this.effects = new Effects(this.scene, this.camera);
+
+    const authority = !this.net.isOnline || this.net.isHost;
+    this.story = new StoryMode({
+      scene: this.scene,
+      effects: this.effects,
+      hud: this.hud,
+      camera: this.camera,
+      followCam: null,          // assigned once the camera rig exists
+      authority,
+      onBroadcast: (msg) => this.net.sendEvent(msg),
+    });
+
+    const tasks = this.story.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 92) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+
+    label.textContent = 'Setting the village alight…';
+    bar.style.width = '96%';
+    await frame();
+
+    this.world = this.story.level;          // shared interface: collision, etc.
+    this.followCam = new FollowCamera(this.camera, this.story.collision);
+    this.story.followCam = this.followCam;
+
+    // Dusk, heavy smoke, firelight — nothing like the bright arena sky.
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: 0,
+      cloudCount: 0,
+      shadows: this.quality.shadows,
+      fogNear: 22,
+      fogFar: 165,
+      fogColor: 0x6b4630,
+      skyTop: 0x2a2233,
+      skyMid: 0x6b4732,
+      skyBottom: 0xb2704a,
+    });
+    this.atmo.sun.color.setHex(0xffb070);
+    this.atmo.sun.intensity = 0.85;
+    this.atmo.hemi.color.setHex(0x8a6a52);
+    this.atmo.hemi.groundColor.setHex(0x2a2418);
+    this.atmo.hemi.intensity = 0.6;
+    this.renderer.setClearColor(0x6b4630);
+
+    // No dummies, no crates, no rounds in the story.
+    this.dummies = new DummyField(this.scene);
+    this.kunaiSystem = new KunaiSystem(this.scene, this.story.collision, this.effects);
+    this.pickups = null;
+
+    bar.style.width = '100%';
+    await frame();
+
+    const prof = this.profile;
+    if (this.player) { this.scene.remove(this.player.model.root); this.player.model.dispose(); }
+    this.player = new Player({
+      id: this.net.selfId || 'local',
+      name: prof.name,
+      color: prof.color,
+      world: this.story.level,
+      effects: this.effects,
+      scene: this.scene,
+      kunai: this.kunaiSystem,
+      pickups: null,
+    });
+    // A villager, not a ninja: dash and tongue remain, weapons do not.
+    this.player.spawn(this.story.spawnPoint);
+    this.player.inventory.slots[0] = null;
+    this.player.inventory.slots[1] = null;
+    this.player.inventory.dirty = true;
+    this.player.combatEnabled = false;
+    // Right mouse is the parry for the whole story, not just the duel — so
+    // it never falls through to the "equip kunai first" path.
+    this.player.storyParry = true;
+    this.followCam.snapTo(this.player.pos);
+
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.setObjectives(this.story.objectives);
+    this.hud.show(true);
+    this.hud.setRoom(this.net.room, 'Story — the burning village', this.net.isOnline);
+    this.hud.toast('Follow the boardwalk — get out of the village', 5);
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.startAmbient();
+    Audio.stopMenuMusic();
+    this._resize();
+  }
+
   _onLockChange(locked) {
     if (this.mode === 'playing' && !locked) this._pause();
     else if (this.mode === 'paused' && locked) this._resume();
@@ -534,6 +658,20 @@ class Game {
   }
 
   _quitToMenu() {
+    // Story keeps a whole separate scene; drop it so a later arena match
+    // does not inherit the swamp.
+    if (this.isStory) {
+      if (this.story) this.story.dispose();
+      this.story = null;
+      this.isStory = false;
+      this.world = null;
+      this.scene = null;
+      this.atmo = null;
+      this.player = null;
+      this.pickups = null;
+      this.renderer.setClearColor(0x8ec9e8);
+      this._underwater = false;
+    }
     this.net.disconnect();
     for (const r of this.remotes.values()) r.dispose();
     this.remotes.clear();
@@ -583,8 +721,13 @@ class Game {
     dt = clamp(dt, 0, 0.05);
     this.clock = t;
 
-    if (this.mode === 'playing' || this.mode === 'paused') this._updateGame(dt, t);
-    else this._updateMenu(dt);
+    if (this.mode === 'playing' || this.mode === 'paused') {
+      // Story and arena are two separate loops that share the renderer.
+      if (this.isStory) this._updateStory(dt, t);
+      else this._updateGame(dt, t);
+    } else {
+      this._updateMenu(dt);
+    }
 
     this._syncClickToPlay();
   }
@@ -604,6 +747,84 @@ class Game {
   _updateMenu(dt) {
     this.menuScene.update(dt);
     this.renderer.render(this.menuScene.scene, this.menuScene.camera);
+  }
+
+  /** Story-mode frame: no rounds, no crates, no scoreboard. */
+  _updateStory(dt, t) {
+    const p = this.player;
+    if (this.mode !== 'paused') {
+      const look = this.input.takeLook();
+      // The cutscene owns the camera, so mouse look is ignored during it.
+      if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+
+      // Toadel is the only thing the broken sword can meaningfully hit.
+      const targets = this._storyTargets();
+      p.update(dt, this.input, this.followCam, targets);
+
+      if (p.deathPending) {
+        p.deathPending = false;
+        this.hud.announce('YOU DIED', 'danger', true);
+        this._storyDeathTimer = 3.0;
+      }
+      if (this._storyDeathTimer > 0) {
+        this._storyDeathTimer -= dt;
+        if (this._storyDeathTimer <= 0 && p.health.dead) {
+          // Straight back into the fight — the story does not move on.
+          const arena = this.story.level.arenaCenter;
+          const spawn = this.story.phase === STORY_PHASE.BOSS
+            ? new THREE.Vector3(arena.x, arena.y + 1, arena.z - 14)
+            : this.story.spawnPoint;
+          p.spawn(spawn);
+          p.damageMultiplier = this.story.phase === STORY_PHASE.BOSS
+            ? CFG.story.brokenSwordMult : 1;
+          this.followCam.snapTo(p.pos);
+          this.hud.clearAnnounce();
+        }
+      }
+
+      this._drainEvents(p);
+      for (const r of this.remotes.values()) r.update(dt, t);
+
+      this.story.update(dt, p, this.remotes.values());
+      this.kunaiSystem.update(dt, targets);
+      this.effects.update(dt);
+
+      const speed = Math.hypot(p.vel.x, p.vel.z);
+      if (!p.cinematic) {
+        this.followCam.update(p.pos, speed, dt, {
+          dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        });
+      }
+      this.atmo.update(dt, this.camera.position);
+
+      this._updateHud(dt, speed);
+      this._updateAudioListener();
+      Audio.updateAmbient(dt);
+      this.net.tickState(dt, () => p.netState());
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Toadel as a katana target, so the broken sword can chip at him. */
+  _storyTargets() {
+    const list = [];
+    const boss = this.story && this.story.boss;
+    if (boss && boss.active) {
+      list.push({
+        id: 'toadel', pos: boss.pos, dead: false, isDummy: true, // local-only
+        hitbox: { headOffset: 4.2, headRadius: 0.9, bodyOffset: 2.2, bodyRadius: 1.3 },
+        onHit: (dmg, dx, dz) => {
+          boss.model.flinch();
+          this.effects.damageNumber(
+            _hitPos.set(boss.pos.x, boss.pos.y + 3.4, boss.pos.z), dmg, false, 0.35);
+          Audio.hit(boss.pos, false);
+          // Everyone reports damage; the host is what actually applies it.
+          if (this.story.authority) this.story.damageBoss(dmg);
+          else this.net.sendEvent({ t: 'bossHit', d: dmg });
+        },
+      });
+    }
+    return list;
   }
 
   _updateGame(dt, t) {
@@ -915,7 +1136,9 @@ class Game {
       p.inventory.dirty = false;
       this.hud.setHotbar(p.inventory);
     }
-    this.hud.setPickupPrompt(!p.health.dead && !!this.pickups.nearest(p.pos));
+    // No supply crates in the story level.
+    this.hud.setPickupPrompt(
+      !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
 
     // One-shot messages raised by the player controller.
     if (p.pickedUpCue) {
@@ -950,8 +1173,16 @@ class Game {
     );
     this.hud.setSpeed(speed, p.sprinting);
 
-    // ---- round HUD ----
+    // ---- round HUD (arena only; the story has its own objectives) ----
     const R = this.round;
+    if (!R || this.isStory) {
+      this.hud.update(dt);
+      if (this._comboReset > 0) {
+        this._comboReset -= dt;
+        if (this._comboReset <= 0) this._comboCount = 0;
+      }
+      return;
+    }
     if (R.phase === PHASE.VOTING) {
       const players = this._playerIds().length;
       this.hud.updateVote(R, players, this.myVote, this.myTaggerCount, maxTaggers(players));
