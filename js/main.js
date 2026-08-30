@@ -177,7 +177,19 @@ class Game {
     $('btn-settings').onclick = () => this.showPanel('settings');
     $('btn-credits').onclick = () => this.showPanel('credits');
     for (const b of document.querySelectorAll('.btn-back')) {
-      b.onclick = () => { Audio.uiBack(); this.showPanel('home'); };
+      b.onclick = () => {
+        Audio.uiBack();
+        // Settings opened from the pause menu must go BACK to the pause menu.
+        // Dropping to the main menu used to leave the match half-exited, so
+        // pressing Play again restarted the level from scratch.
+        if (this._settingsFromPause) {
+          this._settingsFromPause = false;
+          $('menu').classList.remove('show');
+          $('pause').classList.add('show');
+          return;
+        }
+        this.showPanel('home');
+      };
     }
 
     // --- identity ---
@@ -266,8 +278,10 @@ class Game {
     $('btn-resume').onclick = () => this._resume();
     $('btn-quit').onclick = () => this._quitToMenu();
     $('btn-pause-settings').onclick = () => {
+      // Stay in 'paused' so the match is still live behind the panel — the
+      // game keeps rendering and nothing gets torn down.
+      this._settingsFromPause = true;
       $('pause').classList.remove('show');
-      this.mode = 'menu-overlay';
       $('menu').classList.add('show');
       this.showPanel('settings');
     };
@@ -554,12 +568,19 @@ class Game {
     });
 
     const tasks = this.story.buildTasks();
+    const timings = [];
     for (let i = 0; i < tasks.length; i++) {
       label.textContent = tasks[i][0] + '…';
       bar.style.width = ((i / tasks.length) * 92) + '%';
       await frame();
+      const t0 = performance.now();
       tasks[i][1]();
+      timings.push([tasks[i][0], Math.round(performance.now() - t0)]);
     }
+    // Logged so a slow load can be diagnosed from the console instead of guessed at.
+    const total = timings.reduce((a, b) => a + b[1], 0);
+    console.log(`[frogshin] story level built in ${total}ms`);
+    console.table(timings.map(([name, ms]) => ({ step: name, ms })));
 
     label.textContent = 'Setting the village alight…';
     bar.style.width = '96%';
@@ -621,6 +642,10 @@ class Game {
 
     this.hud.buildHotbar(this.player.inventory);
     this.hud.setObjectives(this.story.objectives);
+    // The HUD is shared with the arena, so anything left over from a match
+    // (round timer, "YOU ARE IT", a boss bar, the vote screen) is cleared —
+    // otherwise it bleeds straight into the story.
+    this.hud.resetForStory();
     this.hud.show(true);
     this.hud.setRoom(this.net.room, 'Story — the burning village', this.net.isOnline);
     this.hud.toast('Follow the boardwalk — get out of the village', 5);
@@ -757,9 +782,13 @@ class Game {
       // The cutscene owns the camera, so mouse look is ignored during it.
       if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
 
+      // Slow motion for the tutorial beats. The UI keeps real time so
+      // prompts, fades and the HUD never crawl along with the action.
+      const gdt = dt * this.story.timeScale;
+
       // Toadel is the only thing the broken sword can meaningfully hit.
       const targets = this._storyTargets();
-      p.update(dt, this.input, this.followCam, targets);
+      p.update(gdt, this.input, this.followCam, targets);
 
       if (p.deathPending) {
         p.deathPending = false;
@@ -783,11 +812,20 @@ class Game {
       }
 
       this._drainEvents(p);
-      for (const r of this.remotes.values()) r.update(dt, t);
+      // Everyone plays the village and the duel alone, even in a shared
+      // session — the other frogs only become visible once Toadel has put
+      // you all in the cells.
+      const showOthers = this.story.phase === STORY_PHASE.PRISON;
+      for (const r of this.remotes.values()) {
+        r.update(dt, t);
+        r.model.root.visible = showOthers;
+      }
 
+      // The story itself runs on real time so its scripted timers (fades,
+      // the black hold, the wake-up) are not stretched by slow motion.
       this.story.update(dt, p, this.remotes.values());
-      this.kunaiSystem.update(dt, targets);
-      this.effects.update(dt);
+      this.kunaiSystem.update(gdt, targets);
+      this.effects.update(gdt);
 
       const speed = Math.hypot(p.vel.x, p.vel.z);
       if (!p.cinematic) {
