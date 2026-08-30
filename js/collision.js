@@ -178,6 +178,7 @@ export class CollisionWorld {
     state.onWall = false;
     state.hitCeiling = false;
     state.landedThisFrame = false;
+    state.bounce = false;
     state.wallNormal.set(0, 0, 0);
     state.groundTag = 'terrain';
 
@@ -290,10 +291,21 @@ export class CollisionWorld {
       pos.x = oldX; pos.z = oldZ;
       const n = this.terrain.normalAt(oldX + dx * 2, oldZ + dz * 2, this._n);
       const len = Math.hypot(n.x, n.z) || 1;
-      state.wallNormal.x = n.x / len;
-      state.wallNormal.z = n.z / len;
-      state.onWall = true;
-      state.wallTag = 'terrain';
+      const nx = n.x / len, nz = n.z / len;
+
+      // A true cliff face offers no purchase. Flagging it as `bounce` rather
+      // than as a wall is what stops players wall-jumping their way up the
+      // mountains — there is nothing to kick off.
+      if (this.terrain.slopeAt(oldX + dx * 2, oldZ + dz * 2) > CFG.grapple.noGrappleSlope) {
+        state.bounce = true;
+        state.bounceX = nx;
+        state.bounceZ = nz;
+      } else {
+        state.wallNormal.x = nx;
+        state.wallNormal.z = nz;
+        state.onWall = true;
+        state.wallTag = 'terrain';
+      }
       if (dx !== 0) vel.x = 0; else vel.z = 0;
     } else if (th > pos.y) {
       pos.y = th;                 // walk up the slope
