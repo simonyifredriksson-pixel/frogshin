@@ -39,6 +39,8 @@ export const CFG = {
     wallJumpOut: 13.0,
     wallCoyote: 0.16,
 
+    // Shove applied when you run into an unclimbable cliff face.
+    mountainBounce: 11,
     radius: 0.55,            // collision capsule radius
     height: 1.75,            // collision capsule height
     stepHeight: 0.65,        // auto-step over small ledges
@@ -187,6 +189,10 @@ export const CFG = {
     detachDist: 3.0,         // auto-release when you arrive
     aimAssistAngle: 0.09,    // radians of cone assist toward anchors
     maxTime: 4.0,            // safety release
+    // Bare rock offers nothing to stick to: terrain steeper than this cannot
+    // be grappled, so the mountain rim is not a shortcut out of the map.
+    // Structures (stone, wood, anchors) are always valid whatever the slope.
+    noGrappleSlope: 0.42,
   },
 
   // --------------------------------------------------------------- combat
