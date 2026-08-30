@@ -10,6 +10,7 @@ import { clamp } from './util.js';
 import { CFG } from './config.js';
 import { staminaBand } from './stamina.js';
 import { ITEM_ICONS, SLOT_LABELS } from './items.js';
+import { Audio } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,6 +41,12 @@ export class HUD {
     this.scoreboard = $('scoreboard');
     this.scoreRows = $('score-rows');
     this.toastEl = $('toast');
+    this.roundBanner = $('round-banner');
+    this.rbIcon = $('rb-icon');
+    this.rbName = $('rb-name');
+    this.rbTime = $('rb-time');
+    this.rbRole = $('rb-role');
+    this.announceEl = $('round-announce');
     this.hotbarEl = $('hotbar');
     this.pickupPrompt = $('pickup-prompt');
     this.slotEls = [];
@@ -73,6 +80,126 @@ export class HUD {
       this.healthBar.classList.add('bump');
     }
     this._lastHealth = frac;
+  }
+
+  // ------------------------------------------------------------ vote screen
+
+  /**
+   * Wire the vote overlay once.
+   * @param onVote  (mode) => void
+   * @param onCount (delta) => void
+   */
+  buildVote(onVote, onCount) {
+    this.voteEl = $('vote');
+    this.voteCards = Array.from(document.querySelectorAll('.vote-card'));
+    for (const card of this.voteCards) {
+      card.addEventListener('mouseenter', () => Audio.uiHover());
+      card.addEventListener('click', () => onVote(card.dataset.mode));
+    }
+    $('tp-minus').addEventListener('click', () => onCount(-1));
+    $('tp-plus').addEventListener('click', () => onCount(1));
+    this.voteTimerEl = $('vote-timer');
+    this.tpCount = $('tp-count');
+    this.tpMax = $('tp-max');
+    this.tpNote = $('tp-note');
+    this.taggerPicker = $('tagger-picker');
+    this.voteFoot = $('vote-foot');
+  }
+
+  showVote(show) {
+    if (show === this._voteShown) return;
+    this._voteShown = show;
+    this.voteEl.classList.toggle('show', show);
+  }
+
+  /**
+   * @param round       RoundManager
+   * @param playerCount lobby size
+   * @param myMode      the mode this player voted for, or null
+   * @param myCount     this player's requested tagger count
+   * @param maxCount    highest legal tagger count
+   */
+  updateVote(round, playerCount, myMode, myCount, maxCount) {
+    const secs = Math.max(0, Math.ceil(round.timer));
+    if (secs !== this._voteSecs) {
+      this._voteSecs = secs;
+      this.voteTimerEl.textContent = secs;
+    }
+
+    for (const card of this.voteCards) {
+      const m = card.dataset.mode;
+      card.classList.toggle('picked', m === myMode);
+      const n = card.querySelector('[data-count]');
+      const v = round.tally[m] || 0;
+      if (n.textContent !== String(v)) n.textContent = v;
+    }
+
+    // The tagger count only means anything for the chase modes, and only
+    // becomes a choice at all once there are more than two players.
+    const relevant = myMode === 'tag' || myMode === 'infection';
+    const adjustable = relevant && playerCount > 2;
+    this.taggerPicker.classList.toggle('disabled', !adjustable);
+    this.tpCount.textContent = myCount;
+    this.tpMax.textContent = `of ${maxCount} max`;
+    this.tpNote.textContent = !relevant
+      ? 'Only used by Tag and Infection'
+      : (playerCount > 2
+        ? `${playerCount} players — up to ${maxCount} taggers`
+        : 'Needs 3+ players to change');
+
+    this.voteFoot.textContent = myMode
+      ? 'Vote locked in — you can still change it'
+      : 'Click a mode to vote · the most votes wins';
+  }
+
+  // ---------------------------------------------------------------- round
+
+  /**
+   * Top-of-screen round readout.
+   * @param info    { icon, name } for the current mode
+   * @param seconds time left
+   * @param role    'it' | 'runner' | '' — drives the colour and the label
+   */
+  setRound(info, seconds, role, taggerCount) {
+    this.roundBanner.classList.add('show');
+    if (this._rbMode !== info.name) {
+      this._rbMode = info.name;
+      this.rbIcon.textContent = info.icon;
+      this.rbName.textContent = info.name;
+    }
+    const s = Math.max(0, Math.ceil(seconds));
+    const txt = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    if (txt !== this._rbTime) { this._rbTime = txt; this.rbTime.textContent = txt; }
+    this.roundBanner.classList.toggle('urgent', s <= 15);
+
+    let label = '';
+    if (role === 'it') label = "YOU ARE IT — tag someone!";
+    else if (role === 'runner') label = taggerCount === 1 ? 'RUN — 1 tagger' : `RUN — ${taggerCount} taggers`;
+    if (label !== this._rbRole) { this._rbRole = label; this.rbRole.textContent = label; }
+    this.roundBanner.classList.toggle('it', role === 'it');
+    this.roundBanner.classList.toggle('runner', role === 'runner');
+  }
+
+  hideRound() {
+    this.roundBanner.classList.remove('show');
+    this._rbMode = null;
+  }
+
+  /**
+   * Big centre-screen message.
+   * @param tone 'good' | 'danger' | ''
+   * @param hold true to leave it on screen until cleared
+   */
+  announce(text, tone = '', hold = false) {
+    this.announceEl.textContent = text;
+    this.announceEl.classList.remove('show', 'hold', 'good', 'danger');
+    void this.announceEl.offsetWidth;        // restart the animation
+    if (tone) this.announceEl.classList.add(tone);
+    this.announceEl.classList.add(hold ? 'hold' : 'show');
+  }
+
+  clearAnnounce() {
+    this.announceEl.classList.remove('show', 'hold', 'good', 'danger');
   }
 
   // --------------------------------------------------------------- hotbar
@@ -123,9 +250,11 @@ export class HUD {
           el.dataset.item = slot.item.id;
           icon.innerHTML = ITEM_ICONS[slot.item.id] || '';
         }
-        // Infinite items (the katana) show no number.
-        count.textContent = slot.item.infinite ? '' : String(slot.count);
-        count.classList.toggle('none', !slot.item.infinite && slot.count <= 0);
+        // The katana shows nothing; a tagger's kunai show the infinity mark.
+        const endless = inventory.unlimitedKunai && slot.item.id === 'kunai';
+        count.textContent = slot.item.infinite ? '' : (endless ? '∞' : String(slot.count));
+        count.classList.toggle('none', !slot.item.infinite && !endless && slot.count <= 0);
+        count.classList.toggle('endless', endless);
       }
       el.classList.toggle('sel', i === inventory.selected);
     }
