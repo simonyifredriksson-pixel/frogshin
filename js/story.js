@@ -15,13 +15,13 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v11';
-import { CFG } from './config.js?v=v11';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v11';
-import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v11';
-import { FrogModel } from './frog.js?v=v11';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v11';
-import { Audio } from './audio.js?v=v11';
+import * as THREE from '../lib/three.module.js?v=v12';
+import { CFG } from './config.js?v=v12';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v12';
+import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v12';
+import { FrogModel } from './frog.js?v=v12';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v12';
+import { Audio } from './audio.js?v=v12';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',
@@ -370,7 +370,7 @@ export class StoryMode {
     // Every client therefore owns its own copy of him and runs its own AI.
     // Sharing one networked boss meant whoever reached the gate first began
     // the fight for everybody, and the others could never duel him at all.
-    b.updateAI(dt, player, null);
+    b.updateAI(dt, player);
     b.resolveStrike(dt, player, this);
 
     for (const s of this.soldiers) {
@@ -728,20 +728,14 @@ class BossToadel {
 
   // ------------------------------------------------------------------- AI
 
-  updateAI(dt, player, remotes) {
+  updateAI(dt, player) {
     if (!this.active) return;
     const B = CFG.story.boss;
 
-    // Pick the nearest living target — in co-op he goes for whoever is closest.
-    let target = player.pos;
-    let bestD = player.health.dead ? Infinity : this.pos.distanceToSquared(player.pos);
-    if (remotes) {
-      for (const r of remotes) {
-        if (!r.spawned || r.dead) continue;
-        const d = this.pos.distanceToSquared(r.pos);
-        if (d < bestD) { bestD = d; target = r.pos; }
-      }
-    }
+    // This Toadel belongs to one player and can never target anyone else.
+    // Taking only the local player as an argument makes that a property of
+    // the code rather than something the caller has to remember.
+    const target = player.pos;
     this.targetPos = target;
 
     _toPlayer.set(target.x - this.pos.x, 0, target.z - this.pos.z);
