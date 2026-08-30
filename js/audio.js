@@ -433,6 +433,89 @@ export class AudioEngine {
     this._music = { timer, pad, oscs };
   }
 
+  /** Sharp attention cue for a tutorial prompt. */
+  cue(pos) {
+    this.tone({ freq: 880, to: 1320, dur: 0.16, type: 'square', volume: 0.16, pos });
+    this.tone({ freq: 1760, dur: 0.1, type: 'triangle', volume: 0.09, pos });
+  }
+
+  /**
+   * Boss theme: a driving low ostinato under a slow, menacing motif in a
+   * minor scale. Scheduled note-by-note like the menu theme.
+   */
+  startBossMusic() {
+    if (!this.ready || this._boss) return;
+    const t = this.ctx.currentTime;
+
+    // Pulsing sub drone.
+    const droneGain = this.ctx.createGain();
+    droneGain.gain.value = 0;
+    droneGain.gain.linearRampToValueAtTime(0.10, t + 2.0);
+    droneGain.connect(this.musicBus);
+    const oscs = [];
+    for (const f of [55, 55.6, 82.5]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      const g = this.ctx.createGain();
+      g.gain.value = 0.34;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 220;
+      o.connect(lp); lp.connect(g); g.connect(droneGain);
+      o.start(t);
+      oscs.push(o);
+    }
+
+    // Natural minor — tense without being atonal.
+    const scale = [0, 2, 3, 5, 7, 8, 10];
+    const root = 110;
+    let step = 0;
+
+    const timer = setInterval(() => {
+      if (!this._boss) return;
+      // Driving eighth-note pulse on the root.
+      this.tone({
+        freq: root, dur: 0.16, type: 'square', volume: 0.09,
+        bus: this.musicBus, attack: 0.004,
+      });
+      if (step % 2 === 1) {
+        this.tone({
+          freq: root * 1.5, dur: 0.12, type: 'square', volume: 0.05,
+          bus: this.musicBus, attack: 0.004,
+        });
+      }
+      // A slower motif riding on top.
+      if (step % 4 === 0) {
+        const deg = scale[(Math.floor(step / 4) * 2) % scale.length];
+        this.tone({
+          freq: root * 2 * Math.pow(2, deg / 12), dur: 0.7,
+          type: 'sawtooth', volume: 0.07, bus: this.musicBus, attack: 0.02,
+        });
+      }
+      // Percussive hit on the downbeat.
+      if (step % 8 === 0) {
+        this.noise({
+          dur: 0.22, volume: 0.13, filter: 260, filterTo: 60,
+          type: 'lowpass', bus: this.musicBus,
+        });
+      }
+      step++;
+    }, 250);
+
+    this._boss = { timer, droneGain, oscs };
+  }
+
+  stopBossMusic() {
+    if (!this._boss) return;
+    clearInterval(this._boss.timer);
+    const t = this.ctx.currentTime;
+    this._boss.droneGain.gain.linearRampToValueAtTime(0, t + 1.2);
+    const b = this._boss;
+    setTimeout(() => { for (const o of b.oscs) { try { o.stop(); } catch (e) { /* noop */ } } }, 1500);
+    this._boss = null;
+  }
+
   stopMenuMusic() {
     if (!this._music) return;
     clearInterval(this._music.timer);
