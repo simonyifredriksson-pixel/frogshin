@@ -20,7 +20,7 @@ import { HUD } from './hud.js';
 import { KunaiSystem, PickupSystem } from './items.js';
 import { DummyField } from './dummy.js';
 import { RoundManager, PHASE, maxTaggers } from './rounds.js';
-import { StoryMode, STORY_PHASE } from './story.js';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js';
 import { MenuScene } from './menu.js';
 import { Network, NetRole } from './net.js';
 
@@ -157,7 +157,7 @@ class Game {
   // ------------------------------------------------------------- menu UI
 
   _buildMenuUI() {
-    const panels = ['home', 'play', 'howto', 'settings', 'credits'];
+    const panels = ['home', 'play', 'lobby', 'howto', 'settings', 'credits'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       Audio.uiClick();
@@ -223,20 +223,40 @@ class Game {
       roomInput.value = roomInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     });
 
-    $('btn-host').onclick = () => this._connect('host', null);
+    // Creating or joining a room now lands in a LOBBY instead of launching
+    // straight into a match — otherwise there was no moment at which you
+    // could choose Story, because the arena started the instant you hosted.
+    $('btn-host').onclick = () => { this.pendingMode = null; this._connect('host', null); };
     $('btn-join').onclick = () => {
       const code = roomInput.value.trim();
       if (!code) { this._playStatus('Enter a room code to join.', true); return; }
+      this.pendingMode = null;
       this._connect('join', code);
     };
-    $('btn-quickplay').onclick = () => this._connect('host', 'FROG');
-    $('btn-solo').onclick = () => this._connect('solo', null);
+    // Quick Play and the two solo buttons are explicit, so they go right in.
+    $('btn-quickplay').onclick = () => { this.pendingMode = 'arena'; this._connect('host', 'FROG'); };
+    $('btn-solo').onclick = () => { this.pendingMode = 'arena'; this._connect('solo', null); };
     $('btn-story').onclick = () => {
-      // Story runs in whatever session you already have: solo if none.
-      this.pendingStory = true;
+      this.pendingMode = 'story';
       if (this.net.isOnline && this.net.connected) this._enterGame();
       else this._connect('solo', null);
     };
+
+    // --- lobby ---
+    // Only the host chooses, and the choice is broadcast — otherwise two
+    // players could pick different modes and end up in different worlds.
+    $('lobby-arena').onclick = () => this._hostStart('arena');
+    $('lobby-story').onclick = () => this._hostStart('story');
+    $('lobby-leave').onclick = () => {
+      Audio.uiBack();
+      this.net.disconnect();
+      this.pendingMode = null;
+      this._playStatus('', false);
+      this.showPanel('play');
+    };
+
+    // --- leave a match from the vote screen between rounds ---
+    $('vote-leave').onclick = () => { Audio.uiBack(); this._quitToMenu(); };
 
     // --- settings controls ---
     const bind = (id, key, fn) => {
@@ -287,6 +307,40 @@ class Game {
     };
   }
 
+  /** Show the pre-match lobby and keep its player count live. */
+  _showLobby() {
+    this.showPanel('lobby');
+    this._refreshLobby();
+  }
+
+  _refreshLobby() {
+    if (!$('panel-lobby').classList.contains('active')) return;
+    const n = this.net.isOnline ? this.net.playerCount : 1;
+    const isHost = !this.net.isOnline || this.net.isHost;
+    $('lobby-code').textContent = this.net.room || '----';
+    $('lobby-count').textContent = n;
+    $('lobby-plural').textContent = n === 1 ? '' : 's';
+    $('lobby-host-controls').classList.toggle('show', isHost);
+    $('lobby-waiting').classList.toggle('show', !isHost);
+    $('lobby-status').textContent = !isHost
+      ? 'You are in — the host picks the mode'
+      : (n === 1
+        ? 'Waiting for friends — they join with the code above'
+        : 'Ready when you are');
+  }
+
+  /**
+   * Host picks the mode for everyone. The choice is broadcast, and also
+   * re-sent whenever somebody new joins so late arrivals follow the host
+   * into the mode already running instead of loading the wrong world.
+   */
+  _hostStart(mode) {
+    this.sessionMode = mode;
+    this.pendingMode = mode;
+    this.net.sendEvent({ t: 'gamemode', m: mode });
+    this._enterGame();
+  }
+
   _playStatus(msg, isError) {
     const el = $('play-status');
     el.textContent = msg;
@@ -315,13 +369,18 @@ class Game {
     };
 
     net.onReady = () => {
-      if (this.mode === 'menu' || this.mode === 'menu-overlay') this._enterGame();
+      if (this.mode !== 'menu' && this.mode !== 'menu-overlay') return;
+      // A room made with Create/Join waits in the lobby so the players can
+      // agree on Arena or Story. Everything else launches immediately.
+      if (this.pendingMode) this._enterGame();
+      else this._showLobby();
     };
 
     net.onJoin = (id, prof) => this._addRemote(id, prof);
 
     net.onLeave = (id) => {
       this._pendingJoins.delete(id);
+      this._refreshLobby();
       if (this.round) this.round.removePlayer(id);
       const r = this.remotes.get(id);
       if (!r) return;
@@ -345,6 +404,15 @@ class Game {
       }
       if (ev.t === 'pickup') {
         if (this.pickups) this.pickups.remove(ev.id, true);
+        return;
+      }
+      if (ev.t === 'gamemode') {
+        // The host has chosen. Follow them in, unless we are already playing.
+        this.sessionMode = ev.m;
+        if (this.mode === 'menu' || this.mode === 'menu-overlay') {
+          this.pendingMode = ev.m;
+          this._enterGame();
+        }
         return;
       }
       if (ev.t === 'boss') {
@@ -404,6 +472,11 @@ class Game {
    * parked and materialised once the game scene is ready.
    */
   _addRemote(id, prof) {
+    this._refreshLobby();          // keep the lobby's player count honest
+    // Tell a late joiner which mode is already running.
+    if (this.sessionMode && (!this.net.isOnline || this.net.isHost)) {
+      this.net.sendEvent({ t: 'gamemode', m: this.sessionMode });
+    }
     if (this.remotes.has(id)) return;
     if (!this.scene || !this.effects) {
       this._pendingJoins.set(id, prof);
@@ -448,11 +521,14 @@ class Game {
     const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
     // Story mode builds its own level in its own scene.
-    if (this.pendingStory) {
-      this.pendingStory = false;
+    if (this.pendingMode === 'story') {
+      this.pendingMode = null;
+      this.sessionMode = 'story';
       await this._enterStory(loading, bar, label, frame);
       return;
     }
+    this.pendingMode = null;
+    this.sessionMode = 'arena';
 
     if (!this.world) {
       // --- first-time world build, one step per frame ---
@@ -660,7 +736,10 @@ class Game {
   }
 
   _onLockChange(locked) {
-    if (this.mode === 'playing' && !locked) this._pause();
+    // Voting deliberately releases the mouse so the cards can be clicked —
+    // pausing there would drop the pause menu on top of the vote screen.
+    const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
+    if (this.mode === 'playing' && !locked && !voting) this._pause();
     else if (this.mode === 'paused' && locked) this._resume();
   }
 
@@ -706,8 +785,12 @@ class Game {
     this.hud.show(false);
     this.hud.hideRespawn();
     this.mode = 'menu';
+    this.pendingMode = null;
+    this.sessionMode = null;
+    this._settingsFromPause = false;
     this.input.releaseLock();
     Audio.stopAmbient();
+    Audio.stopBossMusic();
     Audio.startMenuMusic();
     this._playStatus('', false);
   }
@@ -763,7 +846,9 @@ class Game {
    * request is rejected (browsers refuse one made too soon after an unlock).
    */
   _syncClickToPlay() {
-    const want = this.mode === 'playing' && !this.input.locked;
+    // Not during voting: the mouse is meant to be free there.
+    const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
+    const want = this.mode === 'playing' && !this.input.locked && !voting;
     if (want === this._ctpShown) return;
     this._ctpShown = want;
     $('click-to-play').classList.toggle('show', want);
@@ -813,12 +898,15 @@ class Game {
 
       this._drainEvents(p);
       // Everyone plays the village and the duel alone, even in a shared
-      // session — the other frogs only become visible once Toadel has put
-      // you all in the cells.
-      const showOthers = this.story.phase === STORY_PHASE.PRISON;
+      // session. Two players only become visible to each other once BOTH
+      // have been beaten by Toadel and woken in the cells — so this checks
+      // the other player's broadcast progress, not just our own.
+      const myCode = STORY_PHASE_CODE[this.story.phase] || 0;
+      p.storyPhaseCode = myCode;
+      const iAmInCastle = myCode >= PRISON_CODE;
       for (const r of this.remotes.values()) {
         r.update(dt, t);
-        r.model.root.visible = showOthers;
+        r.model.root.visible = iAmInCastle && (r.storyPhase || 0) >= PRISON_CODE;
       }
 
       // The story itself runs on real time so its scripted timers (fades,
