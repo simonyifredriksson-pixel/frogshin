@@ -139,6 +139,36 @@
       </div>
     </div>
 
+    <!-- LOBBY (after creating or joining a room) -->
+    <div class="panel" id="panel-lobby">
+      <div class="card">
+        <h2 class="card-title">ROOM READY</h2>
+
+        <div class="lobby-code">
+          <span>SHARE THIS CODE</span>
+          <b id="lobby-code">----</b>
+        </div>
+
+        <div class="lobby-players">
+          <b id="lobby-count">1</b> frog<span id="lobby-plural"></span> in the room
+        </div>
+
+        <p class="note">
+          Everyone should pick the <b>same</b> mode. Wait for your friends to
+          join, then choose.
+        </p>
+
+        <div id="lobby-host-controls">
+          <button class="btn btn-go" id="lobby-arena"><span>PLAY ARENA</span></button>
+          <button class="btn btn-story" id="lobby-story"><span>PLAY STORY</span></button>
+        </div>
+        <div id="lobby-waiting">WAITING FOR THE HOST TO CHOOSE…</div>
+        <button class="btn btn-quiet" id="lobby-leave"><span>LEAVE ROOM</span></button>
+
+        <div id="lobby-status" class="status"></div>
+      </div>
+    </div>
+
     <!-- HOW TO PLAY -->
     <div class="panel" id="panel-howto">
       <div class="card wide">
@@ -437,6 +467,7 @@
     </div>
 
     <div class="vote-foot" id="vote-foot">Click a mode to vote · the most votes wins</div>
+    <button class="btn btn-quiet" id="vote-leave"><span>LEAVE MATCH</span></button>
   </div>
 </div>
 
