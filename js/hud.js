@@ -41,6 +41,18 @@ export class HUD {
     this.scoreboard = $('scoreboard');
     this.scoreRows = $('score-rows');
     this.toastEl = $('toast');
+    // Vote-screen elements are cached here rather than in buildVote(), which
+    // only runs when an arena match starts. Going straight to Story mode
+    // would otherwise leave these undefined and crash on the first reset.
+    this.voteEl = $('vote');
+    this.voteTimerEl = $('vote-timer');
+    this.voteCards = Array.from(document.querySelectorAll('.vote-card'));
+    this.tpCount = $('tp-count');
+    this.tpMax = $('tp-max');
+    this.tpNote = $('tp-note');
+    this.taggerPicker = $('tagger-picker');
+    this.voteFoot = $('vote-foot');
+
     this.roundBanner = $('round-banner');
     this.rbIcon = $('rb-icon');
     this.rbName = $('rb-name');
@@ -84,6 +96,34 @@ export class HUD {
 
   // ----------------------------------------------------------------- story
 
+  /**
+   * Wipe every piece of arena UI before the story starts.
+   * The HUD is one shared set of elements, so state left over from a match
+   * would otherwise show up mid-story — a round timer counting down, a stale
+   * "YOU ARE IT", or a boss bar from a previous attempt.
+   */
+  resetForStory() {
+    this.hideRound();
+    this.showVote(false);
+    this.clearAnnounce();
+    this.hideRespawn();
+    this.showScoreboard(false);
+    this.hideBossBar();
+    this.setTutorial(null);
+    this.setCinematic(false);
+    this.setSubtitle('');
+    this.setPickupPrompt(false);
+    this.setAlert(0, false);
+    this.setFade(0, 0);
+    this.setCritical(false);
+    this.killfeed.innerHTML = '';
+    this._feedItems.length = 0;
+    this.toastEl.classList.remove('show');
+    this.comboEl.classList.remove('show');
+    this._rbMode = null;
+    this._bossFrac = 0;
+  }
+
   /** @param list array of { id, text, done, active } — or null to hide */
   setObjectives(list) {
     const root = $('objectives');
@@ -107,6 +147,25 @@ export class HUD {
       if (isNew && i === list.length - 1) li.classList.add('new');
       ul.appendChild(li);
     });
+  }
+
+  /**
+   * Guard suspicion meter.
+   * @param level   0..1 how close a guard is to spotting you
+   * @param chasing true once one actually has
+   */
+  setAlert(level, chasing) {
+    const el = $('alert');
+    const show = level > 0.02 || chasing;
+    if (show !== this._alertShown) {
+      this._alertShown = show;
+      el.classList.toggle('show', show);
+    }
+    if (chasing !== this._alertChase) {
+      this._alertChase = chasing;
+      el.classList.toggle('chase', chasing);
+    }
+    if (show) $('al-fill').style.width = (clamp(level, 0, 1) * 100) + '%';
   }
 
   showBossBar(name, fraction) {
@@ -136,6 +195,41 @@ export class HUD {
     this.root.classList.toggle('cinematic', on);
   }
 
+  /**
+   * Tutorial prompt, split so the key gets its own badge.
+   * Call with no arguments to hide it.
+   * @param verb e.g. 'HOLD'   @param key 'RIGHT CLICK'   @param tail 'TO PARRY…'
+   */
+  setTutorial(verb, key, tail) {
+    const el = $('tutorial');
+    if (!verb) {
+      el.classList.remove('show');
+      this._tutKey = null;
+      return;
+    }
+    const sig = verb + '|' + key + '|' + tail;
+    if (sig !== this._tutKey) {
+      this._tutKey = sig;
+      $('tut-verb').textContent = verb;
+      $('tut-key').textContent = key;
+      $('tut-tail').textContent = tail;
+    }
+    el.classList.add('show');
+  }
+
+  /**
+   * Fade the screen to or from black.
+   * @param to       1 for black, 0 for clear
+   * @param duration seconds
+   */
+  setFade(to, duration) {
+    const el = $('fade');
+    el.style.transition = duration > 0 ? `opacity ${duration}s ease-in-out` : 'none';
+    // Force a reflow so a transition set in the same frame still animates.
+    void el.offsetWidth;
+    el.style.opacity = String(to);
+  }
+
   setSubtitle(text, speaker) {
     const el = $('subtitle');
     if (!text) { el.classList.remove('show'); return; }
@@ -151,21 +245,16 @@ export class HUD {
    * @param onVote  (mode) => void
    * @param onCount (delta) => void
    */
+  /** Wire the vote handlers. Elements themselves are cached in the ctor. */
   buildVote(onVote, onCount) {
-    this.voteEl = $('vote');
-    this.voteCards = Array.from(document.querySelectorAll('.vote-card'));
+    if (this._voteWired) return;
+    this._voteWired = true;
     for (const card of this.voteCards) {
       card.addEventListener('mouseenter', () => Audio.uiHover());
       card.addEventListener('click', () => onVote(card.dataset.mode));
     }
     $('tp-minus').addEventListener('click', () => onCount(-1));
     $('tp-plus').addEventListener('click', () => onCount(1));
-    this.voteTimerEl = $('vote-timer');
-    this.tpCount = $('tp-count');
-    this.tpMax = $('tp-max');
-    this.tpNote = $('tp-note');
-    this.taggerPicker = $('tagger-picker');
-    this.voteFoot = $('vote-foot');
   }
 
   showVote(show) {
