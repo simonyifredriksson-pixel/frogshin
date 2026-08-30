@@ -163,6 +163,9 @@ export class Player {
       dt: this.dashTimer > 0 ? 1 : 0,
       sw: this.inWater ? 1 : 0,
       sp: this.sprinting ? 1 : 0,
+      // How far through the story this player is, so others know whether
+      // they should be visible yet. 0 in the arena.
+      st: this.storyPhaseCode || 0,
       at: this.combat.attacking ? this.combat.comboIndex + 1 : 0,
       gr: g,
       k: this.kills,
@@ -336,6 +339,10 @@ export class Player {
     this.hitCeiling = cs.hitCeiling;
     this.wallNormal.copy(cs.wallNormal);
     this.landedThisFrame = cs.landedThisFrame;
+
+    // Bounced off a cliff: shove away from the rock and kill the dash, so
+    // charging a mountain never gains you height.
+    if (cs.bounce) this._bounceOffCliff(cs.bounceX, cs.bounceZ);
 
     this._postMove(dt, hasInput, cam, dashing);
 
@@ -908,7 +915,33 @@ export class Player {
 
   // ----------------------------------------------------------- post-physics
 
+  /**
+   * Rebound off an unclimbable rock face.
+   *
+   * Rate-limited so grinding against a cliff does not machine-gun the sound
+   * and particles; the push itself still applies every frame, which is what
+   * makes the wall genuinely impossible to hug.
+   */
+  _bounceOffCliff(nx, nz) {
+    const push = CFG.move.mountainBounce;
+    this.vel.x = nx * push;
+    this.vel.z = nz * push;
+    // No wall-cling, no wall-jump, and a dash into rock simply stops.
+    this.wallSliding = false;
+    this.wallCoyote = 0;
+    if (this.dashTimer > 0) { this.dashTimer = 0; this.dashDir.set(nx, 0, nz); }
+
+    this._bounceCue = (this._bounceCue || 0);
+    if (this._bounceCue <= 0) {
+      this._bounceCue = 0.35;
+      _tmp.set(this.pos.x - nx * 0.4, this.pos.y + 1.0, this.pos.z - nz * 0.4);
+      this.effects.dustPuff(_tmp, 6, 2.2, 0x9a9187);
+      Audio.land(this.pos, false);
+    }
+  }
+
   _postMove(dt, hasInput, cam, dashing) {
+    if (this._bounceCue > 0) this._bounceCue -= dt;
     // Coyote time.
     if (this.grounded) {
       this.coyote = CFG.move.coyoteTime;
