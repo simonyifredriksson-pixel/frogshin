@@ -462,9 +462,15 @@ export class FrogModel {
     if (atk > 0) {
       this._poseAttack(s.attackIndex || 0, atk, dt);
     } else {
-      // Katana rides on the back when not swinging.
-      this.katana.position.set(-0.16, 0.74, -0.42);
-      this.katana.rotation.set(0.25, 0, -0.62);
+      if (s.parrying) {
+        // Held out front, horizontal, catching the blow.
+        this.katana.position.set(0.30, 1.02, 0.52);
+        this.katana.rotation.set(0.1, 0, 1.5);
+      } else {
+        // Katana rides on the back when not swinging.
+        this.katana.position.set(-0.16, 0.74, -0.42);
+        this.katana.rotation.set(0.25, 0, -0.62);
+      }
       this.katana.scale.setScalar(1);
       this.sheath.visible = false;   // sword itself stands in for the sheath
       // Unwind the torso twist left over from a swing.
@@ -473,7 +479,10 @@ export class FrogModel {
       for (const arm of this.arms) {
         const phase = arm.side > 0 ? -sw : sw;
         let sx, sz, fx;
-        if (s.throwT > 0 && arm.side > 0) {
+        if (s.parrying) {
+          // Blade brought up across the body in a guard.
+          sx = -1.15; sz = arm.side * (arm.side > 0 ? 0.55 : 0.85); fx = -1.25;
+        } else if (s.throwT > 0 && arm.side > 0) {
           // Right arm snaps from cocked-behind-the-ear to fully extended.
           const k = 1 - s.throwT;                 // 0 -> 1 over the throw
           const e = k * k * (3 - 2 * k);
