@@ -1,0 +1,332 @@
+/**
+ * Story-mode characters: the armoured invader toads and the villager frogs
+ * they are attacking.
+ *
+ * Toads are built from the same primitive-and-group approach as the player
+ * frog, but heavier and hunched, with plate armour and a wooden club. All
+ * materials are module-level singletons so twenty toads on screen still only
+ * touch a handful of materials.
+ */
+
+import * as THREE from '../lib/three.module.js';
+import { damp, lerp, clamp } from './util.js';
+
+const G = {
+  sphere: new THREE.SphereGeometry(1, 10, 8),
+  low: new THREE.SphereGeometry(1, 7, 5),
+  box: new THREE.BoxGeometry(1, 1, 1),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 7),
+  cone: new THREE.ConeGeometry(1, 1, 6),
+  capsule: new THREE.CapsuleGeometry(1, 1, 3, 7),
+};
+
+let M = null;
+function mats() {
+  if (M) return M;
+  const L = (c, e) => new THREE.MeshLambertMaterial({ color: c, emissive: e || 0x000000 });
+  M = {
+    skin: L(0x6f7a3e),        // sickly olive toad hide
+    skinDark: L(0x535c2e),
+    belly: L(0x9aa06a),
+    iron: L(0x565f6b),
+    ironDark: L(0x353b45),
+    gold: L(0x9a7d33),
+    wood: L(0x6b4a2a),
+    woodDark: L(0x452e19),
+    eye: L(0xff5a2c, 0x8a2a10),   // glowing malice
+    cloth: L(0x7a2f22),
+    bossIron: L(0x3c3f4a),
+    bossTrim: L(0xb08b32),
+    bossCloth: L(0x5e1a14),
+  };
+  return M;
+}
+
+function part(geo, mat, sx, sy, sz, px, py, pz, rx, ry, rz) {
+  const m = new THREE.Mesh(geo, mat);
+  m.scale.set(sx, sy, sz);
+  m.position.set(px || 0, py || 0, pz || 0);
+  m.rotation.set(rx || 0, ry || 0, rz || 0);
+  m.castShadow = true;
+  return m;
+}
+
+/**
+ * An armoured toad. `boss` makes it much larger and more ornate.
+ * Modelled facing +Z, like the player frog, so `setFacing` matches.
+ */
+export class ToadModel {
+  constructor(boss = false) {
+    const P = mats();
+    this.boss = boss;
+    this.root = new THREE.Group();
+    this.body = new THREE.Group();
+    this.root.add(this.body);
+
+    const s = boss ? 1.85 : 1.0;
+    this.scaleFactor = s;
+    this.root.scale.setScalar(s);
+
+    const iron = boss ? P.bossIron : P.iron;
+    const trim = boss ? P.bossTrim : P.gold;
+
+    // ---- torso: broad and hunched forward ----
+    this.body.add(part(G.sphere, P.skin, 0.62, 0.52, 0.56, 0, 0.78, 0));
+    this.body.add(part(G.sphere, P.belly, 0.48, 0.38, 0.40, 0, 0.68, 0.24));
+    // Breastplate.
+    this.body.add(part(G.sphere, iron, 0.64, 0.42, 0.50, 0, 0.86, 0.04));
+    this.body.add(part(G.box, trim, 0.14, 0.42, 0.06, 0, 0.88, 0.50));
+    // Shoulder plates.
+    for (const sx of [-1, 1]) {
+      this.body.add(part(G.low, iron, 0.28, 0.22, 0.26, sx * 0.62, 1.06, 0));
+      this.body.add(part(G.cone, trim, 0.12, 0.20, 0.12, sx * 0.72, 1.22, 0, 0, 0, sx * 0.4));
+    }
+    // Belt.
+    this.body.add(part(G.cyl, P.woodDark, 0.60, 0.09, 0.56, 0, 0.52, 0));
+
+    // ---- head: wide, low-set, angry ----
+    this.head = new THREE.Group();
+    this.head.position.set(0, 1.28, 0.10);
+    this.body.add(this.head);
+    this.head.add(part(G.sphere, P.skin, 0.50, 0.38, 0.46, 0, 0, 0));
+    this.head.add(part(G.sphere, P.skinDark, 0.44, 0.14, 0.40, 0, -0.16, 0.06));  // jaw
+    // Helmet.
+    this.head.add(part(G.sphere, iron, 0.53, 0.34, 0.48, 0, 0.10, -0.02));
+    this.head.add(part(G.box, iron, 0.10, 0.16, 0.50, 0, 0.34, -0.06));           // crest
+    if (boss) {
+      // Horns mark the leader out at a glance.
+      for (const sx of [-1, 1]) {
+        this.head.add(part(G.cone, trim, 0.10, 0.52, 0.10,
+          sx * 0.42, 0.28, -0.04, -0.3, 0, sx * 0.75));
+      }
+      this.head.add(part(G.box, trim, 0.56, 0.05, 0.05, 0, 0.20, 0.40));
+    }
+    // Eyes.
+    for (const sx of [-1, 1]) {
+      this.head.add(part(G.low, P.eye, 0.11, 0.09, 0.09, sx * 0.24, 0.06, 0.38));
+    }
+    this.head.add(part(G.box, P.skinDark, 0.56, 0.03, 0.10, 0, -0.10, 0.36));     // mouth line
+
+    // ---- arms ----
+    this.arms = [];
+    for (const sx of [-1, 1]) {
+      const shoulder = new THREE.Group();
+      shoulder.position.set(sx * 0.60, 0.98, 0);
+      this.body.add(shoulder);
+      shoulder.add(part(G.capsule, P.skin, 0.16, 0.18, 0.16, 0, -0.24, 0));
+      shoulder.add(part(G.cyl, iron, 0.18, 0.10, 0.18, 0, -0.10, 0));
+      const fore = new THREE.Group();
+      fore.position.set(0, -0.46, 0);
+      shoulder.add(fore);
+      fore.add(part(G.capsule, P.skin, 0.14, 0.17, 0.14, 0, -0.18, 0));
+      const hand = new THREE.Group();
+      hand.position.set(0, -0.40, 0);
+      fore.add(hand);
+      hand.add(part(G.low, P.skin, 0.17, 0.15, 0.17, 0, 0, 0));
+      this.arms.push({ shoulder, fore, hand, side: sx });
+    }
+
+    // ---- legs: squat and splayed ----
+    this.legs = [];
+    for (const sx of [-1, 1]) {
+      const hip = new THREE.Group();
+      hip.position.set(sx * 0.32, 0.46, 0);
+      this.body.add(hip);
+      hip.add(part(G.capsule, P.skin, 0.20, 0.16, 0.20, sx * 0.06, -0.16, 0));
+      const shin = new THREE.Group();
+      shin.position.set(sx * 0.08, -0.32, 0);
+      hip.add(shin);
+      shin.add(part(G.capsule, P.skin, 0.14, 0.16, 0.14, 0, -0.16, 0));
+      const foot = new THREE.Group();
+      foot.position.set(0, -0.34, 0);
+      shin.add(foot);
+      foot.add(part(G.low, P.skin, 0.20, 0.08, 0.30, 0, 0, 0.12));
+      this.legs.push({ hip, shin, foot, side: sx });
+    }
+
+    // ---- club, held in the right hand ----
+    this.weapon = new THREE.Group();
+    this.weapon.add(part(G.cyl, P.wood, 0.07, 0.90, 0.07, 0, -0.35, 0));
+    this.weapon.add(part(G.cyl, P.wood, 0.17, 0.42, 0.17, 0, 0.34, 0));
+    // Knots and iron bands so it reads as a heavy, crude weapon.
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      this.weapon.add(part(G.low, P.woodDark, 0.07, 0.07, 0.07,
+        Math.cos(a) * 0.17, 0.22 + (i % 2) * 0.24, Math.sin(a) * 0.17));
+    }
+    this.weapon.add(part(G.cyl, iron, 0.19, 0.05, 0.19, 0, 0.50, 0));
+    if (boss) {
+      this.weapon.scale.setScalar(1.25);
+      this.weapon.add(part(G.cone, trim, 0.13, 0.26, 0.13, 0, 0.62, 0));
+    }
+    this.arms[1].hand.add(this.weapon);
+    this.weapon.position.set(0, -0.18, 0.08);
+    this.weapon.rotation.x = -0.4;
+
+    if (boss) {
+      // Tattered cape.
+      this.cape = new THREE.Group();
+      this.cape.position.set(0, 1.06, -0.34);
+      this.body.add(this.cape);
+      for (let i = 0; i < 3; i++) {
+        this.cape.add(part(G.box, P.bossCloth, 0.62 - i * 0.1, 0.5, 0.05,
+          (i - 1) * 0.28, -0.42, -0.04 - i * 0.02, 0.16, 0, 0));
+      }
+    }
+
+    // ---- animation state ----
+    this.t = Math.random() * 10;
+    this.stride = Math.random() * 6;
+    this.attackT = 0;
+    this.attackDur = 1;
+    this.hurtT = 0;
+    this.dead = false;
+  }
+
+  setFacing(yaw) { this.root.rotation.y = yaw + Math.PI; }
+
+  /** Kick off a swing animation. */
+  swing(duration = 0.55) {
+    this.attackT = duration;
+    this.attackDur = duration;
+  }
+
+  flinch() { this.hurtT = 0.18; }
+
+  /**
+   * @param s { speed, attacking, dead }
+   */
+  update(dt, s = {}) {
+    this.t += dt;
+    const t = this.t;
+
+    if (s.dead || this.dead) {
+      this.root.rotation.z = damp(this.root.rotation.z, Math.PI * 0.46, 6, dt);
+      this.body.position.y = damp(this.body.position.y, -0.3, 6, dt);
+      return;
+    }
+
+    const speed = s.speed || 0;
+    const moving = speed > 0.6;
+    if (moving) this.stride += dt * (3.2 + Math.min(speed, 14) * 0.55);
+
+    const sw = Math.sin(this.stride);
+    // Heavy, lumbering gait.
+    this.body.position.y = Math.abs(Math.sin(this.stride)) * (moving ? 0.09 : 0)
+      + Math.sin(t * 1.4) * 0.02;
+    this.body.rotation.x = damp(this.body.rotation.x, moving ? 0.20 : 0.10, 6, dt);
+    this.head.rotation.x = damp(this.head.rotation.x, moving ? -0.16 : -0.06, 6, dt);
+
+    for (const leg of this.legs) {
+      const phase = leg.side > 0 ? sw : -sw;
+      leg.hip.rotation.x = damp(leg.hip.rotation.x, moving ? phase * 0.62 : -0.2, 14, dt);
+      leg.shin.rotation.x = damp(leg.shin.rotation.x,
+        moving ? clamp(-phase, 0, 1) * 0.9 + 0.1 : 0.45, 14, dt);
+      leg.hip.rotation.z = damp(leg.hip.rotation.z, leg.side * 0.24, 8, dt);
+    }
+
+    // Attack: big overhead club smash.
+    if (this.attackT > 0) {
+      this.attackT = Math.max(0, this.attackT - dt);
+      const k = 1 - this.attackT / this.attackDur;      // 0 -> 1
+      const e = k < 0.42
+        ? (k / 0.42) * (k / 0.42) * 0.5                  // slow wind-up
+        : 0.5 + (1 - Math.pow(1 - (k - 0.42) / 0.58, 3)) * 0.5;  // fast strike
+      const right = this.arms[1];
+      right.shoulder.rotation.x = lerp(-2.6, 1.05, e);
+      right.shoulder.rotation.z = 0.1;
+      right.fore.rotation.x = lerp(-1.2, -0.1, e);
+      this.body.rotation.x = 0.2 + Math.sin(e * Math.PI) * 0.25;
+      const left = this.arms[0];
+      left.shoulder.rotation.x = damp(left.shoulder.rotation.x, -0.5, 12, dt);
+      left.shoulder.rotation.z = damp(left.shoulder.rotation.z, -0.4, 12, dt);
+    } else {
+      for (const arm of this.arms) {
+        const phase = arm.side > 0 ? -sw : sw;
+        arm.shoulder.rotation.x = damp(arm.shoulder.rotation.x,
+          moving ? phase * 0.5 : 0.1, 10, dt);
+        arm.shoulder.rotation.z = damp(arm.shoulder.rotation.z, arm.side * 0.22, 8, dt);
+        arm.fore.rotation.x = damp(arm.fore.rotation.x, -0.5, 10, dt);
+      }
+    }
+
+    if (this.hurtT > 0) {
+      this.hurtT -= dt;
+      // Quick shudder on taking a hit.
+      this.body.position.x = Math.sin(this.hurtT * 90) * 0.06;
+    } else {
+      this.body.position.x = damp(this.body.position.x, 0, 12, dt);
+    }
+
+    if (this.cape) {
+      this.cape.rotation.x = 0.1 + Math.sin(t * 1.7) * 0.09 + Math.min(speed, 12) * 0.02;
+    }
+  }
+}
+
+/**
+ * A scripted background actor: a toad beating a villager, or a villager
+ * cowering. Purely decorative — these never interact with the player, they
+ * exist to make the invasion feel like it is happening around you.
+ */
+export class VillageScene {
+  /**
+   * @param kind 'beating' | 'burning' | 'fleeing'
+   */
+  constructor(kind, x, y, z, facing, frogFactory) {
+    this.kind = kind;
+    this.root = new THREE.Group();
+    this.root.position.set(x, y, z);
+    this.root.rotation.y = facing;
+    this.t = Math.random() * 5;
+    this.cycle = 1.6 + Math.random() * 0.8;
+
+    this.toad = new ToadModel(false);
+    this.root.add(this.toad.root);
+
+    if (kind === 'beating') {
+      // A villager frog on the ground taking blows.
+      this.victim = frogFactory();
+      this.victim.root.position.set(0, 0, 1.9);
+      this.victim.root.rotation.z = Math.PI * 0.45;
+      this.root.add(this.victim.root);
+      this.toad.setFacing(0);
+    } else if (kind === 'fleeing') {
+      this.victim = frogFactory();
+      this.victim.root.position.set(0, 0, 3.2);
+      this.root.add(this.victim.root);
+      this.toad.setFacing(0);
+    } else {
+      this.toad.setFacing(Math.random() * Math.PI * 2);
+    }
+  }
+
+  update(dt) {
+    this.t += dt;
+    if (this.kind === 'beating') {
+      // Swing on a loop, with the club landing on the beat.
+      if (this.t > this.cycle) {
+        this.t = 0;
+        this.toad.swing(0.6);
+        if (this.victim) this.victim.croak();
+      }
+      this.toad.update(dt, { speed: 0 });
+      if (this.victim) {
+        this.victim.update(dt, {
+          speed: 0, grounded: true, moving: false, dead: true,
+        });
+      }
+    } else if (this.kind === 'fleeing') {
+      this.toad.update(dt, { speed: 6 });
+      if (this.victim) {
+        this.victim.update(dt, {
+          speed: 9, vy: 0, grounded: true, moving: true, dead: false,
+        });
+      }
+    } else {
+      // Torching a building: slow, deliberate swings at the walls.
+      if (this.t > this.cycle * 1.6) { this.t = 0; this.toad.swing(0.8); }
+      this.toad.update(dt, { speed: 0 });
+    }
+  }
+}
