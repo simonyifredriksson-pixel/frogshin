@@ -43,6 +43,10 @@ export class Player {
     this.inventory = new Inventory();
     this.kunaiCooldown = 0;
     this.throwT = 0;
+    // Set each frame by the round manager: taggers throw faster, and the
+    // chase modes turn player damage off entirely.
+    this.throwCooldownOverride = 0;
+    this.combatEnabled = true;
 
     this.model = new FrogModel(this.color, this.name, true);
     this.scene.add(this.model.root);
@@ -612,7 +616,7 @@ export class Player {
     if (slot.count <= 0) { this.outOfKunaiCue = true; return; }
 
     this.inventory.useSelectedKunai();
-    this.kunaiCooldown = CFG.kunai.cooldown;
+    this.kunaiCooldown = this.throwCooldownOverride || CFG.kunai.cooldown;
     this.throwT = 0.26;
     this.yaw = cam.yaw;                       // throw where you are looking
 
@@ -673,6 +677,9 @@ export class Player {
         if (h.target.onHit) h.target.onHit(h.damage, h.dirX, h.dirZ);
         continue;
       }
+
+      // Chase modes have no damage — the katana swing stays purely cosmetic.
+      if (!this.combatEnabled) continue;
 
       this.effects.damageNumber(_tmp, h.damage, h.heavy);
       this.events.push({
