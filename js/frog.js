@@ -559,6 +559,12 @@ export class FrogModel {
       tl.rotation.y = damp(tl.rotation.y, Math.sin(t * 5 + i * 2) * 0.3, 9, dt);
     }
 
+    // Spin and bob the tagger marker so it catches the eye.
+    if (this.tagMarker && this.tagMarker.visible) {
+      this.tagMarker.rotation.y += dt * 2.4;
+      this.tagMarker.position.y = 2.62 + Math.sin(t * 3.2) * 0.12;
+    }
+
     // ---- tongue ----------------------------------------------------------
     this._updateTongue(dt, s);
   }
@@ -652,6 +658,35 @@ export class FrogModel {
     this.tongueMesh.position.y = L * 0.5;
     this.tongueTip.position.y = L;
     this.tongueTip.visible = s.grappling;
+  }
+
+  /**
+   * Show or hide the "this frog is it" marker: a bright inverted cone
+   * hovering above the head, visible across the map during a chase.
+   */
+  setTagger(v) {
+    if (this._isTagger === v) return;
+    this._isTagger = v;
+    if (v && !this.tagMarker) {
+      const g = new THREE.Group();
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.34, 0.6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xff5a3c })
+      );
+      cone.rotation.x = Math.PI;          // point the tip down at the frog
+      g.add(cone);
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.42, 0.07, 6, 14),
+        new THREE.MeshBasicMaterial({ color: 0xffb03c })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 0.42;
+      g.add(ring);
+      g.position.set(0, 2.62, 0);
+      this.tagMarker = g;
+      this.root.add(g);
+    }
+    if (this.tagMarker) this.tagMarker.visible = v;
   }
 
   /**
