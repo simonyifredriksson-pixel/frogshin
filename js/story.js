@@ -51,6 +51,20 @@ const FADE_OUT = 2.0;
 const BLACK_TIME = 2.0;
 const FADE_IN = 2.2;
 
+/**
+ * Numeric code for the network. Players only become visible to one another
+ * once BOTH have reached the cell, so each broadcasts how far along it is.
+ */
+export const STORY_PHASE_CODE = {
+  [STORY_PHASE.ESCAPE]: 0,
+  [STORY_PHASE.CUTSCENE]: 1,
+  [STORY_PHASE.BOSS]: 2,
+  [STORY_PHASE.DEFEAT]: 3,
+  [STORY_PHASE.PRISON]: 4,
+};
+/** At or past this code means "has woken up in the castle". */
+export const PRISON_CODE = 4;
+
 const TOADEL_LINE =
   '“Another villager? How unfortunate. You should have stayed in your ' +
   'little house and waited for the flames to reach you.”';
