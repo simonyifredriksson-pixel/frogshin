@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FROGSHIN — Ninja Frog Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- ══════════════════════════════════════════════════════ START SCREEN ══ -->
+<div id="menu" class="show">
+
+  <!-- Warm vignette + a scanline wash to sell the pixel-art presentation -->
+  <div class="menu-grade"></div>
+
+  <div class="menu-inner">
+
+    <!-- ─────────────────────────── logo ─────────────────────────── -->
+    <div class="logo">
+      <svg class="logo-crest" viewBox="0 0 560 150" aria-hidden="true">
+        <!-- Crossed katana behind the title -->
+        <g class="katana">
+          <rect x="40"  y="70" width="330" height="7"  fill="#e9eef5"/>
+          <rect x="40"  y="77" width="330" height="4"  fill="#9fb0c4"/>
+          <polygon points="370,68 396,73.5 370,83" fill="#f6f9ff"/>
+          <rect x="16"  y="66" width="26" height="16" fill="#c9a227"/>
+          <rect x="-14" y="69" width="34" height="10" fill="#2b2b34"/>
+          <rect x="-18" y="67" width="8"  height="14" fill="#c9a227"/>
+        </g>
+        <g class="katana katana-2">
+          <rect x="190" y="70" width="330" height="7" fill="#e9eef5"/>
+          <rect x="190" y="77" width="330" height="4" fill="#9fb0c4"/>
+          <polygon points="520,68 546,73.5 520,83" fill="#f6f9ff"/>
+          <rect x="166" y="66" width="26" height="16" fill="#c9a227"/>
+          <rect x="136" y="69" width="34" height="10" fill="#2b2b34"/>
+          <rect x="132" y="67" width="8"  height="14" fill="#c9a227"/>
+        </g>
+      </svg>
+
+      <div class="logo-plate">
+        <h1 class="title" data-text="FROGSHIN">FROGSHIN</h1>
+      </div>
+
+      <div class="logo-eyes" aria-hidden="true">
+        <span class="eye"><i></i></span>
+        <span class="eye"><i></i></span>
+      </div>
+
+      <div class="subtitle">◆ NINJA FROG ARENA ◆</div>
+    </div>
+
+    <!-- ─────────────────────────── panels ─────────────────────────── -->
+
+    <!-- HOME -->
+    <div class="panel active" id="panel-home">
+      <nav class="menu-list">
+        <button class="btn btn-main" id="btn-play"><span>PLAY</span></button>
+        <button class="btn btn-main" id="btn-howto"><span>HOW TO PLAY</span></button>
+        <button class="btn btn-main" id="btn-settings"><span>SETTINGS</span></button>
+        <button class="btn btn-main" id="btn-credits"><span>CREDITS</span></button>
+      </nav>
+    </div>
+
+    <!-- PLAY -->
+    <div class="panel" id="panel-play">
+      <div class="card">
+        <h2 class="card-title">ENTER THE ARENA</h2>
+
+        <div class="field">
+          <label for="input-name">NINJA NAME</label>
+          <input id="input-name" type="text" maxlength="14" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <div class="field">
+          <label>FROG COLOUR</label>
+          <div id="color-picker" class="swatches"></div>
+        </div>
+
+        <div class="divider"><span>MULTIPLAYER</span></div>
+
+        <div class="btn-row">
+          <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
+          <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
+        </div>
+
+        <div class="join-row">
+          <input id="input-room" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" spellcheck="false" />
+          <button class="btn" id="btn-join"><span>JOIN</span></button>
+        </div>
+
+        <p class="note">
+          Quick Play drops you into the public room <b>FROG</b>. Create Room gives you a
+          private code — share it and your friends join from their own machines.
+        </p>
+
+        <div class="divider"><span>OR</span></div>
+        <button class="btn btn-quiet" id="btn-solo"><span>SOLO PRACTICE (OFFLINE)</span></button>
+
+        <div id="play-status" class="status"></div>
+        <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+    <!-- HOW TO PLAY -->
+    <div class="panel" id="panel-howto">
+      <div class="card wide">
+        <h2 class="card-title">HOW TO PLAY</h2>
+
+        <div class="how-grid">
+          <div class="how-col">
+            <h3>CONTROLS</h3>
+            <ul class="keys">
+              <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></li>
+              <li><kbd>SHIFT</kbd><span>Sprint — double speed, ninja run</span></li>
+              <li><kbd>MOUSE</kbd><span>Look / aim</span></li>
+              <li><kbd>SPACE</kbd><span>Jump — tap again mid-air for the frog flip</span></li>
+              <li><kbd>Q</kbd><span>Dash — fast, brief invulnerability</span></li>
+              <li><kbd>G</kbd><span>Tongue grapple — press again to let go</span></li>
+              <li><kbd>LMB</kbd><span>Katana — 3-hit combo</span></li>
+              <li><kbd>RMB</kbd><span>Throw kunai (equip it first)</span></li>
+              <li><kbd>1</kbd><kbd>2</kbd>…<kbd>0</kbd><span>Hotbar — or click a slot</span></li>
+              <li><kbd>E</kbd><span>Pick up a kunai crate</span></li>
+              <li><kbd>TAB</kbd><span>Scoreboard</span></li>
+              <li><kbd>ESC</kbd><span>Pause</span></li>
+            </ul>
+          </div>
+
+          <div class="how-col">
+            <h3>NINJA TECHNIQUE</h3>
+            <ul class="tips">
+              <li><b>Wall jump.</b> Hug any wall in mid-air and press <kbd>SPACE</kbd> to kick off it.</li>
+              <li><b>Swing, don't winch.</b> The tongue is a real rope — build speed by swinging wide, then release with <kbd>SPACE</kbd> for a launch.</li>
+              <li><b>Chain everything.</b> Landing a grapple refills your air dash and flip. Dash → grapple → flip → dash crosses the whole map.</li>
+              <li><b>Lanterns are targets.</b> The glowing lanterns are always grappleable and the crosshair opens up when one is in reach.</li>
+              <li><b>The third swing hits hardest.</b> Land all three combo hits — the finisher does heavy damage and big knockback.</li>
+              <li><b>Dash through attacks.</b> The dash has brief invulnerability frames.</li>
+              <li><b>Kunai hit for 25 — or 50 to the head.</b> Press <kbd>2</kbd> to equip them and <kbd>RMB</kbd> to throw. They fly dead straight and very fast, so the crosshair is exactly where they land. You start with 10; glowing crates around the valley hold 5 more each and are replaced every 30 seconds.</li>
+              <li><b>Practise on the dummies.</b> The straw dummies on the arena platforms show exactly how much damage each hit does.</li>
+              <li><b>Watch your stamina.</b> Sprinting drains it and every jump costs a chunk. Empty it and you cannot sprint <i>or</i> jump until it climbs back to 70% — so keep some in reserve for the escape. Dashing and grappling are free.</li>
+            </ul>
+          </div>
+        </div>
+
+        <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel" id="panel-settings">
+      <div class="card">
+        <h2 class="card-title">SETTINGS</h2>
+
+        <div class="field">
+          <label for="set-quality">GRAPHICS <span class="hint">pixel styles render at lower resolution — faster and sharper-looking</span></label>
+          <select id="set-quality">
+            <option value="crisp">Crisp — full resolution</option>
+            <option value="pixel">Pixel — recommended</option>
+            <option value="chunky">Chunky — big pixels, no shadows</option>
+            <option value="potato">Potato — maximum performance</option>
+          </select>
+        </div>
+
+        <div class="field slider">
+          <label for="set-sens">MOUSE SENSITIVITY <b id="set-sens-val"></b></label>
+          <input id="set-sens" type="range" min="0.2" max="3" step="0.05" />
+        </div>
+
+        <div class="field check">
+          <label for="set-invert">INVERT MOUSE Y <b id="set-invert-val"></b></label>
+          <input id="set-invert" type="checkbox" />
+        </div>
+
+        <div class="divider"><span>AUDIO</span></div>
+
+        <div class="field slider">
+          <label for="set-master">MASTER <b id="set-master-val"></b></label>
+          <input id="set-master" type="range" min="0" max="1" step="0.01" />
+        </div>
+        <div class="field slider">
+          <label for="set-sfx">EFFECTS <b id="set-sfx-val"></b></label>
+          <input id="set-sfx" type="range" min="0" max="1" step="0.01" />
+        </div>
+        <div class="field slider">
+          <label for="set-music">MUSIC <b id="set-music-val"></b></label>
+          <input id="set-music" type="range" min="0" max="1" step="0.01" />
+        </div>
+
+        <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+    <!-- CREDITS -->
+    <div class="panel" id="panel-credits">
+      <div class="card">
+        <h2 class="card-title">CREDITS</h2>
+        <div class="credits">
+          <p class="big">FROGSHIN</p>
+          <p>A fast-paced multiplayer ninja game,<br/>except everyone is a frog.</p>
+          <hr/>
+          <p><b>Engine</b><br/>Three.js (r160)</p>
+          <p><b>Multiplayer</b><br/>WebRTC peer-to-peer, signalled by PeerJS</p>
+          <p><b>Art</b><br/>Every frog, temple, tree and lantern is generated
+             procedurally from primitives at load time — no texture or model files.</p>
+          <p><b>Audio</b><br/>Fully synthesized with the Web Audio API at runtime.</p>
+          <hr/>
+          <p class="small">Built as an original design. Menu composition inspired by
+             classic pixel-art adventure title screens.</p>
+        </div>
+        <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="menu-foot">
+    <span>WASD move · SHIFT sprint · SPACE jump · Q dash · G tongue · LMB katana</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ LOADING ══ -->
+<div id="loading">
+  <div class="load-frog">🐸</div>
+  <div class="load-title">FROGSHIN</div>
+  <div class="load-track"><div id="loading-bar"></div></div>
+  <div id="loading-label">Preparing…</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════ HUD ══ -->
+<div id="hud" class="hidden">
+
+  <div id="speed-lines"></div>
+  <div id="underwater"></div>
+  <div id="vignette"></div>
+
+  <!-- crosshair -->
+  <div id="crosshair" class="cross-idle">
+    <span class="ch n"></span><span class="ch s"></span>
+    <span class="ch e"></span><span class="ch w"></span>
+    <span class="ch dot"></span>
+  </div>
+  <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+
+  <!-- top-left: room -->
+  <div id="room-info">
+    <div class="ri-code">ROOM <b id="room-code">—</b></div>
+    <div class="ri-status" id="net-status"></div>
+  </div>
+
+  <!-- top-right: kill feed -->
+  <div id="killfeed"></div>
+
+  <!-- bottom-left: vitals -->
+  <div id="vitals">
+    <div class="vital-row">
+      <div class="vital-icon">🐸</div>
+      <div id="health-bar" class="bar big">
+        <div id="health-fill" class="fill"></div>
+        <div class="bar-label"><b id="health-text">100</b></div>
+      </div>
+    </div>
+
+    <div class="vital-row">
+      <div class="vital-icon stam-icon">⚡</div>
+      <div id="stamina-bar" class="bar stam">
+        <div id="stamina-fill" class="fill"></div>
+        <div class="bar-label"><b id="stamina-text">100</b></div>
+      </div>
+    </div>
+
+    <div class="ability-row">
+      <div id="dash-meter" class="ability">
+        <div class="ab-key">Q</div>
+        <div class="bar"><div id="dash-fill" class="fill"></div></div>
+        <div class="ab-name">DASH <span id="dash-charges"></span></div>
+      </div>
+      <div id="grapple-meter" class="ability">
+        <div class="ab-key">G</div>
+        <div class="bar"><div id="grapple-fill" class="fill"></div></div>
+        <div class="ab-name">TONGUE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- hotbar (slots are built in JS from the inventory) -->
+  <div id="hotbar"></div>
+  <div id="pickup-prompt"><b>E</b><span>Take kunai</span></div>
+
+  <div id="combo"></div>
+  <div id="toast"></div>
+
+  <!-- scoreboard (hold TAB) -->
+  <div id="scoreboard">
+    <div class="sb-head"><span></span><span>NINJA</span><span>K</span><span>D</span></div>
+    <div id="score-rows"></div>
+  </div>
+
+  <!-- respawn -->
+  <div id="respawn">
+    <div class="rs-title">DEFEATED</div>
+    <div class="rs-killer" id="respawn-killer"></div>
+    <div class="rs-count" id="respawn-count">3</div>
+    <div class="rs-sub">respawning…</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ CLICK TO PLAY ══ -->
+<!-- Pointer lock can only be requested from a user gesture, so entering the
+     match always goes through this click. -->
+<div id="click-to-play">
+  <div class="ctp-inner">
+    <div class="ctp-icon">🐸</div>
+    <div class="ctp-text">CLICK TO PLAY</div>
+    <div class="ctp-sub">captures your mouse &nbsp;·&nbsp; <b>ESC</b> releases it</div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════ PAUSE ══ -->
+<div id="pause">
+  <div class="card">
+    <h2 class="card-title">PAUSED</h2>
+    <div id="pause-room" class="pause-room"></div>
+    <button class="btn btn-go" id="btn-resume"><span>RESUME</span></button>
+    <button class="btn" id="btn-pause-settings"><span>SETTINGS</span></button>
+    <button class="btn btn-quiet" id="btn-quit"><span>LEAVE MATCH</span></button>
+    <p class="note">Click the game to recapture your mouse.</p>
+  </div>
+</div>
+
+<pre id="boot-error"></pre>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
