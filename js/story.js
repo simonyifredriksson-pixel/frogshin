@@ -15,13 +15,13 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v10';
-import { CFG } from './config.js?v=v10';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v10';
-import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v10';
-import { FrogModel } from './frog.js?v=v10';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v10';
-import { Audio } from './audio.js?v=v10';
+import * as THREE from '../lib/three.module.js?v=v11';
+import { CFG } from './config.js?v=v11';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v11';
+import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v11';
+import { FrogModel } from './frog.js?v=v11';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v11';
+import { Audio } from './audio.js?v=v11';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',
@@ -202,7 +202,7 @@ export class StoryMode {
       case STORY_PHASE.ESCAPE: this._updateEscape(dt, player); break;
       case STORY_PHASE.CUTSCENE: this._updateCutscene(dt, player); break;
       case STORY_PHASE.BOSS:
-        this._updateBoss(gdt, player, remotes);
+        this._updateBoss(gdt, player);
         this._updateTutorial(dt, player);
         break;
       case STORY_PHASE.DEFEAT: this._updateDefeat(dt, player); break;
@@ -362,21 +362,15 @@ export class StoryMode {
     this.boss.begin();
   }
 
-  _updateBoss(dt, player, remotes) {
+  _updateBoss(dt, player) {
     const b = this.boss;
 
-    if (this.authority) {
-      b.updateAI(dt, player, remotes);
-      this._syncAccum += dt;
-      if (this._syncAccum >= 1 / CFG.story.boss.syncRate) {
-        this._syncAccum = 0;
-        if (this.onBroadcast) this.onBroadcast(b.serialize());
-      }
-    } else {
-      b.updateRemote(dt);
-    }
-
-    // Every client independently decides whether the swing landed on itself.
+    // Toadel is deliberately a SOLO encounter, even in a shared session —
+    // it is the whole reason players cannot see each other until afterwards.
+    // Every client therefore owns its own copy of him and runs its own AI.
+    // Sharing one networked boss meant whoever reached the gate first began
+    // the fight for everybody, and the others could never duel him at all.
+    b.updateAI(dt, player, null);
     b.resolveStrike(dt, player, this);
 
     for (const s of this.soldiers) {
@@ -616,18 +610,7 @@ export class StoryMode {
     }
   }
 
-  /** Boss state from the host. */
-  applyBossState(s) {
-    if (this.authority || !this.boss) return;
-    this.boss.applyState(s);
-    if (this.phase !== STORY_PHASE.BOSS && s.a) {
-      // A late joiner arriving mid-fight still gets the arena sealed.
-      this.level.sealArena();
-      for (const so of this.soldiers) so.root.visible = true;
-    }
-  }
-
-  /** A player landed a hit on Toadel. */
+  /** A player landed a hit on Toadel. Always local — the duel is solo. */
   damageBoss(amount) {
     if (!this.boss || this.phase !== STORY_PHASE.BOSS) return;
     this.boss.takeDamage(amount);
@@ -818,24 +801,7 @@ class BossToadel {
     Audio.slash(this.pos, this.swingIndex === 2 ? 2 : 0);
   }
 
-  /** Mirror clients: interpolate toward the broadcast pose. */
-  updateRemote(dt) {
-    if (this.netPos) {
-      this.pos.lerp(this.netPos, clamp(dt * 12, 0, 1));
-      this.yaw = dampAngle(this.yaw, this.netYaw, 12, dt);
-      this.pos.y = this.level.heightAt(this.pos.x, this.pos.z);
-      this.model.root.position.copy(this.pos);
-      this.model.setFacing(this.yaw);
-    }
-    if (this.swingT > 0) this.swingT -= dt;
-    this.model.update(dt, { speed: this.moveSpeedNow });
-  }
-
-  /**
-   * Decide whether the current swing connects with the LOCAL player.
-   * Runs on every client for its own player, which is what keeps co-op
-   * damage correct without a message per hit.
-   */
+  /** Decide whether the current swing connects with the local player. */
   resolveStrike(dt, player, story) {
     if (this.swingT <= 0 || this.struck) return;
     const B = CFG.story.boss;
@@ -867,36 +833,4 @@ class BossToadel {
     this.model.flinch();
   }
 
-  serialize() {
-    return {
-      t: 'boss',
-      x: Math.round(this.pos.x * 20) / 20,
-      y: Math.round(this.pos.y * 20) / 20,
-      z: Math.round(this.pos.z * 20) / 20,
-      r: Math.round(this.yaw * 100) / 100,
-      h: Math.round(this.health),
-      s: this.swingT > 0 ? this.swingIndex + 1 : 0,
-      d: Math.round(this.swingT * 100) / 100,
-      m: Math.round(this.moveSpeedNow * 10) / 10,
-      a: this.active ? 1 : 0,
-    };
-  }
-
-  applyState(s) {
-    if (!this.netPos) this.netPos = new THREE.Vector3();
-    this.netPos.set(s.x, s.y, s.z);
-    this.netYaw = s.r;
-    this.health = s.h;
-    this.moveSpeedNow = s.m;
-    this.active = !!s.a;
-    // Start the swing animation locally when a new one is announced.
-    if (s.s && this.swingT <= 0) {
-      this.swingIndex = s.s - 1;
-      this.swingDur = CFG.story.boss.attackCooldown[this.swingIndex];
-      this.swingT = s.d > 0 ? s.d : this.swingDur;
-      this.struck = false;
-      this.model.swing(this.swingDur);
-      Audio.slash(this.pos, this.swingIndex === 2 ? 2 : 0);
-    }
-  }
 }
