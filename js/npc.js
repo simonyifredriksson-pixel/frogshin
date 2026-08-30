@@ -9,7 +9,7 @@
  */
 
 import * as THREE from '../lib/three.module.js';
-import { damp, lerp, clamp } from './util.js';
+import { damp, dampAngle, lerp, clamp } from './util.js';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -261,6 +261,134 @@ export class ToadModel {
     if (this.cape) {
       this.cape.rotation.x = 0.1 + Math.sin(t * 1.7) * 0.09 + Math.min(speed, 12) * 0.02;
     }
+  }
+}
+
+/**
+ * A castle guard on patrol.
+ *
+ * Walks a waypoint loop, and only notices you if you are inside its vision
+ * cone, within range, AND in clear line of sight — so breaking line of sight
+ * is a real way to escape rather than a cosmetic one. Loses interest a few
+ * seconds after you slip out of view.
+ */
+export class PatrolGuard {
+  constructor(route, y, collision) {
+    this.model = new ToadModel(false);
+    this.route = route;
+    this.collision = collision;
+    this.index = 0;
+    this.pos = new THREE.Vector3(route[0][0], y, route[0][1]);
+    this.yaw = 0;
+    this.model.root.position.copy(this.pos);
+    this.state = 'patrol';        // patrol | alert | chase | search
+    this.alertLevel = 0;          // 0..1 — fills while you are in view
+    this.searchTimer = 0;
+    this.attackCooldown = 0;
+    this.speed = 0;
+    this.waitTimer = 0;
+    this.baseY = y;
+
+    this.viewRange = 26;
+    this.viewAngle = 0.62;        // half-angle of the cone, radians
+    this.attackRange = 3.4;
+  }
+
+  /** Can this guard actually see `target` right now? */
+  canSee(target) {
+    const dx = target.x - this.pos.x;
+    const dz = target.z - this.pos.z;
+    const dy = target.y - this.pos.y;
+    const dist = Math.hypot(dx, dz);
+    if (dist > this.viewRange || Math.abs(dy) > 6) return false;
+
+    // Facing check.
+    const ang = Math.atan2(dx, dz);
+    let rel = ang - this.yaw;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    // Very close by, they notice you regardless of facing.
+    if (Math.abs(rel) > this.viewAngle && dist > 5) return false;
+
+    // Line of sight: a wall between you breaks it.
+    const inv = 1 / (dist || 1);
+    const hit = this.collision.raycast(
+      this.pos.x, this.pos.y + 1.6, this.pos.z,
+      dx * inv, (dy + 1.0) / (dist || 1), dz * inv, dist - 0.6);
+    return !hit;
+  }
+
+  update(dt, target, onAttack) {
+    const seen = target ? this.canSee(target) : false;
+
+    if (seen) {
+      this.alertLevel = Math.min(1, this.alertLevel + dt * 2.2);
+      if (this.alertLevel >= 1) { this.state = 'chase'; this.searchTimer = 4.0; }
+      else if (this.state === 'patrol') this.state = 'alert';
+      this.lastSeen = { x: target.x, y: target.y, z: target.z };
+    } else {
+      this.alertLevel = Math.max(0, this.alertLevel - dt * 0.5);
+      if (this.state === 'chase') {
+        this.searchTimer -= dt;
+        if (this.searchTimer <= 0) this.state = 'search';
+      } else if (this.state === 'search') {
+        this.searchTimer -= dt;
+        if (this.searchTimer <= 0) { this.state = 'patrol'; this.alertLevel = 0; }
+      } else if (this.state === 'alert' && this.alertLevel <= 0) {
+        this.state = 'patrol';
+      }
+    }
+
+    let goal = null;
+    let speed = 0;
+    if (this.state === 'chase' && this.lastSeen) {
+      goal = this.lastSeen; speed = 13.5;
+    } else if (this.state === 'search' && this.lastSeen) {
+      goal = this.lastSeen; speed = 6.5;
+      if (this.searchTimer <= 0) this.searchTimer = 3;
+    } else if (this.state === 'alert') {
+      goal = this.lastSeen; speed = 0;      // stop and stare
+    } else {
+      // Patrol: walk the loop, pausing briefly at each corner.
+      const wp = this.route[this.index];
+      goal = { x: wp[0], z: wp[1] };
+      if (this.waitTimer > 0) { this.waitTimer -= dt; speed = 0; }
+      else speed = 5.5;
+      if (Math.hypot(goal.x - this.pos.x, goal.z - this.pos.z) < 1.6) {
+        this.index = (this.index + 1) % this.route.length;
+        this.waitTimer = 0.8 + Math.random() * 1.4;
+      }
+    }
+
+    if (goal) {
+      const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.05) {
+        const want = Math.atan2(dx, dz);
+        this.yaw = dampAngle(this.yaw, want, this.state === 'chase' ? 7 : 3.2, dt);
+      }
+      if (speed > 0 && d > 0.6) {
+        this.pos.x += (dx / d) * speed * dt;
+        this.pos.z += (dz / d) * speed * dt;
+      }
+      this.speed = speed;
+    }
+
+    // Attack when they catch you.
+    if (this.attackCooldown > 0) this.attackCooldown -= dt;
+    if (this.state === 'chase' && target && this.attackCooldown <= 0) {
+      const d = Math.hypot(target.x - this.pos.x, target.z - this.pos.z);
+      if (d < this.attackRange) {
+        this.attackCooldown = 1.5;
+        this.model.swing(0.6);
+        if (onAttack) onAttack(this);
+      }
+    }
+
+    this.pos.y = this.baseY;
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.yaw);
+    this.model.update(dt, { speed: this.speed });
   }
 }
 
