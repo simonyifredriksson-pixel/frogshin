@@ -1,0 +1,542 @@
+/**
+ * Story mode: "The Burning of the Swamp Village".
+ *
+ * Flow: ESCAPE (follow the boardwalk) -> CUTSCENE (Toadel notices you and
+ * speaks) -> BOSS (an unwinnable-by-design duel).
+ *
+ * The fight is intentionally lopsided. You carry a broken sword that does a
+ * third of its normal damage, Toadel has an enormous pool of health, and any
+ * blow he lands takes 80% of yours — so two connect and you are finished.
+ * Parrying is the only real defence, and it punishes greed: absorb a second
+ * blow inside one parry and you are knocked flat long enough to be hit.
+ *
+ * Authority model matches the rest of the game: the host runs Toadel's AI
+ * and broadcasts his state; every client independently checks whether his
+ * swing landed on *them*, so nobody needs a per-player hit message.
+ */
+
+import * as THREE from '../lib/three.module.js';
+import { CFG } from './config.js';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js';
+import { ToadModel, VillageScene } from './npc.js';
+import { FrogModel } from './frog.js';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js';
+import { Audio } from './audio.js';
+
+export const STORY_PHASE = {
+  ESCAPE: 'escape',
+  CUTSCENE: 'cutscene',
+  BOSS: 'boss',
+};
+
+const TOADEL_LINE =
+  '“Another villager? How unfortunate. You should have stayed in your ' +
+  'little house and waited for the flames to reach you.”';
+
+const _v = new THREE.Vector3();
+const _toPlayer = new THREE.Vector3();
+
+export class StoryMode {
+  constructor(opts) {
+    this.scene = opts.scene;
+    this.effects = opts.effects;
+    this.hud = opts.hud;
+    this.camera = opts.camera;
+    this.followCam = opts.followCam;
+    this.authority = opts.authority;
+    this.onBroadcast = opts.onBroadcast;    // (msg) => void
+
+    this.level = null;
+    this.phase = STORY_PHASE.ESCAPE;
+    this.time = 0;
+    this.actors = [];
+    this.soldiers = [];
+    this.fireEmitTimer = 0;
+    this._syncAccum = 0;
+
+    // Objectives shown top-left. `done` drives the strike-through.
+    this.objectives = [
+      { id: 'escape', text: 'Escape the village', done: false, active: true },
+    ];
+
+    this.boss = null;
+    this.cutscene = null;
+    this.shake = 0;
+  }
+
+  // ---------------------------------------------------------------- build
+
+  buildTasks() {
+    const level = new StoryLevel(this.scene);
+    this.level = level;
+    const tasks = level.buildTasks();
+    tasks.push(['Rousing the invaders', () => this._populate()]);
+    return tasks;
+  }
+
+  get collision() { return this.level.collision; }
+  get spawnPoint() { return this.level.spawnPos.clone(); }
+
+  /** Fill the village with the attack in progress, plus Toadel at the gate. */
+  _populate() {
+    const rnd = Math.random;
+    const frogFactory = () => {
+      const f = new FrogModel(0x6cc24a, '', true);
+      f.root.scale.setScalar(0.95);
+      return f;
+    };
+
+    // Background vignettes along the route: beatings, burnings, chases.
+    const kinds = ['beating', 'burning', 'fleeing', 'burning', 'beating'];
+    for (let i = 0; i < 14; i++) {
+      const t = 0.06 + (i / 14) * 0.82;
+      const z = t * PATH_LENGTH;
+      if (z > ARENA_Z - 22) continue;
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = Math.sin(z * 0.012) * 7 + side * (12 + rnd() * 10);
+      const y = this.level.heightAt(x, z);
+      if (y < 1.4) continue;
+      const kind = kinds[i % kinds.length];
+      const facing = Math.atan2(-side, 0) + (rnd() - 0.5);
+      const actor = new VillageScene(kind, x, y, z, facing, frogFactory);
+      this.scene.add(actor.root);
+      this.actors.push(actor);
+    }
+
+    // The ring of soldiers that seals the arena.
+    for (const [x, y, z, face] of this.level.soldierSpots) {
+      const t = new ToadModel(false);
+      t.root.position.set(x, y, z);
+      t.setFacing(face);
+      t.root.visible = false;              // revealed when the fight starts
+      this.scene.add(t.root);
+      this.soldiers.push(t);
+    }
+
+    // Toadel, waiting in front of the gate.
+    this.boss = new BossToadel(this.scene, this.level, this.effects);
+  }
+
+  // --------------------------------------------------------------- update
+
+  /**
+   * @param player local Player
+   * @param remotes iterable of RemotePlayer
+   */
+  update(dt, player, remotes) {
+    this.time += dt;
+    this.level.update(dt);
+
+    for (const a of this.actors) a.update(dt);
+    this._emitFires(dt);
+
+    if (this.shake > 0) {
+      this.shake -= dt;
+      this.followCam.shake(0.35);
+    }
+
+    switch (this.phase) {
+      case STORY_PHASE.ESCAPE: this._updateEscape(dt, player); break;
+      case STORY_PHASE.CUTSCENE: this._updateCutscene(dt, player); break;
+      case STORY_PHASE.BOSS: this._updateBoss(dt, player, remotes); break;
+      default: break;
+    }
+  }
+
+  _updateEscape(dt, player) {
+    this.boss.idle(dt);
+    // Trigger once the player is close enough to the gate.
+    const d = Math.hypot(
+      player.pos.x - this.boss.pos.x,
+      player.pos.z - this.boss.pos.z
+    );
+    if (d < CFG.story.triggerRange) this._beginCutscene(player);
+  }
+
+  // ------------------------------------------------------------- cutscene
+
+  _beginCutscene(player) {
+    this.phase = STORY_PHASE.CUTSCENE;
+    this.cutscene = { t: 0, stage: 0, spoken: false };
+    // Freeze the player and take the camera off them.
+    player.cinematic = true;
+    player.vel.set(0, 0, 0);
+    this.hud.setCinematic(true);
+    this.hud.setSubtitle('');
+    Audio.stopAmbient();
+  }
+
+  _updateCutscene(dt, player) {
+    const c = this.cutscene;
+    c.t += dt;
+
+    // Frame Toadel over the player's shoulder for the whole scene.
+    const b = this.boss;
+    _v.set(b.pos.x, b.pos.y + 2.6, b.pos.z);
+    const camDist = lerp(16, 9, clamp(c.t / 5.5, 0, 1));
+    const angle = -Math.PI / 2 + 0.35 + c.t * 0.06;
+    this.camera.position.set(
+      b.pos.x + Math.cos(angle) * camDist,
+      b.pos.y + 5.2 - clamp(c.t / 5.5, 0, 1) * 1.4,
+      b.pos.z + Math.sin(angle) * camDist
+    );
+    this.camera.lookAt(_v);
+
+    if (c.stage === 0) {
+      // He becomes aware of you and turns his head.
+      b.turnHead(dt, player.pos, 1);
+      if (c.t > 1.6) { c.stage = 1; Audio.exhausted(b.pos); }
+    } else if (c.stage === 1) {
+      // Turns to face you fully, then advances.
+      b.faceTarget(dt, player.pos, 3.0);
+      const dist = Math.hypot(player.pos.x - b.pos.x, player.pos.z - b.pos.z);
+      if (dist > 6.5) b.walkToward(dt, player.pos, 5.0);
+      else b.walkToward(dt, player.pos, 0);
+      if (c.t > 3.4 && !c.spoken) {
+        c.spoken = true;
+        this.hud.setSubtitle(TOADEL_LINE, CFG.story.boss.name);
+        Audio.tone({ freq: 90, to: 60, dur: 1.4, type: 'sawtooth', volume: 0.2, pos: b.pos });
+      }
+      if (c.t > 8.6) { c.stage = 2; }
+    } else if (c.stage === 2) {
+      this._beginBoss(player);
+    }
+
+    b.model.update(dt, { speed: b.moveSpeedNow });
+  }
+
+  // ----------------------------------------------------------------- boss
+
+  _beginBoss(player) {
+    this.phase = STORY_PHASE.BOSS;
+    this.cutscene = null;
+
+    player.cinematic = false;
+    // A broken blade: a third of the damage it would normally do.
+    player.damageMultiplier = CFG.story.brokenSwordMult;
+    player.storyParry = true;
+
+    this.hud.setCinematic(false);
+    this.hud.setSubtitle('');
+    this.hud.showBossBar(CFG.story.boss.name, 1);
+
+    // Seal the arena and reveal the soldiers holding the line.
+    this.level.sealArena();
+    for (const s of this.soldiers) s.root.visible = true;
+
+    this._completeObjective('escape', false);
+    this._addObjective('survive', 'Survive Toadel');
+
+    this.shake = CFG.story.shakeTime;
+    Audio.death(this.boss.pos);
+    Audio.startAmbient();
+    this.boss.begin();
+  }
+
+  _updateBoss(dt, player, remotes) {
+    const b = this.boss;
+
+    if (this.authority) {
+      b.updateAI(dt, player, remotes);
+      this._syncAccum += dt;
+      if (this._syncAccum >= 1 / CFG.story.boss.syncRate) {
+        this._syncAccum = 0;
+        if (this.onBroadcast) this.onBroadcast(b.serialize());
+      }
+    } else {
+      b.updateRemote(dt);
+    }
+
+    // Every client independently decides whether the swing landed on itself.
+    b.resolveStrike(dt, player, this);
+
+    for (const s of this.soldiers) {
+      s.update(dt, { speed: 0 });
+      // Soldiers bang their clubs — a hostile, closing-in ambience.
+      if (Math.random() < dt * 0.25) s.swing(0.7);
+    }
+
+    this.hud.setBossBar(b.health / b.maxHealth);
+  }
+
+  /** Boss state from the host. */
+  applyBossState(s) {
+    if (this.authority || !this.boss) return;
+    this.boss.applyState(s);
+    if (this.phase !== STORY_PHASE.BOSS && s.a) {
+      // A late joiner arriving mid-fight still gets the arena sealed.
+      this.level.sealArena();
+      for (const so of this.soldiers) so.root.visible = true;
+    }
+  }
+
+  /** A player landed a hit on Toadel. */
+  damageBoss(amount) {
+    if (!this.boss || this.phase !== STORY_PHASE.BOSS) return;
+    this.boss.takeDamage(amount);
+  }
+
+  // ----------------------------------------------------------- objectives
+
+  _addObjective(id, text) {
+    if (this.objectives.some((o) => o.id === id)) return;
+    for (const o of this.objectives) o.active = false;
+    this.objectives.push({ id, text, done: false, active: true });
+    this.hud.setObjectives(this.objectives);
+    Audio.uiClick();
+  }
+
+  _completeObjective(id, chime = true) {
+    const o = this.objectives.find((x) => x.id === id);
+    if (!o || o.done) return;
+    o.done = true;
+    o.active = false;
+    this.hud.setObjectives(this.objectives);
+    if (chime) Audio.refreshed(this.camera.position);
+  }
+
+  // --------------------------------------------------------------- extras
+
+  /** Fire, smoke and ember particles from every burning building. */
+  _emitFires(dt) {
+    this.fireEmitTimer -= dt;
+    if (this.fireEmitTimer > 0) return;
+    this.fireEmitTimer = 0.05;
+
+    const camPos = this.camera.position;
+    for (const f of this.level.fires) {
+      // Only spend particles on fires the player can actually see.
+      const dx = f.x - camPos.x, dz = f.z - camPos.z;
+      if (dx * dx + dz * dz > 110 * 110) continue;
+      this.effects.fire(f.x, f.y, f.z, f.size);
+    }
+  }
+
+  dispose() {
+    this.hud.setCinematic(false);
+    this.hud.hideBossBar();
+    this.hud.setObjectives(null);
+    this.hud.setSubtitle('');
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+/** Toadel: the toad leader. Fast, heavy, and not meant to be beaten. */
+class BossToadel {
+  constructor(scene, level, effects) {
+    this.effects = effects;
+    this.level = level;
+    this.model = new ToadModel(true);
+    this.pos = new THREE.Vector3(0, level.heightAt(0, PATH_LENGTH - 9), PATH_LENGTH - 9);
+    this.vel = new THREE.Vector3();
+    this.yaw = Math.PI;                  // facing the gate, back to the player
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.yaw);
+    scene.add(this.model.root);
+
+    this.maxHealth = CFG.story.boss.health;
+    this.health = this.maxHealth;
+    this.active = false;
+    this.moveSpeedNow = 0;
+
+    this.attackTimer = 0;      // cooldown until the next swing
+    this.swingT = 0;           // time left in the current swing
+    this.swingDur = 0;
+    this.swingIndex = 0;
+    this.struck = false;       // has this swing already resolved?
+    this.comboTimer = 0;
+    this.headTurn = 0;
+  }
+
+  begin() { this.active = true; this.attackTimer = 0.8; }
+
+  /** Standing guard before the fight. */
+  idle(dt) {
+    this.moveSpeedNow = 0;
+    this.model.update(dt, { speed: 0 });
+  }
+
+  turnHead(dt, target, amount) {
+    const want = Math.atan2(target.x - this.pos.x, target.z - this.pos.z);
+    const rel = angleDelta(this.yaw, want);
+    this.headTurn = damp(this.headTurn, clamp(rel, -1.2, 1.2) * amount, 4, dt);
+    this.model.head.rotation.y = this.headTurn;
+  }
+
+  faceTarget(dt, target, rate) {
+    const want = Math.atan2(target.x - this.pos.x, target.z - this.pos.z);
+    this.yaw = dampAngle(this.yaw, want, rate, dt);
+    this.model.setFacing(this.yaw);
+    this.model.head.rotation.y = damp(this.model.head.rotation.y, 0, 5, dt);
+  }
+
+  walkToward(dt, target, speed) {
+    if (speed <= 0) { this.moveSpeedNow = damp(this.moveSpeedNow, 0, 8, dt); return; }
+    _toPlayer.set(target.x - this.pos.x, 0, target.z - this.pos.z);
+    const d = _toPlayer.length();
+    if (d < 0.01) return;
+    _toPlayer.multiplyScalar(1 / d);
+    this.pos.addScaledVector(_toPlayer, speed * dt);
+    this.pos.y = this.level.heightAt(this.pos.x, this.pos.z);
+    this.model.root.position.copy(this.pos);
+    this.moveSpeedNow = speed;
+  }
+
+  // ------------------------------------------------------------------- AI
+
+  updateAI(dt, player, remotes) {
+    if (!this.active) return;
+    const B = CFG.story.boss;
+
+    // Pick the nearest living target — in co-op he goes for whoever is closest.
+    let target = player.pos;
+    let bestD = player.health.dead ? Infinity : this.pos.distanceToSquared(player.pos);
+    if (remotes) {
+      for (const r of remotes) {
+        if (!r.spawned || r.dead) continue;
+        const d = this.pos.distanceToSquared(r.pos);
+        if (d < bestD) { bestD = d; target = r.pos; }
+      }
+    }
+    this.targetPos = target;
+
+    _toPlayer.set(target.x - this.pos.x, 0, target.z - this.pos.z);
+    const dist = _toPlayer.length();
+    if (dist > 0.001) _toPlayer.multiplyScalar(1 / dist);
+
+    // Always turning to face you — there is no circling him for free.
+    const want = Math.atan2(_toPlayer.x, _toPlayer.z);
+    this.yaw = dampAngle(this.yaw, want, B.turnRate, dt);
+
+    if (this.swingT > 0) {
+      this.swingT -= dt;
+      // He lunges forward as the club comes down.
+      const k = 1 - this.swingT / this.swingDur;
+      if (k > 0.35 && k < 0.62) {
+        this.pos.addScaledVector(_toPlayer, B.lungeSpeed * dt * (1 - dist / 14));
+      }
+      this.moveSpeedNow = 2;
+    } else {
+      if (this.attackTimer > 0) this.attackTimer -= dt;
+      if (this.comboTimer > 0) this.comboTimer -= dt;
+
+      // Close the gap fast, then swing the instant he is in range.
+      if (dist > B.reach * 0.8) {
+        const speed = B.moveSpeed * (dist > 16 ? 1.25 : 1);
+        this.pos.addScaledVector(_toPlayer, speed * dt);
+        this.moveSpeedNow = speed;
+      } else {
+        this.moveSpeedNow = damp(this.moveSpeedNow, 0, 8, dt);
+        if (this.attackTimer <= 0) this._startSwing();
+      }
+    }
+
+    // Keep him inside the arena.
+    const dx = this.pos.x, dz = this.pos.z - ARENA_Z;
+    const r = Math.hypot(dx, dz);
+    if (r > ARENA_RADIUS - 2) {
+      this.pos.x = dx / r * (ARENA_RADIUS - 2);
+      this.pos.z = ARENA_Z + dz / r * (ARENA_RADIUS - 2);
+    }
+
+    this.pos.y = this.level.heightAt(this.pos.x, this.pos.z);
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.yaw);
+    this.model.update(dt, { speed: this.moveSpeedNow });
+  }
+
+  _startSwing() {
+    const B = CFG.story.boss;
+    this.swingIndex = this.comboTimer > 0 ? (this.swingIndex + 1) % 3 : 0;
+    this.swingDur = B.attackCooldown[this.swingIndex];
+    this.swingT = this.swingDur;
+    this.attackTimer = this.swingDur + 0.12;
+    this.comboTimer = B.comboWindow;
+    this.struck = false;
+    this.model.swing(this.swingDur);
+    Audio.slash(this.pos, this.swingIndex === 2 ? 2 : 0);
+  }
+
+  /** Mirror clients: interpolate toward the broadcast pose. */
+  updateRemote(dt) {
+    if (this.netPos) {
+      this.pos.lerp(this.netPos, clamp(dt * 12, 0, 1));
+      this.yaw = dampAngle(this.yaw, this.netYaw, 12, dt);
+      this.pos.y = this.level.heightAt(this.pos.x, this.pos.z);
+      this.model.root.position.copy(this.pos);
+      this.model.setFacing(this.yaw);
+    }
+    if (this.swingT > 0) this.swingT -= dt;
+    this.model.update(dt, { speed: this.moveSpeedNow });
+  }
+
+  /**
+   * Decide whether the current swing connects with the LOCAL player.
+   * Runs on every client for its own player, which is what keeps co-op
+   * damage correct without a message per hit.
+   */
+  resolveStrike(dt, player, story) {
+    if (this.swingT <= 0 || this.struck) return;
+    const B = CFG.story.boss;
+    const k = 1 - this.swingT / this.swingDur;
+    if (k < B.windup[this.swingIndex] / this.swingDur) return;
+
+    this.struck = true;
+
+    if (player.health.dead || player.cinematic) return;
+
+    _v.set(player.pos.x - this.pos.x, 0, player.pos.z - this.pos.z);
+    const dist = _v.length();
+    if (dist > B.reach) return;
+    if (dist > 0.01) {
+      _v.multiplyScalar(1 / dist);
+      const fwd = Math.atan2(_v.x, _v.z);
+      if (Math.abs(angleDelta(this.yaw, fwd)) > B.arc) return;
+    }
+    // Vertical slice, so a well-timed leap over the swing gets you clear.
+    if (player.pos.y - this.pos.y > 3.0) return;
+
+    _v.set(this.pos.x, this.pos.y + 2.0, this.pos.z);
+    player.onBossBlow(_v, this.yaw, story);
+  }
+
+  takeDamage(amount) {
+    if (!this.active) return;
+    this.health = Math.max(0, this.health - amount);
+    this.model.flinch();
+  }
+
+  serialize() {
+    return {
+      t: 'boss',
+      x: Math.round(this.pos.x * 20) / 20,
+      y: Math.round(this.pos.y * 20) / 20,
+      z: Math.round(this.pos.z * 20) / 20,
+      r: Math.round(this.yaw * 100) / 100,
+      h: Math.round(this.health),
+      s: this.swingT > 0 ? this.swingIndex + 1 : 0,
+      d: Math.round(this.swingT * 100) / 100,
+      m: Math.round(this.moveSpeedNow * 10) / 10,
+      a: this.active ? 1 : 0,
+    };
+  }
+
+  applyState(s) {
+    if (!this.netPos) this.netPos = new THREE.Vector3();
+    this.netPos.set(s.x, s.y, s.z);
+    this.netYaw = s.r;
+    this.health = s.h;
+    this.moveSpeedNow = s.m;
+    this.active = !!s.a;
+    // Start the swing animation locally when a new one is announced.
+    if (s.s && this.swingT <= 0) {
+      this.swingIndex = s.s - 1;
+      this.swingDur = CFG.story.boss.attackCooldown[this.swingIndex];
+      this.swingT = s.d > 0 ? s.d : this.swingDur;
+      this.struck = false;
+      this.model.swing(this.swingDur);
+      Audio.slash(this.pos, this.swingIndex === 2 ? 2 : 0);
+    }
+  }
+}
