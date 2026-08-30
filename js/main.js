@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v9';
-import { CFG, FROG_COLORS, NINJA_NAMES } from './config.js?v=v9';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v9';
-import { Input } from './input.js?v=v9';
-import { Audio } from './audio.js?v=v9';
-import { World } from './world.js?v=v9';
-import { Effects } from './effects.js?v=v9';
-import { Atmosphere } from './atmosphere.js?v=v9';
-import { FollowCamera } from './camera.js?v=v9';
-import { Player } from './player.js?v=v9';
-import { RemotePlayer } from './remote.js?v=v9';
-import { HUD } from './hud.js?v=v9';
-import { KunaiSystem, PickupSystem } from './items.js?v=v9';
-import { DummyField } from './dummy.js?v=v9';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v9';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v9';
-import { MenuScene } from './menu.js?v=v9';
-import { Network, NetRole } from './net.js?v=v9';
+import * as THREE from '../lib/three.module.js?v=v10';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v10';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v10';
+import { Input } from './input.js?v=v10';
+import { Audio } from './audio.js?v=v10';
+import { World } from './world.js?v=v10';
+import { Effects } from './effects.js?v=v10';
+import { Atmosphere } from './atmosphere.js?v=v10';
+import { FollowCamera } from './camera.js?v=v10';
+import { Player } from './player.js?v=v10';
+import { RemotePlayer } from './remote.js?v=v10';
+import { HUD } from './hud.js?v=v10';
+import { KunaiSystem, PickupSystem } from './items.js?v=v10';
+import { DummyField } from './dummy.js?v=v10';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v10';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v10';
+import { MenuScene } from './menu.js?v=v10';
+import { Network, NetRole } from './net.js?v=v10';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -374,6 +374,14 @@ class Game {
       // agree on Arena or Story. Everything else launches immediately.
       if (this.pendingMode) this._enterGame();
       else this._showLobby();
+    };
+
+    net.onVersionMismatch = (theirBuild, who) => {
+      const msg = `${who} is on a different version (${theirBuild} vs ${BUILD}) — ` +
+        'both press Ctrl+Shift+R to refresh';
+      if (this.hud) this.hud.toast(msg, 9);
+      this._playStatus(msg, true);
+      console.warn('[frogshin] build mismatch:', theirBuild, 'vs', BUILD);
     };
 
     net.onJoin = (id, prof) => this._addRemote(id, prof);
@@ -1006,7 +1014,12 @@ class Game {
 
       this._drainEvents(p);
 
-      for (const r of this.remotes.values()) r.update(dt, t);
+      for (const r of this.remotes.values()) {
+        r.update(dt, t);
+        // Explicit: only the story ever hides players, and this guarantees a
+        // frog hidden there is shown again on returning to the arena.
+        r.model.root.visible = true;
+      }
 
       this.world.update(dt, this.camera.position);
 
