@@ -26,17 +26,14 @@ export const MODE_INFO = {
   [MODES.TAG]: {
     name: 'TAG',
     blurb: 'Taggers have unlimited kunai. Get hit and you become it — and they go free.',
-    icon: '🏃',
   },
   [MODES.INFECTION]: {
     name: 'INFECTION',
     blurb: 'Get hit and you join the taggers. Survive to the end, or convert everyone.',
-    icon: '☣',
   },
   [MODES.FFA]: {
     name: 'CLASSIC FFA',
     blurb: 'Everyone for themselves. Katana, kunai, no teams. Most kills wins.',
-    icon: '⚔',
   },
 };
 
