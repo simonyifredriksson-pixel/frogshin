@@ -62,6 +62,33 @@ export const CFG = {
     recoverTo: 0.70,
   },
 
+  // ---------------------------------------------------------------- story
+  story: {
+    triggerRange: 17,        // how close to Toadel before the cutscene fires
+    shakeTime: 0.5,          // screen shake when the fight begins
+    brokenSwordMult: 1 / 3,  // your blade is broken: a third of normal damage
+    parry: {
+      knockdownAfter: 2,     // hits absorbed in one parry before you go down
+      knockdownTime: 0.7,    // seconds on the floor, unable to act
+      chipStagger: 0.18,     // brief hitstop when a blow is turned aside
+    },
+    boss: {
+      name: 'TOADEL, THE TOAD LEADER',
+      health: 3000,          // deliberately brutal — you are meant to lose
+      damageFraction: 0.8,   // each landed blow takes 80% of your health
+      reach: 5.2,
+      arc: 1.15,
+      moveSpeed: 11.5,
+      chaseAccel: 34,
+      attackCooldown: [0.95, 0.8, 1.35],
+      windup: [0.30, 0.24, 0.42],   // fast — you must read them quickly
+      comboWindow: 1.5,
+      lungeSpeed: 26,
+      turnRate: 5.0,
+      syncRate: 12,          // boss state broadcasts per second
+    },
+  },
+
   // --------------------------------------------------------------- rounds
   rounds: {
     voteTime: 22,            // seconds to pick a mode
