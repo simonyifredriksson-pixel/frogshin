@@ -16,8 +16,8 @@
  * for one client to directly write another's health.
  */
 
-import { CFG } from './config.js?v=v9';
-import { roomCode as makeRoomCode } from './util.js?v=v9';
+import { CFG, BUILD } from './config.js?v=v10';
+import { roomCode as makeRoomCode } from './util.js?v=v10';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -40,6 +40,7 @@ export class Network {
     this.onEvent = null;
     this.onHit = null;
     this.onStatus = null;
+    this.onVersionMismatch = null;   // (theirBuild, name) => void
     this.onReady = null;
     this.onFail = null;
 
@@ -138,7 +139,7 @@ export class Network {
       conn.on('open', () => {
         clearTimeout(timeout);
         this.connected = true;
-        this._send(conn, { m: 'hello', name: profile.name, color: profile.color });
+        this._send(conn, { m: 'hello', name: profile.name, color: profile.color, v: BUILD });
         this._status(`Connected to room ${this.room}`);
         if (this.onReady) this.onReady({ role: this.role, room: this.room });
       });
@@ -198,7 +199,7 @@ export class Network {
       for (const [id, p] of this.profiles) {
         if (id !== conn.peer) roster.push({ id, name: p.name, color: p.color });
       }
-      this._send(conn, { m: 'welcome', you: conn.peer, roster, room: this.room });
+      this._send(conn, { m: 'welcome', you: conn.peer, roster, room: this.room, v: BUILD });
 
       // Tell everyone else about the newcomer.
       this._broadcast({ m: 'join', id: conn.peer, name: prof.name, color: prof.color }, conn.peer);
@@ -232,6 +233,12 @@ export class Network {
         if (prof) {
           prof.name = (d.name || prof.name).slice(0, 14);
           prof.color = d.color || prof.color;
+          prof.build = d.v || 'older';
+        }
+        // A build mismatch does not stop play, but it must be visible —
+        // silently disagreeing about the rules is far more confusing.
+        if ((d.v || 'older') !== BUILD && this.onVersionMismatch) {
+          this.onVersionMismatch(d.v || 'older', prof ? prof.name : 'A player');
         }
         break;
       }
@@ -265,6 +272,9 @@ export class Network {
     if (!d || !d.m) return;
     switch (d.m) {
       case 'welcome':
+        if ((d.v || 'older') !== BUILD && this.onVersionMismatch) {
+          this.onVersionMismatch(d.v || 'older', 'The host');
+        }
         for (const p of d.roster) {
           if (p.id === this.selfId) continue;
           this.profiles.set(p.id, { name: p.name, color: p.color, kills: 0, deaths: 0 });
