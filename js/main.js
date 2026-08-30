@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js';
-import { CFG, FROG_COLORS, NINJA_NAMES } from './config.js';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js';
-import { Input } from './input.js';
-import { Audio } from './audio.js';
-import { World } from './world.js';
-import { Effects } from './effects.js';
-import { Atmosphere } from './atmosphere.js';
-import { FollowCamera } from './camera.js';
-import { Player } from './player.js';
-import { RemotePlayer } from './remote.js';
-import { HUD } from './hud.js';
-import { KunaiSystem, PickupSystem } from './items.js';
-import { DummyField } from './dummy.js';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js';
-import { MenuScene } from './menu.js';
-import { Network, NetRole } from './net.js';
+import * as THREE from '../lib/three.module.js?v=v9';
+import { CFG, FROG_COLORS, NINJA_NAMES } from './config.js?v=v9';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v9';
+import { Input } from './input.js?v=v9';
+import { Audio } from './audio.js?v=v9';
+import { World } from './world.js?v=v9';
+import { Effects } from './effects.js?v=v9';
+import { Atmosphere } from './atmosphere.js?v=v9';
+import { FollowCamera } from './camera.js?v=v9';
+import { Player } from './player.js?v=v9';
+import { RemotePlayer } from './remote.js?v=v9';
+import { HUD } from './hud.js?v=v9';
+import { KunaiSystem, PickupSystem } from './items.js?v=v9';
+import { DummyField } from './dummy.js?v=v9';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v9';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v9';
+import { MenuScene } from './menu.js?v=v9';
+import { Network, NetRole } from './net.js?v=v9';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
