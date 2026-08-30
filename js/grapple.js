@@ -61,11 +61,20 @@ export class Grapple {
     this.origin.copy(origin);
     this.dir.copy(dir).normalize();
 
-    const hit = this.collision.raycast(
+    let hit = this.collision.raycast(
       origin.x, origin.y, origin.z,
       this.dir.x, this.dir.y, this.dir.z,
       CFG.grapple.range
     );
+
+    // A cliff face gives the tongue nothing to grip. Rejecting it here (as
+    // opposed to blocking the shot) means the tongue still flies out and
+    // slaps the rock, which reads as "that surface will not hold" rather
+    // than as the button not working.
+    if (hit && hit.tag === 'terrain' && this.collision.terrain &&
+        this.collision.terrain.slopeAt(hit.x, hit.z) > CFG.grapple.noGrappleSlope) {
+      hit = null;
+    }
 
     // Soft aim assist toward floating anchors — grappling at speed with a
     // mouse is hard, and lanterns are the intended targets.
