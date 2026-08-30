@@ -8,6 +8,32 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
+<script>
+// Registered BEFORE the module graph loads. main.js installs its own handler,
+// but if a module fails to parse then main.js never runs at all — which used
+// to mean a silent black screen with no clue why. This catches that case.
+(function () {
+  function show(msg) {
+    var el = document.getElementById('boot-error');
+    if (!el) { document.addEventListener('DOMContentLoaded', function () { show(msg); }); return; }
+    el.className = 'show';
+    el.textContent = '⚠ ' + msg;
+  }
+  window.addEventListener('error', function (e) {
+    if (e.message) show(e.message + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    show('Unhandled promise rejection: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+  });
+  // If the game never boots, say so rather than sitting on a blank screen.
+  setTimeout(function () {
+    if (!window.game) {
+      show('The game failed to start — a script did not load.\n' +
+           'Open the browser console (F12) for the exact error.');
+    }
+  }, 6000);
+})();
+</script>
 </head>
 <body>
 
@@ -280,6 +306,20 @@
     </div>
   </div>
 
+  <!-- story: guard alert indicator -->
+  <div id="alert">
+    <div class="al-eye">!</div>
+    <div class="al-track"><div id="al-fill"></div></div>
+    <div class="al-text" id="al-text">SPOTTED</div>
+  </div>
+
+  <!-- story: tutorial prompt -->
+  <div id="tutorial">
+    <span class="tut-verb" id="tut-verb"></span>
+    <kbd class="tut-key" id="tut-key"></kbd>
+    <span class="tut-tail" id="tut-tail"></span>
+  </div>
+
   <!-- story: cinematic bars + subtitle -->
   <div id="cinebar-top"></div>
   <div id="cinebar-bottom"></div>
@@ -422,6 +462,9 @@
     <p class="note">Click the game to recapture your mouse.</p>
   </div>
 </div>
+
+<!-- Full-screen fade, above everything: used by the story's defeat sequence -->
+<div id="fade"></div>
 
 <pre id="boot-error"></pre>
 
