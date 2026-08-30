@@ -450,6 +450,44 @@ export class Effects {
     this.ring(new THREE.Vector3(pos.x, pos.y + 0.05, pos.z), 0.4, 4.5, 0.5, 0x9fd8f0, true);
   }
 
+  /**
+   * A burning building or bonfire. Emits flame, smoke and the occasional
+   * ember; called repeatedly from the story level for each active fire.
+   */
+  fire(x, y, z, size = 1) {
+    const s = size;
+    // Flame core — hot, fast, short-lived.
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 0.7 * s;
+      const warm = Math.random();
+      this.spark.spawn(
+        x + Math.cos(a) * r, y + Math.random() * 0.4 * s, z + Math.sin(a) * r,
+        (Math.random() - 0.5) * 0.9, 2.6 + Math.random() * 3.0 * s, (Math.random() - 0.5) * 0.9,
+        1.0, 0.42 + warm * 0.42, 0.10 + warm * 0.14,
+        (0.34 + Math.random() * 0.4) * s, 0.42 + Math.random() * 0.35,
+        3.4, 1.5
+      );
+    }
+    // Smoke, drifting and expanding.
+    if (Math.random() < 0.55) {
+      this.dust.spawn(
+        x + (Math.random() - 0.5) * s, y + 1.1 * s, z + (Math.random() - 0.5) * s,
+        (Math.random() - 0.2) * 1.4, 2.2 + Math.random() * 1.6, (Math.random() - 0.5) * 1.4,
+        0.16, 0.15, 0.15,
+        (0.8 + Math.random() * 0.9) * s, 1.5 + Math.random(), 1.1, 0.5
+      );
+    }
+    // Rising embers.
+    if (Math.random() < 0.22) {
+      this.spark.spawn(
+        x + (Math.random() - 0.5) * 1.4 * s, y + 0.6, z + (Math.random() - 0.5) * 1.4 * s,
+        (Math.random() - 0.5) * 2.4, 3.5 + Math.random() * 3.5, (Math.random() - 0.5) * 2.4,
+        1.0, 0.7, 0.25, 0.12 + Math.random() * 0.12, 1.6 + Math.random(), 1.4, 0.7
+      );
+    }
+  }
+
   /** Bubbles rising off a swimming frog. */
   bubbles(pos, amount = 3) {
     for (let i = 0; i < amount; i++) {
