@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v10';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v10';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v10';
-import { Input } from './input.js?v=v10';
-import { Audio } from './audio.js?v=v10';
-import { World } from './world.js?v=v10';
-import { Effects } from './effects.js?v=v10';
-import { Atmosphere } from './atmosphere.js?v=v10';
-import { FollowCamera } from './camera.js?v=v10';
-import { Player } from './player.js?v=v10';
-import { RemotePlayer } from './remote.js?v=v10';
-import { HUD } from './hud.js?v=v10';
-import { KunaiSystem, PickupSystem } from './items.js?v=v10';
-import { DummyField } from './dummy.js?v=v10';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v10';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v10';
-import { MenuScene } from './menu.js?v=v10';
-import { Network, NetRole } from './net.js?v=v10';
+import * as THREE from '../lib/three.module.js?v=v11';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v11';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v11';
+import { Input } from './input.js?v=v11';
+import { Audio } from './audio.js?v=v11';
+import { World } from './world.js?v=v11';
+import { Effects } from './effects.js?v=v11';
+import { Atmosphere } from './atmosphere.js?v=v11';
+import { FollowCamera } from './camera.js?v=v11';
+import { Player } from './player.js?v=v11';
+import { RemotePlayer } from './remote.js?v=v11';
+import { HUD } from './hud.js?v=v11';
+import { KunaiSystem, PickupSystem } from './items.js?v=v11';
+import { DummyField } from './dummy.js?v=v11';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v11';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v11';
+import { MenuScene } from './menu.js?v=v11';
+import { Network, NetRole } from './net.js?v=v11';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -423,14 +423,7 @@ class Game {
         }
         return;
       }
-      if (ev.t === 'boss') {
-        if (this.story) this.story.applyBossState(ev);
-        return;
-      }
-      if (ev.t === 'bossHit') {
-        if (this.story && this.story.authority) this.story.damageBoss(ev.d);
-        return;
-      }
+      // Toadel is not networked: each player fights their own copy alone.
       if (ev.t === 'round') {
         if (this.round) this.round.applyState(ev);
         return;
@@ -952,9 +945,8 @@ class Game {
           this.effects.damageNumber(
             _hitPos.set(boss.pos.x, boss.pos.y + 3.4, boss.pos.z), dmg, false, 0.35);
           Audio.hit(boss.pos, false);
-          // Everyone reports damage; the host is what actually applies it.
-          if (this.story.authority) this.story.damageBoss(dmg);
-          else this.net.sendEvent({ t: 'bossHit', d: dmg });
+          // Your Toadel is yours alone, so damage applies straight away.
+          this.story.damageBoss(dmg);
         },
       });
     }
