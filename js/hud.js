@@ -82,6 +82,68 @@ export class HUD {
     this._lastHealth = frac;
   }
 
+  // ----------------------------------------------------------------- story
+
+  /** @param list array of { id, text, done, active } — or null to hide */
+  setObjectives(list) {
+    const root = $('objectives');
+    if (!list || !list.length) { root.classList.remove('show'); return; }
+    root.classList.add('show');
+
+    // Rebuild only when the objective set or its state actually changed.
+    const key = list.map((o) => `${o.id}:${o.done ? 1 : 0}:${o.active ? 1 : 0}`).join('|');
+    if (key === this._objKey) return;
+    const isNew = this._objKey && list.length > this._objCount;
+    this._objKey = key;
+    this._objCount = list.length;
+
+    const ul = $('obj-list');
+    ul.innerHTML = '';
+    list.forEach((o, i) => {
+      const li = document.createElement('li');
+      li.textContent = o.text;
+      if (o.done) li.classList.add('done');
+      if (o.active) li.classList.add('active');
+      if (isNew && i === list.length - 1) li.classList.add('new');
+      ul.appendChild(li);
+    });
+  }
+
+  showBossBar(name, fraction) {
+    const bar = $('boss-bar');
+    $('boss-name').textContent = name;
+    bar.classList.add('show');
+    this._bossFrac = fraction;
+    $('boss-fill').style.width = (fraction * 100) + '%';
+    $('boss-chip').style.width = (fraction * 100) + '%';
+  }
+
+  setBossBar(fraction) {
+    const f = clamp(fraction, 0, 1);
+    // Only touch the DOM on a visible change — this runs every frame.
+    if (Math.abs(f - (this._bossFrac || 0)) < 0.0005) return;
+    this._bossFrac = f;
+    $('boss-fill').style.width = (f * 100) + '%';
+    $('boss-chip').style.width = (f * 100) + '%';
+  }
+
+  hideBossBar() { $('boss-bar').classList.remove('show'); }
+
+  /** Letterbox bars + hide the gameplay HUD. */
+  setCinematic(on) {
+    if (on === this._cine) return;
+    this._cine = on;
+    this.root.classList.toggle('cinematic', on);
+  }
+
+  setSubtitle(text, speaker) {
+    const el = $('subtitle');
+    if (!text) { el.classList.remove('show'); return; }
+    $('sub-speaker').textContent = speaker || '';
+    $('sub-text').textContent = text;
+    el.classList.add('show');
+  }
+
   // ------------------------------------------------------------ vote screen
 
   /**
