@@ -18,7 +18,7 @@
 import * as THREE from '../lib/three.module.js';
 import { CFG } from './config.js';
 import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js';
-import { ToadModel, VillageScene } from './npc.js';
+import { ToadModel, VillageScene, PatrolGuard } from './npc.js';
 import { FrogModel } from './frog.js';
 import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js';
 import { Audio } from './audio.js';
@@ -27,7 +27,29 @@ export const STORY_PHASE = {
   ESCAPE: 'escape',
   CUTSCENE: 'cutscene',
   BOSS: 'boss',
+  DEFEAT: 'defeat',
+  PRISON: 'prison',
 };
+
+/**
+ * Scripted tutorial beats during the duel. Each waits for the player to
+ * actually perform the action before moving on, and the two that follow a
+ * landed blow drop into slow motion so there is time to read the prompt.
+ */
+const TUT = {
+  IDLE: 0,        // before the first blow
+  DASH: 1,        // slow-mo: teach the dash
+  ATTACK: 2,      // teach attacking
+  WAIT_HIT: 3,    // wait for his next blow
+  PARRY: 4,       // slow-mo: teach the parry
+  DONE: 5,
+};
+
+// Defeat sequence timings, in seconds.
+const FALL_TIME = 1.6;
+const FADE_OUT = 2.0;
+const BLACK_TIME = 2.0;
+const FADE_IN = 2.2;
 
 const TOADEL_LINE =
   '“Another villager? How unfortunate. You should have stayed in your ' +
@@ -62,7 +84,16 @@ export class StoryMode {
     this.boss = null;
     this.cutscene = null;
     this.shake = 0;
+
+    // Slow motion multiplier applied to gameplay (never to the UI).
+    this.timeScale = 1;
+    this.tutorial = TUT.IDLE;
+    this.tutorialTimer = 0;
+    this.defeat = null;
   }
+
+  /** True while the tutorial is holding the player's hand — no real damage. */
+  get inTutorial() { return this.tutorial !== TUT.DONE; }
 
   // ---------------------------------------------------------------- build
 
@@ -115,6 +146,20 @@ export class StoryMode {
 
     // Toadel, waiting in front of the gate.
     this.boss = new BossToadel(this.scene, this.level, this.effects);
+
+    // The gaoler, asleep in the corridor outside your cell.
+    const sleeper = new ToadModel(false);
+    sleeper.root.position.copy(this.level.sleepingGuardPos);
+    sleeper.setFacing(-Math.PI / 2);
+    // Slumped against the wall: tipped back, legs out, head lolling.
+    sleeper.root.rotation.z = 0.42;
+    sleeper.body.rotation.x = -0.35;
+    sleeper.head.rotation.x = 0.55;
+    sleeper.head.rotation.z = 0.3;
+    for (const leg of sleeper.legs) leg.hip.rotation.x = -1.1;
+    for (const arm of sleeper.arms) arm.shoulder.rotation.x = 0.6;
+    this.scene.add(sleeper.root);
+    this.sleeper = sleeper;
   }
 
   // --------------------------------------------------------------- update
@@ -127,7 +172,11 @@ export class StoryMode {
     this.time += dt;
     this.level.update(dt);
 
-    for (const a of this.actors) a.update(dt);
+    // `gdt` is world time (slowed during tutorial beats); `dt` stays real so
+    // scripted timers — prompts, fades, the black hold — are never stretched.
+    const gdt = dt * this.timeScale;
+
+    for (const a of this.actors) a.update(gdt);
     this._emitFires(dt);
 
     if (this.shake > 0) {
@@ -138,9 +187,74 @@ export class StoryMode {
     switch (this.phase) {
       case STORY_PHASE.ESCAPE: this._updateEscape(dt, player); break;
       case STORY_PHASE.CUTSCENE: this._updateCutscene(dt, player); break;
-      case STORY_PHASE.BOSS: this._updateBoss(dt, player, remotes); break;
+      case STORY_PHASE.BOSS:
+        this._updateBoss(gdt, player, remotes);
+        this._updateTutorial(dt, player);
+        break;
+      case STORY_PHASE.DEFEAT: this._updateDefeat(dt, player); break;
+      case STORY_PHASE.PRISON: this._updatePrison(dt, player); break;
       default: break;
     }
+  }
+
+  // ------------------------------------------------------------- tutorial
+
+  /**
+   * Drive the tutorial prompts. Each step ends when the player does the
+   * thing, so nobody is left staring at a prompt they have already obeyed.
+   */
+  _updateTutorial(dt, player) {
+    if (this.tutorial === TUT.DONE || this.tutorial === TUT.IDLE) return;
+    this.tutorialTimer += dt;
+
+    if (this.tutorial === TUT.DASH) {
+      // Cleared by dashing — or by a generous timeout so nobody gets stuck.
+      if (player.dashTimer > 0 || this.tutorialTimer > 9) {
+        this._setTutorial(TUT.ATTACK);
+      }
+    } else if (this.tutorial === TUT.ATTACK) {
+      if (player.combat.attacking || this.tutorialTimer > 9) {
+        this._setTutorial(TUT.WAIT_HIT);
+      }
+    } else if (this.tutorial === TUT.PARRY) {
+      // Cleared as soon as the guard is actually up.
+      if (player.parrying || this.tutorialTimer > 10) {
+        this._setTutorial(TUT.DONE);
+      }
+    }
+  }
+
+  _setTutorial(step) {
+    this.tutorial = step;
+    this.tutorialTimer = 0;
+
+    if (step === TUT.DASH) {
+      this.timeScale = 0.18;
+      this.hud.setTutorial('PRESS', 'Q', 'TO DASH AWAY');
+      Audio.cue(this.camera.position);
+    } else if (step === TUT.ATTACK) {
+      this.timeScale = 1;
+      this.hud.setTutorial('CLICK', 'LMB', 'TO HIT THE BOSS');
+      Audio.cue(this.camera.position);
+    } else if (step === TUT.WAIT_HIT) {
+      this.timeScale = 1;
+      this.hud.setTutorial(null);
+    } else if (step === TUT.PARRY) {
+      this.timeScale = 0.18;
+      this.hud.setTutorial('HOLD', 'RIGHT CLICK', 'TO PARRY HIS ATTACK');
+      Audio.cue(this.camera.position);
+    } else if (step === TUT.DONE) {
+      this.timeScale = 1;
+      this.hud.setTutorial(null);
+      this.hud.announce('NOW SURVIVE', 'danger');
+    }
+  }
+
+  /** Called by the player when one of Toadel's blows connects. */
+  onBossLanded() {
+    if (this.tutorial === TUT.IDLE) { this._setTutorial(TUT.DASH); return true; }
+    if (this.tutorial === TUT.WAIT_HIT) { this._setTutorial(TUT.PARRY); return true; }
+    return false;
   }
 
   _updateEscape(dt, player) {
@@ -230,6 +344,7 @@ export class StoryMode {
     this.shake = CFG.story.shakeTime;
     Audio.death(this.boss.pos);
     Audio.startAmbient();
+    Audio.startBossMusic();
     this.boss.begin();
   }
 
@@ -257,6 +372,234 @@ export class StoryMode {
     }
 
     this.hud.setBossBar(b.health / b.maxHealth);
+  }
+
+  // ---------------------------------------------------------- defeat
+
+  /**
+   * Toadel has finished you. You collapse, the world fades out, and you come
+   * round somewhere else entirely.
+   */
+  beginDefeat(player) {
+    if (this.phase === STORY_PHASE.DEFEAT || this.phase === STORY_PHASE.PRISON) return;
+    this.phase = STORY_PHASE.DEFEAT;
+    this.defeat = { t: 0, stage: 'fall' };
+    this.timeScale = 1;
+
+    player.frozen = true;
+    player.knockdown = 99;          // stay down; nothing can act you out of it
+    player.parrying = false;
+    player.storyParry = false;
+
+    this.hud.setTutorial(null);
+    this.hud.hideBossBar();
+    this.hud.clearAnnounce();
+    Audio.stopBossMusic();
+    Audio.hurt(player.pos);
+    Audio.land(player.pos, true);
+  }
+
+  _updateDefeat(dt, player) {
+    const d = this.defeat;
+    d.t += dt;
+
+    // The boss stands over you while the light goes out.
+    this.boss.model.update(dt, { speed: 0 });
+
+    if (d.stage === 'fall') {
+      if (d.t > FALL_TIME) { d.stage = 'out'; d.t = 0; this.hud.setFade(1, FADE_OUT); }
+    } else if (d.stage === 'out') {
+      if (d.t > FADE_OUT) {
+        d.stage = 'black'; d.t = 0;
+        // Move everything while the screen is fully black.
+        this._enterPrison(player);
+      }
+    } else if (d.stage === 'black') {
+      if (d.t > BLACK_TIME) { d.stage = 'in'; d.t = 0; this.hud.setFade(0, FADE_IN); }
+    } else if (d.stage === 'in') {
+      if (d.t > FADE_IN) {
+        this.phase = STORY_PHASE.PRISON;
+        this.defeat = null;
+        this._wakeUp(player);
+      }
+    }
+  }
+
+  /** Teleport into the cell behind the black screen. */
+  _enterPrison(player) {
+    const level = this.level;
+    player.health.revive();
+    player.pos.copy(level.prisonSpawn);
+    player.vel.set(0, 0, 0);
+    player.damageMultiplier = 1;
+    player.knockdown = 99;          // still lying down when the lights return
+    player.frozen = true;
+    player.model.root.position.copy(player.pos);
+
+    // Point the camera at the barred door, low to the floor.
+    this.followCam.yaw = Math.atan2(
+      -(level.prisonLook.x - player.pos.x),
+      -(level.prisonLook.z - player.pos.z)
+    );
+    this.followCam.pitch = 0.35;    // looking up from the ground
+    this.followCam.distance = 2.4;
+    this.followCam.snapTo(player.pos);
+
+    Audio.stopAmbient();
+    this._completeObjective('survive', false);
+    this._addObjective('escape-cell', 'Escape the dungeon');
+  }
+
+  /** Come round: the camera rises as the frog picks itself up. */
+  _wakeUp(player) {
+    this.wake = { t: 0 };
+    this.hud.setSubtitle('');
+    Audio.startAmbient();
+  }
+
+  _updatePrison(dt, player) {
+    this.level.updateRats(dt);
+
+    if (this.wake) {
+      this.wake.t += dt;
+      // Slow, groggy return to your feet.
+      const k = clamp(this.wake.t / 3.2, 0, 1);
+      this.followCam.pitch = lerp(0.35, -0.05, k);
+      this.followCam.distance = lerp(2.4, CFG.camera.distance, k);
+
+      if (this.wake.t > 2.2 && player.knockdown > 1) {
+        player.knockdown = 0;         // back on your feet
+        player.frozen = false;
+        this.hud.toast('You wake in a cell beneath the castle', 5);
+      }
+      if (this.wake.t > 3.4) {
+        this.wake = null;
+        // The tongue is still yours — the game says so explicitly, because
+        // this is the first time it is used to solve something.
+        this.hud.setTutorial('PRESS', 'G', 'WHILE LOOKING AT THE KEY TO GRAB IT');
+        Audio.cue(player.pos);
+        this.keyPrompt = true;
+      }
+      return;
+    }
+
+    // The sleeping guard snores on, oblivious.
+    if (this.sleeper) {
+      this.snore = (this.snore || 0) + dt;
+      this.sleeper.body.position.y = Math.sin(this.snore * 1.5) * 0.05;
+      if (this.snore % 4 < dt * 2) Audio.tone({
+        freq: 70, to: 55, dur: 0.5, type: 'sawtooth',
+        volume: 0.06, pos: this.sleeper.root.position,
+      });
+    }
+
+    // ---- grab the key with the tongue ----
+    if (!this.keyTaken && player.grapple.attached) {
+      const k = this.level.keyPos;
+      if (player.grapple.anchor.distanceTo(k) < 2.2) this._takeKey(player);
+    }
+
+    if (this.keyTaken) this._updateEscapeCastle(dt, player);
+  }
+
+  /** Tongue hit the key: it flies to you and the cell door swings open. */
+  _takeKey(player) {
+    this.keyTaken = true;
+    this.keyPrompt = false;
+    this.hud.setTutorial(null);
+    player.grapple.release();
+
+    const level = this.level;
+    if (level.keyMesh) level.keyMesh.visible = false;
+    // Remove the anchor so the tongue does not keep catching on nothing.
+    const idx = level.collision.anchors.indexOf(level.keyAnchor);
+    if (idx >= 0) level.collision.anchors.splice(idx, 1);
+
+    this.effects.puff(level.keyPos, 0xffd76b, 18, 5);
+    Audio.pickup(player.pos);
+
+    // Open the door.
+    if (level.cellDoor) level.cellDoor.disabled = true;
+    if (level.doorMesh) level.doorMesh.visible = false;
+    Audio.uiBack();
+    setTimeout(() => Audio.land(player.pos, true), 220);
+
+    this._completeObjective('escape-cell');
+    this._addObjective('escape-castle', 'Escape the castle');
+    this.hud.announce('THE DOOR IS OPEN', 'good');
+    this.hud.toast('Guards patrol the halls — stay out of sight', 5);
+
+    this._spawnGuards();
+  }
+
+  _spawnGuards() {
+    if (this.guards && this.guards.length) return;
+    this.guards = [];
+    const y = this.level.prisonSpawn.y;
+    for (const route of this.level.guardRoutes) {
+      const g = new PatrolGuard(route, y, this.level.collision);
+      this.scene.add(g.model.root);
+      this.guards.push(g);
+    }
+  }
+
+  /** Sneak through the castle to the gatehouse. */
+  _updateEscapeCastle(dt, player) {
+    const target = player.health.dead ? null : player.pos;
+    let anyChasing = false;
+    let maxAlert = 0;
+
+    for (const g of this.guards) {
+      g.update(dt, target, (guard) => {
+        // A guard's club hurts, but far less than Toadel's.
+        const dx = player.pos.x - guard.pos.x;
+        const dz = player.pos.z - guard.pos.z;
+        const len = Math.hypot(dx, dz) || 1;
+        player.vel.x += (dx / len) * 11;
+        player.vel.z += (dz / len) * 11;
+        player.vel.y = Math.max(player.vel.y, 0) + 5;
+        player.health.damage(28, 'guard');
+        _v.set(player.pos.x, player.pos.y + 1.1, player.pos.z);
+        this.effects.hitBurst(_v, { x: -dx / len, y: 0, z: -dz / len }, false);
+        this.effects.damageNumber(_v, 28, false);
+        Audio.hit(player.pos, false);
+        Audio.hurt(player.pos);
+        this.followCam.shake(0.35);
+      });
+      if (g.state === 'chase') anyChasing = true;
+      maxAlert = Math.max(maxAlert, g.alertLevel);
+    }
+
+    this.hud.setAlert(maxAlert, anyChasing);
+
+    // Caught and beaten: back to the cell, door shut again.
+    if (player.health.dead && !this._recapture) {
+      this._recapture = 2.5;
+      this.hud.announce('CAUGHT', 'danger', true);
+    }
+    if (this._recapture > 0) {
+      this._recapture -= dt;
+      if (this._recapture <= 0) {
+        this._recapture = 0;
+        player.health.revive();
+        player.pos.copy(this.level.prisonSpawn);
+        player.vel.set(0, 0, 0);
+        this.followCam.snapTo(player.pos);
+        this.hud.clearAnnounce();
+        this.hud.toast('Thrown back in your cell — try again', 4);
+        for (const g of this.guards) { g.state = 'patrol'; g.alertLevel = 0; }
+      }
+    }
+
+    // Reached the gatehouse.
+    if (!this.escaped && this.level.castleExit &&
+        player.pos.distanceTo(this.level.castleExit) < 7) {
+      this.escaped = true;
+      this._completeObjective('escape-castle');
+      this.hud.announce('YOU ESCAPED THE CASTLE', 'good', true);
+      this.hud.setAlert(0, false);
+      Audio.respawn(player.pos);
+    }
   }
 
   /** Boss state from the host. */
@@ -317,6 +660,9 @@ export class StoryMode {
     this.hud.hideBossBar();
     this.hud.setObjectives(null);
     this.hud.setSubtitle('');
+    this.hud.setTutorial(null);
+    this.hud.setFade(0, 0);
+    Audio.stopBossMusic();
   }
 }
 
