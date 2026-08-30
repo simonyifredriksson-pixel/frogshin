@@ -1,0 +1,212 @@
+/**
+ * FROGSHIN — central tuning constants.
+ * Every "feel" number lives here so movement can be tuned in one place.
+ */
+
+export const CFG = {
+  // ---------------------------------------------------------------- world
+  world: {
+    seed: 1337,              // fixed seed => every client generates an identical map
+    size: 420,               // world spans -size/2 .. +size/2 on X and Z
+    grid: 145,               // heightfield resolution (grid x grid samples)
+    waterLevel: 2.2,
+    killPlane: -30,          // fall below this and you respawn
+  },
+
+  // ------------------------------------------------------------- movement
+  move: {
+    runSpeed: 15.5,          // top ground speed (units/s)
+    airSpeed: 14.0,          // top speed you can steer toward while airborne
+    // Must exceed runSpeed * groundFriction (15.5 * 11 = 170.5), otherwise
+    // friction wins the tug-of-war and the real top speed settles well below
+    // runSpeed — which would also make the sprint multiplier inexact.
+    groundAccel: 220,        // how hard we chase the target velocity on ground
+    airAccel: 42,            // weaker in the air, but enough to feel responsive
+    groundFriction: 11.0,
+    airFriction: 0.35,
+    gravity: -42.0,
+    fallGravityMult: 1.45,   // heavier on the way down => snappy, non-floaty arc
+    maxFallSpeed: -62,
+
+    jumpSpeed: 17.5,
+    doubleJumpSpeed: 15.5,   // the "frog flip" second jump
+    jumpCutMult: 0.42,       // release Space early => shorter hop
+    coyoteTime: 0.13,        // grace period to jump after leaving a ledge
+    jumpBuffer: 0.14,        // pressing Space just before landing still jumps
+
+    wallSlideSpeed: -5.0,    // clamped fall speed while hugging a wall
+    wallJumpUp: 16.5,
+    wallJumpOut: 13.0,
+    wallCoyote: 0.16,
+
+    radius: 0.55,            // collision capsule radius
+    height: 1.75,            // collision capsule height
+    stepHeight: 0.65,        // auto-step over small ledges
+  },
+
+  // -------------------------------------------------------------- stamina
+  stamina: {
+    // All costs halved from the first pass so stamina lasts twice as long.
+    max: 100,
+    jumpCost: 8,             // ground jump
+    doubleJumpCost: 10,      // the frog flip costs more than a normal hop
+    wallJumpCost: 6.5,
+    breachCost: 9,           // leaping clear of the water
+    sprintDrain: 10.5,       // per second on land
+    swimSprintDrain: 7.5,    // per second underwater — cheaper, you go slower
+    regen: 27,               // per second once recovery starts
+    regenDelay: 0.65,        // quiet period after spending before regen kicks in
+    exhaustedRegenMult: 1.3, // recover quicker while locked out
+    // Run dry and you are locked out of sprint AND jump until stamina climbs
+    // back to this fraction.
+    recoverTo: 0.70,
+  },
+
+  // ---------------------------------------------------------------- items
+  kunai: {
+    damage: 25,
+    headshotDamage: 50,      // clean hit to the head
+    startCount: 10,
+    boxCount: 5,             // kunai inside each pickup crate
+    speed: 186,              // 3x the original throw speed
+    gravity: 0,              // zero: the kunai flies dead straight, no drop
+    // Range is now the limit rather than the drop. `lifetime` is derived
+    // from range / speed so the two can never disagree.
+    range: 134,              // 5x the old level-throw distance of ~27u
+    radius: 0.12,            // the blade's own thickness, added to hitboxes
+    cooldown: 0.32,
+    stickTime: 2.5,          // how long a thrown kunai stays in a surface
+    knockback: 5.0,
+    knockbackUp: 2.5,
+    maxInFlight: 32,
+  },
+
+  // Hitbox geometry, as offsets above a target's feet. Used by kunai to tell
+  // a headshot from a body hit. Tuned against the actual rig: the frog's
+  // head mesh sits at 0.66..1.38 with the eyes reaching ~1.5, and its torso
+  // at 0.16..1.08 — the two genuinely overlap on such a squat character, so
+  // the head sphere is kept tight and the neck reads as a headshot.
+  hitbox: {
+    player: { headOffset: 1.14, headRadius: 0.28, bodyOffset: 0.60, bodyRadius: 0.52 },
+    // Dummy head sits at body-local 2.12 plus the 0.45 body-group offset.
+    dummy:  { headOffset: 2.57, headRadius: 0.30, bodyOffset: 1.87, bodyRadius: 0.52 },
+  },
+
+  pickups: {
+    boxes: 5,                // crates alive at once
+    cycle: 30,               // seconds before the whole set is replaced
+    range: 3.2,              // how close you must be to press E
+    spawnRadius: 150,        // keep crates inside the mountain rim
+    bobHeight: 0.35,
+    syncInterval: 2.0,       // authority rebroadcast, covers late joiners
+  },
+
+  // --------------------------------------------------------------- sprint
+  sprint: {
+    speedMult: 2.0,          // hold Shift for double top speed
+    swimMult: 1.5,           // Shift underwater is a gentler boost
+    accelMult: 1.5,          // reach that speed quickly, not over ten metres
+    frictionMult: 0.55,      // less braking so the run holds its momentum
+    fovBoost: 13,            // widen the view — the classic "going fast" cue
+    trailInterval: 0.028,    // seconds between trail puffs
+  },
+
+  // ----------------------------------------------------------------- swim
+  swim: {
+    speed: 11.0,             // full 3D swim speed, steered with the camera
+    accel: 40,
+    drag: 2.3,               // water resistance
+    sinkGravity: -3.2,       // gentle sink when you stop kicking
+    riseSpeed: 30,           // Space thrusts you upward
+    maxRise: 10,
+    maxSink: -9,
+    breachBoost: 19,         // leap clear of the surface from just below it
+    breachDepth: 1.4,        // how close to the surface a breach is allowed
+    surfaceLevel: 0.55,      // eye depth that counts as "at the surface"
+  },
+
+  // ----------------------------------------------------------------- dash
+  dash: {
+    speed: 47,
+    duration: 0.17,
+    cooldown: 1.5,
+    airCharges: 1,           // air dashes before you must touch ground/grapple
+    endSpeedKeep: 0.52,      // fraction of dash speed retained on exit
+    invulnerable: 0.14,      // brief i-frames make the dash a real defensive tool
+  },
+
+  // -------------------------------------------------------------- grapple
+  grapple: {
+    range: 62,
+    fireSpeed: 210,          // tongue travel speed (visual + hit timing)
+    retractSpeed: 150,
+    pull: 105,               // acceleration toward the anchor
+    maxPullSpeed: 40,
+    swingBoost: 1.02,        // slight per-second tangential gain => swings feel alive
+    minRopeLength: 3.5,
+    cooldown: 0.35,
+    detachDist: 3.0,         // auto-release when you arrive
+    aimAssistAngle: 0.09,    // radians of cone assist toward anchors
+    maxTime: 4.0,            // safety release
+  },
+
+  // --------------------------------------------------------------- combat
+  combat: {
+    maxHealth: 100,
+    comboDamage: [16, 16, 26],
+    comboWindow: 0.85,
+    attackCooldown: [0.34, 0.34, 0.5],
+    windup: [0.07, 0.06, 0.11],   // delay before the hitbox opens
+    reach: 3.5,
+    arc: 1.25,                    // half-angle of the slash cone (radians)
+    knockback: [11, 11, 19],
+    knockbackUp: [4.5, 4.5, 8.5],
+    hitstop: [0.045, 0.045, 0.09],
+    regenDelay: 6.0,
+    regenRate: 9.0,
+    respawnTime: 3.0,
+    spawnProtection: 2.0,
+  },
+
+  // --------------------------------------------------------------- camera
+  camera: {
+    fov: 74,
+    distance: 6.4,
+    minDistance: 1.6,
+    height: 1.85,
+    shoulder: 0.75,          // over-the-shoulder offset
+    sensitivity: 0.0024,
+    pitchMin: -1.15,
+    pitchMax: 1.05,
+    followLerp: 16,          // position smoothing
+    fovSpeedBoost: 16,       // extra FOV at high speed (speed lines feel)
+    near: 0.15,
+    far: 900,
+  },
+
+  // ----------------------------------------------------------------- net
+  net: {
+    sendRate: 20,            // state packets per second
+    interpDelay: 0.11,       // render remote players this far in the past
+    timeout: 9.0,            // drop a peer after this many seconds of silence
+    prefix: 'frogshin-v1-',  // PeerJS id namespace
+  },
+
+  // -------------------------------------------------------------- quality
+  gfx: {
+    pixelScale: 0.5,         // internal render scale (pixel-art look + perf)
+    shadows: true,
+    maxParticles: 900,
+  },
+};
+
+/** Team colours used to tint remote frogs so players are distinguishable. */
+export const FROG_COLORS = [
+  0x6cc24a, 0x4aa3c2, 0xc2794a, 0xa64ac2, 0xc2b74a,
+  0x4ac28a, 0xc24a6c, 0x7a8ac2, 0x9cc24a, 0xc25a2a,
+];
+
+export const NINJA_NAMES = [
+  'Ribbit', 'Shadowpad', 'Lilyblade', 'Kero', 'Toadstorm', 'Nightcroak',
+  'Bogstep', 'Jadefang', 'Mistleap', 'Pondwraith', 'Tadpole', 'Swampsong',
+];
