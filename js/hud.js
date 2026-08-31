@@ -6,11 +6,12 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v14';
-import { CFG } from './config.js?v=v14';
-import { staminaBand } from './stamina.js?v=v14';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v14';
-import { Audio } from './audio.js?v=v14';
+import { clamp } from './util.js?v=v15';
+import { CFG } from './config.js?v=v15';
+import { staminaBand } from './stamina.js?v=v15';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v15';
+import { Audio } from './audio.js?v=v15';
+import { PX, setIcon } from './icons.js?v=v15';
 
 const $ = (id) => document.getElementById(id);
 
@@ -71,6 +72,19 @@ export class HUD {
     this._toastTimer = 0;
     this._comboTimer = 0;
     this._lastHealth = 1;
+
+    // One place decides what every icon looks like. Emoji rendered in each
+    // platform's own style and clashed with the pixel art.
+    setIcon('icon-health', PX.HEART);
+    setIcon('icon-stamina', PX.BOLT);
+    setIcon('purse-icon', PX.COIN);
+    setIcon('icon-load-frog', PX.FROG);
+    setIcon('icon-ctp-frog', PX.FROG);
+    setIcon('icon-alert', PX.EYE);
+
+    this.purseAmount = $('purse-amount');
+    this.pursePops = $('purse-pops');
+    this._purseShown = -1;
     this._flashTimer = 0;
     this._feedItems = [];
   }
@@ -92,6 +106,28 @@ export class HUD {
       this.healthBar.classList.add('bump');
     }
     this._lastHealth = frac;
+  }
+
+  // --------------------------------------------------------------- froglets
+
+  /** Current balance, top-right. Only touches the DOM when it changes. */
+  setFroglets(n) {
+    if (n === this._purseShown) return;
+    this._purseShown = n;
+    this.purseAmount.textContent = n.toLocaleString('en-GB');
+    this.purseAmount.classList.remove('bump');
+    void this.purseAmount.offsetWidth;
+    this.purseAmount.classList.add('bump');
+  }
+
+  /** Floating "+100 Tagged Kero" beside the purse. */
+  frogletPopup(amount, reason) {
+    const el = document.createElement('div');
+    el.className = 'purse-pop';
+    el.textContent = `+${amount}` + (reason ? ` ${reason}` : '');
+    this.pursePops.appendChild(el);
+    // The CSS animation runs for 1.8s; clean up a little after that.
+    setTimeout(() => el.remove(), 2000);
   }
 
   // ----------------------------------------------------------------- story
@@ -507,7 +543,7 @@ export class HUD {
     k.textContent = killer || 'The world';
     const icon = document.createElement('span');
     icon.className = 'feed-icon';
-    icon.textContent = killer ? '⚔' : '☠';
+    icon.innerHTML = killer ? PX.BLADE : PX.SKULL;
     const v = document.createElement('span');
     v.className = 'feed-name' + (victim === selfName ? ' me' : '');
     v.textContent = victim;
