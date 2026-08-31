@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v16" />
+<link rel="stylesheet" href="css/style.css?v=v17" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -370,6 +370,11 @@
     <div class="al-text" id="al-text">SPOTTED</div>
   </div>
 
+  <!-- practice ring prompt -->
+  <div id="ring-prompt">
+    <b>T</b><span>TRY SKINS &amp; ABILITIES</span>
+  </div>
+
   <!-- story: tutorial prompt -->
   <div id="tutorial">
     <span class="tut-verb" id="tut-verb"></span>
@@ -483,6 +488,12 @@
         <div class="vc-votes"><span data-count="infection">0</span> votes</div>
       </button>
 
+      <button class="vote-card" data-mode="team">
+        <div class="vc-name">TEAM BATTLE</div>
+        <div class="vc-blurb">Same fight, two sides. Pick 1v1 up to 5v5. No friendly fire — most kills takes the round.</div>
+        <div class="vc-votes"><span data-count="team">0</span> votes</div>
+      </button>
+
       <button class="vote-card" data-mode="ffa">
         <div class="vc-name">CLASSIC FFA</div>
         <div class="vc-blurb">Everyone for themselves. Katana, kunai, no teams. Most kills wins.</div>
@@ -561,6 +572,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v16"></script>
+<script type="module" src="js/main.js?v=v17"></script>
 </body>
 </html>
