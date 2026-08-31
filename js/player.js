@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v14';
-import { CFG } from './config.js?v=v14';
-import { clamp, damp, dampAngle, lerp } from './util.js?v=v14';
-import { FrogModel } from './frog.js?v=v14';
-import { Grapple, GrappleState } from './grapple.js?v=v14';
-import { Combat, Health } from './combat.js?v=v14';
-import { Stamina } from './stamina.js?v=v14';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v14';
-import { Audio } from './audio.js?v=v14';
+import * as THREE from '../lib/three.module.js?v=v15';
+import { CFG } from './config.js?v=v15';
+import { clamp, damp, dampAngle, lerp } from './util.js?v=v15';
+import { FrogModel } from './frog.js?v=v15';
+import { Grapple, GrappleState } from './grapple.js?v=v15';
+import { Combat, Health } from './combat.js?v=v15';
+import { Stamina } from './stamina.js?v=v15';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v15';
+import { Audio } from './audio.js?v=v15';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -248,8 +248,13 @@ export class Player {
       }
       const wheel = input.takeWheel();
       if (wheel) this._cycleSlot(wheel);
-      // In story mode the right button is a held parry rather than a throw.
-      if (this.storyParry) {
+      // Right mouse does one of two things depending on what is in hand:
+      // hold to PARRY with the katana, click to THROW with kunai. That makes
+      // parrying available in every mode, at the cost of having your blade
+      // out instead of your kunai.
+      const slot = this.inventory.selectedSlot;
+      const swordOut = !!slot && slot.item === ITEMS.katana;
+      if (swordOut) {
         const held = input.rightHeld;
         if (held !== this.parrying) {
           this.parrying = held;
@@ -259,8 +264,10 @@ export class Player {
           else Audio.uiHover();
         }
         input.consume('MouseRight');
-      } else if (input.consume('MouseRight')) {
-        this._tryThrowKunai(cam);
+      } else {
+        // Switching off the sword drops any guard you were holding.
+        if (this.parrying) { this.parrying = false; this.parryHits = 0; }
+        if (input.consume('MouseRight')) this._tryThrowKunai(cam);
       }
       if (input.consume('KeyE')) this._tryPickup();
     } else {
@@ -783,6 +790,28 @@ export class Player {
   /** Damage requested by another player. Returns true if it landed. */
   receiveHit(dmg, kx, ky, kz, fromId, cam) {
     if (this.health.dead || this.health.protected) return false;
+
+    // A raised guard turns the blow aside — same rule everywhere, including
+    // the arena: the second hit absorbed inside one parry breaks it.
+    if (this.parrying) {
+      const len = Math.hypot(kx, kz) || 1;
+      const nx = kx / len, nz = kz / len;
+      this.parryHits++;
+      this.justParried = 0.2;
+      if (this.parryHits >= CFG.story.parry.knockdownAfter) {
+        this._knockDown(nx, nz);
+        return false;
+      }
+      this.vel.x += nx * 7;
+      this.vel.z += nz * 7;
+      this.combat.hitstop = CFG.story.parry.chipStagger;
+      _tmp.set(this.pos.x + nx * 0.6, this.pos.y + 1.1, this.pos.z + nz * 0.6);
+      this.effects.hitBurst(_tmp, { x: -nx, y: 0, z: -nz }, true);
+      this.effects.ring(_tmp, 0.3, 2.6, 0.3, 0xbfe3ff, false, { x: nx, y: 0, z: nz });
+      Audio.parry(this.pos);
+      if (cam) cam.shake(0.2);
+      return false;
+    }
     const applied = this.health.damage(dmg, fromId);
     if (!applied) return false;
 
