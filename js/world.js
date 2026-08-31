@@ -9,10 +9,10 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v16';
-import { CFG } from './config.js?v=v16';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v16';
-import { Terrain, CollisionWorld } from './collision.js?v=v16';
+import * as THREE from '../lib/three.module.js?v=v17';
+import { CFG } from './config.js?v=v17';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v17';
+import { Terrain, CollisionWorld } from './collision.js?v=v17';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -298,6 +298,55 @@ export class World {
     return m;
   }
 
+  /**
+   * The glowing blue try-out ring.
+   *
+   * Unlit basic materials on purpose: it must read as a marker rather than
+   * as scenery, and stay equally visible in shadow.
+   */
+  _buildPracticeRing(x, y, z, radius) {
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(radius - 0.45, radius, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0x4ad0ff, transparent: true, opacity: 0.9,
+        side: THREE.DoubleSide, depthWrite: false,
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.06;
+    group.add(ring);
+
+    const glow = new THREE.Mesh(
+      new THREE.RingGeometry(radius - 1.5, radius + 0.9, 48),
+      new THREE.MeshBasicMaterial({
+        color: 0x2a9ad0, transparent: true, opacity: 0.22,
+        side: THREE.DoubleSide, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.04;
+    group.add(glow);
+
+    // A soft column so it is findable from across the arena.
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(radius - 0.5, radius - 0.2, 7, 20, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0x5ad8ff, transparent: true, opacity: 0.09,
+        side: THREE.DoubleSide, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      })
+    );
+    pillar.position.y = 3.5;
+    group.add(pillar);
+
+    this.scene.add(group);
+    this.practiceRing = { pos: new THREE.Vector3(x, y, z), radius, group, ring, glow, pillar };
+  }
+
   torii(x, z, rotY = 0, scale = 1) {
     const y = this.heightAt(x, z);
     const w = 3.2 * scale, h = 6.2 * scale;
@@ -353,6 +402,10 @@ export class World {
     // Two more on the central dais so there is always one close at hand.
     this.dummySpots.push([-6.5, baseY + 1.45, 6.5, Math.atan2(6.5, -6.5)]);
     this.dummySpots.push([6.5, baseY + 1.45, -6.5, Math.atan2(-6.5, 6.5)]);
+
+    // ---- practice ring, dead centre of the dummy platform ----
+    // Standing in it lets a solo player try every skin and ability.
+    this._buildPracticeRing(0, baseY + 1.5, 0, 4.2);
 
     // Aerial lantern ring — chain grapples in a circle above the arena.
     for (let i = 0; i < 10; i++) {
@@ -719,6 +772,15 @@ export class World {
 
   update(dt, cameraPos) {
     this.time += dt;
+
+    // Practice ring: slow pulse so it reads as interactive.
+    if (this.practiceRing) {
+      const p = 0.75 + Math.sin(this.time * 2.0) * 0.25;
+      this.practiceRing.ring.material.opacity = 0.55 + p * 0.4;
+      this.practiceRing.glow.material.opacity = 0.12 + p * 0.16;
+      this.practiceRing.pillar.material.opacity = 0.05 + p * 0.07;
+      this.practiceRing.group.rotation.y += dt * 0.25;
+    }
 
     // Lantern bob — cheap, and it makes the world feel alive.
     for (let i = 0; i < this.lanterns.length; i++) {
