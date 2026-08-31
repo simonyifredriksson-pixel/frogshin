@@ -17,8 +17,8 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v14';
-import { clamp } from './util.js?v=v14';
+import { CFG } from './config.js?v=v15';
+import { clamp } from './util.js?v=v15';
 
 export const MODES = { TAG: 'tag', INFECTION: 'infection', FFA: 'ffa' };
 
@@ -66,6 +66,8 @@ export class RoundManager {
     this.immunity = new Map();      // playerId -> seconds of no-tag-back left
     this.votes = new Map();         // playerId -> { mode, taggers }
     this.tally = { tag: 0, infection: 0, ffa: 0 };
+    this.startingTaggers = new Set();
+    this.outcome = '';              // 'survivors' | 'taggers' | 'ffa'
     this.result = '';
     this.roundNumber = 0;
     this._syncAccum = 0;
@@ -176,11 +178,12 @@ export class RoundManager {
         break;
       case PHASE.PLAYING:
         if (this.timer <= 0) {
-          this._finish(this._timeUpResult(playerIds));
+          const r = this._timeUpResult(playerIds);
+          this._finish(r.text, r.outcome);
         } else if (this.mode === MODES.INFECTION &&
                    playerIds.length > 1 &&
                    playerIds.every((id) => this.taggers.has(id))) {
-          this._finish('EVERYONE INFECTED — taggers win!');
+          this._finish('EVERYONE INFECTED — taggers win!', 'taggers');
         }
         break;
       case PHASE.ENDING:
@@ -197,15 +200,25 @@ export class RoundManager {
     }
   }
 
+  /**
+   * Result text plus a machine-readable outcome, which the economy uses to
+   * decide who gets paid.
+   * @returns { text, outcome: 'survivors'|'taggers'|'ffa' }
+   */
   _timeUpResult(playerIds) {
-    if (this.mode === MODES.FFA) return 'TIME — check the scoreboard';
+    if (this.mode === MODES.FFA) {
+      return { text: 'TIME — check the scoreboard', outcome: 'ffa' };
+    }
     const survivors = playerIds.filter((id) => !this.taggers.has(id)).length;
     if (this.mode === MODES.INFECTION) {
       return survivors > 0
-        ? `${survivors} survivor${survivors === 1 ? '' : 's'} held out — survivors win!`
-        : 'Taggers win!';
+        ? {
+          text: `${survivors} survivor${survivors === 1 ? '' : 's'} held out — survivors win!`,
+          outcome: 'survivors',
+        }
+        : { text: 'Taggers win!', outcome: 'taggers' };
     }
-    return 'TIME — the runners escaped!';
+    return { text: 'TIME — the runners escaped!', outcome: 'survivors' };
   }
 
   _beginVoting() {
@@ -234,13 +247,18 @@ export class RoundManager {
       const n = Math.min(this.taggerCount, Math.max(1, pool.length - 1));
       for (let i = 0; i < n && i < pool.length; i++) this.taggers.add(pool[i]);
     }
+    // Remembered separately from `taggers`, which changes as people are
+    // tagged — the economy pays a bonus for having STARTED as an infector.
+    this.startingTaggers = new Set(this.taggers);
 
     this.result = '';
+    this.outcome = '';
     this._setPhase(PHASE.STARTING, CFG.rounds.startCountdown);
   }
 
-  _finish(result) {
+  _finish(result, outcome) {
     this.result = result;
+    this.outcome = outcome || '';
     this._setPhase(PHASE.ENDING, CFG.rounds.endTime);
   }
 
@@ -296,6 +314,8 @@ export class RoundManager {
       tc: this.taggerCount,
       v: this.tally,
       r: this.result,
+      o: this.outcome || '',
+      sg: Array.from(this.startingTaggers || []),
       n: this.roundNumber,
     };
   }
@@ -313,6 +333,8 @@ export class RoundManager {
     this.timer = s.tl;
     this.taggerCount = s.tc;
     this.result = s.r || '';
+    this.outcome = s.o || '';
+    this.startingTaggers = new Set(s.sg || []);
     this.roundNumber = s.n || 0;
     this.tally = s.v || { tag: 0, infection: 0, ffa: 0 };
     this.taggers = new Set(s.tg || []);
