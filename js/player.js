@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v13';
-import { CFG } from './config.js?v=v13';
-import { clamp, damp, dampAngle, lerp } from './util.js?v=v13';
-import { FrogModel } from './frog.js?v=v13';
-import { Grapple, GrappleState } from './grapple.js?v=v13';
-import { Combat, Health } from './combat.js?v=v13';
-import { Stamina } from './stamina.js?v=v13';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v13';
-import { Audio } from './audio.js?v=v13';
+import * as THREE from '../lib/three.module.js?v=v14';
+import { CFG } from './config.js?v=v14';
+import { clamp, damp, dampAngle, lerp } from './util.js?v=v14';
+import { FrogModel } from './frog.js?v=v14';
+import { Grapple, GrappleState } from './grapple.js?v=v14';
+import { Combat, Health } from './combat.js?v=v14';
+import { Stamina } from './stamina.js?v=v14';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v14';
+import { Audio } from './audio.js?v=v14';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -27,6 +27,7 @@ const _swimWish = new THREE.Vector3();
 const _throwOrigin = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _throwDir = new THREE.Vector3();
+const _assist = new THREE.Vector3();
 const _axis = { x: 0, y: 0 };
 
 export class Player {
@@ -182,6 +183,7 @@ export class Player {
    */
   update(dt, input, cam, targets) {
     this._lastInput = input;     // so the dead/frozen paths can flush it too
+    this._targets = targets;     // kunai aim assist reads this on throw
     this.health.update(dt);
     this.combat.update(dt);
     this.stamina.update(dt);
@@ -682,13 +684,54 @@ export class Player {
     if (dir.lengthSq() < 1e-6) dir.copy(_aim);
     dir.normalize();
 
-    this.kunai.throw_(o, dir, this.id, true);
+    // Aim assist: pick a nearby player or dummy inside a narrow cone. The
+    // kunai then curves toward it in flight rather than being snapped onto
+    // it here, so a throw that was never close still misses.
+    const assist = this._pickKunaiTarget(o, dir);
+
+    this.kunai.throw_(o, dir, this.id, true, assist ? assist.id : null);
     Audio.kunaiThrow(this.pos);
     this.events.push({
       t: 'kunai',
       x: r2(o.x), y: r2(o.y), z: r2(o.z),
       dx: r2(dir.x), dy: r2(dir.y), dz: r2(dir.z),
+      tid: assist ? assist.id : undefined,
     });
+  }
+
+  /**
+   * Best aim-assist candidate for a throw: the target closest to the line
+   * you are actually aiming along. Only players and dummies qualify —
+   * scenery is never assisted.
+   */
+  _pickKunaiTarget(origin, dir) {
+    const K = CFG.kunai;
+    const list = this._targets;
+    if (!list || !list.length) return null;
+
+    let best = null;
+    let bestScore = Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      if (!t || t.dead) continue;
+      const box = t.hitbox || CFG.hitbox.player;
+      _assist.set(
+        t.pos.x - origin.x,
+        (t.pos.y + box.bodyOffset) - origin.y,
+        t.pos.z - origin.z
+      );
+      const dist = _assist.length();
+      if (dist < 2 || dist > K.assistRange) continue;
+      _assist.multiplyScalar(1 / dist);
+      const dot = _assist.dot(dir);
+      if (dot <= 0) continue;
+      const angle = Math.acos(clamp(dot, -1, 1));
+      if (angle > K.assistAngle) continue;
+      // Tightest angle wins; distance only breaks near-ties.
+      const score = angle * 10 + dist * 0.003;
+      if (score < bestScore) { bestScore = score; best = t; }
+    }
+    return best;
   }
 
   /** Grab the nearest kunai crate. */
