@@ -16,10 +16,58 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v12';
-import { roomCode as makeRoomCode } from './util.js?v=v12';
+import { CFG, BUILD } from './config.js?v=v13';
+import { roomCode as makeRoomCode } from './util.js?v=v13';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
+
+/**
+ * ICE configuration — how two browsers find a path to each other.
+ *
+ * STUN alone only tells each peer its own public address so they can attempt
+ * a direct connection ("hole punching"). That works on most home routers and
+ * fails on most school and corporate networks, which use symmetric NAT and
+ * block the UDP involved. The symptom is very specific: home-to-school
+ * connects, school-to-school never does.
+ *
+ * TURN fixes that by relaying the traffic through a public server. The
+ * 443/TCP entry matters most — to a firewall it is indistinguishable from
+ * ordinary HTTPS, so it survives networks that drop everything else.
+ *
+ * These are the Open Relay Project's free public credentials. Free TURN is
+ * rate-limited and carries no uptime guarantee, so STUN is listed first and
+ * the relay is only used when a direct route genuinely cannot be found.
+ */
+const ICE_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+    {
+      // Most firewall-tolerant of the lot: TURN over TCP on the HTTPS port.
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ],
+  // Gather a few candidates up front so connecting is not slowed by having
+  // to discover a relay path from scratch.
+  iceCandidatePoolSize: 4,
+};
+
+/** Options handed to every PeerJS Peer we create. */
+function peerOptions() {
+  return { debug: 0, config: ICE_CONFIG };
+}
 
 export class Network {
   constructor() {
@@ -83,7 +131,7 @@ export class Network {
     this.role = NetRole.HOST;
     this._status(`Creating room ${this.room}…`);
 
-    this.peer = new window.Peer(CFG.net.prefix + this.room, { debug: 0 });
+    this.peer = new window.Peer(CFG.net.prefix + this.room, peerOptions());
 
     this.peer.on('open', (id) => {
       this.selfId = id;
@@ -120,7 +168,7 @@ export class Network {
     this.role = NetRole.CLIENT;
     this._status(`Connecting to room ${this.room}…`);
 
-    this.peer = new window.Peer(undefined, { debug: 0 });
+    this.peer = new window.Peer(undefined, peerOptions());
 
     this.peer.on('open', (id) => {
       this.selfId = id;
@@ -131,10 +179,19 @@ export class Network {
       });
       this.hostConn = conn;
 
-      // If the host never answers, surface a real error instead of hanging.
+      // Two different failures look identical from here, so they are timed
+      // separately. Reaching the broker but never opening the data channel
+      // means the room exists and the NETWORK is blocking the link — the
+      // usual story on school and office Wi-Fi.
+      this._reachedBroker = false;
       const timeout = setTimeout(() => {
-        if (!this.connected) this._fail(`No room "${this.room}" is open right now.`);
-      }, 12000);
+        if (this.connected) return;
+        this._fail(this._reachedBroker
+          ? `Found room "${this.room}", but this network is blocking the ` +
+            'connection. School and office Wi-Fi often does. Try a phone ' +
+            'hotspot or a home network.'
+          : `No room "${this.room}" is open right now.`);
+      }, 20000);   // TURN relaying can take noticeably longer than a direct link
 
       conn.on('open', () => {
         clearTimeout(timeout);
@@ -150,6 +207,12 @@ export class Network {
         this._hostLost();
       });
       conn.on('error', () => { /* surfaced by peer.on('error') */ });
+
+      // ICE reaching "checking" proves the host was found and we are now
+      // negotiating a route — so a later timeout is a blocked path, not a
+      // missing room.
+      if (conn.peerConnection) this._watchIce(conn);
+      else setTimeout(() => { if (conn.peerConnection) this._watchIce(conn); }, 400);
     });
 
     this.peer.on('error', (err) => {
@@ -158,6 +221,26 @@ export class Network {
         return;
       }
       this._peerError(err);
+    });
+  }
+
+  /**
+   * Watch ICE negotiation so a failure can be reported precisely.
+   * Purely diagnostic — it never changes the connection itself.
+   */
+  _watchIce(conn) {
+    const pc = conn.peerConnection;
+    if (!pc || this._iceWatched) return;
+    this._iceWatched = true;
+    pc.addEventListener('iceconnectionstatechange', () => {
+      const st = pc.iceConnectionState;
+      if (st === 'checking') this._reachedBroker = true;
+      if (st === 'connected' || st === 'completed') this._reachedBroker = true;
+      if (st === 'failed' && !this.connected) {
+        this._fail('This network is blocking the peer-to-peer connection. ' +
+          'School and office Wi-Fi usually does — try a phone hotspot.');
+      }
+      console.log('[frogshin] ice:', st);
     });
   }
 
