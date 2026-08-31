@@ -6,11 +6,11 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v13';
-import { CFG } from './config.js?v=v13';
-import { staminaBand } from './stamina.js?v=v13';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v13';
-import { Audio } from './audio.js?v=v13';
+import { clamp } from './util.js?v=v14';
+import { CFG } from './config.js?v=v14';
+import { staminaBand } from './stamina.js?v=v14';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v14';
+import { Audio } from './audio.js?v=v14';
 
 const $ = (id) => document.getElementById(id);
 
@@ -97,12 +97,14 @@ export class HUD {
   // ----------------------------------------------------------------- story
 
   /**
-   * Wipe every piece of arena UI before the story starts.
-   * The HUD is one shared set of elements, so state left over from a match
-   * would otherwise show up mid-story — a round timer counting down, a stale
-   * "YOU ARE IT", or a boss bar from a previous attempt.
+   * Wipe every overlay back to a clean slate.
+   *
+   * The HUD is one shared set of elements reused by the arena, the story and
+   * the menu, and several of them (the vote screen, the boss bar) live
+   * OUTSIDE #hud — so hiding #hud alone leaves them on screen. Called both
+   * when entering the story and when leaving a match.
    */
-  resetForStory() {
+  resetOverlays() {
     this.hideRound();
     this.showVote(false);
     this.clearAnnounce();
