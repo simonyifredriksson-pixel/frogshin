@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v13';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v13';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v13';
-import { Input } from './input.js?v=v13';
-import { Audio } from './audio.js?v=v13';
-import { World } from './world.js?v=v13';
-import { Effects } from './effects.js?v=v13';
-import { Atmosphere } from './atmosphere.js?v=v13';
-import { FollowCamera } from './camera.js?v=v13';
-import { Player } from './player.js?v=v13';
-import { RemotePlayer } from './remote.js?v=v13';
-import { HUD } from './hud.js?v=v13';
-import { KunaiSystem, PickupSystem } from './items.js?v=v13';
-import { DummyField } from './dummy.js?v=v13';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v13';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v13';
-import { MenuScene } from './menu.js?v=v13';
-import { Network, NetRole } from './net.js?v=v13';
+import * as THREE from '../lib/three.module.js?v=v14';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v14';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v14';
+import { Input } from './input.js?v=v14';
+import { Audio } from './audio.js?v=v14';
+import { World } from './world.js?v=v14';
+import { Effects } from './effects.js?v=v14';
+import { Atmosphere } from './atmosphere.js?v=v14';
+import { FollowCamera } from './camera.js?v=v14';
+import { Player } from './player.js?v=v14';
+import { RemotePlayer } from './remote.js?v=v14';
+import { HUD } from './hud.js?v=v14';
+import { KunaiSystem, PickupSystem } from './items.js?v=v14';
+import { DummyField } from './dummy.js?v=v14';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v14';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v14';
+import { MenuScene } from './menu.js?v=v14';
+import { Network, NetRole } from './net.js?v=v14';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -445,7 +445,9 @@ class Game {
         if (this.kunaiSystem) {
           _kOrigin.set(ev.x, ev.y, ev.z);
           _kDir.set(ev.dx, ev.dy, ev.dz).normalize();
-          this.kunaiSystem.throw_(_kOrigin, _kDir, id, false);
+          // Pass the assisted target through so onlookers see the same curve
+          // the thrower does, rather than a blade flying implausibly straight.
+          this.kunaiSystem.throw_(_kOrigin, _kDir, id, false, ev.tid || null);
           Audio.kunaiThrow(_kOrigin);
         }
         return;
@@ -553,6 +555,7 @@ class Game {
 
       this.effects = new Effects(this.scene, this.camera);
       this.kunaiSystem = new KunaiSystem(this.scene, world.collision, this.effects);
+      this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
       this.dummies = new DummyField(this.scene);
       for (const [dx, dy, dz, face] of world.dummySpots) {
         this.dummies.add(dx, dy, dz, face);
@@ -689,6 +692,7 @@ class Game {
     // No dummies, no crates, no rounds in the story.
     this.dummies = new DummyField(this.scene);
     this.kunaiSystem = new KunaiSystem(this.scene, this.story.collision, this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
     this.pickups = null;
 
     bar.style.width = '100%';
@@ -725,7 +729,7 @@ class Game {
     // The HUD is shared with the arena, so anything left over from a match
     // (round timer, "YOU ARE IT", a boss bar, the vote screen) is cleared —
     // otherwise it bleeds straight into the story.
-    this.hud.resetForStory();
+    this.hud.resetOverlays();
     this.hud.show(true);
     this.hud.setRoom(this.net.room, 'Story — the burning village', this.net.isOnline);
     this.hud.toast('Follow the boardwalk — get out of the village', 5);
@@ -787,7 +791,13 @@ class Game {
     $('menu').classList.add('show');
     this.showPanel('home');
     this.hud.show(false);
-    this.hud.hideRespawn();
+    // The vote screen and boss bar sit outside #hud, so hiding the HUD is not
+    // enough — without this the mode-vote panel stayed stuck on the menu.
+    this.hud.resetOverlays();
+    // Drop the round so the next match starts from a fresh vote rather than
+    // resuming a stale one.
+    this.round = null;
+    this.myVote = null;
     this.mode = 'menu';
     this.pendingMode = null;
     this.sessionMode = null;
@@ -1235,6 +1245,36 @@ class Game {
       });
     }
     return list;
+  }
+
+  /**
+   * Where an assisted kunai should aim, for any target id.
+   *
+   * Works from every viewpoint: the id may be this client's own player (a
+   * kunai someone threw at you), another frog, or a training dummy. Writes
+   * the chest position into `out` and returns whether it found anything, so
+   * a kunai stops curving once its target dies or disconnects.
+   */
+  _resolveAimTarget(id, out) {
+    if (this.player && id === this.player.id && !this.player.health.dead) {
+      const b = CFG.hitbox.player;
+      out.set(this.player.pos.x, this.player.pos.y + b.bodyOffset, this.player.pos.z);
+      return true;
+    }
+    const r = this.remotes.get(id);
+    if (r && r.spawned && !r.dead) {
+      const b = CFG.hitbox.player;
+      out.set(r.pos.x, r.pos.y + b.bodyOffset, r.pos.z);
+      return true;
+    }
+    if (this.dummies) {
+      for (const d of this.dummies.dummies) {
+        if (d.id !== id) continue;
+        out.copy(d.hitPoint);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Extra punch for a headshot: gold ring, chime and a screen kick. */
