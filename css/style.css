@@ -793,9 +793,89 @@ kbd {
 
 /* -------------------------------------------------------------- killfeed */
 
-#killfeed {
+/* ---------------------------------------------------------------- purse */
+
+#purse {
   position: absolute;
   right: 26px; top: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(10,14,20,0.74);
+  border: 3px solid rgba(255,207,92,0.4);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+}
+.purse-icon { width: 20px; height: 20px; display: block; }
+.purse-icon svg { width: 100%; height: 100%; display: block; }
+#purse-amount {
+  font-family: var(--font-px);
+  font-size: 14px;
+  color: var(--gold);
+  text-shadow: 0 2px 0 rgba(0,0,0,0.8);
+}
+#purse-amount.bump { animation: purseBump 0.3s ease-out; }
+@keyframes purseBump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.22); color: #fff6d0; }
+  100% { transform: scale(1); }
+}
+.purse-label {
+  font-family: var(--font-px);
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--parch-dim);
+}
+
+/* Award popups stack downward out of the purse. */
+#purse-pops {
+  position: absolute;
+  right: 0; top: 100%;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
+}
+.purse-pop {
+  font-family: var(--font-px);
+  font-size: 9px;
+  color: #8fe05c;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.9);
+  white-space: nowrap;
+  animation: pursePop 1.8s ease-out forwards;
+}
+@keyframes pursePop {
+  0%   { opacity: 0; transform: translateY(-8px) scale(0.8); }
+  15%  { opacity: 1; transform: translateY(0) scale(1.1); }
+  30%  { transform: translateY(0) scale(1); }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+/* Pixel icons must never be smoothed. */
+.vital-icon svg, .purse-icon svg, .al-eye svg,
+.load-frog svg, .ctp-icon svg, .feed-icon svg {
+  image-rendering: pixelated;
+  shape-rendering: crispEdges;
+}
+.vital-icon { width: 24px; height: 24px; display: flex; align-items: center; }
+.vital-icon svg { width: 100%; height: auto; display: block; }
+.stam-icon { width: 18px; }
+.load-frog { width: 74px; height: 66px; }
+.load-frog svg { width: 100%; height: 100%; }
+.ctp-icon { width: 56px; height: 50px; margin: 0 auto 12px; }
+.ctp-icon svg { width: 100%; height: 100%; }
+.al-eye { width: 30px; height: 20px; }
+.al-eye svg { width: 100%; height: 100%; }
+.feed-icon { width: 13px; height: 13px; display: inline-block; }
+.feed-icon svg { width: 100%; height: 100%; display: block; }
+
+/* Kill feed sits below the purse now. */
+#killfeed {
+  position: absolute;
+  right: 26px; top: 80px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
