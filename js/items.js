@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v15';
-import { CFG } from './config.js?v=v15';
-import { clamp } from './util.js?v=v15';
+import * as THREE from '../lib/three.module.js?v=v16';
+import { CFG } from './config.js?v=v16';
+import { clamp } from './util.js?v=v16';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -153,6 +153,10 @@ function kunaiGeometries() {
 }
 
 let _kunaiMats = null;
+/**
+ * Kunai materials are shared by every blade on screen, so a skin change
+ * repaints them in place rather than rebuilding the pool.
+ */
 function kunaiMaterials() {
   if (_kunaiMats) return _kunaiMats;
   _kunaiMats = {
@@ -162,6 +166,16 @@ function kunaiMaterials() {
     ring: new THREE.MeshLambertMaterial({ color: 0x14161a }),
   };
   return _kunaiMats;
+}
+
+/** Apply a kunai skin to every existing and future blade. */
+export function setKunaiSkin(skin) {
+  if (!skin) return;
+  const M = kunaiMaterials();
+  M.steel.color.setHex(skin.blade);
+  M.edge.color.setHex(skin.facet);
+  M.wrap.color.setHex(skin.wrap);
+  M.ring.color.setHex(skin.ring);
 }
 
 /**
