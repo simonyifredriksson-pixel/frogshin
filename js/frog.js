@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v15';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v15';
+import * as THREE from '../lib/three.module.js?v=v16';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v16';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -41,26 +41,43 @@ export class FrogModel {
    * @param {string} name   displayed above the head
    * @param {boolean} isLocal local player skips its own nameplate
    */
-  constructor(color = 0x6cc24a, name = 'Frog', isLocal = false) {
+  /**
+   * @param skins optional { frog, sword } palettes from the shop. The player
+   *              colour still tints the body when the default frog skin is
+   *              worn, so colour choice keeps working; a bought skin
+   *              overrides it entirely.
+   */
+  constructor(color = 0x6cc24a, name = 'Frog', isLocal = false, skins = null) {
     this.color = color;
     this.name = name;
     this.isLocal = isLocal;
 
-    const skin = new THREE.Color(color);
+    const fs = skins && skins.frog;
+    const ss = skins && skins.sword;
+    const useCustomFrog = !!fs && fs.id !== 'frog_default';
+
+    const skin = new THREE.Color(useCustomFrog ? fs.skin : color);
     const skinDark = skin.clone().multiplyScalar(0.72);
 
     this.mats = {
       skin: new THREE.MeshLambertMaterial({ color: skin }),
       skinDark: new THREE.MeshLambertMaterial({ color: skinDark }),
-      belly: new THREE.MeshLambertMaterial({ color: BELLY }),
-      cloth: new THREE.MeshLambertMaterial({ color: CLOTH }),
-      clothDark: new THREE.MeshLambertMaterial({ color: CLOTH_DARK }),
-      scarf: new THREE.MeshLambertMaterial({ color: SCARF }),
+      belly: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.belly : BELLY }),
+      cloth: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.cloth : CLOTH }),
+      clothDark: new THREE.MeshLambertMaterial({
+        color: new THREE.Color(useCustomFrog ? fs.cloth : CLOTH).multiplyScalar(0.62),
+      }),
+      scarf: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.scarf : SCARF }),
       eye: new THREE.MeshBasicMaterial({ color: EYE_WHITE }),
       pupil: new THREE.MeshBasicMaterial({ color: 0x101014 }),
       shine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      steel: new THREE.MeshLambertMaterial({ color: 0xd9dee6, emissive: 0x2a3038 }),
-      gold: new THREE.MeshLambertMaterial({ color: 0xc9a227 }),
+      steel: new THREE.MeshLambertMaterial({
+        color: ss ? ss.blade : 0xd9dee6,
+        emissive: ss ? ss.glow : 0x2a3038,
+      }),
+      edge: new THREE.MeshLambertMaterial({ color: ss ? ss.edge : 0xf2f6fb }),
+      gold: new THREE.MeshLambertMaterial({ color: ss ? ss.guard : 0xc9a227 }),
+      grip: new THREE.MeshLambertMaterial({ color: ss ? ss.grip : CLOTH_DARK }),
       tongue: new THREE.MeshLambertMaterial({ color: 0xef7d9d }),
     };
 
@@ -224,9 +241,9 @@ export class FrogModel {
     const blade = mesh(G.box, this.mats.steel, 0.045, 1.35, 0.11, 0, 0.78, 0);
     this.katana.add(blade);
     // Angled tip.
-    this.katana.add(mesh(G.cone, this.mats.steel, 0.06, 0.22, 0.075, 0, 1.55, 0));
+    this.katana.add(mesh(G.cone, this.mats.edge, 0.06, 0.22, 0.075, 0, 1.55, 0));
     this.katana.add(mesh(G.box, this.mats.gold, 0.17, 0.045, 0.17, 0, 0.08, 0));   // tsuba
-    this.katana.add(mesh(G.cyl, this.mats.clothDark, 0.055, 0.30, 0.055, 0, -0.10, 0)); // grip
+    this.katana.add(mesh(G.cyl, this.mats.grip, 0.055, 0.30, 0.055, 0, -0.10, 0)); // grip
     this.katana.add(mesh(G.box, this.mats.gold, 0.07, 0.04, 0.07, 0, -0.26, 0));   // pommel
     this.blade = blade;
     this.body.add(this.katana);
