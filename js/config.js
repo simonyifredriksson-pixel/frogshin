@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v13';
+export const BUILD = 'v14';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -130,6 +130,19 @@ export const CFG = {
     knockback: 5.0,
     knockbackUp: 2.5,
     maxInFlight: 32,
+
+    // --- aim assist ---
+    // Deliberately half as forgiving as the grapple's, which uses
+    // aimAssistAngle 0.09 widened by 3 to an effective 0.27 rad cone.
+    // Half of that is 0.135 rad (~7.7 degrees).
+    assistAngle: 0.135,
+    assistRange: 120,
+    // Rather than snapping the throw at the target, the blade STEERS toward
+    // it at a limited turn rate, so it visibly curves in instead of flying
+    // past and registering a hit anyway.
+    homingTurnRate: 2.2,     // radians per second
+    homingGiveUpAngle: 1.2,  // stop steering rather than turn back on itself
+    homingStopDist: 1.4,     // close enough; let it fly straight in
   },
 
   // Hitbox geometry, as offsets above a target's feet. Used by kunai to tell
