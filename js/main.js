@@ -5,27 +5,27 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v16';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v16';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v16';
-import { Input } from './input.js?v=v16';
-import { Audio } from './audio.js?v=v16';
-import { World } from './world.js?v=v16';
-import { Effects } from './effects.js?v=v16';
-import { Atmosphere } from './atmosphere.js?v=v16';
-import { FollowCamera } from './camera.js?v=v16';
-import { Player } from './player.js?v=v16';
-import { RemotePlayer } from './remote.js?v=v16';
-import { HUD } from './hud.js?v=v16';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v16';
-import { FrogModel } from './frog.js?v=v16';
-import { DummyField } from './dummy.js?v=v16';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v16';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v16';
-import { MenuScene } from './menu.js?v=v16';
-import { Economy } from './economy.js?v=v16';
-import { Shop } from './shop.js?v=v16';
-import { Network, NetRole } from './net.js?v=v16';
+import * as THREE from '../lib/three.module.js?v=v17';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v17';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v17';
+import { Input } from './input.js?v=v17';
+import { Audio } from './audio.js?v=v17';
+import { World } from './world.js?v=v17';
+import { Effects } from './effects.js?v=v17';
+import { Atmosphere } from './atmosphere.js?v=v17';
+import { FollowCamera } from './camera.js?v=v17';
+import { Player } from './player.js?v=v17';
+import { RemotePlayer } from './remote.js?v=v17';
+import { HUD } from './hud.js?v=v17';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v17';
+import { FrogModel } from './frog.js?v=v17';
+import { DummyField } from './dummy.js?v=v17';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v17';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v17';
+import { MenuScene } from './menu.js?v=v17';
+import { Economy } from './economy.js?v=v17';
+import { Shop } from './shop.js?v=v17';
+import { Network, NetRole } from './net.js?v=v17';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -191,6 +191,13 @@ class Game {
     for (const b of document.querySelectorAll('.btn-back')) {
       b.onclick = () => {
         Audio.uiBack();
+        // The practice ring's try-out panel returns straight to the match.
+        if (this._tryPanelOpen) {
+          this._tryPanelOpen = false;
+          $('menu').classList.remove('show');
+          this.showPanel('home');
+          return;
+        }
         // Settings opened from the pause menu must go BACK to the pause menu.
         // Dropping to the main menu used to leave the match half-exited, so
         // pressing Play again restarted the level from scratch.
@@ -499,6 +506,8 @@ class Game {
       if (!this.player || this.player.health.dead) return;
       // Tag and Infection have no damage at all — only tagging.
       if (this.round && !this.round.combatEnabled) return;
+      // Belt and braces: reject a teammate's hit even if one somehow arrives.
+      if (this.round && this.round.areAllies(this.player.id, d.from)) return;
       const landed = this.player.receiveHit(d.dmg, d.kx, d.ky, d.kz, d.from, this.followCam);
       // Death itself is picked up from `deathPending` in the game loop.
       if (landed) this.hud.damageFlash(clamp(d.dmg / 40, 0.2, 0.9));
@@ -784,7 +793,8 @@ class Game {
     // Voting deliberately releases the mouse so the cards can be clicked —
     // pausing there would drop the pause menu on top of the vote screen.
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
-    if (this.mode === 'playing' && !locked && !voting) this._pause();
+    // The practice ring's try-out panel also releases the mouse on purpose.
+    if (this.mode === 'playing' && !locked && !voting && !this._tryPanelOpen) this._pause();
     else if (this.mode === 'paused' && locked) this._resume();
   }
 
@@ -911,7 +921,8 @@ class Game {
   _syncClickToPlay() {
     // Not during voting: the mouse is meant to be free there.
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
-    const want = this.mode === 'playing' && !this.input.locked && !voting;
+    const want = this.mode === 'playing' && !this.input.locked
+      && !voting && !this._tryPanelOpen;
     if (want === this._ctpShown) return;
     this._ctpShown = want;
     $('click-to-play').classList.toggle('show', want);
@@ -994,6 +1005,66 @@ class Game {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * The blue ring on the dummy platform.
+   *
+   * Solo practice only — being able to equip unowned skins would obviously
+   * be nonsense in a real match. Standing in it grants unlimited kunai and
+   * opens a try-out panel on T, which lends every skin and ability without
+   * touching saved progress.
+   */
+  _updatePracticeRing(p) {
+    const ring = this.world && this.world.practiceRing;
+    const soloPractice = !this.net.isOnline && !this.isStory;
+    if (!ring || !soloPractice) {
+      if (this._inRing) this._exitPracticeRing();
+      return;
+    }
+
+    const dx = p.pos.x - ring.pos.x;
+    const dz = p.pos.z - ring.pos.z;
+    const dy = Math.abs(p.pos.y - ring.pos.y);
+    const inside = dy < 4 && (dx * dx + dz * dz) < ring.radius * ring.radius;
+
+    if (inside !== this._inRing) {
+      this._inRing = inside;
+      if (inside) {
+        p.inventory.setUnlimitedKunai(true);
+        this.shop.setTryMode(true);
+        this.hud.toast('Practice ring — press T to try every skin and ability', 4);
+        Audio.refreshed(p.pos);
+      } else {
+        this._exitPracticeRing();
+      }
+    }
+
+    this.hud.setRingPrompt(inside && !this._tryPanelOpen);
+
+    if (inside && this.input.consume('KeyT')) this._openTryPanel();
+  }
+
+  _exitPracticeRing() {
+    this._inRing = false;
+    this.hud.setRingPrompt(false);
+    if (this.player) this.player.inventory.setUnlimitedKunai(false);
+    // Give back whatever they actually own.
+    if (this.shop.clearTrial()) this._applySkins();
+    this.shop.setTryMode(false);
+  }
+
+  /** Free the mouse and show the shop as a lend-everything panel. */
+  _openTryPanel() {
+    this._tryPanelOpen = true;
+    this._settingsFromPause = false;
+    this.shop.onTrialEquip = () => this._applySkins();
+    this.shop.setTryMode(true);
+    this.shop.render();
+    this.input.releaseLock();
+    $('menu').classList.add('show');
+    this.showPanel('shop');
+    this.hud.setRingPrompt(false);
+  }
+
   /** Toadel as a katana target, so the broken sword can chip at him. */
   _storyTargets() {
     const list = [];
@@ -1034,6 +1105,18 @@ class Game {
       if (this.input.down('Tab')) this._refreshScoreboard();
 
       // ---- round flow (the clock itself ticked above, pause or not) ----
+      // Team score is tallied from everyone's own kill counters, which each
+      // client already broadcasts — no separate scorekeeping to desync.
+      if (this.round.isTeamMode && this.round.authority) {
+        const totals = [0, 0];
+        const t0 = this.round.teamOf(p.id);
+        if (t0 !== -1) totals[t0] += p.kills;
+        for (const r of this.remotes.values()) {
+          const t = this.round.teamOf(r.id);
+          if (t !== -1) totals[t] += r.kills || 0;
+        }
+        this.round.teamKills = totals;
+      }
       const isIt = this.round.isTagger(p.id);
       // Taggers get endless kunai and a snappier throw; runners keep theirs.
       p.inventory.setUnlimitedKunai(this.round.isTagMode && isIt);
@@ -1098,6 +1181,8 @@ class Game {
 
       this.atmo.update(dt, this.camera.position);
       this.effects.update(dt);
+
+      this._updatePracticeRing(p);
 
       this._updateHud(dt, speed);
       this._updateAudioListener();
@@ -1230,6 +1315,14 @@ class Game {
     const wasIt = R.isTagger(me);
     const startedIt = R.startingTaggers && R.startingTaggers.has(me);
 
+    if (R.mode === MODES.TEAM) {
+      const mine = R.teamOf(me);
+      if (mine !== -1 && R.outcome === 'team' + mine) {
+        this.economy.award(E.roundWinReward, 'Team won');
+      }
+      return;
+    }
+
     if (R.mode === MODES.FFA) {
       // Top of the scoreboard takes the round.
       let best = this.player.kills;
@@ -1286,6 +1379,10 @@ class Game {
 
     for (const r of this.remotes.values()) {
       if (!r.spawned || r.dead) continue;
+      // Teammates are not targets at all — the katana and the kunai's aim
+      // assist both read this list, so friendly fire is impossible rather
+      // than merely ignored on arrival.
+      if (this.round && this.round.areAllies(this.player.id, r.id)) continue;
       list.push({
         id: r.id, pos: r.pos, dead: r.dead, isDummy: false,
         hitbox: CFG.hitbox.player,
