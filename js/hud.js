@@ -6,12 +6,12 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v16';
-import { CFG } from './config.js?v=v16';
-import { staminaBand } from './stamina.js?v=v16';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v16';
-import { Audio } from './audio.js?v=v16';
-import { PX, setIcon } from './icons.js?v=v16';
+import { clamp } from './util.js?v=v17';
+import { CFG } from './config.js?v=v17';
+import { staminaBand } from './stamina.js?v=v17';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v17';
+import { Audio } from './audio.js?v=v17';
+import { PX, setIcon } from './icons.js?v=v17';
 
 const $ = (id) => document.getElementById(id);
 
@@ -323,15 +323,36 @@ export class HUD {
       if (n.textContent !== String(v)) n.textContent = v;
     }
 
-    // The tagger count only means anything for the chase modes, and only
-    // becomes a choice at all once there are more than two players.
-    const relevant = myMode === 'tag' || myMode === 'infection';
-    const adjustable = relevant && playerCount > 2;
+    // The picker does double duty: tagger count for the chases, squad size
+    // for Team Battle. Its label changes so it never reads as the wrong one.
+    const isChase = myMode === 'tag' || myMode === 'infection';
+    const isTeam = myMode === 'team';
+    const label = this.taggerPicker.querySelector('label');
+
+    if (isTeam) {
+      label.textContent = 'TEAM SIZE';
+      this.taggerPicker.classList.remove('disabled');
+      this.tpCount.textContent = `${myCount}v${myCount}`;
+      this.tpMax.textContent = 'up to 5v5';
+      this.tpNote.textContent = playerCount < myCount * 2
+        ? `Only ${playerCount} here — sides will be smaller but even`
+        : 'Two sides, no friendly fire';
+      this.voteFoot.textContent = myMode
+        ? 'Vote locked in — you can still change it'
+        : 'Click a mode to vote · the most votes wins';
+      for (const card of this.voteCards) {
+        card.classList.toggle('picked', card.dataset.mode === myMode);
+      }
+      return;
+    }
+
+    label.textContent = 'HOW MANY TAGGERS?';
+    const adjustable = isChase && playerCount > 2;
     this.taggerPicker.classList.toggle('disabled', !adjustable);
     this.tpCount.textContent = myCount;
     this.tpMax.textContent = `of ${maxCount} max`;
-    this.tpNote.textContent = !relevant
-      ? 'Only used by Tag and Infection'
+    this.tpNote.textContent = !isChase
+      ? 'Only used by Tag, Infection and Team Battle'
       : (playerCount > 2
         ? `${playerCount} players — up to ${maxCount} taggers`
         : 'Needs 3+ players to change');
@@ -447,6 +468,13 @@ export class HUD {
       }
       el.classList.toggle('sel', i === inventory.selected);
     }
+  }
+
+  /** "Press T" prompt shown while standing in the practice ring. */
+  setRingPrompt(show) {
+    if (show === this._ringShown) return;
+    this._ringShown = show;
+    $('ring-prompt').classList.toggle('show', show);
   }
 
   /** "Press E" prompt shown when standing near a crate. */
