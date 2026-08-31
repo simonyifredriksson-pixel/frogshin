@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v14" />
+<link rel="stylesheet" href="css/style.css?v=v15" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -17,7 +17,7 @@
     var el = document.getElementById('boot-error');
     if (!el) { document.addEventListener('DOMContentLoaded', function () { show(msg); }); return; }
     el.className = 'show';
-    el.textContent = '⚠ ' + msg;
+    el.textContent = '! ' + msg;
   }
   window.addEventListener('error', function (e) {
     if (e.message) show(e.message + (e.filename ? '\n' + e.filename + ':' + e.lineno : ''));
@@ -197,9 +197,9 @@
             <h3>GAME MODES</h3>
             <ul class="tips">
               <li><b>Everyone votes</b> between rounds. Most votes wins; with 3+ players you also pick how many taggers there are (up to one fewer than the player count).</li>
-              <li><b>🏃 Tag.</b> Taggers have unlimited kunai. Hit a runner and you swap — they become it, you go free. Brief immunity stops instant tag-backs.</li>
-              <li><b>☣ Infection.</b> Same throw, but the runner <i>joins</i> the taggers. Ends when everyone is infected, or the survivors run out the clock.</li>
-              <li><b>⚔ Classic FFA.</b> Normal deathmatch — katana, kunai, damage and respawns. Most kills wins.</li>
+              <li><b>Tag.</b> Taggers have unlimited kunai. Hit a runner and you swap — they become it, you go free. Brief immunity stops instant tag-backs.</li>
+              <li><b>Infection.</b> Same throw, but the runner <i>joins</i> the taggers. Ends when everyone is infected, or the survivors run out the clock.</li>
+              <li><b>Classic FFA.</b> Normal deathmatch — katana, kunai, damage and respawns. Most kills wins.</li>
               <li>In Tag and Infection there is <b>no damage at all</b>. Only the kunai tag counts, so it is a pure chase.</li>
             </ul>
           </div>
@@ -298,7 +298,7 @@
 
 <!-- ═══════════════════════════════════════════════════════════ LOADING ══ -->
 <div id="loading">
-  <div class="load-frog">🐸</div>
+  <div class="load-frog" id="icon-load-frog"></div>
   <div class="load-title">FROGSHIN</div>
   <div class="load-track"><div id="loading-bar"></div></div>
   <div id="loading-label">Preparing…</div>
@@ -338,7 +338,7 @@
 
   <!-- story: guard alert indicator -->
   <div id="alert">
-    <div class="al-eye">!</div>
+    <div class="al-eye" id="icon-alert"></div>
     <div class="al-track"><div id="al-fill"></div></div>
     <div class="al-text" id="al-text">SPOTTED</div>
   </div>
@@ -371,13 +371,20 @@
     <div class="ri-status" id="net-status"></div>
   </div>
 
-  <!-- top-right: kill feed -->
+  <!-- top-right: froglets, then the kill feed below it -->
+  <div id="purse">
+    <span class="purse-icon" id="purse-icon"></span>
+    <b id="purse-amount">0</b>
+    <span class="purse-label">FROGLETS</span>
+    <div id="purse-pops"></div>
+  </div>
+
   <div id="killfeed"></div>
 
   <!-- bottom-left: vitals -->
   <div id="vitals">
     <div class="vital-row">
-      <div class="vital-icon">🐸</div>
+      <div class="vital-icon" id="icon-health"></div>
       <div id="health-bar" class="bar big">
         <div id="health-fill" class="fill"></div>
         <div class="bar-label"><b id="health-text">100</b></div>
@@ -385,7 +392,7 @@
     </div>
 
     <div class="vital-row">
-      <div class="vital-icon stam-icon">⚡</div>
+      <div class="vital-icon stam-icon" id="icon-stamina"></div>
       <div id="stamina-bar" class="bar stam">
         <div id="stamina-fill" class="fill"></div>
         <div class="bar-label"><b id="stamina-text">100</b></div>
@@ -476,7 +483,7 @@
      match always goes through this click. -->
 <div id="click-to-play">
   <div class="ctp-inner">
-    <div class="ctp-icon">🐸</div>
+    <div class="ctp-icon" id="icon-ctp-frog"></div>
     <div class="ctp-text">CLICK TO PLAY</div>
     <div class="ctp-sub">captures your mouse &nbsp;·&nbsp; <b>ESC</b> releases it</div>
   </div>
@@ -500,6 +507,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v14"></script>
+<script type="module" src="js/main.js?v=v15"></script>
 </body>
 </html>
