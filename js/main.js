@@ -5,24 +5,24 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v12';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v12';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v12';
-import { Input } from './input.js?v=v12';
-import { Audio } from './audio.js?v=v12';
-import { World } from './world.js?v=v12';
-import { Effects } from './effects.js?v=v12';
-import { Atmosphere } from './atmosphere.js?v=v12';
-import { FollowCamera } from './camera.js?v=v12';
-import { Player } from './player.js?v=v12';
-import { RemotePlayer } from './remote.js?v=v12';
-import { HUD } from './hud.js?v=v12';
-import { KunaiSystem, PickupSystem } from './items.js?v=v12';
-import { DummyField } from './dummy.js?v=v12';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v12';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v12';
-import { MenuScene } from './menu.js?v=v12';
-import { Network, NetRole } from './net.js?v=v12';
+import * as THREE from '../lib/three.module.js?v=v13';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v13';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v13';
+import { Input } from './input.js?v=v13';
+import { Audio } from './audio.js?v=v13';
+import { World } from './world.js?v=v13';
+import { Effects } from './effects.js?v=v13';
+import { Atmosphere } from './atmosphere.js?v=v13';
+import { FollowCamera } from './camera.js?v=v13';
+import { Player } from './player.js?v=v13';
+import { RemotePlayer } from './remote.js?v=v13';
+import { HUD } from './hud.js?v=v13';
+import { KunaiSystem, PickupSystem } from './items.js?v=v13';
+import { DummyField } from './dummy.js?v=v13';
+import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v13';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v13';
+import { MenuScene } from './menu.js?v=v13';
+import { Network, NetRole } from './net.js?v=v13';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
