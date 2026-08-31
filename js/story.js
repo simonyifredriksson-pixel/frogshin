@@ -15,13 +15,14 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v14';
-import { CFG } from './config.js?v=v14';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v14';
-import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v14';
-import { FrogModel } from './frog.js?v=v14';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v14';
-import { Audio } from './audio.js?v=v14';
+import * as THREE from '../lib/three.module.js?v=v15';
+import { CFG } from './config.js?v=v15';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v15';
+import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v15';
+import { FrogModel } from './frog.js?v=v15';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v15';
+import { Audio } from './audio.js?v=v15';
+import { ITEMS } from './items.js?v=v15';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',
@@ -340,9 +341,14 @@ export class StoryMode {
     this.cutscene = null;
 
     player.cinematic = false;
-    // A broken blade: a third of the damage it would normally do.
+    // A broken blade: a third of the damage it would normally do. Putting a
+    // real katana in the hotbar is also what enables the parry, since that is
+    // now gated on having the sword out rather than on being in story mode.
     player.damageMultiplier = CFG.story.brokenSwordMult;
-    player.storyParry = true;
+    player.inventory.slots[0] = { item: ITEMS.katana, count: -1 };
+    player.inventory.select(0);
+    player.inventory.dirty = true;
+    player.combatEnabled = true;
 
     this.hud.setCinematic(false);
     this.hud.setSubtitle('');
