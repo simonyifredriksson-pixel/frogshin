@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v14';
+export const BUILD = 'v15';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -101,6 +101,17 @@ export const CFG = {
     },
   },
 
+  // -------------------------------------------------------------- economy
+  economy: {
+    storageKey: 'frogshin.economy',
+    tagReward: 100,          // per player tagged or infected
+    roundWinReward: 100,     // your side won the round
+    taggerWinReward: 300,    // won while it was you doing the chasing
+    infectorStartWinReward: 200,  // started as an infector and the infection won
+    onlineInterval: 900,     // 15 minutes...
+    onlineReward: 250,       // ...pays this much
+  },
+
   // --------------------------------------------------------------- rounds
   rounds: {
     voteTime: 22,            // seconds to pick a mode
@@ -132,10 +143,9 @@ export const CFG = {
     maxInFlight: 32,
 
     // --- aim assist ---
-    // Deliberately half as forgiving as the grapple's, which uses
-    // aimAssistAngle 0.09 widened by 3 to an effective 0.27 rad cone.
-    // Half of that is 0.135 rad (~7.7 degrees).
-    assistAngle: 0.135,
+    // Started at half the grapple's effective 0.27 rad cone (0.135), then
+    // widened by 1.5x on request: 0.2025 rad (~11.6 degrees).
+    assistAngle: 0.2025,
     assistRange: 120,
     // Rather than snapping the throw at the target, the blade STEERS toward
     // it at a limited turn rate, so it visibly curves in instead of flying
