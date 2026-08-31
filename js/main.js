@@ -5,25 +5,27 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v15';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v15';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v15';
-import { Input } from './input.js?v=v15';
-import { Audio } from './audio.js?v=v15';
-import { World } from './world.js?v=v15';
-import { Effects } from './effects.js?v=v15';
-import { Atmosphere } from './atmosphere.js?v=v15';
-import { FollowCamera } from './camera.js?v=v15';
-import { Player } from './player.js?v=v15';
-import { RemotePlayer } from './remote.js?v=v15';
-import { HUD } from './hud.js?v=v15';
-import { KunaiSystem, PickupSystem } from './items.js?v=v15';
-import { DummyField } from './dummy.js?v=v15';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v15';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v15';
-import { MenuScene } from './menu.js?v=v15';
-import { Economy } from './economy.js?v=v15';
-import { Network, NetRole } from './net.js?v=v15';
+import * as THREE from '../lib/three.module.js?v=v16';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v16';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v16';
+import { Input } from './input.js?v=v16';
+import { Audio } from './audio.js?v=v16';
+import { World } from './world.js?v=v16';
+import { Effects } from './effects.js?v=v16';
+import { Atmosphere } from './atmosphere.js?v=v16';
+import { FollowCamera } from './camera.js?v=v16';
+import { Player } from './player.js?v=v16';
+import { RemotePlayer } from './remote.js?v=v16';
+import { HUD } from './hud.js?v=v16';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v16';
+import { FrogModel } from './frog.js?v=v16';
+import { DummyField } from './dummy.js?v=v16';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v16';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v16';
+import { MenuScene } from './menu.js?v=v16';
+import { Economy } from './economy.js?v=v16';
+import { Shop } from './shop.js?v=v16';
+import { Network, NetRole } from './net.js?v=v16';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -161,7 +163,7 @@ class Game {
   // ------------------------------------------------------------- menu UI
 
   _buildMenuUI() {
-    const panels = ['home', 'play', 'lobby', 'howto', 'settings', 'credits'];
+    const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings', 'credits'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       Audio.uiClick();
@@ -176,7 +178,13 @@ class Game {
       btn.addEventListener('mouseenter', () => Audio.uiHover());
     }
 
+    // Skins repaint shared materials, so applying them once here covers every
+    // kunai already pooled in the scene as well as any thrown later.
+    this.shop = new Shop(this.economy, () => this._applySkins());
+    this._applySkins();
+
     $('btn-play').onclick = () => this.showPanel('play');
+    $('btn-shop').onclick = () => { this.shop.render(); this.showPanel('shop'); };
     $('btn-howto').onclick = () => this.showPanel('howto');
     $('btn-settings').onclick = () => this.showPanel('settings');
     $('btn-credits').onclick = () => this.showPanel('credits');
@@ -343,6 +351,30 @@ class Game {
     this.pendingMode = mode;
     this.net.sendEvent({ t: 'gamemode', m: mode });
     this._enterGame();
+  }
+
+  /**
+   * Push the equipped skins into the world.
+   *
+   * Kunai colours live on shared materials so they repaint instantly. The
+   * frog and its katana are baked into the model at build time, so the local
+   * player is rebuilt — only when actually in a match, since there is no
+   * model to rebuild while sitting in the menu.
+   */
+  _applySkins() {
+    const skins = this.shop.equippedSkins();
+    this.equippedSkins = skins;
+    setKunaiSkin(skins.kunai);
+    if (this.player && this.scene) {
+      const old = this.player.model;
+      const rebuilt = new FrogModel(this.player.color, this.player.name, true, skins);
+      rebuilt.root.position.copy(old.root.position);
+      rebuilt.root.rotation.copy(old.root.rotation);
+      this.scene.remove(old.root);
+      old.dispose();
+      this.player.model = rebuilt;
+      this.scene.add(rebuilt.root);
+    }
   }
 
   _playStatus(msg, isError) {
@@ -602,6 +634,7 @@ class Game {
       scene: this.scene,
       kunai: this.kunaiSystem,
       pickups: this.pickups,
+      skins: this.equippedSkins,
     });
 
     this.hud.buildHotbar(this.player.inventory);
@@ -713,6 +746,7 @@ class Game {
       scene: this.scene,
       kunai: this.kunaiSystem,
       pickups: null,
+      skins: this.equippedSkins,
     });
     // A villager, not a ninja: dash and tongue remain, weapons do not.
     this.player.spawn(this.story.spawnPoint);
