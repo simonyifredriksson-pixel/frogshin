@@ -1635,6 +1635,35 @@ kbd {
 }
 #alert.chase .al-text { opacity: 1; }
 
+/* ---- practice ring prompt ---- */
+#ring-prompt {
+  position: absolute;
+  left: 50%; bottom: 24%;
+  transform: translateX(-50%) translateY(8px);
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 18px;
+  background: rgba(8,20,30,0.86);
+  border: 3px solid #4ad0ff;
+  box-shadow: 0 0 20px rgba(74,208,255,0.5);
+  opacity: 0;
+  transition: opacity 0.16s, transform 0.16s;
+  pointer-events: none;
+}
+#ring-prompt.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#ring-prompt b {
+  display: inline-block; min-width: 24px; padding: 5px 8px;
+  font-family: var(--font-px); font-size: 11px;
+  color: #06222e;
+  background: linear-gradient(180deg, #9fe8ff, #35b8e8);
+  border: 2px solid #0b3a4c;
+  box-shadow: 0 3px 0 #072530;
+  text-align: center;
+}
+#ring-prompt span {
+  font-family: var(--font-px); font-size: 9px; letter-spacing: 1px;
+  color: #cdf2ff;
+}
+
 /* ---- tutorial prompt ---- */
 #tutorial {
   position: absolute;
