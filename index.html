@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v15" />
+<link rel="stylesheet" href="css/style.css?v=v16" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -88,6 +88,7 @@
       <nav class="menu-list">
         <button class="btn btn-main" id="btn-play"><span>PLAY</span></button>
         <button class="btn btn-main" id="btn-howto"><span>HOW TO PLAY</span></button>
+        <button class="btn btn-main" id="btn-shop"><span>SHOP</span></button>
         <button class="btn btn-main" id="btn-settings"><span>SETTINGS</span></button>
         <button class="btn btn-main" id="btn-credits"><span>CREDITS</span></button>
       </nav>
@@ -166,6 +167,32 @@
         <button class="btn btn-quiet" id="lobby-leave"><span>LEAVE ROOM</span></button>
 
         <div id="lobby-status" class="status"></div>
+      </div>
+    </div>
+
+    <!-- SHOP -->
+    <div class="panel" id="panel-shop">
+      <div class="card wide">
+        <div class="shop-head">
+          <h2 class="card-title">SHOP</h2>
+          <div class="shop-purse">
+            <span class="purse-icon" id="shop-purse-icon"></span>
+            <b id="shop-balance">0</b>
+            <span>FROGLETS</span>
+          </div>
+        </div>
+
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="swords">SWORD SKINS</button>
+          <button class="shop-tab" data-tab="frogs">FROG SKINS</button>
+          <button class="shop-tab" data-tab="kunai">KUNAI SKINS</button>
+          <button class="shop-tab" data-tab="abilities">ABILITIES</button>
+        </div>
+
+        <div id="shop-body"></div>
+
+        <div id="shop-status" class="status"></div>
+        <button class="btn btn-back"><span>BACK</span></button>
       </div>
     </div>
 
@@ -501,12 +528,39 @@
   </div>
 </div>
 
+<!-- ═════════════════════════════════════════════════════ CRATE OPENING ══ -->
+<div id="crate">
+  <div class="crate-inner">
+    <div class="crate-title" id="crate-title">OPENING</div>
+
+    <!-- The reel: a strip of items that scrolls past a fixed centre marker -->
+    <div class="reel-window">
+      <div class="reel-marker"></div>
+      <div class="reel-strip" id="reel-strip"></div>
+      <div class="reel-fade left"></div>
+      <div class="reel-fade right"></div>
+    </div>
+
+    <!-- Reveal card, shown once the reel settles -->
+    <div id="crate-result">
+      <div class="cr-rarity" id="cr-rarity">COMMON</div>
+      <div class="cr-art" id="cr-art"></div>
+      <div class="cr-name" id="cr-name">—</div>
+      <div class="cr-dupe" id="cr-dupe"></div>
+      <div class="crate-actions">
+        <button class="btn btn-go" id="crate-again"><span>OPEN ANOTHER</span></button>
+        <button class="btn" id="crate-close"><span>DONE</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Full-screen fade, above everything: used by the story's defeat sequence -->
 <div id="fade"></div>
 
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v15"></script>
+<script type="module" src="js/main.js?v=v16"></script>
 </body>
 </html>
