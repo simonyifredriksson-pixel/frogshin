@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v15';
-import { CFG } from './config.js?v=v15';
-import { clamp, damp, dampAngle, lerp } from './util.js?v=v15';
-import { FrogModel } from './frog.js?v=v15';
-import { Grapple, GrappleState } from './grapple.js?v=v15';
-import { Combat, Health } from './combat.js?v=v15';
-import { Stamina } from './stamina.js?v=v15';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v15';
-import { Audio } from './audio.js?v=v15';
+import * as THREE from '../lib/three.module.js?v=v16';
+import { CFG } from './config.js?v=v16';
+import { clamp, damp, dampAngle, lerp } from './util.js?v=v16';
+import { FrogModel } from './frog.js?v=v16';
+import { Grapple, GrappleState } from './grapple.js?v=v16';
+import { Combat, Health } from './combat.js?v=v16';
+import { Stamina } from './stamina.js?v=v16';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v16';
+import { Audio } from './audio.js?v=v16';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -60,7 +60,8 @@ export class Player {
     this.justParried = 0;
     this.justKnockedDown = false;
 
-    this.model = new FrogModel(this.color, this.name, true);
+    // Cosmetic palettes from the shop, if any are equipped.
+    this.model = new FrogModel(this.color, this.name, true, opts.skins || null);
     this.scene.add(this.model.root);
 
     // --- physics state ---
