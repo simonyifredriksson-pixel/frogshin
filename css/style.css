@@ -545,6 +545,265 @@ kbd {
 }
 
 /* ==========================================================================
+   SHOP
+   ========================================================================== */
+
+.shop-head {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  margin-bottom: 18px;
+}
+.shop-head .card-title { margin-bottom: 0; }
+.shop-purse {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 13px;
+  background: rgba(0,0,0,0.35);
+  border: 3px solid rgba(255,207,92,0.4);
+}
+.shop-purse .purse-icon { width: 18px; height: 18px; }
+.shop-purse .purse-icon svg { width: 100%; height: 100%; image-rendering: pixelated; }
+.shop-purse b { font-family: var(--font-px); font-size: 13px; color: var(--gold); }
+.shop-purse span:last-child {
+  font-family: var(--font-px); font-size: 7px; color: var(--parch-dim);
+}
+
+.shop-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+.shop-tab {
+  flex: 1 1 auto;
+  padding: 11px 10px;
+  font-family: var(--font-px);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--parch-dim);
+  background: linear-gradient(180deg, #222d3a, #171f29);
+  border: 3px solid #0c1219;
+  box-shadow: 0 3px 0 #0a0f14;
+  cursor: pointer;
+}
+.shop-tab:hover { color: var(--parch); background: linear-gradient(180deg, #2c3a4a, #1d2733); }
+.shop-tab.active {
+  color: #1b1206;
+  background: linear-gradient(180deg, #ffe08a, #d9a625);
+  border-color: #6b4a10;
+}
+
+/* ---- crate offer ---- */
+.crate-offer {
+  display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
+  padding: 16px;
+  margin-bottom: 18px;
+  background: rgba(0,0,0,0.3);
+  border: 3px solid #26313d;
+}
+.crate-box {
+  width: 108px; height: 82px;
+  position: relative;
+  flex: 0 0 auto;
+  background: linear-gradient(180deg, #4a5058 0%, #2f343b 55%, #232830 100%);
+  border: 4px solid #14171c;
+  box-shadow: inset 0 3px 0 rgba(255,255,255,0.13), 0 5px 0 #0d1014;
+}
+/* Latch and colour flash, so each case reads differently at a glance. */
+.crate-box::before {
+  content: '';
+  position: absolute; left: 0; right: 0; top: 22px; height: 11px;
+  background: rgba(0,0,0,0.45);
+}
+.crate-box::after {
+  content: '';
+  position: absolute; right: -4px; top: -4px; bottom: -4px; width: 26px;
+  background: var(--crate-color, #c0392b);
+  clip-path: polygon(38% 0, 100% 0, 100% 100%, 0 100%);
+  opacity: 0.9;
+}
+.crate-lock {
+  position: absolute;
+  left: 50%; top: 14px;
+  transform: translateX(-50%);
+  width: 18px; height: 15px;
+  background: #cfd6de;
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,0.25);
+}
+.crate-lock::before {
+  content: '';
+  position: absolute; left: 4px; top: -7px;
+  width: 10px; height: 9px;
+  border: 3px solid #cfd6de;
+  border-bottom: 0;
+}
+.crate-meta { flex: 1 1 240px; }
+.crate-meta h3 {
+  font-family: var(--font-px); font-size: 12px; color: var(--gold);
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+.crate-meta p { font-size: 17px; color: var(--parch-dim); margin-bottom: 10px; }
+.crate-odds { display: flex; gap: 10px; flex-wrap: wrap; }
+.crate-odds span {
+  font-family: var(--font-px); font-size: 8px;
+  padding: 3px 6px; border-bottom: 3px solid currentColor;
+}
+.crate-buy { flex: 0 0 auto; text-align: center; }
+.crate-buy .btn { width: 190px; margin-bottom: 8px; }
+.crate-price { font-family: var(--font-px); font-size: 10px; color: var(--parch-dim); }
+
+/* ---- item grid ---- */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
+  gap: 10px;
+}
+.skin-card {
+  position: relative;
+  padding: 9px 8px 8px;
+  background: linear-gradient(180deg, #2a3340, #1a222c);
+  border: 3px solid #0c1219;
+  border-bottom-width: 5px;
+  cursor: pointer;
+  transition: transform 0.09s ease;
+}
+.skin-card:hover { transform: translateY(-3px); }
+.skin-card.locked { opacity: 0.5; cursor: default; }
+.skin-card.locked:hover { transform: none; }
+.skin-card.equipped { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,200,90,0.5); }
+.skin-art {
+  height: 62px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 7px;
+}
+.skin-art svg { width: 100%; height: 100%; }
+.skin-name {
+  font-family: var(--font-px); font-size: 8px; line-height: 1.5;
+  color: var(--parch);
+}
+.skin-tier { font-family: var(--font-px); font-size: 7px; margin-top: 3px; }
+.skin-card .tag {
+  position: absolute; right: 5px; top: 5px;
+  font-family: var(--font-px); font-size: 7px;
+  padding: 2px 4px; background: rgba(0,0,0,0.6); color: var(--gold);
+}
+
+/* ---- abilities ---- */
+.ability-card {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: rgba(0,0,0,0.3);
+  border: 3px solid #26313d;
+}
+.ability-art {
+  width: 66px; height: 66px; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.35);
+  border: 3px solid #0c1219;
+}
+.ability-art svg { width: 74%; height: 74%; }
+.ability-info { flex: 1 1 260px; }
+.ability-info h3 {
+  font-family: var(--font-px); font-size: 11px; color: var(--gold);
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+.ability-info p { font-size: 17px; line-height: 1.35; color: var(--parch-dim); }
+.ability-stats {
+  margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap;
+  font-family: var(--font-px); font-size: 8px; color: var(--jade);
+}
+.ability-card .btn { width: 180px; flex: 0 0 auto; }
+
+/* ==========================================================================
+   CRATE OPENING
+   ========================================================================== */
+
+#crate {
+  position: fixed; inset: 0;
+  z-index: 45;
+  display: none;
+  align-items: center; justify-content: center;
+  background: rgba(4,7,11,0.9);
+}
+#crate.show { display: flex; }
+.crate-inner { width: min(940px, 96vw); text-align: center; }
+.crate-title {
+  font-family: var(--font-px);
+  font-size: clamp(12px, 2vw, 18px);
+  letter-spacing: 3px;
+  color: var(--gold);
+  text-shadow: 0 3px 0 #2a1a04;
+  margin-bottom: 20px;
+}
+
+.reel-window {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  border-top: 4px solid #26313d;
+  border-bottom: 4px solid #26313d;
+  background: rgba(0,0,0,0.45);
+}
+.reel-strip {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 8px;
+  will-change: transform;
+}
+.reel-item {
+  position: relative;
+  width: 122px; height: 118px;
+  flex: 0 0 122px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #2a3340, #161d26);
+  border-bottom: 5px solid #4b69ff;
+}
+.reel-item svg { width: 74px; height: 62px; }
+.reel-item span {
+  font-family: var(--font-px); font-size: 7px; color: var(--parch-dim);
+}
+/* The fixed needle the winning item lands under. */
+.reel-marker {
+  position: absolute;
+  left: 50%; top: -4px; bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  background: var(--gold);
+  box-shadow: 0 0 14px rgba(255,207,92,0.95);
+  z-index: 3;
+}
+.reel-fade {
+  position: absolute; top: 0; bottom: 0; width: 22%;
+  pointer-events: none; z-index: 2;
+}
+.reel-fade.left  { left: 0;  background: linear-gradient(90deg, rgba(4,7,11,0.95), transparent); }
+.reel-fade.right { right: 0; background: linear-gradient(270deg, rgba(4,7,11,0.95), transparent); }
+
+#crate-result {
+  margin-top: 22px;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+#crate-result.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.cr-rarity {
+  font-family: var(--font-px); font-size: 10px; letter-spacing: 3px;
+  margin-bottom: 10px;
+}
+.cr-art { height: 92px; display: flex; align-items: center; justify-content: center; }
+.cr-art svg { height: 100%; width: auto; }
+.cr-name {
+  font-family: var(--font-px);
+  font-size: clamp(13px, 2.4vw, 22px);
+  color: var(--parch);
+  margin-top: 10px;
+  text-shadow: 0 3px 0 rgba(0,0,0,0.8);
+}
+.cr-dupe { margin-top: 8px; font-size: 17px; color: var(--parch-dim); min-height: 22px; }
+.crate-actions {
+  margin-top: 16px;
+  display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+}
+.crate-actions .btn { width: 210px; }
+
+/* ==========================================================================
    LOADING
    ========================================================================== */
 
