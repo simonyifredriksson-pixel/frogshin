@@ -10,13 +10,14 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v13';
-import { CFG } from './config.js?v=v13';
-import { clamp } from './util.js?v=v13';
+import * as THREE from '../lib/three.module.js?v=v14';
+import { CFG } from './config.js?v=v14';
+import { clamp } from './util.js?v=v14';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
 const _seg = new THREE.Vector3();
+const _aim = new THREE.Vector3();
 
 // --------------------------------------------------------------- hotbar
 
@@ -219,6 +220,9 @@ export class KunaiSystem {
     this.effects = effects;
     this.pool = [];
     this.active = [];
+    // (id, outVec3) => bool — supplied by the game so a kunai can follow a
+    // moving target without this module knowing what a player is.
+    this.resolveTarget = null;
 
     for (let i = 0; i < CFG.kunai.maxInFlight; i++) {
       const mesh = createKunaiMesh();
@@ -246,13 +250,16 @@ export class KunaiSystem {
   }
 
   /**
-   * @param origin  world position to launch from
-   * @param dir     normalised direction
-   * @param ownerId who threw it
-   * @param local   true if this client owns hit detection for it
+   * @param origin   world position to launch from
+   * @param dir      normalised direction
+   * @param ownerId  who threw it
+   * @param local    true if this client owns hit detection for it
+   * @param targetId id of the assisted target, or null for a straight throw.
+   *                 Sent over the wire too, so onlookers see the same curve.
    */
-  throw_(origin, dir, ownerId, local) {
+  throw_(origin, dir, ownerId, local, targetId) {
     const k = this._take();
+    k.targetId = targetId || null;
     k.pos.copy(origin);
     k.vel.copy(dir).multiplyScalar(CFG.kunai.speed);
     // Flight time is exactly the time needed to cover `range` at `speed`,
@@ -292,6 +299,7 @@ export class KunaiSystem {
       }
 
       _prev.copy(k.pos);
+      this._steer(k, dt);
       k.vel.y += K.gravity * dt;
       k.pos.addScaledVector(k.vel, dt);
 
@@ -354,6 +362,39 @@ export class KunaiSystem {
         k.mesh.rotateZ(k.spin);
       }
     }
+  }
+
+  /**
+   * Curve an assisted kunai toward its target.
+   *
+   * The turn rate is capped, so the blade arcs in over its flight rather
+   * than snapping onto the target — a hard lock would look like a homing
+   * missile. It also gives up if the target ends up too far off to the side,
+   * so a badly-aimed throw still misses.
+   */
+  _steer(k, dt) {
+    if (!k.targetId || !this.resolveTarget) return;
+    if (!this.resolveTarget(k.targetId, _aim)) { k.targetId = null; return; }
+
+    _v.subVectors(_aim, k.pos);
+    const dist = _v.length();
+    const K = CFG.kunai;
+    if (dist < K.homingStopDist) { k.targetId = null; return; }
+    _v.multiplyScalar(1 / dist);
+
+    _seg.copy(k.vel);
+    const speed = _seg.length();
+    if (speed < 1e-4) return;
+    _seg.multiplyScalar(1 / speed);
+
+    const angle = Math.acos(clamp(_seg.dot(_v), -1, 1));
+    if (angle > K.homingGiveUpAngle) { k.targetId = null; return; }
+    if (angle < 1e-4) return;
+
+    // Rotate the heading toward the target by at most turnRate * dt.
+    const t = Math.min(1, (K.homingTurnRate * dt) / angle);
+    _seg.lerp(_v, t).normalize();
+    k.vel.copy(_seg).multiplyScalar(speed);
   }
 
   /**
