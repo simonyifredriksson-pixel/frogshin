@@ -9,9 +9,9 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v16';
-import { Audio } from './audio.js?v=v16';
-import { PX } from './icons.js?v=v16';
+} from './skins.js?v=v17';
+import { Audio } from './audio.js?v=v17';
+import { PX } from './icons.js?v=v17';
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
@@ -124,7 +124,17 @@ export class Shop {
     this.onChange = onChange || (() => {});
     this.tab = 'swords';
     this.opening = false;
+    // Trial mode is the practice ring: everything reads as owned, nothing is
+    // charged, and equipping writes to a temporary loadout instead of saving.
+    this.tryMode = false;
+    this.onTrialEquip = null;
     this._wire();
+  }
+
+  setTryMode(on) {
+    if (this.tryMode === on) return;
+    this.tryMode = on;
+    this.render();
   }
 
   _wire() {
@@ -211,8 +221,14 @@ export class Shop {
   }
 
   _skinCard(kind, skin) {
-    const owned = skin.id === DEFAULT_SKIN[kind] || this.economy.owns(kind, skin.id);
-    const equipped = (this.economy.equipped[this._slot(kind)] || DEFAULT_SKIN[kind]) === skin.id;
+    const owned = this.tryMode
+      || skin.id === DEFAULT_SKIN[kind]
+      || this.economy.owns(kind, skin.id);
+    const slot = this._slot(kind);
+    const current = this.tryMode && this.trial
+      ? this.trial[slot]
+      : this.economy.equipped[slot];
+    const equipped = (current || DEFAULT_SKIN[kind]) === skin.id;
     const r = RARITY[skin.rarity];
 
     const card = document.createElement('div');
@@ -226,11 +242,20 @@ export class Shop {
 
     if (owned) {
       card.onclick = () => {
-        this.economy.equipped[this._slot(kind)] = skin.id;
-        this.economy.save();
-        Audio.uiClick();
-        this.status(`${skin.name} equipped.`);
-        this.onChange();
+        if (this.tryMode) {
+          // Trials never touch saved progress.
+          this.trial = this.trial || {};
+          this.trial[slot] = skin.id;
+          Audio.uiClick();
+          this.status(`Trying ${skin.name} — this is not saved.`);
+          if (this.onTrialEquip) this.onTrialEquip();
+        } else {
+          this.economy.equipped[slot] = skin.id;
+          this.economy.save();
+          Audio.uiClick();
+          this.status(`${skin.name} equipped.`);
+          this.onChange();
+        }
         this.render();
       };
     }
@@ -243,8 +268,15 @@ export class Shop {
   }
 
   _renderAbilities(body) {
+    if (this.tryMode) {
+      const note = document.createElement('p');
+      note.className = 'note';
+      note.innerHTML = '<b>Practice ring:</b> every ability is unlocked here '
+        + 'to try. Nothing is bought and nothing is saved.';
+      body.appendChild(note);
+    }
     for (const a of ABILITIES) {
-      const owned = this.economy.hasAbility(a.id);
+      const owned = this.tryMode || this.economy.hasAbility(a.id);
       const card = document.createElement('div');
       card.className = 'ability-card';
       card.innerHTML =
@@ -387,13 +419,24 @@ export class Shop {
     this.render();
   }
 
-  /** Resolve the skin objects the game should actually use. */
+  /**
+   * Resolve the skin objects the game should use. A trial loadout from the
+   * practice ring takes precedence over the saved one while it lasts.
+   */
   equippedSkins() {
     const e = this.economy.equipped;
+    const t = (this.tryMode && this.trial) ? this.trial : {};
     return {
-      sword: findSkin('swords', e.sword || DEFAULT_SKIN.swords),
-      frog: findSkin('frogs', e.frog || DEFAULT_SKIN.frogs),
-      kunai: findSkin('kunai', e.kunai || DEFAULT_SKIN.kunai),
+      sword: findSkin('swords', t.sword || e.sword || DEFAULT_SKIN.swords),
+      frog: findSkin('frogs', t.frog || e.frog || DEFAULT_SKIN.frogs),
+      kunai: findSkin('kunai', t.kunai || e.kunai || DEFAULT_SKIN.kunai),
     };
+  }
+
+  /** Forget a trial loadout when the player steps out of the ring. */
+  clearTrial() {
+    if (!this.trial) return false;
+    this.trial = null;
+    return true;
   }
 }
