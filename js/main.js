@@ -5,24 +5,25 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v14';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v14';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v14';
-import { Input } from './input.js?v=v14';
-import { Audio } from './audio.js?v=v14';
-import { World } from './world.js?v=v14';
-import { Effects } from './effects.js?v=v14';
-import { Atmosphere } from './atmosphere.js?v=v14';
-import { FollowCamera } from './camera.js?v=v14';
-import { Player } from './player.js?v=v14';
-import { RemotePlayer } from './remote.js?v=v14';
-import { HUD } from './hud.js?v=v14';
-import { KunaiSystem, PickupSystem } from './items.js?v=v14';
-import { DummyField } from './dummy.js?v=v14';
-import { RoundManager, PHASE, maxTaggers } from './rounds.js?v=v14';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v14';
-import { MenuScene } from './menu.js?v=v14';
-import { Network, NetRole } from './net.js?v=v14';
+import * as THREE from '../lib/three.module.js?v=v15';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v15';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v15';
+import { Input } from './input.js?v=v15';
+import { Audio } from './audio.js?v=v15';
+import { World } from './world.js?v=v15';
+import { Effects } from './effects.js?v=v15';
+import { Atmosphere } from './atmosphere.js?v=v15';
+import { FollowCamera } from './camera.js?v=v15';
+import { Player } from './player.js?v=v15';
+import { RemotePlayer } from './remote.js?v=v15';
+import { HUD } from './hud.js?v=v15';
+import { KunaiSystem, PickupSystem } from './items.js?v=v15';
+import { DummyField } from './dummy.js?v=v15';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v15';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v15';
+import { MenuScene } from './menu.js?v=v15';
+import { Economy } from './economy.js?v=v15';
+import { Network, NetRole } from './net.js?v=v15';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -54,8 +55,11 @@ class Game {
     this.net = new Network();
     this._wireNetwork();
 
+    this.economy = new Economy();
+
     this.hud = new HUD();
     this.hud.show(false);
+    this.hud.setFroglets(this.economy.froglets);
 
     this.menuScene = new MenuScene(this.renderer);
     this._resize();
@@ -715,10 +719,9 @@ class Game {
     this.player.inventory.slots[0] = null;
     this.player.inventory.slots[1] = null;
     this.player.inventory.dirty = true;
+    // No weapons during the village — the broken sword is handed over when
+    // the duel starts, which is also what unlocks the parry.
     this.player.combatEnabled = false;
-    // Right mouse is the parry for the whole story, not just the duel — so
-    // it never falls through to the "equip kunai first" path.
-    this.player.storyParry = true;
     this.followCam.snapTo(this.player.pos);
 
     // Anyone who joined while the level was still building gets created now.
@@ -842,6 +845,12 @@ class Game {
     // Clamp so an alt-tab or a stall can never teleport anyone through a wall.
     dt = clamp(dt, 0, 0.05);
     this.clock = t;
+
+    // Froglets accrue for time played, so this ticks in menus too.
+    this.economy.update(dt);
+    this.hud.setFroglets(this.economy.froglets);
+    const awards = this.economy.drainPending();
+    if (awards) for (const a of awards) this.hud.frogletPopup(a.amount, a.reason);
 
     if (this.mode === 'playing' || this.mode === 'paused') {
       // Players who connected before the world existed were parked in a
@@ -976,6 +985,11 @@ class Game {
     const paused = this.mode === 'paused';
     const p = this.player;
 
+    // The round clock runs OUTSIDE the pause check on purpose. Pausing used
+    // to freeze it locally, so whoever paused came back with extra time on
+    // the board while everyone else had been playing.
+    if (this.round) this.round.update(dt, this._playerIds());
+
     if (!paused) {
       // Mouse look.
       const look = this.input.takeLook();
@@ -985,8 +999,7 @@ class Game {
       this.hud.showScoreboard(this.input.down('Tab'));
       if (this.input.down('Tab')) this._refreshScoreboard();
 
-      // ---- round flow -------------------------------------------------
-      this.round.update(dt, this._playerIds());
+      // ---- round flow (the clock itself ticked above, pause or not) ----
       const isIt = this.round.isTagger(p.id);
       // Taggers get endless kunai and a snappier throw; runners keep theirs.
       p.inventory.setUnlimitedKunai(this.round.isTagMode && isIt);
@@ -1163,6 +1176,41 @@ class Game {
     } else if (phase === PHASE.ENDING) {
       this.hud.announce(this.round.result || 'ROUND OVER', 'good', true);
       Audio.refreshed(this.player.pos);
+      this._awardRoundEnd();
+    }
+  }
+
+  /**
+   * Pay out at the end of a round.
+   *
+   * Guarded so it can only fire once per round — the ENDING phase change can
+   * arrive more than once on a mirror client if a sync packet repeats it.
+   */
+  _awardRoundEnd() {
+    const R = this.round;
+    const E = CFG.economy;
+    if (!R || this._paidRound === R.roundNumber) return;
+    this._paidRound = R.roundNumber;
+
+    const me = this.player.id;
+    const wasIt = R.isTagger(me);
+    const startedIt = R.startingTaggers && R.startingTaggers.has(me);
+
+    if (R.mode === MODES.FFA) {
+      // Top of the scoreboard takes the round.
+      let best = this.player.kills;
+      for (const r of this.remotes.values()) best = Math.max(best, r.kills || 0);
+      if (this.player.kills >= best && best > 0) {
+        this.economy.award(E.roundWinReward, 'Round won');
+      }
+      return;
+    }
+
+    if (R.outcome === 'taggers') {
+      if (wasIt) this.economy.award(E.taggerWinReward, 'Won as tagger');
+      if (startedIt) this.economy.award(E.infectorStartWinReward, 'Starting infector');
+    } else if (R.outcome === 'survivors') {
+      if (!wasIt) this.economy.award(E.roundWinReward, 'Survived');
     }
   }
 
@@ -1179,6 +1227,8 @@ class Game {
       if (slot >= 0) this.player.inventory.select(slot);
     } else if (byId === me) {
       this.hud.announce(`TAGGED ${this.net.nameOf(victimId).toUpperCase()}!`, 'good');
+      this.economy.award(CFG.economy.tagReward,
+        this.round.mode === MODES.INFECTION ? 'Infected' : 'Tagged');
     }
     this.hud.addKill(byName, victimName, 'You');
     Audio.headshot(this.player.pos);
@@ -1414,7 +1464,7 @@ window.addEventListener('error', (e) => {
   const el = $('boot-error');
   if (el) {
     el.classList.add('show');
-    el.textContent = '⚠ ' + (e.message || 'Unknown error') +
+    el.textContent = '! ' + (e.message || 'Unknown error') +
       (e.filename ? `\n${e.filename}:${e.lineno}` : '');
   }
 });
@@ -1425,7 +1475,7 @@ function boot() {
     window.game = new Game();
   } catch (err) {
     const el = $('boot-error');
-    if (el) { el.classList.add('show'); el.textContent = '⚠ ' + err.message; }
+    if (el) { el.classList.add('show'); el.textContent = '! ' + err.message; }
     throw err;
   }
 }
