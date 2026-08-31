@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { CFG } from './config.js?v=v17';
-import { clamp } from './util.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { CFG } from './config.js?v=v18';
+import { clamp } from './util.js?v=v18';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -28,6 +28,10 @@ export const SLOT_LABELS = ['1', '2', '3', '4', '5', '0'];
 export const ITEMS = {
   katana: { id: 'katana', name: 'Katana', infinite: true },
   kunai: { id: 'kunai', name: 'Kunai', infinite: false },
+  // Abilities sit in the hotbar too, but pressing their key FIRES them
+  // rather than selecting them — there is nothing else to do with one.
+  invisibility: { id: 'invisibility', name: 'Vanish', infinite: true, ability: true },
+  shadowclone: { id: 'shadowclone', name: 'Clone', infinite: true, ability: true },
 };
 
 /** Inline SVG icons, drawn to read clearly at hotbar size. */
@@ -50,6 +54,25 @@ export const ITEM_ICONS = {
           transform="rotate(-45 7 24.4)"/>
     <rect x="1.6" y="25.4" width="3" height="3" fill="#c9a227"
           transform="rotate(-45 3.1 26.9)"/>
+  </svg>`,
+  invisibility: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <g fill="#8fd8ff" opacity="0.55">
+      <rect x="10" y="5" width="12" height="4"/><rect x="7" y="9" width="18" height="13"/>
+      <rect x="9" y="22" width="14" height="5"/>
+    </g>
+    <g fill="#0d1a22"><rect x="11" y="13" width="3" height="4"/><rect x="18" y="13" width="3" height="4"/></g>
+    <g fill="#ffffff" opacity="0.9"><rect x="4" y="12" width="2" height="8"/><rect x="26" y="12" width="2" height="8"/></g>
+  </svg>`,
+  shadowclone: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <g fill="#2a2a44" opacity="0.9">
+      <rect x="3" y="7" width="10" height="4"/><rect x="1" y="11" width="14" height="11"/>
+      <rect x="3" y="22" width="10" height="4"/>
+    </g>
+    <g fill="#6cc24a">
+      <rect x="19" y="7" width="10" height="4"/><rect x="17" y="11" width="14" height="11"/>
+      <rect x="19" y="22" width="10" height="4"/>
+    </g>
+    <g fill="#12121a"><rect x="20" y="14" width="3" height="3"/><rect x="26" y="14" width="3" height="3"/></g>
   </svg>`,
 };
 
@@ -90,6 +113,10 @@ export class Inventory {
 
   select(index) {
     if (index < 0 || index >= this.slots.length) return false;
+    // Abilities are fired, never held. Selecting one would leave you with
+    // no weapon in hand, which is not a state the game should allow.
+    const s = this.slots[index];
+    if (s && s.item.ability) return false;
     if (index === this.selected) return false;
     this.selected = index;
     this.dirty = true;
@@ -127,6 +154,34 @@ export class Inventory {
     s.count--;
     this.dirty = true;
     return true;
+  }
+
+  /**
+   * Put the chosen abilities into slots 3 and 4 (keys 3 and 4), capped at
+   * CFG.abilities.maxEquipped. Anything already there is cleared first, so
+   * this is safe to call whenever the loadout changes.
+   */
+  setAbilities(ids) {
+    const max = CFG.abilities.maxEquipped;
+    const wanted = (ids || []).slice(0, max);
+    for (let i = 2; i < 2 + max; i++) {
+      const chosen = wanted[i - 2];
+      this.slots[i] = chosen && ITEMS[chosen]
+        ? { item: ITEMS[chosen], count: -1 }
+        : null;
+    }
+    // Never leave the cursor parked on a slot that just emptied.
+    if (!this.slots[this.selected]) this.selected = 0;
+    this.dirty = true;
+  }
+
+  /** Ability ids currently in the hotbar, in slot order. */
+  equippedAbilities() {
+    const out = [];
+    for (const s of this.slots) {
+      if (s && s.item.ability) out.push(s.item.id);
+    }
+    return out;
   }
 
   reset() {

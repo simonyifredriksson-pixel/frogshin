@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v17';
+export const BUILD = 'v18';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -110,6 +110,22 @@ export const CFG = {
     infectorStartWinReward: 200,  // started as an infector and the infection won
     onlineInterval: 900,     // 15 minutes...
     onlineReward: 250,       // ...pays this much
+  },
+
+  // ------------------------------------------------------------ abilities
+  abilities: {
+    maxEquipped: 2,          // only two may be carried into a match
+    invisibility: {
+      duration: 5,
+      cooldown: 30,
+      selfOpacity: 0.35,     // you still see a ghost of yourself
+    },
+    shadowclone: {
+      duration: 10,
+      cooldown: 60,
+      delay: 0.45,           // how far behind you the clone copies your moves
+      buffer: 4.0,           // seconds of movement history kept
+    },
   },
 
   // --------------------------------------------------------------- rounds

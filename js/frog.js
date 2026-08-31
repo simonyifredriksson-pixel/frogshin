@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v18';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -731,6 +731,34 @@ export class FrogModel {
   triggerFlip() { this.flip = 1; }
   /** Little throat puff — used on jumps and croaks. */
   croak() { this.croakPulse = 1; }
+
+  /**
+   * Turn this model into a translucent dark copy of itself — the Shadow
+   * Clone. Materials are per-instance, so this only affects this model.
+   */
+  makeShadow() {
+    for (const k in this.mats) {
+      const m = this.mats[k];
+      m.transparent = true;
+      m.opacity = 0.58;
+      m.depthWrite = false;
+      if (m.color) m.color.multiplyScalar(0.42);
+      if (m.emissive) m.emissive.multiplyScalar(0.35);
+    }
+  }
+
+  /** Fade the whole frog — used while invisibility is up. */
+  setGhost(k) {
+    if (this._ghost === k) return;
+    this._ghost = k;
+    const on = k < 0.999;
+    for (const key in this.mats) {
+      const m = this.mats[key];
+      m.transparent = on;
+      m.opacity = k;
+      m.depthWrite = !on;
+    }
+  }
 
   setVisible(v) {
     if (this.visible === v) return;

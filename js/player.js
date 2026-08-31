@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { CFG } from './config.js?v=v17';
-import { clamp, damp, dampAngle, lerp } from './util.js?v=v17';
-import { FrogModel } from './frog.js?v=v17';
-import { Grapple, GrappleState } from './grapple.js?v=v17';
-import { Combat, Health } from './combat.js?v=v17';
-import { Stamina } from './stamina.js?v=v17';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v17';
-import { Audio } from './audio.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { CFG } from './config.js?v=v18';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v18';
+import { FrogModel } from './frog.js?v=v18';
+import { Grapple, GrappleState } from './grapple.js?v=v18';
+import { Combat, Health } from './combat.js?v=v18';
+import { Stamina } from './stamina.js?v=v18';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v18';
+import { Audio } from './audio.js?v=v18';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -59,6 +59,14 @@ export class Player {
     this.damageMultiplier = 1;     // broken sword scales this down
     this.justParried = 0;
     this.justKnockedDown = false;
+
+    // --- abilities ---
+    this.abilityCd = {};       // id -> seconds remaining
+    this.invisibleT = 0;
+    this.cloneT = 0;
+    this.cloneTrail = [];      // recent transforms the clone replays
+    this._cloneClock = 0;
+    this._abilityCue = 0;
 
     // Cosmetic palettes from the shop, if any are equipped.
     this.model = new FrogModel(this.color, this.name, true, opts.skins || null);
@@ -136,6 +144,11 @@ export class Player {
     this.dashCooldown = 0;
     this.dashCharges = CFG.dash.airCharges;
     this.doubleJumpLeft = 1;
+    // Dying drops any ability that was running — but NOT its cooldown, so
+    // death is never a way to refresh one.
+    this.invisibleT = 0;
+    this.cloneT = 0;
+    this.cloneTrail.length = 0;
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.z = 0;
     this.model.body.position.y = 0;
@@ -155,7 +168,13 @@ export class Player {
   /** Snapshot for the network layer. */
   netState() {
     const g = this.grapple.netState();
+    const c = this.cloneTransform();
     return {
+      // Abilities others must be able to see: the clone has to be visible to
+      // work as bait, and invisibility has to be known so viewers can decide
+      // whether it applies to them.
+      iv: this.invisibleT > 0 ? 1 : 0,
+      cl: c ? [r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed)] : null,
       x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
       vx: r2(this.vel.x), vy: r2(this.vel.y), vz: r2(this.vel.z),
       yaw: r2(this.visualYaw),
@@ -244,8 +263,13 @@ export class Player {
       if (input.consumeAttack()) this._tryAttack(cam);
 
       // Hotbar: number keys select the matching slot, left to right.
+      // An ability slot FIRES instead of selecting — there is nothing to
+      // hold, and fumbling for a second keypress mid-chase is miserable.
       for (let i = 0; i < SLOT_KEYS.length; i++) {
-        if (input.consume(SLOT_KEYS[i]) && this.inventory.select(i)) Audio.uiClick();
+        if (!input.consume(SLOT_KEYS[i])) continue;
+        const slot = this.inventory.slots[i];
+        if (slot && slot.item.ability) this._useAbility(slot.item.id);
+        else if (this.inventory.select(i)) Audio.uiClick();
       }
       const wheel = input.takeWheel();
       if (wheel) this._cycleSlot(wheel);
@@ -276,6 +300,25 @@ export class Player {
     }
 
     // ---- timers ---------------------------------------------------------
+    // Ability timers run whatever else is happening.
+    for (const id in this.abilityCd) {
+      if (this.abilityCd[id] > 0) this.abilityCd[id] -= dt;
+    }
+    if (this._abilityCue > 0) this._abilityCue -= dt;
+    if (this.invisibleT > 0) {
+      this.invisibleT -= dt;
+      if (this.invisibleT <= 0) {
+        this.effects.puff(
+          _tmp.set(this.pos.x, this.pos.y + 1.0, this.pos.z), 0x8fd8ff, 14, 4);
+        Audio.tongueRelease(this.pos);
+      }
+    }
+    if (this.cloneT > 0) {
+      this.cloneT -= dt;
+      this._recordClone(dt);
+      if (this.cloneT <= 0) this.cloneTrail.length = 0;
+    }
+
     if (this._tiredCue > 0) this._tiredCue -= dt;
     if (this.kunaiCooldown > 0) this.kunaiCooldown -= dt;
     if (this.throwT > 0) this.throwT -= dt;
@@ -641,6 +684,89 @@ export class Player {
 
   // ------------------------------------------------------------ kunai
 
+  // ------------------------------------------------------------ abilities
+
+  /** Fire an ability if it is off cooldown. */
+  _useAbility(id) {
+    const A = CFG.abilities[id];
+    if (!A) return;
+    if ((this.abilityCd[id] || 0) > 0) {
+      if (!this._abilityCue || this._abilityCue <= 0) {
+        this._abilityCue = 0.4;
+        Audio.uiBack();
+      }
+      return;
+    }
+    this.abilityCd[id] = A.cooldown;
+
+    if (id === 'invisibility') {
+      this.invisibleT = A.duration;
+      this.effects.puff(
+        _tmp.set(this.pos.x, this.pos.y + 1.0, this.pos.z), 0x8fd8ff, 22, 5);
+      this.effects.ring(_tmp, 0.4, 3.4, 0.45, 0x8fd8ff, true);
+      Audio.tone({ freq: 900, to: 220, dur: 0.4, type: 'sine', volume: 0.16, pos: this.pos });
+      Audio.tongueRelease(this.pos);
+      this.events.push({
+        t: 'abil', a: 'invisibility',
+        x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
+      });
+    } else if (id === 'shadowclone') {
+      this.cloneT = A.duration;
+      // Seed the history so the clone has something to copy immediately.
+      this.cloneTrail.length = 0;
+      this._recordClone(0);
+      this.effects.puff(
+        _tmp.set(this.pos.x, this.pos.y + 1.0, this.pos.z), 0x9a7aff, 24, 6);
+      this.effects.ring(_tmp, 0.4, 3.8, 0.45, 0x9a7aff, true);
+      Audio.doubleJump(this.pos);
+      this.events.push({
+        t: 'abil', a: 'shadowclone',
+        x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
+      });
+    }
+  }
+
+  /** Remember where we were, so the clone can retrace it. */
+  _recordClone(dt) {
+    const A = CFG.abilities.shadowclone;
+    this._cloneClock = (this._cloneClock || 0) + dt;
+    this.cloneTrail.push({
+      t: this._cloneClock,
+      x: this.pos.x, y: this.pos.y, z: this.pos.z,
+      yaw: this.visualYaw,
+      speed: Math.hypot(this.vel.x, this.vel.z),
+      grounded: this.grounded,
+    });
+    // Drop history older than the buffer window.
+    while (this.cloneTrail.length > 2
+      && this._cloneClock - this.cloneTrail[0].t > A.buffer) {
+      this.cloneTrail.shift();
+    }
+  }
+
+  /** Where the clone should be right now, or null. */
+  cloneTransform() {
+    if (this.cloneT <= 0 || this.cloneTrail.length < 2) return null;
+    const A = CFG.abilities.shadowclone;
+    const want = this._cloneClock - A.delay;
+    const trail = this.cloneTrail;
+    if (want <= trail[0].t) return trail[0];
+    for (let i = 0; i < trail.length - 1; i++) {
+      const a = trail[i], b = trail[i + 1];
+      if (want >= a.t && want <= b.t) {
+        const span = b.t - a.t;
+        const k = span > 1e-6 ? (want - a.t) / span : 0;
+        return {
+          x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k),
+          yaw: a.yaw + angleDelta(a.yaw, b.yaw) * k,
+          speed: lerp(a.speed, b.speed, k),
+          grounded: k < 0.5 ? a.grounded : b.grounded,
+        };
+      }
+    }
+    return trail[trail.length - 1];
+  }
+
   /** Step the hotbar selection, skipping empty slots. */
   _cycleSlot(dir) {
     const slots = this.inventory.slots;
@@ -648,7 +774,9 @@ export class Player {
     for (let step = 1; step <= n; step++) {
       // + n * n keeps the value positive before the wrap for either direction.
       const i = (this.inventory.selected + dir * step + n * n) % n;
-      if (slots[i]) {
+      // Ability slots are skipped: the wheel picks what you HOLD, and you
+      // never hold an ability.
+      if (slots[i] && !slots[i].item.ability) {
         if (this.inventory.select(i)) Audio.uiClick();
         return;
       }

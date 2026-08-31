@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v17';
+import { CFG } from './config.js?v=v18';
 
 export class Economy {
   constructor() {
@@ -21,6 +21,7 @@ export class Economy {
     this.owned = { swords: [], frogs: [], kunai: [] };  // unlocked skins
     this.equipped = { sword: null, frog: null, kunai: null };
     this.abilities = [];        // purchased ability ids
+    this.loadout = [];          // the (at most two) carried into a match
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -43,6 +44,7 @@ export class Economy {
       if (d.owned) Object.assign(this.owned, d.owned);
       if (d.equipped) Object.assign(this.equipped, d.equipped);
       if (Array.isArray(d.abilities)) this.abilities = d.abilities;
+      if (Array.isArray(d.loadout)) this.loadout = d.loadout;
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -59,6 +61,7 @@ export class Economy {
         owned: this.owned,
         equipped: this.equipped,
         abilities: this.abilities,
+        loadout: this.loadout,
       }));
     } catch (e) {
       console.warn('[frogshin] could not save progress:', e);
@@ -112,9 +115,33 @@ export class Economy {
   unlockAbility(id) {
     if (this.hasAbility(id)) return false;
     this.abilities.push(id);
+    // Buying something you cannot yet carry would be a bad surprise, so a
+    // new ability equips itself while there is room.
+    if (this.loadout.length < CFG.abilities.maxEquipped) this.loadout.push(id);
     this._dirty = true;
     this.save();
     return true;
+  }
+
+  isEquippedAbility(id) { return this.loadout.indexOf(id) !== -1; }
+
+  /**
+   * Toggle an ability in the carried loadout.
+   * @returns {'on'|'off'|'full'} what happened
+   */
+  toggleAbility(id) {
+    const at = this.loadout.indexOf(id);
+    if (at !== -1) {
+      this.loadout.splice(at, 1);
+      this._dirty = true;
+      this.save();
+      return 'off';
+    }
+    if (this.loadout.length >= CFG.abilities.maxEquipped) return 'full';
+    this.loadout.push(id);
+    this._dirty = true;
+    this.save();
+    return 'on';
   }
 
   // ----------------------------------------------------------------- update

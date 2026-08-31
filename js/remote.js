@@ -11,11 +11,11 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { CFG } from './config.js?v=v17';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v17';
-import { FrogModel } from './frog.js?v=v17';
-import { Audio } from './audio.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { CFG } from './config.js?v=v18';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v18';
+import { FrogModel } from './frog.js?v=v18';
+import { Audio } from './audio.js?v=v18';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -138,6 +138,16 @@ export class RemotePlayer {
         this.model.root.position.copy(_tmp);
         break;
       }
+      case 'abil': {
+        // The pop is worth showing even for a vanish you are about to lose
+        // sight of — it tells you WHERE they went invisible.
+        _tmp.set(ev.x, ev.y + 1.0, ev.z);
+        const col = ev.a === 'invisibility' ? 0x8fd8ff : 0x9a7aff;
+        this.effects.puff(_tmp, col, 20, 5);
+        this.effects.ring(_tmp, 0.4, 3.4, 0.45, col, true);
+        Audio.tongueRelease(_tmp);
+        break;
+      }
       case 'grapEnd':
         this.grappleActive = false;
         Audio.tongueRelease(this.pos);
@@ -202,6 +212,30 @@ export class RemotePlayer {
     });
 
     this.model.drawNameplate(this.hp / this.maxHp);
+    this._updateClone(dt);
+  }
+
+  /**
+   * Draw this player's shadow clone, if they have one out.
+   * Built lazily — most players never use the ability.
+   */
+  _updateClone(dt) {
+    if (!this.cloneState) {
+      if (this.cloneModel) this.cloneModel.root.visible = false;
+      return;
+    }
+    if (!this.cloneModel) {
+      this.cloneModel = new FrogModel(this.color, '', true);
+      this.cloneModel.makeShadow();
+      this.scene.add(this.cloneModel.root);
+    }
+    const [x, y, z, yaw, speed] = this.cloneState;
+    this.cloneModel.root.visible = true;
+    this.cloneModel.root.position.set(x, y, z);
+    this.cloneModel.setFacing(yaw);
+    this.cloneModel.update(dt, {
+      speed, vy: 0, grounded: true, moving: speed > 1.2, dead: false,
+    });
   }
 
   /** Find the two snapshots bracketing `renderTime` and blend them. */
@@ -256,6 +290,8 @@ export class RemotePlayer {
     this.swimming = !!s.sw;
     this.sprinting = !!s.sp;
     this.storyPhase = s.st || 0;
+    this.invisible = !!s.iv;
+    this.cloneState = s.cl || null;
     if (s.at) this.attackIndex = s.at - 1;
 
     if (s.gr) {
@@ -272,5 +308,10 @@ export class RemotePlayer {
   dispose() {
     this.scene.remove(this.model.root);
     this.model.dispose();
+    if (this.cloneModel) {
+      this.scene.remove(this.cloneModel.root);
+      this.cloneModel.dispose();
+      this.cloneModel = null;
+    }
   }
 }

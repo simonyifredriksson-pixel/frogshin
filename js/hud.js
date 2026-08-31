@@ -6,14 +6,24 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v17';
-import { CFG } from './config.js?v=v17';
-import { staminaBand } from './stamina.js?v=v17';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v17';
-import { Audio } from './audio.js?v=v17';
-import { PX, setIcon } from './icons.js?v=v17';
+import { clamp } from './util.js?v=v18';
+import { CFG } from './config.js?v=v18';
+import { staminaBand } from './stamina.js?v=v18';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v18';
+import { Audio } from './audio.js?v=v18';
+import { PX, setIcon } from './icons.js?v=v18';
 
 const $ = (id) => document.getElementById(id);
+
+// Full cooldown per ability, so the shade can be drawn as a fraction.
+const ABILITY_CD = {
+  invisibility: CFG.abilities.invisibility.cooldown,
+  shadowclone: CFG.abilities.shadowclone.cooldown,
+};
+const ABILITY_MAX = {
+  invisibility: CFG.abilities.invisibility.duration,
+  shadowclone: CFG.abilities.shadowclone.duration,
+};
 
 export class HUD {
   constructor() {
@@ -426,6 +436,7 @@ export class HUD {
       el.className = 'hb-slot';
       el.innerHTML =
         '<div class="hb-icon"></div>' +
+        '<div class="hb-cd"><span></span></div>' +
         '<div class="hb-count"></div>' +
         '<div class="hb-key">' + (SLOT_LABELS[i] || '') + '</div>';
       // The HUD is pointer-events:none, so slots opt back in individually.
@@ -441,14 +452,20 @@ export class HUD {
     this._hotbarBuilt = true;
   }
 
-  /** Refresh icons, counts and the selection highlight. */
-  setHotbar(inventory) {
+  /**
+   * Refresh icons, counts and the selection highlight.
+   * @param cooldowns optional { abilityId: secondsLeft } for ability slots
+   * @param actives   optional { abilityId: secondsLeft } while an ability runs
+   */
+  setHotbar(inventory, cooldowns, actives) {
     if (!this._hotbarBuilt) this.buildHotbar(inventory);
     for (let i = 0; i < this.slotEls.length; i++) {
       const el = this.slotEls[i];
       const slot = inventory.slots[i];
       const icon = el.querySelector('.hb-icon');
       const count = el.querySelector('.hb-count');
+
+      this._slotCooldown(el, slot, cooldowns, actives);
 
       if (!slot) {
         if (el.dataset.item !== '') { icon.innerHTML = ''; el.dataset.item = ''; }
@@ -468,6 +485,42 @@ export class HUD {
       }
       el.classList.toggle('sel', i === inventory.selected);
     }
+  }
+
+  /**
+   * Ability slots wipe over with a dark shade while recharging, with the
+   * whole seconds left on top — the same read as any cooldown in an action
+   * game, so nobody has to learn it.
+   */
+  _slotCooldown(el, slot, cooldowns, actives) {
+    const shade = el.querySelector('.hb-cd');
+    if (!shade) return;
+    const id = (slot && slot.item.ability) ? slot.item.id : null;
+    const live = id && actives ? Math.max(0, actives[id] || 0) : 0;
+    const cd = id && cooldowns ? Math.max(0, cooldowns[id] || 0) : 0;
+
+    // An ability that is RUNNING beats one that is recharging: while the
+    // effect is up, that is the number you care about.
+    const on = live > 0;
+    const secs = on ? live : cd;
+    if (secs <= 0) {
+      if (el.dataset.cd !== '') {
+        el.dataset.cd = '';
+        shade.style.height = '0%';
+        shade.firstChild.textContent = '';
+      }
+      el.classList.remove('cooling', 'live');
+      return;
+    }
+    el.classList.toggle('cooling', !on);
+    el.classList.toggle('live', on);
+    const label = String(Math.ceil(secs));
+    if (el.dataset.cd !== label) {
+      el.dataset.cd = label;
+      shade.firstChild.textContent = label;
+    }
+    const total = on ? (ABILITY_MAX[id] || 1) : (ABILITY_CD[id] || 1);
+    shade.style.height = Math.round(Math.min(1, secs / total) * 100) + '%';
   }
 
   /** "Press T" prompt shown while standing in the practice ring. */

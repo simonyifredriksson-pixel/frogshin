@@ -9,10 +9,10 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { CFG } from './config.js?v=v17';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v17';
-import { Terrain, CollisionWorld } from './collision.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { CFG } from './config.js?v=v18';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v18';
+import { Terrain, CollisionWorld } from './collision.js?v=v18';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -343,6 +343,9 @@ export class World {
     pillar.position.y = 3.5;
     group.add(pillar);
 
+    // Hidden by default — the game reveals it only in offline practice,
+    // where it is the only place it means anything.
+    group.visible = false;
     this.scene.add(group);
     this.practiceRing = { pos: new THREE.Vector3(x, y, z), radius, group, ring, glow, pillar };
   }

@@ -9,11 +9,13 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v17';
-import { Audio } from './audio.js?v=v17';
-import { PX } from './icons.js?v=v17';
+} from './skins.js?v=v18';
+import { Audio } from './audio.js?v=v18';
+import { PX } from './icons.js?v=v18';
+import { CFG } from './config.js?v=v18';
 
 const $ = (id) => document.getElementById(id);
+const MAX_ABILITIES = CFG.abilities.maxEquipped;
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
 // --------------------------------------------------------------- previews
@@ -268,26 +270,34 @@ export class Shop {
   }
 
   _renderAbilities(body) {
-    if (this.tryMode) {
-      const note = document.createElement('p');
-      note.className = 'note';
-      note.innerHTML = '<b>Practice ring:</b> every ability is unlocked here '
-        + 'to try. Nothing is bought and nothing is saved.';
-      body.appendChild(note);
-    }
+    const max = MAX_ABILITIES;
+    const note = document.createElement('p');
+    note.className = 'note';
+    note.innerHTML = this.tryMode
+      ? '<b>Practice ring:</b> every ability is unlocked here to try. Nothing '
+        + `is bought and nothing is saved. You still carry ${max} at a time.`
+      : `You can carry <b>${max}</b> abilities into a match. Equipped ones sit `
+        + 'in your hotbar — press their number key to fire.';
+    body.appendChild(note);
+
     for (const a of ABILITIES) {
       const owned = this.tryMode || this.economy.hasAbility(a.id);
+      const on = this._abilityOn(a.id);
       const card = document.createElement('div');
-      card.className = 'ability-card';
+      card.className = 'ability-card' + (on ? ' equipped' : '');
       card.innerHTML =
         `<div class="ability-art">${a.art}</div>`
         + `<div class="ability-info"><h3>${a.name}</h3><p>${a.blurb}</p>`
         + `<div class="ability-stats"><span>LASTS ${a.duration}s</span>`
         + `<span>COOLDOWN ${a.cooldown}s</span></div></div>`;
       const btn = document.createElement('button');
-      btn.className = 'btn ' + (owned ? 'btn-quiet' : 'btn-go');
-      btn.innerHTML = `<span>${owned ? 'OWNED' : a.price.toLocaleString('en-GB') + ' FROGLETS'}</span>`;
-      if (!owned) {
+      if (owned) {
+        btn.className = 'btn ' + (on ? 'btn-go' : 'btn-quiet');
+        btn.innerHTML = `<span>${on ? 'EQUIPPED' : 'EQUIP'}</span>`;
+        btn.onclick = () => this._toggleAbility(a);
+      } else {
+        btn.className = 'btn btn-go';
+        btn.innerHTML = `<span>${a.price.toLocaleString('en-GB')} FROGLETS</span>`;
         btn.onclick = () => {
           if (!this.economy.canAfford(a.price)) {
             Audio.uiBack();
@@ -297,7 +307,7 @@ export class Shop {
           this.economy.spend(a.price);
           this.economy.unlockAbility(a.id);
           Audio.respawn({ x: 0, y: 0, z: 0 });
-          this.status(`${a.name} unlocked. Equip it from the hotbar in a match.`);
+          this.status(`${a.name} unlocked and equipped to your hotbar.`);
           this.onChange();
           this.render();
         };
@@ -305,6 +315,43 @@ export class Shop {
       card.appendChild(btn);
       body.appendChild(card);
     }
+  }
+
+  /** Is this ability in the loadout we are currently editing? */
+  _abilityOn(id) {
+    if (this.tryMode) {
+      return !!(this.trial && this.trial.abilities
+        && this.trial.abilities.indexOf(id) !== -1);
+    }
+    return this.economy.isEquippedAbility(id);
+  }
+
+  /** Equip/unequip, respecting the two-slot cap. */
+  _toggleAbility(a) {
+    let result;
+    if (this.tryMode) {
+      this.trial = this.trial || {};
+      const list = this.trial.abilities || (this.trial.abilities = []);
+      const at = list.indexOf(a.id);
+      if (at !== -1) { list.splice(at, 1); result = 'off'; }
+      else if (list.length >= MAX_ABILITIES) result = 'full';
+      else { list.push(a.id); result = 'on'; }
+    } else {
+      result = this.economy.toggleAbility(a.id);
+    }
+
+    if (result === 'full') {
+      Audio.uiBack();
+      this.status(`You can only carry ${MAX_ABILITIES} abilities — unequip one first.`, true);
+      return;
+    }
+    Audio.uiClick();
+    this.status(result === 'on'
+      ? `${a.name} equipped to your hotbar.`
+      : `${a.name} unequipped.`);
+    if (this.tryMode && this.onTrialEquip) this.onTrialEquip();
+    else this.onChange();
+    this.render();
   }
 
   // ---------------------------------------------------------- crate opening
@@ -421,11 +468,13 @@ export class Shop {
 
   /**
    * Resolve the skin objects the game should use. A trial loadout from the
-   * practice ring takes precedence over the saved one while it lasts.
+   * practice ring takes precedence over the saved one — and keeps doing so
+   * after you step back out of the ring, so a borrowed skin lasts the whole
+   * match rather than snapping off the moment you walk away.
    */
   equippedSkins() {
     const e = this.economy.equipped;
-    const t = (this.tryMode && this.trial) ? this.trial : {};
+    const t = this.trial || {};
     return {
       sword: findSkin('swords', t.sword || e.sword || DEFAULT_SKIN.swords),
       frog: findSkin('frogs', t.frog || e.frog || DEFAULT_SKIN.frogs),
@@ -433,7 +482,18 @@ export class Shop {
     };
   }
 
-  /** Forget a trial loadout when the player steps out of the ring. */
+  /**
+   * Ability ids to put in the hotbar, capped at the carry limit. Borrowed
+   * ones from the practice ring last the match, exactly like borrowed skins.
+   */
+  equippedAbilities() {
+    const list = (this.trial && this.trial.abilities)
+      ? this.trial.abilities
+      : this.economy.loadout;
+    return (list || []).slice(0, MAX_ABILITIES);
+  }
+
+  /** Forget a trial loadout — on leaving the match, not the ring. */
   clearTrial() {
     if (!this.trial) return false;
     this.trial = null;

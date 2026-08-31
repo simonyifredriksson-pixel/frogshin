@@ -5,27 +5,27 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v17';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v17';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v17';
-import { Input } from './input.js?v=v17';
-import { Audio } from './audio.js?v=v17';
-import { World } from './world.js?v=v17';
-import { Effects } from './effects.js?v=v17';
-import { Atmosphere } from './atmosphere.js?v=v17';
-import { FollowCamera } from './camera.js?v=v17';
-import { Player } from './player.js?v=v17';
-import { RemotePlayer } from './remote.js?v=v17';
-import { HUD } from './hud.js?v=v17';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v17';
-import { FrogModel } from './frog.js?v=v17';
-import { DummyField } from './dummy.js?v=v17';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v17';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v17';
-import { MenuScene } from './menu.js?v=v17';
-import { Economy } from './economy.js?v=v17';
-import { Shop } from './shop.js?v=v17';
-import { Network, NetRole } from './net.js?v=v17';
+import * as THREE from '../lib/three.module.js?v=v18';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v18';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v18';
+import { Input } from './input.js?v=v18';
+import { Audio } from './audio.js?v=v18';
+import { World } from './world.js?v=v18';
+import { Effects } from './effects.js?v=v18';
+import { Atmosphere } from './atmosphere.js?v=v18';
+import { FollowCamera } from './camera.js?v=v18';
+import { Player } from './player.js?v=v18';
+import { RemotePlayer } from './remote.js?v=v18';
+import { HUD } from './hud.js?v=v18';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v18';
+import { FrogModel } from './frog.js?v=v18';
+import { DummyField } from './dummy.js?v=v18';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v18';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v18';
+import { MenuScene } from './menu.js?v=v18';
+import { Economy } from './economy.js?v=v18';
+import { Shop } from './shop.js?v=v18';
+import { Network, NetRole } from './net.js?v=v18';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -382,6 +382,18 @@ class Game {
       this.player.model = rebuilt;
       this.scene.add(rebuilt.root);
     }
+    // The clone wears whatever you wear, so it has to be rebuilt too.
+    this._dropClone();
+    // Abilities live in the hotbar; owning one is what puts it there.
+    if (this.player) this.player.inventory.setAbilities(this.shop.equippedAbilities());
+  }
+
+  /** Throw away the shadow-clone model so it is rebuilt with fresh skins. */
+  _dropClone() {
+    if (!this._cloneModel) return;
+    if (this.scene) this.scene.remove(this._cloneModel.root);
+    this._cloneModel.dispose();
+    this._cloneModel = null;
   }
 
   _playStatus(msg, isError) {
@@ -646,9 +658,15 @@ class Game {
       skins: this.equippedSkins,
     });
 
+    // Owned abilities go into the hotbar before it is built, so the slots
+    // are right on the very first frame.
+    this.player.inventory.setAbilities(this.shop.equippedAbilities());
     this.hud.buildHotbar(this.player.inventory);
     this.hud.onSlotClick = (i) => {
-      if (this.player.inventory.select(i)) Audio.uiClick();
+      const slot = this.player.inventory.slots[i];
+      // Clicking an ability slot fires it, exactly like its number key.
+      if (slot && slot.item.ability) this.player._useAbility(slot.item.id);
+      else if (this.player.inventory.select(i)) Audio.uiClick();
     };
 
     this._setupRounds(authority);
@@ -849,6 +867,8 @@ class Game {
     this.pendingMode = null;
     this.sessionMode = null;
     this._settingsFromPause = false;
+    this._endTrial();
+    this._dropClone();
     this.input.releaseLock();
     Audio.stopAmbient();
     Audio.stopBossMusic();
@@ -1016,7 +1036,10 @@ class Game {
   _updatePracticeRing(p) {
     const ring = this.world && this.world.practiceRing;
     const soloPractice = !this.net.isOnline && !this.isStory;
-    if (!ring || !soloPractice) {
+    if (!ring) return;
+    // Only exists in practice; in a real match it is not even drawn.
+    if (ring.group.visible !== soloPractice) ring.group.visible = soloPractice;
+    if (!soloPractice) {
       if (this._inRing) this._exitPracticeRing();
       return;
     }
@@ -1043,13 +1066,25 @@ class Game {
     if (inside && this.input.consume('KeyT')) this._openTryPanel();
   }
 
+  /**
+   * Step out of the ring.
+   *
+   * The borrowed loadout deliberately STAYS ON — walking away from the ring
+   * to go and test a skin is the whole point. It is only handed back when
+   * the match itself ends, in _quitToMenu.
+   */
   _exitPracticeRing() {
     this._inRing = false;
     this.hud.setRingPrompt(false);
     if (this.player) this.player.inventory.setUnlimitedKunai(false);
-    // Give back whatever they actually own.
-    if (this.shop.clearTrial()) this._applySkins();
+  }
+
+  /** Drop borrowed skins and abilities; called when leaving a match. */
+  _endTrial() {
+    this._inRing = false;
+    this._tryPanelOpen = false;
     this.shop.setTryMode(false);
+    if (this.shop.clearTrial()) this._applySkins();
   }
 
   /** Free the mouse and show the shop as a lend-everything panel. */
@@ -1157,10 +1192,10 @@ class Game {
 
       for (const r of this.remotes.values()) {
         r.update(dt, t);
-        // Explicit: only the story ever hides players, and this guarantees a
-        // frog hidden there is shown again on returning to the arena.
-        r.model.root.visible = true;
+        // Invisibility only hides you from the people hunting you.
+        r.model.root.visible = !(r.invisible && this._isHunting(p.id, r.id));
       }
+      this._updateLocalClone(dt);
 
       this.world.update(dt, this.camera.position);
 
@@ -1192,6 +1227,47 @@ class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Is `hunterId` someone `preyId` needs to hide from?
+   *
+   * Invisibility is deliberately not a blanket vanish: it hides you from
+   * whoever is trying to catch you and from nobody else, so a runner's escape
+   * still reads on everyone else's screen.
+   */
+  _isHunting(hunterId, preyId) {
+    const R = this.round;
+    if (!R || !R.playing) return false;
+    if (R.isTagMode) {
+      // Only the hunted benefit — a tagger going invisible would be unfair
+      // and, on their own screen, pointless.
+      return R.isTagger(hunterId) && !R.isTagger(preyId);
+    }
+    if (R.isTeamMode) return !R.areAllies(hunterId, preyId);
+    return false;   // FFA: everyone hunts everyone, so nobody is special
+  }
+
+  /** Draw the local player's shadow clone. */
+  _updateLocalClone(dt) {
+    const p = this.player;
+    const c = p.cloneTransform();
+    if (!c) {
+      if (this._cloneModel) this._cloneModel.root.visible = false;
+      return;
+    }
+    if (!this._cloneModel) {
+      this._cloneModel = new FrogModel(p.color, '', true, this.shop.equippedSkins());
+      this._cloneModel.makeShadow();
+      this.scene.add(this._cloneModel.root);
+    }
+    this._cloneModel.root.visible = true;
+    this._cloneModel.root.position.set(c.x, c.y, c.z);
+    this._cloneModel.setFacing(c.yaw);
+    this._cloneModel.update(dt, {
+      speed: c.speed, vy: 0, grounded: c.grounded,
+      moving: c.speed > 1.2 && c.grounded, dead: false,
+    });
   }
 
   /** Send the player's queued events over the wire and handle local ones. */
@@ -1492,10 +1568,24 @@ class Game {
     }
     if (p.stamina.justRecovered) Audio.refreshed(p.pos);
 
-    // Hotbar only redraws when the inventory actually changed.
-    if (p.inventory.dirty) {
+    // Hotbar redraws when the inventory changes — or every frame while an
+    // ability is running or recharging, since that shade has to actually move.
+    const actives = { invisibility: p.invisibleT, shadowclone: p.cloneT };
+    const busy = p.inventory.equippedAbilities()
+      .some((id) => (p.abilityCd[id] || 0) > 0 || (actives[id] || 0) > 0);
+    if (p.inventory.dirty || busy || this._hbBusy) {
       p.inventory.dirty = false;
-      this.hud.setHotbar(p.inventory);
+      this._hbBusy = busy;
+      this.hud.setHotbar(p.inventory, p.abilityCd, actives);
+    }
+    // Your own frog fades rather than vanishing — you still need to see
+    // yourself, but the feedback that it is working has to be constant.
+    p.model.setGhost(p.invisibleT > 0 ? CFG.abilities.invisibility.selfOpacity : 1);
+    if (p._abilityCue > 0 && !this._cueShown) {
+      this._cueShown = true;
+      this.hud.toast('Still recharging', 0.9);
+    } else if (p._abilityCue <= 0) {
+      this._cueShown = false;
     }
     // No supply crates in the story level.
     this.hud.setPickupPrompt(
