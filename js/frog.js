@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v20';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v20';
+import * as THREE from '../lib/three.module.js?v=v21';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v21';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -711,6 +711,9 @@ export class FrogModel {
       g.position.set(0, 2.62, 0);
       this.tagMarker = g;
       this.root.add(g);
+      // Built after the fact, so any fade already in effect has not been
+      // applied to it — force setGhost to run over the rig again.
+      this._ghost = undefined;
     }
     if (this.tagMarker) this.tagMarker.visible = v;
   }
@@ -733,20 +736,44 @@ export class FrogModel {
   croak() { this.croakPulse = 1; }
 
   /**
-   * Fade the whole frog — used while invisibility is up, and by the shadow
-   * clone when its owner is invisible. Materials are per-instance, so this
-   * only ever affects this one model.
+   * Fade the ENTIRE frog — used while invisibility is up, and by the shadow
+   * clone when its owner is invisible.
+   *
+   * Walks the whole rig rather than just `this.mats`, because parts of the
+   * model carry their own materials: the nameplate sprite and the "it"
+   * marker. Fading only the body left those floating at full strength, which
+   * defeats the point — a name tag hanging over thin air is worse than no
+   * invisibility at all.
+   *
+   * Each material's original look is stashed the first time it is touched,
+   * so restoring puts back exactly what was there (the nameplate, for one,
+   * is transparent by nature and must stay that way at full opacity).
+   * Materials are per-instance, so this only ever affects this one model.
    */
   setGhost(k) {
     if (this._ghost === k) return;
     this._ghost = k;
     const on = k < 0.999;
-    for (const key in this.mats) {
-      const m = this.mats[key];
-      m.transparent = on;
-      m.opacity = k;
-      m.depthWrite = !on;
-    }
+    this.root.traverse((o) => {
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : null);
+      if (!mats) return;
+      for (const m of mats) {
+        if (m.userData.baseOpacity === undefined) {
+          m.userData.baseOpacity = m.opacity;
+          m.userData.baseTransparent = m.transparent;
+          m.userData.baseDepthWrite = m.depthWrite;
+        }
+        if (on) {
+          m.transparent = true;
+          m.opacity = m.userData.baseOpacity * k;
+          m.depthWrite = false;
+        } else {
+          m.transparent = m.userData.baseTransparent;
+          m.opacity = m.userData.baseOpacity;
+          m.depthWrite = m.userData.baseDepthWrite;
+        }
+      }
+    });
   }
 
   setVisible(v) {
@@ -756,7 +783,21 @@ export class FrogModel {
   }
 
   dispose() {
-    this.root.traverse((o) => { if (o.geometry && !Object.values(G).includes(o.geometry)) o.geometry.dispose(); });
+    const shared = Object.values(G);
+    const seen = new Set();
+    this.root.traverse((o) => {
+      if (o.geometry && !shared.includes(o.geometry)) o.geometry.dispose();
+      // Sweep every material, not just this.mats — the nameplate sprite and
+      // the tagger marker own theirs, and shadow clones are built and torn
+      // down often enough that leaking them would add up.
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : null);
+      if (!mats) return;
+      for (const m of mats) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        m.dispose();
+      }
+    });
     for (const k in this.mats) this.mats[k].dispose();
     if (this.plateTex) this.plateTex.dispose();
   }

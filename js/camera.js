@@ -6,9 +6,9 @@
  * screen shake used by every impactful action in the game.
  */
 
-import * as THREE from '../lib/three.module.js?v=v20';
-import { CFG } from './config.js?v=v20';
-import { clamp, damp, lerp } from './util.js?v=v20';
+import * as THREE from '../lib/three.module.js?v=v21';
+import { CFG } from './config.js?v=v21';
+import { clamp, damp, lerp } from './util.js?v=v21';
 
 const _desired = new THREE.Vector3();
 const _focus = new THREE.Vector3();

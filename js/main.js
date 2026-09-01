@@ -5,27 +5,27 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v20';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v20';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v20';
-import { Input } from './input.js?v=v20';
-import { Audio } from './audio.js?v=v20';
-import { World } from './world.js?v=v20';
-import { Effects } from './effects.js?v=v20';
-import { Atmosphere } from './atmosphere.js?v=v20';
-import { FollowCamera } from './camera.js?v=v20';
-import { Player } from './player.js?v=v20';
-import { RemotePlayer } from './remote.js?v=v20';
-import { HUD } from './hud.js?v=v20';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v20';
-import { FrogModel } from './frog.js?v=v20';
-import { DummyField } from './dummy.js?v=v20';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v20';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v20';
-import { MenuScene } from './menu.js?v=v20';
-import { Economy } from './economy.js?v=v20';
-import { Shop } from './shop.js?v=v20';
-import { Network, NetRole } from './net.js?v=v20';
+import * as THREE from '../lib/three.module.js?v=v21';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v21';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v21';
+import { Input } from './input.js?v=v21';
+import { Audio } from './audio.js?v=v21';
+import { World } from './world.js?v=v21';
+import { Effects } from './effects.js?v=v21';
+import { Atmosphere } from './atmosphere.js?v=v21';
+import { FollowCamera } from './camera.js?v=v21';
+import { Player } from './player.js?v=v21';
+import { RemotePlayer } from './remote.js?v=v21';
+import { HUD } from './hud.js?v=v21';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v21';
+import { FrogModel } from './frog.js?v=v21';
+import { DummyField } from './dummy.js?v=v21';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v21';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v21';
+import { MenuScene } from './menu.js?v=v21';
+import { Economy } from './economy.js?v=v21';
+import { Shop } from './shop.js?v=v21';
+import { Network, NetRole } from './net.js?v=v21';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;

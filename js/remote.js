@@ -11,11 +11,11 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v20';
-import { CFG } from './config.js?v=v20';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v20';
-import { FrogModel } from './frog.js?v=v20';
-import { Audio } from './audio.js?v=v20';
+import * as THREE from '../lib/three.module.js?v=v21';
+import { CFG } from './config.js?v=v21';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v21';
+import { FrogModel } from './frog.js?v=v21';
+import { Audio } from './audio.js?v=v21';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -276,7 +276,9 @@ export class RemotePlayer {
       return;
     }
     if (!this.cloneModel) {
-      this.cloneModel = new FrogModel(this.color, '', true);
+      // Same name and nameplate as its owner: a decoy with no name tag over
+      // it would be spotted instantly, which is the whole ability wasted.
+      this.cloneModel = new FrogModel(this.color, this.name, false);
       this.scene.add(this.cloneModel.root);
     }
     const [x, y, z, yaw, speed, bits, attackT, attackIndex, throwT, vy,
@@ -298,6 +300,8 @@ export class RemotePlayer {
       dead: !!(bits & 32),
       attackT, attackIndex, throwT,
     });
+    this.cloneModel.drawNameplate(this.hp / this.maxHp);
+    this.cloneModel.setTagger(this.model._isTagger);
 
     // One arc and one kunai per recorded action, however the packets landed.
     _tmp.set(x, y, z);
