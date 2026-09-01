@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v28';
-import { CFG } from './config.js?v=v28';
-import { clamp } from './util.js?v=v28';
-import { DungeonLevel } from './dungeonlevel.js?v=v28';
-import { DungeonBoss } from './dungeonboss.js?v=v28';
-import { Frogath } from './frogath.js?v=v28';
-import { Audio } from './audio.js?v=v28';
+import * as THREE from '../lib/three.module.js?v=v29';
+import { CFG } from './config.js?v=v29';
+import { clamp } from './util.js?v=v29';
+import { DungeonLevel } from './dungeonlevel.js?v=v29';
+import { DungeonBoss } from './dungeonboss.js?v=v29';
+import { Frogath } from './frogath.js?v=v29';
+import { Audio } from './audio.js?v=v29';
 
 const _v = new THREE.Vector3();
 
@@ -207,6 +207,12 @@ export class DungeonRun {
     } else {
       this.boss.update(dt, player, onHit);
       this.hud.setBossBar(this.boss.fraction);
+      // Ground waves are the one attack with an answer other than running.
+      // Said once, the first time one is ever wound up, and then never again.
+      if (this.boss.windingGroundWave && !this._taughtJump) {
+        this._taughtJump = true;
+        this.hud.toast('AMBER RING — jump it', 3.5);
+      }
       if (this.boss.justDied) {
         this.boss.justDied = false;
         this._onBossDown(player);

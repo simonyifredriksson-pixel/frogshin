@@ -16,14 +16,26 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v28';
-import { CFG } from './config.js?v=v28';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v28';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v28';
-import { Audio } from './audio.js?v=v28';
+import * as THREE from '../lib/three.module.js?v=v29';
+import { CFG } from './config.js?v=v29';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v29';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v29';
+import { Audio } from './audio.js?v=v29';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
+
+/**
+ * Moves that travel along the FLOOR, and can therefore be jumped.
+ *
+ * These are drawn in a distinct colour so the rule is learnable from one
+ * look: an amber ring means "get off the ground", a red one means "get out
+ * of the way". Without an answer other than running, a wide ground wave from
+ * a big guardian is just an unavoidable tax.
+ */
+const GROUND_MOVES = new Set(['shockwave', 'spin']);
+const WARN_RED = 0xff7a3c;      // move out of it
+const WARN_AMBER = 0xffd24a;    // jump over it
 
 const STATE = {
   IDLE: 'idle',
@@ -104,10 +116,34 @@ export class DungeonBoss {
     this.leapTo = new THREE.Vector3();
     this.leapT = 0;
     this.justDied = false;
+    this.windingGroundWave = false;
     this.t = Math.random() * 5;
     this.stride = 0;
     this.hurtT = 0;
     this.swingT = 0;
+  }
+
+  /**
+   * The radius a move actually covers.
+   *
+   * ONE source of truth, read by both the warning marker and the hit test.
+   * They used to be computed separately with different multipliers, so the
+   * ring on the floor was smaller than the thing that hit you — the marker
+   * lied. And the shockwave scaled to 40 units inside a 34-unit room, which
+   * made the later guardians literally impossible to walk out of.
+   */
+  _moveRadius(move) {
+    const R = this.reach * this.scaleFactor;
+    switch (move) {
+      case 'shockwave': return R * 2.2;
+      case 'spin': return R * 1.4;
+      case 'slam': return R * 1.3;
+      case 'leap': return R * 1.35;
+      case 'spores':
+      case 'puddle': return R * 1.6;
+      case 'charge': return R;
+      default: return R * 1.2;                 // combo, blink
+    }
   }
 
   get name() { return this.spec.name; }
@@ -208,9 +244,12 @@ export class DungeonBoss {
    * wind-up.
    */
   _drawWarning(player) {
-    const col = 0xff7a3c;
+    const jumpable = GROUND_MOVES.has(this.move);
+    this.windingGroundWave = jumpable;
+    const col = jumpable ? WARN_AMBER : WARN_RED;
     const w = Math.max(0.12, this.timer);
-    const R = this.reach * this.scaleFactor * 0.8;
+    // The marker is the hitbox. Not an approximation of it.
+    const R = this._moveRadius(this.move);
     switch (this.move) {
       case 'charge':
         this.chargeDir.copy(_to);
@@ -230,33 +269,52 @@ export class DungeonBoss {
         this.leapTo.set(
           player.pos.x + vx * lead, this.baseY, player.pos.z + vz * lead);
         _tmp.set(this.leapTo.x, this.baseY + 0.1, this.leapTo.z);
-        this.effects.ring(_tmp, R * 2.2, R * 2.2, w, col, true);
+        this.effects.ring(_tmp, R, R, w, col, true);
         break;
       }
       case 'spin':
       case 'shockwave':
+        // Grows from the boss out to exactly where it will reach.
+        _tmp.set(this.pos.x, this.baseY + 0.1, this.pos.z);
+        this.effects.ring(_tmp, 1, R, w, col, true);
+        break;
       case 'ringout':
         _tmp.set(this.pos.x, this.baseY + 0.1, this.pos.z);
-        this.effects.ring(_tmp, 1, R * (this.move === 'spin' ? 2.4 : 4.5), w, col, true);
+        this.effects.ring(_tmp, 1, R * 2.5, w, col, true);
         break;
       case 'spores':
       case 'puddle':
         _tmp.set(player.pos.x, this.baseY + 0.1, player.pos.z);
-        this.effects.ring(_tmp, R * 2.4, R * 2.4, w, col, true);
+        this.effects.ring(_tmp, R, R, w, col, true);
+        break;
+      case 'blink':
+        // It will reappear beside you and swing immediately, so the marker
+        // has to cover the reach of that swing — not just say "something is
+        // coming". A blink that telegraphs less than it hits is a cheap
+        // shot, whatever else it is.
+        _tmp.set(player.pos.x, this.baseY + 0.1, player.pos.z);
+        this.effects.ring(_tmp, R * 2, R, w, col, true);
         break;
       case 'throw':
       case 'volley':
-      case 'blink':
+        // The alert says a shot is coming; the bolt itself, visible the whole
+        // way, is what says where. There is no floor area to match here.
         _tmp.set(player.pos.x, this.baseY + 0.1, player.pos.z);
         this.effects.ring(_tmp, R * 1.6, R * 0.8, w, col, true);
         break;
       default:                                   // slam, combo
-        _tmp.set(this.pos.x, this.baseY + 0.1, this.pos.z);
-        this.effects.ring(_tmp, 1.0, R * 2.4, w, col, true);
+        // Drawn AHEAD of the boss, because the strike lunges forward — the
+        // marker has to cover where the blow lands, not where it starts.
+        _tmp.set(this.pos.x + _to.x * R * 0.4, this.baseY + 0.1,
+          this.pos.z + _to.z * R * 0.4);
+        this.effects.ring(_tmp, 1.0, R * 1.6, w, col, true);
         break;
     }
+    // A ground wave gets its own two-note rise, so it is identifiable with
+    // your back turned.
     Audio.tone({
-      freq: 150, to: 380, dur: w, type: 'sawtooth', volume: 0.12, pos: this.pos,
+      freq: jumpable ? 110 : 150, to: jumpable ? 250 : 380,
+      dur: w, type: 'sawtooth', volume: 0.12, pos: this.pos,
     });
   }
 
@@ -288,7 +346,8 @@ export class DungeonBoss {
   _strike(dt, dist, player, onHit) {
     const M = MOVES[this.move] || MOVES.combo;
     const dmg = Math.round(this.damage * M.dmg);
-    const R = this.reach * this.scaleFactor;
+    // The same radius the marker was drawn at.
+    const R = this._moveRadius(this.move);
 
     switch (this.move) {
       case 'charge':
@@ -343,22 +402,22 @@ export class DungeonBoss {
         }
         break;
 
+      // --- ground waves: wide, but you can JUMP them ---
       case 'spin':
-        if (!this.struck) {
-          this.struck = true;
-          _tmp.set(this.pos.x, this.baseY + 0.4, this.pos.z);
-          this.effects.ring(_tmp, 0.5, R * 2.4, 0.4, this.spec.trim, true);
-          if (this._near(player, R * 2.2)) onHit(dmg, this.pos);
-        }
-        break;
-
       case 'shockwave':
         if (!this.struck) {
           this.struck = true;
-          _tmp.set(this.pos.x, this.baseY + 0.3, this.pos.z);
-          this.effects.ring(_tmp, 1, R * 4.5, 0.6, this.spec.trim, true);
-          this.effects.dustPuff(_tmp, 20, 7, 0xcfc0a0);
-          if (this._near(player, R * 4.2)) onHit(dmg, this.pos);
+          _tmp.set(this.pos.x, this.baseY + 0.35, this.pos.z);
+          this.effects.ring(_tmp, 0.5, R, 0.5, WARN_AMBER, true);
+          if (this.move === 'shockwave') {
+            this.effects.dustPuff(_tmp, 20, 7, 0xcfc0a0);
+          }
+          // It travels along the floor, so being off the floor clears it.
+          // Without this the wide late-game waves were simply a tax: they
+          // out-reach the room and no amount of running gets you out.
+          if (this._near(player, R) && this._grounded(player)) {
+            onHit(dmg, this.pos);
+          }
         }
         break;
 
@@ -369,8 +428,9 @@ export class DungeonBoss {
           // A patch of floor that stays dangerous, and stays drawn.
           this.hazards.push({
             x: player.pos.x, z: player.pos.z, y: this.baseY,
-            r: R * 2.2, life: this.move === 'puddle' ? 6 : 3.5,
+            r: R, life: this.move === 'puddle' ? 6 : 3.5,
             dmg: Math.round(dmg * 0.5), tick: 0, color: this.spec.trim,
+            jumpable: this.move === 'puddle',
           });
         }
         break;
@@ -413,6 +473,19 @@ export class DungeonBoss {
 
   _near(player, r) {
     return Math.hypot(player.pos.x - this.pos.x, player.pos.z - this.pos.z) < r;
+  }
+
+  /**
+   * Is the player on the floor?
+   *
+   * Both a real jump and the moment mid-dash count as airborne, so a
+   * well-timed dash over a wave works too — dodging the ground with the
+   * dodge button is exactly what a player will try first.
+   */
+  _grounded(player) {
+    if (player.grounded === false) return false;
+    if (player.pos.y > this.baseY + 1.1) return false;
+    return true;
   }
 
   /**
@@ -488,7 +561,10 @@ export class DungeonBoss {
         h.tick = 0.45;
         _tmp.set(h.x, h.y + 0.1, h.z);
         this.effects.ring(_tmp, h.r, h.r, 0.45, h.color, true);
-        if (Math.hypot(player.pos.x - h.x, player.pos.z - h.z) < h.r) {
+        // A puddle is on the floor and can be hopped; a spore cloud fills
+        // the air above it and cannot.
+        const clears = h.jumpable && !this._grounded(player);
+        if (!clears && Math.hypot(player.pos.x - h.x, player.pos.z - h.z) < h.r) {
           onHit(h.dmg, _tmp);
         }
       }

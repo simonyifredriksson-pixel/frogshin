@@ -5,30 +5,30 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v28';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v28';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v28';
-import { Input } from './input.js?v=v28';
-import { Audio } from './audio.js?v=v28';
-import { World } from './world.js?v=v28';
-import { Effects } from './effects.js?v=v28';
-import { Atmosphere } from './atmosphere.js?v=v28';
-import { FollowCamera } from './camera.js?v=v28';
-import { Player } from './player.js?v=v28';
-import { RemotePlayer } from './remote.js?v=v28';
-import { HUD } from './hud.js?v=v28';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v28';
-import { FrogModel } from './frog.js?v=v28';
-import { DummyField } from './dummy.js?v=v28';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v28';
-import { ToadModel } from './npc.js?v=v28';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v28';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v28';
-import { DungeonRun } from './dungeon.js?v=v28';
-import { MenuScene } from './menu.js?v=v28';
-import { Economy } from './economy.js?v=v28';
-import { Shop } from './shop.js?v=v28';
-import { Network, NetRole } from './net.js?v=v28';
+import * as THREE from '../lib/three.module.js?v=v29';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v29';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v29';
+import { Input } from './input.js?v=v29';
+import { Audio } from './audio.js?v=v29';
+import { World } from './world.js?v=v29';
+import { Effects } from './effects.js?v=v29';
+import { Atmosphere } from './atmosphere.js?v=v29';
+import { FollowCamera } from './camera.js?v=v29';
+import { Player } from './player.js?v=v29';
+import { RemotePlayer } from './remote.js?v=v29';
+import { HUD } from './hud.js?v=v29';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v29';
+import { FrogModel } from './frog.js?v=v29';
+import { DummyField } from './dummy.js?v=v29';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v29';
+import { ToadModel } from './npc.js?v=v29';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v29';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v29';
+import { DungeonRun } from './dungeon.js?v=v29';
+import { MenuScene } from './menu.js?v=v29';
+import { Economy } from './economy.js?v=v29';
+import { Shop } from './shop.js?v=v29';
+import { Network, NetRole } from './net.js?v=v29';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
