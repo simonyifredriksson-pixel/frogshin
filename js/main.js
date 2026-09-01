@@ -5,30 +5,36 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v19';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v19';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v19';
-import { Input } from './input.js?v=v19';
-import { Audio } from './audio.js?v=v19';
-import { World } from './world.js?v=v19';
-import { Effects } from './effects.js?v=v19';
-import { Atmosphere } from './atmosphere.js?v=v19';
-import { FollowCamera } from './camera.js?v=v19';
-import { Player } from './player.js?v=v19';
-import { RemotePlayer } from './remote.js?v=v19';
-import { HUD } from './hud.js?v=v19';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v19';
-import { FrogModel } from './frog.js?v=v19';
-import { DummyField } from './dummy.js?v=v19';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v19';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v19';
-import { MenuScene } from './menu.js?v=v19';
-import { Economy } from './economy.js?v=v19';
-import { Shop } from './shop.js?v=v19';
-import { Network, NetRole } from './net.js?v=v19';
+import * as THREE from '../lib/three.module.js?v=v20';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v20';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v20';
+import { Input } from './input.js?v=v20';
+import { Audio } from './audio.js?v=v20';
+import { World } from './world.js?v=v20';
+import { Effects } from './effects.js?v=v20';
+import { Atmosphere } from './atmosphere.js?v=v20';
+import { FollowCamera } from './camera.js?v=v20';
+import { Player } from './player.js?v=v20';
+import { RemotePlayer } from './remote.js?v=v20';
+import { HUD } from './hud.js?v=v20';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v20';
+import { FrogModel } from './frog.js?v=v20';
+import { DummyField } from './dummy.js?v=v20';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v20';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v20';
+import { MenuScene } from './menu.js?v=v20';
+import { Economy } from './economy.js?v=v20';
+import { Shop } from './shop.js?v=v20';
+import { Network, NetRole } from './net.js?v=v20';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
+
+// Scratch vectors for the shadow clone, so its per-frame work allocates none.
+const _v3 = new THREE.Vector3();
+const _v3b = new THREE.Vector3();
+const _v3c = new THREE.Vector3();
+const _v3d = new THREE.Vector3();
 
 const QUALITY = {
   crisp:  { scale: null, shadows: true,  pixelated: false, leaves: 300, clouds: 28 },
@@ -543,6 +549,18 @@ class Game {
       return;
     }
     const r = new RemotePlayer(id, prof.name, prof.color, this.scene, this.effects);
+    // A remote clone's kunai is drawn locally and deals nothing — the decoy
+    // has to look armed, but only the real frog can actually hurt you.
+    r.onCloneThrow = (pos, dx, dy, dz) => {
+      if (!this.kunaiSystem) return;
+      _v3c.set(dx, dy, dz);
+      if (_v3c.lengthSq() < 1e-6) return;
+      _v3c.normalize();
+      const o = _v3d.copy(pos);
+      o.y += 1.45;
+      o.addScaledVector(_v3c, 0.6);
+      this.kunaiSystem.throw_(o, _v3c, 'clone:' + id, false, null);
+    };
     this.remotes.set(id, r);
     if (this.hud) this.hud.toast(`${prof.name} joined the hunt`);
   }
@@ -1003,7 +1021,7 @@ class Game {
       const iAmInCastle = myCode >= PRISON_CODE;
       for (const r of this.remotes.values()) {
         r.update(dt, t);
-        r.model.root.visible = iAmInCastle && (r.storyPhase || 0) >= PRISON_CODE;
+        r.setViewer(false, !(iAmInCastle && (r.storyPhase || 0) >= PRISON_CODE));
       }
 
       // The story itself runs on real time so its scripted timers (fades,
@@ -1207,8 +1225,10 @@ class Game {
 
       for (const r of this.remotes.values()) {
         r.update(dt, t);
-        // Invisibility only hides you from the people hunting you.
-        r.model.root.visible = !(r.invisible && this._isHunting(p.id, r.id));
+        // Invisibility hides you completely from the people hunting you, and
+        // merely fades you for everyone on your own side — so a teammate can
+        // still follow you without the enemy having a hope of it.
+        r.setViewer(this._isHunting(p.id, r.id), false);
       }
       this._updateLocalClone(dt);
 
@@ -1263,26 +1283,111 @@ class Game {
     return false;   // FFA: everyone hunts everyone, so nobody is special
   }
 
-  /** Draw the local player's shadow clone. */
+  /**
+   * Draw the local player's shadow clone.
+   *
+   * It is a full copy, not a silhouette: same skins, same colour, no
+   * transparency. What sells the decoy is that it does everything you do —
+   * swings, throws, parries, sprints, vanishes — a beat behind, replayed from
+   * the pose you actually held rather than re-derived.
+   */
   _updateLocalClone(dt) {
     const p = this.player;
     const c = p.cloneTransform();
     if (!c) {
       if (this._cloneModel) this._cloneModel.root.visible = false;
+      this._cloneAtk = this._cloneThr = undefined;
       return;
     }
     if (!this._cloneModel) {
       this._cloneModel = new FrogModel(p.color, '', true, this.shop.equippedSkins());
-      this._cloneModel.makeShadow();
       this.scene.add(this._cloneModel.root);
     }
-    this._cloneModel.root.visible = true;
-    this._cloneModel.root.position.set(c.x, c.y, c.z);
-    this._cloneModel.setFacing(c.yaw);
-    this._cloneModel.update(dt, {
-      speed: c.speed, vy: 0, grounded: c.grounded,
-      moving: c.speed > 1.2 && c.grounded, dead: false,
+    const m = this._cloneModel;
+    const pos = this._cloneStandoff(c, p);
+
+    // Same visibility rule as you: your clone hides when you hide.
+    m.root.visible = true;
+    m.setGhost(c.invisible ? CFG.abilities.invisibility.friendlyOpacity : 1);
+    m.root.position.copy(pos);
+    m.setFacing(c.yaw);
+    m.update(dt, {
+      speed: c.speed,
+      vy: c.vy,
+      grounded: c.grounded,
+      moving: c.moving,
+      dashT: c.dashT,
+      attackT: c.attackT,
+      attackIndex: c.attackIndex,
+      throwT: c.throwT,
+      grappling: c.grappling,
+      tongueTo: c.grappling ? { x: c.gx, y: c.gy, z: c.gz } : null,
+      wallSliding: c.wallSliding,
+      sprinting: c.sprinting,
+      swimming: c.swimming,
+      swimPitch: c.swimPitch,
+      parrying: c.parrying,
+      dead: c.dead,
     });
+
+    // Discrete actions fire on a change of the recorded counter, so one swing
+    // makes exactly one arc no matter what the frame rate is doing.
+    if (this._cloneAtk === undefined) this._cloneAtk = c.atk;
+    if (this._cloneThr === undefined) this._cloneThr = c.thr;
+    if (c.atk !== this._cloneAtk) {
+      this._cloneAtk = c.atk;
+      const i = clamp(c.attackIndex, 0, 2);
+      _v3.set(
+        pos.x - Math.sin(c.yaw) * 1.5, pos.y + 1.1, pos.z - Math.cos(c.yaw) * 1.5);
+      this.effects.slashArc(_v3, c.yaw, i, i === 2 ? 0xfff0b0 : 0xdff3ff, i === 2 ? 3.8 : 3.0);
+      Audio.slash(pos, i);
+    }
+    if (c.thr !== this._cloneThr) {
+      this._cloneThr = c.thr;
+      this._cloneThrow(pos, c);
+    }
+  }
+
+  /**
+   * Keep the clone behind you rather than inside you.
+   *
+   * Replaying your path puts it behind you whenever you are moving, but at a
+   * standstill the delayed position is exactly where you are — two frogs in
+   * the same space, which looks broken and hides nothing. So when the gap
+   * closes it is pushed out along your back.
+   */
+  _cloneStandoff(c, p) {
+    const A = CFG.abilities.shadowclone;
+    const out = _v3b.set(c.x, c.y, c.z);
+    const dx = out.x - p.pos.x, dz = out.z - p.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= A.minGap) return out;
+    // Straight out the back, using the facing you are actually rendered with.
+    const bx = Math.sin(p.visualYaw), bz = Math.cos(p.visualYaw);
+    out.x = p.pos.x + bx * A.minGap;
+    out.z = p.pos.z + bz * A.minGap;
+    // Sit it on whatever is under that spot so it does not float or sink.
+    // Clamped from below so a clone behind you at the lip of a drop steps
+    // down with you rather than teleporting to the valley floor.
+    if (this.world && this.world.collision) {
+      const g = this.world.collision.groundHeight(out.x, out.z, p.pos.y + 2);
+      out.y = Math.max(g, c.y - 1.5);
+    }
+    return out;
+  }
+
+  /** The clone's kunai: visual only, and it never hits anything. */
+  _cloneThrow(pos, c) {
+    if (!this.kunaiSystem) return;
+    _v3c.set(c.tdx, c.tdy, c.tdz);
+    if (_v3c.lengthSq() < 1e-6) return;
+    _v3c.normalize();
+    const o = _v3d.copy(pos);
+    o.y += 1.45;
+    o.addScaledVector(_v3c, 0.6);
+    // local=false: a decoy's kunai is a bluff, it deals no damage.
+    this.kunaiSystem.throw_(o, _v3c, 'clone:' + this.player.id, false, null);
+    Audio.kunaiThrow(pos);
   }
 
   /** Send the player's queued events over the wire and handle local ones. */
@@ -1595,7 +1700,8 @@ class Game {
     }
     // Your own frog fades rather than vanishing — you still need to see
     // yourself, but the feedback that it is working has to be constant.
-    p.model.setGhost(p.invisibleT > 0 ? CFG.abilities.invisibility.selfOpacity : 1);
+    p.model.setGhost(
+      p.invisibleT > 0 ? CFG.abilities.invisibility.friendlyOpacity : 1);
     if (p._abilityCue > 0 && !this._cueShown) {
       this._cueShown = true;
       this.hud.toast('Still recharging', 0.9);

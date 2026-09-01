@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v19';
-import { CFG } from './config.js?v=v19';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v19';
-import { FrogModel } from './frog.js?v=v19';
-import { Grapple, GrappleState } from './grapple.js?v=v19';
-import { Combat, Health } from './combat.js?v=v19';
-import { Stamina } from './stamina.js?v=v19';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v19';
-import { Audio } from './audio.js?v=v19';
+import * as THREE from '../lib/three.module.js?v=v20';
+import { CFG } from './config.js?v=v20';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v20';
+import { FrogModel } from './frog.js?v=v20';
+import { Grapple, GrappleState } from './grapple.js?v=v20';
+import { Combat, Health } from './combat.js?v=v20';
+import { Stamina } from './stamina.js?v=v20';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v20';
+import { Audio } from './audio.js?v=v20';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -64,9 +64,14 @@ export class Player {
     this.abilityCd = {};       // id -> seconds remaining
     this.invisibleT = 0;
     this.cloneT = 0;
-    this.cloneTrail = [];      // recent transforms the clone replays
+    this.cloneTrail = [];      // recent poses the clone replays
     this._cloneClock = 0;
     this._abilityCue = 0;
+    this._atkSeq = 0;          // bumped on each swing, so the clone can copy it
+    this._thrSeq = 0;          // ditto for kunai throws
+    this._thrDir = new THREE.Vector3(0, 0, -1);
+    this._cloneMoving = false;
+    this._cloneWasAttacking = false;
 
     // Cosmetic palettes from the shop, if any are equipped.
     this.model = new FrogModel(this.color, this.name, true, opts.skins || null);
@@ -173,8 +178,19 @@ export class Player {
       // Abilities others must be able to see: the clone has to be visible to
       // work as bait, and invisibility has to be known so viewers can decide
       // whether it applies to them.
+      //
+      // The clone is packed as a flat array to keep the 20Hz packet small —
+      // it carries the pose fields that actually change the silhouette, so a
+      // watcher sees it swing and throw, not just glide.
       iv: this.invisibleT > 0 ? 1 : 0,
-      cl: c ? [r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed)] : null,
+      cl: c ? [
+        r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed),
+        (c.grounded ? 1 : 0) | (c.moving ? 2 : 0) | (c.sprinting ? 4 : 0)
+        | (c.swimming ? 8 : 0) | (c.parrying ? 16 : 0) | (c.dead ? 32 : 0)
+        | (c.invisible ? 64 : 0),
+        r2(c.attackT), c.attackIndex, r2(c.throwT), r2(c.vy),
+        c.atk, c.thr, r2(c.tdx), r2(c.tdy), r2(c.tdz),
+      ] : null,
       x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
       vx: r2(this.vel.x), vy: r2(this.vel.y), vz: r2(this.vel.z),
       yaw: r2(this.visualYaw),
@@ -726,16 +742,59 @@ export class Player {
     }
   }
 
-  /** Remember where we were, so the clone can retrace it. */
+  /**
+   * Record one frame of everything the clone needs to be you.
+   *
+   * The whole pose is captured, not just the position — the clone is meant to
+   * be indistinguishable from you at a glance, so it has to swing, throw,
+   * parry, sprint, swim and vanish exactly as you did. Replaying a recorded
+   * pose is what guarantees that: there is no second animation path that
+   * could drift out of step with the real one.
+   *
+   * Swings and throws are caught as rising edges of a counter rather than by
+   * hooking the attack code, so a new action can never be missed or double
+   * fired during the replay.
+   */
   _recordClone(dt) {
     const A = CFG.abilities.shadowclone;
     this._cloneClock = (this._cloneClock || 0) + dt;
+
+    const attacking = !!this.combat.attacking;
+    if (attacking && !this._cloneWasAttacking) this._atkSeq = (this._atkSeq || 0) + 1;
+    this._cloneWasAttacking = attacking;
+
+    const g = this.grapple.visible;
     this.cloneTrail.push({
       t: this._cloneClock,
       x: this.pos.x, y: this.pos.y, z: this.pos.z,
       yaw: this.visualYaw,
       speed: Math.hypot(this.vel.x, this.vel.z),
+      vy: this.vel.y,
       grounded: this.grounded,
+      moving: this._cloneMoving,
+      dashT: this.dashTimer,
+      attackT: this.combat.attackT,
+      attackIndex: this.combat.comboIndex,
+      throwT: this.throwT > 0 ? this.throwT / 0.26 : 0,
+      sprinting: this.sprinting,
+      swimming: this.inWater,
+      swimPitch: this.inWater ? clamp(this.vel.y / 10, -1, 1) : 0,
+      parrying: this.parrying,
+      wallSliding: this.wallSliding,
+      dead: this.health.dead,
+      grappling: g,
+      gx: g ? this.grapple.tip.x : 0,
+      gy: g ? this.grapple.tip.y : 0,
+      gz: g ? this.grapple.tip.z : 0,
+      // Sequence counters — a change during replay means "do it now".
+      // The throw direction is carried on EVERY sample, not just the throwing
+      // one, so a replay frame that steps over the exact throw sample still
+      // knows which way the kunai went.
+      atk: this._atkSeq || 0,
+      thr: this._thrSeq || 0,
+      tdx: this._thrDir.x, tdy: this._thrDir.y, tdz: this._thrDir.z,
+      // Your clone hides when you hide.
+      invisible: this.invisibleT > 0,
     });
     // Drop history older than the buffer window.
     while (this.cloneTrail.length > 2
@@ -744,7 +803,12 @@ export class Player {
     }
   }
 
-  /** Where the clone should be right now, or null. */
+  /**
+   * The pose the clone should hold right now, or null.
+   *
+   * Position and facing are interpolated; discrete state is taken from the
+   * nearer sample, because a half-drawn sword is not a pose.
+   */
   cloneTransform() {
     if (this.cloneT <= 0 || this.cloneTrail.length < 2) return null;
     const A = CFG.abilities.shadowclone;
@@ -756,11 +820,13 @@ export class Player {
       if (want >= a.t && want <= b.t) {
         const span = b.t - a.t;
         const k = span > 1e-6 ? (want - a.t) / span : 0;
+        const near = k < 0.5 ? a : b;
         return {
+          ...near,
           x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), z: lerp(a.z, b.z, k),
           yaw: a.yaw + angleDelta(a.yaw, b.yaw) * k,
           speed: lerp(a.speed, b.speed, k),
-          grounded: k < 0.5 ? a.grounded : b.grounded,
+          vy: lerp(a.vy, b.vy, k),
         };
       }
     }
@@ -827,6 +893,9 @@ export class Player {
 
     this.kunai.throw_(o, dir, this.id, true, assist ? assist.id : null);
     Audio.kunaiThrow(this.pos);
+    // Let the clone throw one too, a beat later.
+    this._thrSeq++;
+    this._thrDir.copy(dir);
     this.events.push({
       t: 'kunai',
       x: r2(o.x), y: r2(o.y), z: r2(o.z),
@@ -1259,6 +1328,8 @@ export class Player {
     this.model.setFacing(this.visualYaw);
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
+    // Stashed for the clone recorder, which cannot see `hasInput` itself.
+    this._cloneMoving = hasInput && speed > 0.8;
     this.model.update(dt, {
       speed,
       vy: this.vel.y,

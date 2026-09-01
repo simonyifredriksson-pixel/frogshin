@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v19';
+export const BUILD = 'v20';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -118,13 +118,15 @@ export const CFG = {
     invisibility: {
       duration: 5,
       cooldown: 30,
-      selfOpacity: 0.35,     // you still see a ghost of yourself
+      // 70% transparent to you and your own side; fully gone to the enemy.
+      friendlyOpacity: 0.30,
     },
     shadowclone: {
       duration: 10,
       cooldown: 60,
       delay: 0.45,           // how far behind you the clone copies your moves
       buffer: 4.0,           // seconds of movement history kept
+      minGap: 1.7,           // it never stands on top of you, even at a halt
     },
   },
 

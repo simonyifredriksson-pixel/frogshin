@@ -11,11 +11,11 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v19';
-import { CFG } from './config.js?v=v19';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v19';
-import { FrogModel } from './frog.js?v=v19';
-import { Audio } from './audio.js?v=v19';
+import * as THREE from '../lib/three.module.js?v=v20';
+import { CFG } from './config.js?v=v20';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v20';
+import { FrogModel } from './frog.js?v=v20';
+import { Audio } from './audio.js?v=v20';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -45,6 +45,16 @@ export class RemotePlayer {
 
     this.grappleActive = false;
     this.grappleTip = new THREE.Vector3();
+
+    this.hidden = false;
+    this.invisible = false;
+    this.cloneInvisible = false;
+    this.cloneState = null;
+    this.cloneModel = null;
+    this._hunting = false;
+    this._forced = false;
+    // Set by the game: spawns the visual-only kunai this player's clone threw.
+    this.onCloneThrow = null;
 
     this.buffer = [];          // { t, s } ordered by time
     this.lastPacket = 0;
@@ -216,26 +226,94 @@ export class RemotePlayer {
   }
 
   /**
+   * Tell this player how the local viewer relates to them.
+   *
+   * @param hunting the viewer is on the side chasing this player, so their
+   *                invisibility should hide them outright rather than fade
+   * @param forced  hidden regardless (story mode hides players who have not
+   *                reached the castle yet)
+   */
+  setViewer(hunting, forced) {
+    this._hunting = !!hunting;
+    this._forced = !!forced;
+    this._applyVisibility();
+  }
+
+  /**
+   * Resolve visibility for the frog and its clone independently.
+   *
+   * They are resolved separately on purpose: the clone replays your pose a
+   * beat late, so it must vanish a beat late too. Tying it to the owner's
+   * live state would give the trick away — the decoy would blink out at the
+   * exact moment the real frog did.
+   */
+  _applyVisibility() {
+    const F = CFG.abilities.invisibility.friendlyOpacity;
+
+    const meHidden = this._forced || (this.invisible && this._hunting);
+    this.hidden = meHidden;
+    this.model.root.visible = !meHidden;
+    this.model.setGhost(this.invisible && !meHidden ? F : 1);
+
+    if (!this.cloneModel) return;
+    const out = !!this.cloneState;
+    const cHidden = this._forced || (this.cloneInvisible && this._hunting);
+    this.cloneModel.root.visible = out && !cHidden;
+    this.cloneModel.setGhost(this.cloneInvisible && !cHidden ? F : 1);
+  }
+
+  /**
    * Draw this player's shadow clone, if they have one out.
-   * Built lazily — most players never use the ability.
+   *
+   * Built lazily — most players never use the ability — and deliberately NOT
+   * tinted or faded: a decoy that looks like a ghost is not a decoy. It only
+   * disappears under the same rule as its owner.
    */
   _updateClone(dt) {
     if (!this.cloneState) {
+      this.cloneInvisible = false;
       if (this.cloneModel) this.cloneModel.root.visible = false;
       return;
     }
     if (!this.cloneModel) {
       this.cloneModel = new FrogModel(this.color, '', true);
-      this.cloneModel.makeShadow();
       this.scene.add(this.cloneModel.root);
     }
-    const [x, y, z, yaw, speed] = this.cloneState;
-    this.cloneModel.root.visible = true;
+    const [x, y, z, yaw, speed, bits, attackT, attackIndex, throwT, vy,
+      atk, thr, tdx, tdy, tdz] = this.cloneState;
+
+    // Bit 64 is the owner's invisibility AS RECORDED, so the clone fades on
+    // the same delay it does everything else on.
+    this.cloneInvisible = !!(bits & 64);
+    this._applyVisibility();
     this.cloneModel.root.position.set(x, y, z);
     this.cloneModel.setFacing(yaw);
     this.cloneModel.update(dt, {
-      speed, vy: 0, grounded: true, moving: speed > 1.2, dead: false,
+      speed, vy,
+      grounded: !!(bits & 1),
+      moving: !!(bits & 2),
+      sprinting: !!(bits & 4),
+      swimming: !!(bits & 8),
+      parrying: !!(bits & 16),
+      dead: !!(bits & 32),
+      attackT, attackIndex, throwT,
     });
+
+    // One arc and one kunai per recorded action, however the packets landed.
+    _tmp.set(x, y, z);
+    if (this._cAtk === undefined) { this._cAtk = atk; this._cThr = thr; }
+    if (atk !== this._cAtk) {
+      this._cAtk = atk;
+      const i = clamp(attackIndex, 0, 2);
+      _dir.set(x - Math.sin(yaw) * 1.5, y + 1.1, z - Math.cos(yaw) * 1.5);
+      this.effects.slashArc(_dir, yaw, i, i === 2 ? 0xfff0b0 : 0xdff3ff, i === 2 ? 3.8 : 3.0);
+      Audio.slash(_tmp, i);
+    }
+    if (thr !== this._cThr) {
+      this._cThr = thr;
+      if (this.onCloneThrow) this.onCloneThrow(_tmp, tdx, tdy, tdz);
+      Audio.kunaiThrow(_tmp);
+    }
   }
 
   /** Find the two snapshots bracketing `renderTime` and blend them. */
