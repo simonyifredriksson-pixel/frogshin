@@ -8,11 +8,11 @@
  * full world generation.
  */
 
-import * as THREE from '../lib/three.module.js?v=v18';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v18';
-import { Atmosphere } from './atmosphere.js?v=v18';
-import { FrogModel } from './frog.js?v=v18';
-import { lanternGlowTexture } from './world.js?v=v18';
+import * as THREE from '../lib/three.module.js?v=v19';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v19';
+import { Atmosphere } from './atmosphere.js?v=v19';
+import { FrogModel } from './frog.js?v=v19';
+import { lanternGlowTexture } from './world.js?v=v19';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

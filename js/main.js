@@ -5,27 +5,27 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v18';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v18';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v18';
-import { Input } from './input.js?v=v18';
-import { Audio } from './audio.js?v=v18';
-import { World } from './world.js?v=v18';
-import { Effects } from './effects.js?v=v18';
-import { Atmosphere } from './atmosphere.js?v=v18';
-import { FollowCamera } from './camera.js?v=v18';
-import { Player } from './player.js?v=v18';
-import { RemotePlayer } from './remote.js?v=v18';
-import { HUD } from './hud.js?v=v18';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v18';
-import { FrogModel } from './frog.js?v=v18';
-import { DummyField } from './dummy.js?v=v18';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v18';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v18';
-import { MenuScene } from './menu.js?v=v18';
-import { Economy } from './economy.js?v=v18';
-import { Shop } from './shop.js?v=v18';
-import { Network, NetRole } from './net.js?v=v18';
+import * as THREE from '../lib/three.module.js?v=v19';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v19';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v19';
+import { Input } from './input.js?v=v19';
+import { Audio } from './audio.js?v=v19';
+import { World } from './world.js?v=v19';
+import { Effects } from './effects.js?v=v19';
+import { Atmosphere } from './atmosphere.js?v=v19';
+import { FollowCamera } from './camera.js?v=v19';
+import { Player } from './player.js?v=v19';
+import { RemotePlayer } from './remote.js?v=v19';
+import { HUD } from './hud.js?v=v19';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v19';
+import { FrogModel } from './frog.js?v=v19';
+import { DummyField } from './dummy.js?v=v19';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v19';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v19';
+import { MenuScene } from './menu.js?v=v19';
+import { Economy } from './economy.js?v=v19';
+import { Shop } from './shop.js?v=v19';
+import { Network, NetRole } from './net.js?v=v19';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -678,7 +678,7 @@ class Game {
     this.hud.setRoom(this.net.room, this.net.status || '', this.net.isOnline);
     this.hud.toast(this.net.isOnline
       ? `Room ${this.net.room} — share this code`
-      : 'Offline solo practice — no other players', 4.5);
+      : 'Offline solo practice — no other players, no froglets earned', 4.5);
 
     loading.classList.remove('show');
     this.mode = 'playing';
@@ -821,7 +821,8 @@ class Game {
     this.mode = 'paused';
     $('pause').classList.add('show');
     $('pause-room').textContent = this.net.isOnline
-      ? `Room code: ${this.net.room}` : 'Offline solo practice';
+      ? `Room code: ${this.net.room}`
+      : 'Offline solo practice — no froglets earned';
     this.hud.showScoreboard(false);
   }
 
@@ -910,9 +911,11 @@ class Game {
     dt = clamp(dt, 0, 0.05);
     this.clock = t;
 
-    // Froglets accrue for time played, so this ticks in menus too.
+    // Froglets accrue for time played, so this ticks in menus too — but not
+    // in solo practice, where there is nobody to earn them against.
+    this.economy.earning = !this.isSoloPractice;
     this.economy.update(dt);
-    this.hud.setFroglets(this.economy.froglets);
+    this.hud.setFroglets(this.economy.froglets, this.economy.earning);
     const awards = this.economy.drainPending();
     if (awards) for (const a of awards) this.hud.frogletPopup(a.amount, a.reason);
 
@@ -1033,9 +1036,21 @@ class Game {
    * opens a try-out panel on T, which lends every skin and ability without
    * touching saved progress.
    */
+  /**
+   * Offline arena play with nobody else in the room.
+   *
+   * This is the one place that decides what counts as practice: the ring is
+   * drawn here and only here, and nothing earned here pays out. Menus are
+   * NOT practice — the time bonus keeps ticking while you browse the shop.
+   */
+  get isSoloPractice() {
+    return (this.mode === 'playing' || this.mode === 'paused')
+      && !this.net.isOnline && !this.isStory;
+  }
+
   _updatePracticeRing(p) {
     const ring = this.world && this.world.practiceRing;
-    const soloPractice = !this.net.isOnline && !this.isStory;
+    const soloPractice = this.isSoloPractice;
     if (!ring) return;
     // Only exists in practice; in a real match it is not even drawn.
     if (ring.group.visible !== soloPractice) ring.group.visible = soloPractice;

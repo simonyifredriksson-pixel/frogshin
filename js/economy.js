@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v18';
+import { CFG } from './config.js?v=v19';
 
 export class Economy {
   constructor() {
@@ -27,6 +27,10 @@ export class Economy {
     this._saveTimer = 0;
     this._dirty = false;
     this._onlineAccum = 0;
+
+    // Offline solo practice pays nothing. The gate lives here rather than at
+    // each call site so no payout — present or future — can slip past it.
+    this.earning = true;
 
     this.load();
   }
@@ -75,6 +79,7 @@ export class Economy {
    * @param reason short label shown beside the amount
    */
   award(amount, reason) {
+    if (!this.earning) return;
     const n = Math.round(amount);
     if (n <= 0) return;
     this.froglets += n;
@@ -152,10 +157,14 @@ export class Economy {
    */
   update(dt) {
     this.secondsOnline += dt;
-    this._onlineAccum += dt;
-    if (this._onlineAccum >= CFG.economy.onlineInterval) {
-      this._onlineAccum -= CFG.economy.onlineInterval;
-      this.award(CFG.economy.onlineReward, 'Time played');
+    // The time bonus PAUSES in solo practice rather than banking up silently
+    // — otherwise the whole session would pay out the moment you left.
+    if (this.earning) {
+      this._onlineAccum += dt;
+      if (this._onlineAccum >= CFG.economy.onlineInterval) {
+        this._onlineAccum -= CFG.economy.onlineInterval;
+        this.award(CFG.economy.onlineReward, 'Time played');
+      }
     }
 
     // Debounced write: awards can arrive many times a second.

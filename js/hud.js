@@ -6,12 +6,12 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v18';
-import { CFG } from './config.js?v=v18';
-import { staminaBand } from './stamina.js?v=v18';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v18';
-import { Audio } from './audio.js?v=v18';
-import { PX, setIcon } from './icons.js?v=v18';
+import { clamp } from './util.js?v=v19';
+import { CFG } from './config.js?v=v19';
+import { staminaBand } from './stamina.js?v=v19';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v19';
+import { Audio } from './audio.js?v=v19';
+import { PX, setIcon } from './icons.js?v=v19';
 
 const $ = (id) => document.getElementById(id);
 
@@ -92,9 +92,11 @@ export class HUD {
     setIcon('icon-ctp-frog', PX.FROG);
     setIcon('icon-alert', PX.EYE);
 
+    this.purse = $('purse');
     this.purseAmount = $('purse-amount');
     this.pursePops = $('purse-pops');
     this._purseShown = -1;
+    this._purseEarning = true;
     this._flashTimer = 0;
     this._feedItems = [];
   }
@@ -121,7 +123,14 @@ export class HUD {
   // --------------------------------------------------------------- froglets
 
   /** Current balance, top-right. Only touches the DOM when it changes. */
-  setFroglets(n) {
+  setFroglets(n, earning = true) {
+    // Dim the purse when nothing can be earned, so a frozen number reads as
+    // "practice" rather than as a bug.
+    if (earning !== this._purseEarning) {
+      this._purseEarning = earning;
+      this.purse.classList.toggle('idle', !earning);
+      this.purse.title = earning ? '' : 'No froglets are earned in solo practice';
+    }
     if (n === this._purseShown) return;
     this._purseShown = n;
     this.purseAmount.textContent = n.toLocaleString('en-GB');
