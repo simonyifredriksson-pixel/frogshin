@@ -8,10 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v26';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v26';
-import { CFG } from './config.js?v=v26';
-import { buildKatana, FrogModel } from './frog.js?v=v26';
+import * as THREE from '../lib/three.module.js?v=v27';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v27';
+import { CFG } from './config.js?v=v27';
+import { buildKatana, FrogModel } from './frog.js?v=v27';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -40,6 +40,7 @@ function mats() {
     bossIron: L(0x3c3f4a),
     bossTrim: L(0xb08b32),
     bossCloth: L(0x5e1a14),
+    tongue: L(0xd4718c),
   };
   return M;
 }
@@ -205,6 +206,21 @@ export class ToadModel {
       }
     }
 
+    // ---- tongue ----
+    // Toads have tongues too, and the juggernaut is a PLAYER wearing this
+    // rig — without one, its grapple rope was invisible while the physics
+    // ran normally, which looked like the ability was broken.
+    this.tongue = new THREE.Group();
+    this.tongue.visible = false;
+    this.tongueMesh = part(G.cyl, P.tongue, 0.10, 1, 0.10, 0, 0.5, 0);
+    this.tongueMesh.castShadow = false;
+    this.tongue.add(this.tongueMesh);
+    this.tongueTip = part(G.low, P.tongue, 0.18, 0.18, 0.18, 0, 1, 0);
+    this.tongueTip.castShadow = false;
+    this.tongue.add(this.tongueTip);
+    this.root.add(this.tongue);
+    this.tongueLen = 0;
+
     // ---- animation state ----
     this.t = Math.random() * 10;
     this.stride = Math.random() * 6;
@@ -221,6 +237,50 @@ export class ToadModel {
   // must not have to care which one it is wearing. These are the parts of
   // FrogModel's interface it calls; the ones with no toad equivalent are
   // honest no-ops rather than missing methods that would throw mid-match.
+
+  /**
+   * Draw the grapple rope, the same way FrogModel does.
+   *
+   * Anchored at the mouth, extended fast on fire and retracted fast on
+   * release, and parented to the root so the toad's own rotation does not
+   * drag the rope off its anchor.
+   */
+  _updateTongue(dt, s) {
+    if (!s.tongueTo || (!s.grappling && this.tongueLen <= 0.01)) {
+      this.tongue.visible = false;
+      this.tongueLen = 0;
+      return;
+    }
+    // Mouth position in root-local space, scaled with the rig.
+    const from = new THREE.Vector3(0, 1.28, 0.55);
+    this.root.localToWorld(from);
+    const dir = new THREE.Vector3().subVectors(s.tongueTo, from);
+    const full = dir.length();
+    if (full < 0.01) { this.tongue.visible = false; return; }
+    dir.multiplyScalar(1 / full);
+
+    const target = s.grappling ? full : 0;
+    const rate = s.grappling ? 220 : 170;
+    this.tongueLen = Math.abs(this.tongueLen - target) < rate * dt
+      ? target
+      : this.tongueLen + Math.sign(target - this.tongueLen) * rate * dt;
+    if (this.tongueLen <= 0.02) { this.tongue.visible = false; return; }
+
+    this.tongue.visible = true;
+    this.tongue.position.copy(this.root.worldToLocal(from.clone()));
+    const localDir = dir.clone()
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.root.rotation.y);
+    this.tongue.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), localDir);
+
+    // The rope is drawn in root-local space, so undo the rig's scale — a
+    // 1.85x toad would otherwise stretch the rope past its anchor point.
+    const L = this.tongueLen / (this.scaleFactor || 1);
+    const wob = 1 + Math.sin(this.t * 30) * 0.08;
+    this.tongueMesh.scale.set(0.10 * wob, L, 0.10 * wob);
+    this.tongueMesh.position.y = L * 0.5;
+    this.tongueTip.position.y = L;
+    this.tongueTip.visible = !!s.grappling;
+  }
 
   setVisible(v) { this.root.visible = v; }
   /** Toads do not croak, flip, or wear an "it" marker. */
@@ -287,6 +347,7 @@ export class ToadModel {
   update(dt, s = {}) {
     if (s.attackT > 0 && !this._wasSwinging && this.attackT <= 0) this.swing(0.42);
     this._wasSwinging = s.attackT > 0;
+    this._updateTongue(dt, s);
 
     this.t += dt;
     const t = this.t;

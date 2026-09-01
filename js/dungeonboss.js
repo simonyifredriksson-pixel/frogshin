@@ -13,12 +13,12 @@
  * hiding the hitbox.
  */
 
-import * as THREE from '../lib/three.module.js?v=v26';
-import { CFG } from './config.js?v=v26';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v26';
-import { ToadModel } from './npc.js?v=v26';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v26';
-import { Audio } from './audio.js?v=v26';
+import * as THREE from '../lib/three.module.js?v=v27';
+import { CFG } from './config.js?v=v27';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v27';
+import { ToadModel } from './npc.js?v=v27';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v27';
+import { Audio } from './audio.js?v=v27';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();

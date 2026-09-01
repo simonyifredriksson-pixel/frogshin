@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v26';
-import { CFG } from './config.js?v=v26';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v26';
-import { Audio } from './audio.js?v=v26';
+import * as THREE from '../lib/three.module.js?v=v27';
+import { CFG } from './config.js?v=v27';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v27';
+import { Audio } from './audio.js?v=v27';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -573,7 +573,16 @@ export class Frogath {
     }
   }
 
+  /**
+   * Finish the current attack and start the rest window.
+   *
+   * Guarded because two paths can reach it for the same attack — the timer
+   * in _runAttack and the beam expiring in _updateBeams. Without the guard
+   * the second call would push the rest timer out again, quietly handing the
+   * player a free extra opening.
+   */
   _endAttack() {
+    if (!this.attackName) return;
     this.attackName = '';
     this.attackTimer = this._restTime();
   }
