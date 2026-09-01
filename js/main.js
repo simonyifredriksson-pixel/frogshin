@@ -5,30 +5,30 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v27';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v27';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v27';
-import { Input } from './input.js?v=v27';
-import { Audio } from './audio.js?v=v27';
-import { World } from './world.js?v=v27';
-import { Effects } from './effects.js?v=v27';
-import { Atmosphere } from './atmosphere.js?v=v27';
-import { FollowCamera } from './camera.js?v=v27';
-import { Player } from './player.js?v=v27';
-import { RemotePlayer } from './remote.js?v=v27';
-import { HUD } from './hud.js?v=v27';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v27';
-import { FrogModel } from './frog.js?v=v27';
-import { DummyField } from './dummy.js?v=v27';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v27';
-import { ToadModel } from './npc.js?v=v27';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v27';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v27';
-import { DungeonRun } from './dungeon.js?v=v27';
-import { MenuScene } from './menu.js?v=v27';
-import { Economy } from './economy.js?v=v27';
-import { Shop } from './shop.js?v=v27';
-import { Network, NetRole } from './net.js?v=v27';
+import * as THREE from '../lib/three.module.js?v=v28';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v28';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v28';
+import { Input } from './input.js?v=v28';
+import { Audio } from './audio.js?v=v28';
+import { World } from './world.js?v=v28';
+import { Effects } from './effects.js?v=v28';
+import { Atmosphere } from './atmosphere.js?v=v28';
+import { FollowCamera } from './camera.js?v=v28';
+import { Player } from './player.js?v=v28';
+import { RemotePlayer } from './remote.js?v=v28';
+import { HUD } from './hud.js?v=v28';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v28';
+import { FrogModel } from './frog.js?v=v28';
+import { DummyField } from './dummy.js?v=v28';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v28';
+import { ToadModel } from './npc.js?v=v28';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v28';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v28';
+import { DungeonRun } from './dungeon.js?v=v28';
+import { MenuScene } from './menu.js?v=v28';
+import { Economy } from './economy.js?v=v28';
+import { Shop } from './shop.js?v=v28';
+import { Network, NetRole } from './net.js?v=v28';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -959,6 +959,9 @@ class Game {
     this.hud.setRoom('', checkpoints ? 'Dungeon — checkpoints on'
       : 'Dungeon — no checkpoints', false);
 
+    // Beating the god unlocks his appearance — a cosmetic, permanently.
+    this.dungeon.onVictory = () => this._awardFrogathSkin();
+
     this.dungeon.start(this.player, 0);
     this.followCam.snapTo(this.player.pos);
 
@@ -988,11 +991,21 @@ class Game {
     this.kunaiSystem.update(dt, targets);
 
     if (p.deathPending) p.deathPending = false;
-    // Nothing is networked here, but the controller still queues events —
-    // left undrained they would grow without limit for the whole run.
-    if (p.events.length) p.events.length = 0;
 
-    this.dungeon.update(dt, p, (dmg, from) => this._dungeonHit(dmg, from));
+    // The katana reports its hits as queued 'hit' EVENTS, because in the
+    // arena they have to travel to the victim's client. Nothing is networked
+    // down here, so this is where they get applied — without it the sword
+    // swung, connected, showed a damage number, and did nothing at all.
+    for (const ev of p.events) {
+      if (ev.t === 'hit') {
+        this.dungeon.damageBoss(ev.dmg);
+        this.hud.hitmarker(ev.c === 2);
+      }
+    }
+    p.events.length = 0;
+
+    this.dungeon.update(dt, p, (dmg, from) => this._dungeonHit(dmg, from),
+      this.input.down('Space'));
 
     this.effects.update(dt);
     this.world.update(dt);
@@ -1009,6 +1022,26 @@ class Game {
     this._updateAudioListener();
     Audio.updateAmbient(dt);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Frogath's look, awarded for putting him down.
+   *
+   * Cosmetic only, and deliberately so: you get the golden body and the blade
+   * of light, and none of the flight, stars or beams. Wearing the god is a
+   * trophy, not a power-up.
+   */
+  _awardFrogathSkin() {
+    const gotFrog = this.economy.unlock('frogs', 'frog_frogath');
+    const gotSword = this.economy.unlock('swords', 'sword_frogath');
+    this.economy.award(CFG.economy.roundWinReward * 10, 'FROGATH DEFEATED');
+    if (gotFrog || gotSword) {
+      this.hud.toast(
+        'UNLOCKED — Frogath\'s hide and his blade of light. Equip them in the shop.',
+        10);
+    } else {
+      this.hud.toast('Frogath falls again.', 5);
+    }
   }
 
   /** A boss attack landing on the player. */

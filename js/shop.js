@@ -9,10 +9,10 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v27';
-import { Audio } from './audio.js?v=v27';
-import { PX } from './icons.js?v=v27';
-import { CFG } from './config.js?v=v27';
+} from './skins.js?v=v28';
+import { Audio } from './audio.js?v=v28';
+import { PX } from './icons.js?v=v28';
+import { CFG } from './config.js?v=v28';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -236,11 +236,16 @@ export class Shop {
     const card = document.createElement('div');
     card.className = 'skin-card' + (owned ? '' : ' locked') + (equipped ? ' equipped' : '');
     card.style.borderBottomColor = r.color;
+    // A reward skin is not in any crate — say so, rather than letting someone
+    // spend five thousand froglets hunting for something they cannot roll.
+    const lockLabel = skin.reward ? 'BEAT FROGATH' : 'LOCKED';
     card.innerHTML =
       `<div class="skin-art">${previewSVG(kind, skin)}</div>`
       + `<div class="skin-name">${skin.name}</div>`
-      + `<div class="skin-tier" style="color:${r.color}">${r.name}</div>`
-      + (equipped ? '<div class="tag">ON</div>' : (owned ? '' : '<div class="tag">LOCKED</div>'));
+      + `<div class="skin-tier" style="color:${r.color}">`
+      + `${skin.reward ? 'REWARD' : r.name}</div>`
+      + (equipped ? '<div class="tag">ON</div>'
+        : (owned ? '' : `<div class="tag">${lockLabel}</div>`));
 
     if (owned) {
       card.onclick = () => {

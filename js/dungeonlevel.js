@@ -12,11 +12,11 @@
  * Layout runs along +x: room i is centred at origin.x + i * roomSpacing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v27';
-import { CFG } from './config.js?v=v27';
-import { mulberry32, clamp, lerp } from './util.js?v=v27';
-import { Terrain, CollisionWorld } from './collision.js?v=v27';
-import { lanternGlowTexture } from './world.js?v=v27';
+import * as THREE from '../lib/three.module.js?v=v28';
+import { CFG } from './config.js?v=v28';
+import { mulberry32, clamp, lerp } from './util.js?v=v28';
+import { Terrain, CollisionWorld } from './collision.js?v=v28';
+import { lanternGlowTexture } from './world.js?v=v28';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -61,6 +61,7 @@ export class DungeonLevel {
     this.rnd = mulberry32(4242);
     this.time = 0;
     this.lanterns = [];
+    this.glows = [];
     this.rooms = [];
     const o = CFG.dungeon.origin;
     this.origin = new THREE.Vector3(o.x, o.y, o.z);
@@ -222,6 +223,8 @@ export class DungeonLevel {
     // a live guardian and be standing in front of Frogath inside a minute,
     // which would make the whole mode skippable.
     const doors = [];
+    let backDoor = null;
+    let frontDoor = null;
     for (const sx of [-1, 1]) {
       if (sx < 0 && i === 0) continue;                 // no door behind room 1
       if (sx > 0 && i >= D.rooms - 1) continue;
@@ -230,6 +233,26 @@ export class DungeonLevel {
         2.6, WALL_H / 2, DOOR_W / 2 + 1.5, 'barrier');
       b.disabled = true;
       doors.push(b);
+      if (sx < 0) backDoor = b; else frontDoor = b;
+    }
+
+    // A pane of light across the exit, lit only once the guardian is down —
+    // with two identical doorways, the glowing one is the answer to "which
+    // way now?" without a word of UI.
+    let exitGlow = null;
+    if (i < D.rooms - 1) {
+      exitGlow = new THREE.Mesh(
+        new THREE.PlaneGeometry(DOOR_W - 0.5, 9),
+        new THREE.MeshBasicMaterial({
+          color: P.light, transparent: true, opacity: 0.0,
+          depthWrite: false, side: THREE.DoubleSide,
+        })
+      );
+      exitGlow.position.set(c.x + R + 1.6, c.y + 4.2, c.z);
+      exitGlow.rotation.y = Math.PI / 2;
+      exitGlow.visible = false;
+      this.scene.add(exitGlow);
+      this.glows.push(exitGlow);
     }
 
     this.rooms.push({
@@ -237,6 +260,9 @@ export class DungeonLevel {
       center: c,
       radius: R,
       doors,
+      backDoor,
+      frontDoor,
+      exitGlow,
       // Where the player stands on entering, and where the boss waits.
       entry: new THREE.Vector3(c.x - R * 0.72, c.y + 0.6, c.z),
       bossSpot: new THREE.Vector3(c.x + R * 0.45, c.y + 0.6, c.z),
@@ -317,10 +343,26 @@ export class DungeonLevel {
     for (const d of r.doors) d.disabled = !sealed;
   }
 
+  /**
+   * Once a guardian is down, the exit opens and the way BACK stays shut.
+   *
+   * Two identical doorways with only one of them correct is a bad puzzle, and
+   * wandering back into a cleared room is only ever a mistake — so the room
+   * behind you is closed off and the way on is lit.
+   */
+  openExit(room) {
+    const r = this.rooms[room];
+    if (!r) return;
+    if (r.frontDoor) r.frontDoor.disabled = true;    // open
+    if (r.backDoor) r.backDoor.disabled = false;     // stays shut
+    if (r.exitGlow) { r.exitGlow.visible = true; r.exitGlow.userData.on = true; }
+  }
+
   /** Open every door in the dungeon — used when a run resets. */
   openAllDoors() {
     for (const r of this.rooms) {
       if (r.doors) for (const d of r.doors) d.disabled = true;
+      if (r.exitGlow) { r.exitGlow.visible = false; r.exitGlow.userData.on = false; }
     }
     if (this.throne && this.throne.doors) {
       for (const d of this.throne.doors) d.disabled = true;
@@ -350,6 +392,11 @@ export class DungeonLevel {
       const f = 0.9 + Math.sin(this.time * 3.1 + l.phase) * 0.1;
       l.mesh.scale.setScalar(f);
     }
+    // An open exit pulses, so it reads as an invitation rather than a wall.
+    for (const g of this.glows) {
+      if (!g.visible) continue;
+      g.material.opacity = 0.30 + Math.sin(this.time * 2.6) * 0.14;
+    }
   }
 
   dispose() {
@@ -357,5 +404,11 @@ export class DungeonLevel {
       l.mesh.material.dispose();
       l.mesh.geometry.dispose();
     }
+    for (const g of this.glows) {
+      this.scene.remove(g);
+      g.material.dispose();
+      g.geometry.dispose();
+    }
+    this.glows.length = 0;
   }
 }

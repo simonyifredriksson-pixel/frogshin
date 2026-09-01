@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v27';
-import { CFG } from './config.js?v=v27';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v27';
-import { Audio } from './audio.js?v=v27';
+import * as THREE from '../lib/three.module.js?v=v28';
+import { CFG } from './config.js?v=v28';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v28';
+import { Audio } from './audio.js?v=v28';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -50,6 +50,8 @@ export const FROGATH_SPEECH = [
 ];
 
 const PHASE_NAMES = ['', 'THE GOD STIRS', 'THE GOD DESCENDS', 'A DYING STAR'];
+/** Seconds of held Space needed to skip the entrance. */
+const SKIP_HOLD = 0.9;
 
 // ---------------------------------------------------------------- the model
 
@@ -241,12 +243,58 @@ export class Frogath {
   get alive() { return this.health > 0; }
   get fighting() { return this.state === STATE.FIGHT; }
 
-  /** Kick off the entrance. The arena should be silent when this is called. */
-  begin() {
+  /**
+   * Kick off the entrance. The arena should be silent when this is called.
+   * @param skippable true once the player has died to him at least once —
+   *                  the speech is worth hearing the first time and a chore
+   *                  on the twentieth attempt.
+   */
+  begin(skippable) {
     this.state = STATE.DESCEND;
     this.t = 0;
     this.rig.root.visible = true;
+    this.skippable = !!skippable;
+    this.skipHeld = 0;
     Audio.stopBossMusic();
+  }
+
+  /** True while the entrance is playing and could be skipped. */
+  get inEntrance() {
+    return this.state === STATE.DESCEND || this.state === STATE.SPEECH
+      || this.state === STATE.RAISE || this.state === STATE.STARE;
+  }
+
+  /**
+   * Hold Space to skip. Held, not tapped, so it cannot be triggered by the
+   * jump you were already pressing when you walked in.
+   *
+   * @param held is the key down this frame
+   * @returns 0..1 progress, for the HUD prompt
+   */
+  updateSkip(dt, held) {
+    if (!this.skippable || !this.inEntrance) return 0;
+    this.skipHeld = held ? this.skipHeld + dt : Math.max(0, this.skipHeld - dt * 2);
+    if (this.skipHeld >= SKIP_HOLD) { this._skipEntrance(); return 1; }
+    return clamp(this.skipHeld / SKIP_HOLD, 0, 1);
+  }
+
+  /** Jump straight to the stare, so "Begin." still lands. */
+  _skipEntrance() {
+    const F = CFG.dungeon.frogath;
+    this.pos.set(this.center.x, this.center.y + F.hoverHeight + 16, this.center.z);
+    this.turningToPlayer = true;
+    this.eyesHot = true;
+    this.hud.setSubtitle('');
+    this.hud.setFade(0, 0.25);
+    if (!this._faded) {
+      this._faded = true;
+      this.hud.showBossBar(F.name, 1, `${F.title}   ·   ??? / ??? HP`);
+    }
+    this.state = STATE.STARE;
+    // Straight to the moment before he speaks: the fight begins in about a
+    // second rather than instantly, so the skip never drops you mid-attack.
+    this.t = 3.4;
+    this.began = false;
   }
 
   // --------------------------------------------------------------- damage
@@ -382,6 +430,13 @@ export class Frogath {
         freq: 74, to: 58, dur: Math.min(1.6, s.t * 0.5), type: 'sawtooth',
         volume: 0.2, pos: this.pos,
       });
+    }
+    // "Tell me, little mortal..." is the moment he stops addressing the room
+    // and starts addressing YOU — so that is where he turns to face you.
+    if (s.line.indexOf('little mortal') !== -1) {
+      this.turningToPlayer = true;
+      this.effects.ring(this.pos, 1, 14, 0.8, GOLD, false, { x: 0, y: 1, z: 0 });
+      Audio.tone({ freq: 200, to: 90, dur: 0.9, type: 'sine', volume: 0.14, pos: this.pos });
     }
     // His eyes come up as he asks whether you thought you were strong.
     if (this.speechIndex === 8) this.eyesHot = true;
@@ -537,7 +592,26 @@ export class Frogath {
 
   // ------------------------------------------------------------- attacks
 
+  /**
+   * A flare of light every time he commits to something.
+   *
+   * Purely presentational, and deliberately tied to the attack START rather
+   * than to a timer — it makes the fight feel like it is reacting to him
+   * instead of running on a metronome, and it gives the eye a second cue
+   * beyond the floor marker.
+   */
+  _flare(power) {
+    this.auraFlash = Math.max(this.auraFlash || 0, power);
+    this.followCam.shake(0.18 * power);
+    _tmp.copy(this.pos);
+    this.effects.puff(_tmp, GOLD_HOT, Math.round(8 * power), 6 * power);
+    // A shockwave ring in the air around him, not on the floor, so it never
+    // reads as a danger marker.
+    this.effects.ring(_tmp, 2, 10 * power, 0.3, GOLD, false, { x: 0, y: 1, z: 0 });
+  }
+
   _startAttack(player) {
+    this._flare(this.phase >= 3 ? 1.4 : 1.0);
     switch (this.attackName) {
       case 'swordCombo': this.attackT = 0; this.comboLeft = this.phase >= 3 ? 4 : 3; break;
       case 'starVolley': this._spawnStars(player, this.phase >= 2 ? 7 : 5, false); this.attackT = 1.1; break;
@@ -906,15 +980,29 @@ export class Frogath {
   _animate(dt, player) {
     const rig = this.rig;
     rig.root.position.copy(this.pos);
+
+    // Through the entrance he faces nowhere in particular — he is speaking to
+    // the room. From "Tell me, little mortal..." onward he turns, slowly, to
+    // look directly at the player and never looks away again.
+    if (this.turningToPlayer && this.state !== STATE.FIGHT) {
+      const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+      this.yaw = dampAngle(this.yaw, want, 1.6, dt);
+    }
     rig.root.rotation.y = this.yaw + Math.PI;
 
     // A slow float, never a walk cycle.
     rig.body.position.y = Math.sin(this.bob * 1.1) * 0.28;
     rig.body.rotation.x = Math.sin(this.bob * 0.7) * 0.05;
 
-    // Haloes turn at different speeds so they never look like one object.
-    rig.halo.rotation.z += dt * 0.5;
-    rig.halo2.rotation.z -= dt * 0.3;
+    // Haloes turn at different speeds so they never look like one object,
+    // and wind up as he loses control of himself.
+    const spin = 1 + (this.phase - 1) * 0.9;
+    rig.halo.rotation.z += dt * 0.5 * spin;
+    rig.halo2.rotation.z -= dt * 0.3 * spin;
+    // They also tilt out of true in the later phases — a god coming apart.
+    const wob = (this.phase - 1) * 0.06;
+    rig.halo.rotation.x = Math.PI / 2 + Math.sin(this.t * 1.7) * wob;
+    rig.halo2.rotation.x = Math.PI / 2 - Math.sin(this.t * 1.3) * wob;
 
     // Limbs hang and sway.
     for (let i = 0; i < rig.limbs.length; i++) {
@@ -930,11 +1018,15 @@ export class Frogath {
     }
 
     // The aura grows and brightens as he weakens — by the last phase he is
-    // a dying star rather than a statue.
+    // a dying star rather than a statue. `auraFlash` punches it outward on
+    // every attack and decays, so the glow breathes with what he is doing.
     const hurt = 1 - this.fraction;
     const pulse = 0.5 + Math.sin(this.t * (3 + hurt * 9)) * 0.5;
-    rig.aura.material.opacity = 0.08 + hurt * 0.30 + pulse * (0.03 + hurt * 0.12);
-    rig.aura.scale.setScalar(4.6 + hurt * 2.2 + pulse * hurt * 0.9);
+    this.auraFlash = damp(this.auraFlash || 0, 0, 5, dt);
+    const flash = this.auraFlash;
+    rig.aura.material.opacity =
+      0.08 + hurt * 0.30 + pulse * (0.03 + hurt * 0.12) + flash * 0.22;
+    rig.aura.scale.setScalar(4.6 + hurt * 2.2 + pulse * hurt * 0.9 + flash * 1.6);
     const heat = new THREE.Color(GOLD).lerp(new THREE.Color(0xffffff), hurt * 0.8);
     rig.aura.material.color.copy(heat);
     rig.mats.inlay.color.copy(heat);
@@ -953,6 +1045,31 @@ export class Frogath {
         this.pos.z + (Math.random() - 0.5) * 14);
       this.effects.puff(_tmp, Math.random() < hurt ? GOLD_HOT : GOLD, 2, 1.2);
     }
+
+    if (this.state !== STATE.FIGHT) return;
+
+    // A pool of light on the floor beneath him. It tracks him around the
+    // arena, so even when he is behind you there is a moving glow telling
+    // you where he is — which is the difference between a hard fight and a
+    // cheap one.
+    this._poolT = (this._poolT || 0) - dt;
+    if (this._poolT <= 0) {
+      this._poolT = 0.11;
+      _tmp.set(this.pos.x, this.center.y + 0.06, this.pos.z);
+      const r = 7 + hurt * 4 + flash * 3;
+      this.effects.ring(_tmp, r, r * 0.86, 0.22, GOLD, true);
+    }
+
+    // Afterimages when he crosses the arena at speed — he does not walk, he
+    // relocates, and the trail is what sells it.
+    const moved = this._lastPos
+      ? this.pos.distanceTo(this._lastPos) / Math.max(dt, 1e-5) : 0;
+    if (!this._lastPos) this._lastPos = this.pos.clone();
+    if (moved > 14) {
+      _tmp.copy(this._lastPos).lerp(this.pos, 0.5);
+      this.effects.puff(_tmp, GOLD, 3, 2);
+    }
+    this._lastPos.copy(this.pos);
   }
 
   dispose() {

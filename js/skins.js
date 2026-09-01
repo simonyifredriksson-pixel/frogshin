@@ -30,6 +30,10 @@ export const SWORD_SKINS = [
   // Deliberately not gold — this is the shape of the weapon, not a prize.
   { id: 'sword_default', name: 'Black Cord',    rarity: 'common',
     blade: 0xe6ecf4, edge: 0xffffff, guard: 0xe4e0d2, grip: 0x141419, glow: 0x39414c },
+  // Frogath's blade of light, as a cosmetic. It looks like the thing that
+  // killed you fourteen times; it does exactly what your katana always did.
+  { id: 'sword_frogath', name: 'The First Croak', rarity: 'legendary', reward: true,
+    blade: 0xfff3c4, edge: 0xffffff, guard: 0xffd76b, grip: 0x4a3206, glow: 0xc9922a },
   { id: 'sword_bamboo',  name: 'Bamboo Cut',   rarity: 'common',
     blade: 0xcfd6c2, edge: 0xe8eedd, guard: 0x7a6a3a, grip: 0x3f4a24, glow: 0x22281a },
   { id: 'sword_river',   name: 'River Iron',   rarity: 'common',
@@ -94,6 +98,10 @@ export const FROG_SKINS = [
     skin: 0xe0b83a, belly: 0xfff0b0, cloth: 0x3a2a06, scarf: 0xc0392b },
   { id: 'frog_spirit',  name: 'Spirit Frog', rarity: 'legendary',
     skin: 0xa8f0e0, belly: 0xe8fffa, cloth: 0x1a3a3a, scarf: 0x6affd0 },
+  // Not in any crate. The only way to own this is to put Frogath down, and
+  // it is his LOOK only — none of what made him hard comes with it.
+  { id: 'frog_frogath', name: 'Frogath',     rarity: 'legendary', reward: true,
+    skin: 0xe8b73a, belly: 0xffe9a8, cloth: 0x4a3206, scarf: 0xfff3c4 },
 ];
 
 /** Catalog lookup by the same keys the Economy stores unlocks under. */
@@ -140,7 +148,23 @@ export const CRATES = [
 ];
 
 export function crateById(id) { return CRATES.find((c) => c.id === id) || null; }
-export function cratePool(crate) { return CATALOG[crate.kind] || []; }
+
+/**
+ * What a crate can actually contain.
+ *
+ * Reward skins are filtered out here rather than at each call site, so a
+ * crate can never hand you something that is supposed to be earned — and the
+ * displayed odds, which read the same pool, stay honest.
+ */
+export function cratePool(crate) {
+  return (CATALOG[crate.kind] || []).filter((s) => !s.reward);
+}
+
+/** Skins that cannot be bought — only awarded. */
+export function isReward(kind, id) {
+  const s = (CATALOG[kind] || []).find((x) => x.id === id);
+  return !!(s && s.reward);
+}
 
 /**
  * Roll one item from a crate.

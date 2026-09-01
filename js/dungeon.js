@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v27';
-import { CFG } from './config.js?v=v27';
-import { clamp } from './util.js?v=v27';
-import { DungeonLevel } from './dungeonlevel.js?v=v27';
-import { DungeonBoss } from './dungeonboss.js?v=v27';
-import { Frogath } from './frogath.js?v=v27';
-import { Audio } from './audio.js?v=v27';
+import * as THREE from '../lib/three.module.js?v=v28';
+import { CFG } from './config.js?v=v28';
+import { clamp } from './util.js?v=v28';
+import { DungeonLevel } from './dungeonlevel.js?v=v28';
+import { DungeonBoss } from './dungeonboss.js?v=v28';
+import { Frogath } from './frogath.js?v=v28';
+import { Audio } from './audio.js?v=v28';
 
 const _v = new THREE.Vector3();
 
@@ -47,6 +47,10 @@ export class DungeonRun {
     this.frogath = null;
     this.state = RUN_STATE.ENTERING;
     this.deaths = 0;
+    // Counted separately: it is what unlocks skipping his entrance.
+    this.frogathDeaths = 0;
+    // Set by the game: fired once, when Frogath falls.
+    this.onVictory = null;
     this.timer = 0;
     this.runTime = 0;
     this._sealed = false;
@@ -132,11 +136,22 @@ export class DungeonRun {
   // --------------------------------------------------------------- update
 
   /**
-   * @param onHit (damage, sourcePos) => void — applies damage to the player
+   * @param onHit    (damage, sourcePos) => void — applies damage to the player
+   * @param skipHeld is the skip key down this frame
    */
-  update(dt, player, onHit) {
+  update(dt, player, onHit, skipHeld) {
     this.level.update(dt);
     this.runTime += dt;
+
+    // Skipping Frogath's entrance, once he has earned the right to be skipped.
+    if (this.frogath && this.frogath.inEntrance) {
+      const p = this.frogath.updateSkip(dt, !!skipHeld);
+      if (this.frogath.skippable) {
+        this.hud.setTutorial(p > 0 ? 'HOLD' : 'HOLD', 'SPACE',
+          p > 0 ? `SKIPPING… ${Math.round(p * 100)}%` : 'TO SKIP');
+      }
+      if (!this.frogath.inEntrance) this.hud.setTutorial(null);
+    }
 
     switch (this.state) {
       case RUN_STATE.ENTERING: this._updateEntering(dt, player); break;
@@ -166,7 +181,9 @@ export class DungeonRun {
       player.cinematic = true;
       player.vel.set(0, 0, 0);
       this.hud.setCinematic(true);
-      this.frogath.begin();
+      // Skippable only once he has actually killed you — the speech earns its
+      // first showing, and after that it is in your way.
+      this.frogath.begin(this.frogathDeaths > 0);
     } else {
       this.boss.begin();
       this.hud.showBossBar(this.boss.name, 1);
@@ -202,7 +219,8 @@ export class DungeonRun {
   _onBossDown(player) {
     this.state = RUN_STATE.CLEARED;
     this.timer = 0;
-    this.level.setDoors(this.room, false);
+    // The way on opens and lights up; the way back stays shut.
+    this.level.openExit(this.room);
     this.hud.hideBossBar();
     this.hud.announce('GUARDIAN DOWN', 'good');
     Audio.stopBossMusic();
@@ -230,6 +248,10 @@ export class DungeonRun {
     _v.copy(this.level.throne.center);
     this.effects.ring(_v, 1, 70, 2.5, 0xfff3c4, true);
     this.followCam.shake(2.0);
+
+    // His look, and nothing else. The skin is the trophy; none of what made
+    // him hard comes with it.
+    if (this.onVictory) this.onVictory();
   }
 
   /**
@@ -253,6 +275,7 @@ export class DungeonRun {
     this.state = RUN_STATE.DEAD;
     this.timer = 2.6;
     this.deaths++;
+    if (this.frogath) this.frogathDeaths++;
     this.hud.hideBossBar();
     this.hud.setCinematic(false);
     this.hud.setSubtitle('');
