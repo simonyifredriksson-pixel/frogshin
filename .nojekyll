@@ -1,0 +1,9 @@
+This file disables Jekyll processing on GitHub Pages.
+
+FROGSHIN is plain static files — HTML, CSS and ES modules — and needs no
+build step at all. Jekyll was running on every deploy regardless, which
+bought nothing and, on 2026-09-01, started failing outright ("Page build
+failed") and left the live site stuck on the previous version.
+
+With this file present Pages publishes the tree verbatim: faster deploys,
+and one entire class of failure removed.
