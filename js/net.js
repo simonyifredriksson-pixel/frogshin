@@ -16,8 +16,8 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v31';
-import { roomCode as makeRoomCode } from './util.js?v=v31';
+import { CFG, BUILD } from './config.js?v=v32';
+import { roomCode as makeRoomCode } from './util.js?v=v32';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 

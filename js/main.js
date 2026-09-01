@@ -5,31 +5,31 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v31';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v31';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v31';
-import { Input } from './input.js?v=v31';
-import { Audio } from './audio.js?v=v31';
-import { World } from './world.js?v=v31';
-import { Effects } from './effects.js?v=v31';
-import { Atmosphere } from './atmosphere.js?v=v31';
-import { FollowCamera } from './camera.js?v=v31';
-import { Player } from './player.js?v=v31';
-import { RemotePlayer } from './remote.js?v=v31';
-import { HUD } from './hud.js?v=v31';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v31';
-import { FrogModel } from './frog.js?v=v31';
-import { DummyField } from './dummy.js?v=v31';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v31';
-import { ToadModel } from './npc.js?v=v31';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v31';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v31';
-import { DungeonRun } from './dungeon.js?v=v31';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v31';
-import { MenuScene } from './menu.js?v=v31';
-import { Economy } from './economy.js?v=v31';
-import { Shop } from './shop.js?v=v31';
-import { Network, NetRole } from './net.js?v=v31';
+import * as THREE from '../lib/three.module.js?v=v32';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v32';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v32';
+import { Input } from './input.js?v=v32';
+import { Audio } from './audio.js?v=v32';
+import { World } from './world.js?v=v32';
+import { Effects } from './effects.js?v=v32';
+import { Atmosphere } from './atmosphere.js?v=v32';
+import { FollowCamera } from './camera.js?v=v32';
+import { Player } from './player.js?v=v32';
+import { RemotePlayer } from './remote.js?v=v32';
+import { HUD } from './hud.js?v=v32';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v32';
+import { FrogModel } from './frog.js?v=v32';
+import { DummyField } from './dummy.js?v=v32';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v32';
+import { ToadModel } from './npc.js?v=v32';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v32';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v32';
+import { DungeonRun } from './dungeon.js?v=v32';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v32';
+import { MenuScene } from './menu.js?v=v32';
+import { Economy } from './economy.js?v=v32';
+import { Shop } from './shop.js?v=v32';
+import { Network, NetRole } from './net.js?v=v32';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -983,7 +983,7 @@ class Game {
   /** One frame of a dungeon run. */
   _updateDungeon(dt, t) {
     const p = this.player;
-    if (this.mode === 'paused') { this.renderer.render(this.scene, this.camera); return; }
+    if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
 
     const look = this.input.takeLook();
     if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
@@ -1205,6 +1205,16 @@ class Game {
     else if (this.mode === 'paused' && locked) this._resume();
   }
 
+  /**
+   * The world is standing still.
+   *
+   * Either the pause menu is up, or the developer menu is — clicking a cheat
+   * button is impossible if a boss is still swinging at you while you aim
+   * for it, so the dev menu freezes the game exactly as a pause does. It
+   * just does not show the pause panel.
+   */
+  get frozen() { return this.mode === 'paused' || this.cheatsOpen; }
+
   _pause() {
     if (this.mode !== 'playing') return;
     this.mode = 'paused';
@@ -1361,10 +1371,12 @@ class Game {
    * request is rejected (browsers refuse one made too soon after an unlock).
    */
   _syncClickToPlay() {
-    // Not during voting: the mouse is meant to be free there.
+    // Not during voting: the mouse is meant to be free there. Nor while the
+    // dev menu is open — it needs the cursor, and the prompt would sit on
+    // top of it and grab the very click meant for a cheat button.
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
     const want = this.mode === 'playing' && !this.input.locked
-      && !voting && !this._tryPanelOpen;
+      && !voting && !this._tryPanelOpen && !this.cheatsOpen;
     if (want === this._ctpShown) return;
     this._ctpShown = want;
     $('click-to-play').classList.toggle('show', want);
@@ -1378,7 +1390,7 @@ class Game {
   /** Story-mode frame: no rounds, no crates, no scoreboard. */
   _updateStory(dt, t) {
     const p = this.player;
-    if (this.mode !== 'paused') {
+    if (!this.frozen) {
       const look = this.input.takeLook();
       // The cutscene owns the camera, so mouse look is ignored during it.
       if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
@@ -1581,7 +1593,7 @@ class Game {
   }
 
   _updateGame(dt, t) {
-    const paused = this.mode === 'paused';
+    const paused = this.frozen;
     const p = this.player;
 
     // The round clock runs OUTSIDE the pause check on purpose. Pausing used
