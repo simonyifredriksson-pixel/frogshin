@@ -5,29 +5,29 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v22';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v22';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v22';
-import { Input } from './input.js?v=v22';
-import { Audio } from './audio.js?v=v22';
-import { World } from './world.js?v=v22';
-import { Effects } from './effects.js?v=v22';
-import { Atmosphere } from './atmosphere.js?v=v22';
-import { FollowCamera } from './camera.js?v=v22';
-import { Player } from './player.js?v=v22';
-import { RemotePlayer } from './remote.js?v=v22';
-import { HUD } from './hud.js?v=v22';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v22';
-import { FrogModel } from './frog.js?v=v22';
-import { DummyField } from './dummy.js?v=v22';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v22';
-import { ToadModel } from './npc.js?v=v22';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v22';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v22';
-import { MenuScene } from './menu.js?v=v22';
-import { Economy } from './economy.js?v=v22';
-import { Shop } from './shop.js?v=v22';
-import { Network, NetRole } from './net.js?v=v22';
+import * as THREE from '../lib/three.module.js?v=v23';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v23';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v23';
+import { Input } from './input.js?v=v23';
+import { Audio } from './audio.js?v=v23';
+import { World } from './world.js?v=v23';
+import { Effects } from './effects.js?v=v23';
+import { Atmosphere } from './atmosphere.js?v=v23';
+import { FollowCamera } from './camera.js?v=v23';
+import { Player } from './player.js?v=v23';
+import { RemotePlayer } from './remote.js?v=v23';
+import { HUD } from './hud.js?v=v23';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v23';
+import { FrogModel } from './frog.js?v=v23';
+import { DummyField } from './dummy.js?v=v23';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v23';
+import { ToadModel } from './npc.js?v=v23';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v23';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v23';
+import { MenuScene } from './menu.js?v=v23';
+import { Economy } from './economy.js?v=v23';
+import { Shop } from './shop.js?v=v23';
+import { Network, NetRole } from './net.js?v=v23';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;

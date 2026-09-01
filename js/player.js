@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v22';
-import { CFG } from './config.js?v=v22';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v22';
-import { FrogModel } from './frog.js?v=v22';
-import { Grapple, GrappleState } from './grapple.js?v=v22';
-import { Combat, Health } from './combat.js?v=v22';
-import { Stamina } from './stamina.js?v=v22';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v22';
-import { Audio } from './audio.js?v=v22';
+import * as THREE from '../lib/three.module.js?v=v23';
+import { CFG } from './config.js?v=v23';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v23';
+import { FrogModel } from './frog.js?v=v23';
+import { Grapple, GrappleState } from './grapple.js?v=v23';
+import { Combat, Health } from './combat.js?v=v23';
+import { Stamina } from './stamina.js?v=v23';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v23';
+import { Audio } from './audio.js?v=v23';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -28,6 +28,7 @@ const _throwOrigin = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _throwDir = new THREE.Vector3();
 const _assist = new THREE.Vector3();
+const _leapTarget = new THREE.Vector3();
 const _axis = { x: 0, y: 0 };
 
 export class Player {
@@ -52,6 +53,13 @@ export class Player {
     this.tagMode = false;        // the katana tags rather than wounds
     this.isJuggernaut = false;   // slower, tougher, wearing the toad
     this.spectating = false;     // knocked out and watching
+
+    // --- juggernaut leap (its replacement for the grapple) ---
+    this.leapCharge = 0;         // seconds of wind-up left
+    this.leapChargeTotal = 0;
+    this.leapCooldown = 0;
+    this.leapDist = 0;
+    this.leapTarget = new THREE.Vector3();
 
     // --- story mode ---
     this.cinematic = false;        // frozen for a cutscene
@@ -158,6 +166,8 @@ export class Player {
     this.invisibleT = 0;
     this.cloneT = 0;
     this.cloneTrail.length = 0;
+    this.leapCharge = 0;
+    this.leapCooldown = 0;
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.z = 0;
     this.model.body.position.y = 0;
@@ -350,6 +360,10 @@ export class Player {
       if (this.cloneT <= 0) this.cloneTrail.length = 0;
     }
 
+    // The juggernaut's leap winds up and fires here, before movement, so a
+    // launch this frame is not immediately overwritten by walk acceleration.
+    this._updateLeap(dt);
+
     if (this._tiredCue > 0) this._tiredCue -= dt;
     if (this.kunaiCooldown > 0) this.kunaiCooldown -= dt;
     if (this.throwT > 0) this.throwT -= dt;
@@ -388,7 +402,9 @@ export class Player {
       // BONUS (2.0x becomes 1.5x), so running still helps it but never lets
       // it run a frog down — it has to corner you, which is the mode.
       const boost = this.sprinting ? this._sprintMult(sp.speedMult) : 1;
-      const scale = this.isJuggernaut ? CFG.juggernaut.moveScale : 1;
+      // Rooted mid-leap-charge: you cannot walk out of your own wind-up.
+      const scale = this.leapCharge > 0 ? 0
+        : (this.isJuggernaut ? CFG.juggernaut.moveScale : 1);
       const wishSpeed = (this.grounded ? CFG.move.runSpeed : CFG.move.airSpeed)
         * boost * scale;
       const accel = (this.grounded ? CFG.move.groundAccel : CFG.move.airAccel)
@@ -438,7 +454,10 @@ export class Player {
 
     // ---- attacks resolve -------------------------------------------------
     if (this.combat.active) {
-      const hits = this.combat.resolve(this.pos, this.yaw, targets);
+      // A blade drawn at 2.1x scale has to reach further than a frog's, or it
+      // visibly passes through people without touching them.
+      const reach = this.isJuggernaut ? CFG.juggernaut.reach : 0;
+      const hits = this.combat.resolve(this.pos, this.yaw, targets, reach);
       if (hits) this._applyHits(hits, cam);
     }
 
@@ -553,6 +572,10 @@ export class Player {
   }
 
   _tryJump(wish, hasInput) {
+    // A charging leap IS the jump — Space must not quietly cancel it by
+    // lifting the toad off the ground mid-wind-up.
+    if (this.leapCharge > 0) { this.jumpBuffer = 0; return; }
+
     // Exhausted means no jumping at all until stamina is back to 70%.
     // Checked once up front so every branch below is covered.
     if (!this.stamina.canAct) {
@@ -669,6 +692,8 @@ export class Player {
   // --------------------------------------------------------------- grapple
 
   _toggleGrapple(cam) {
+    // The juggernaut has no tongue to grapple with — G charges a leap.
+    if (this.isJuggernaut) { this._chargeLeap(cam); return; }
     if (this.grapple.active) { this.grapple.release(); return; }
     cam.aimDirection(_aim);
     if (this.grapple.tryFire(this.mouthPosition, _aim)) {
@@ -678,6 +703,124 @@ export class Player {
         x: r2(this.grapple.anchor.x), y: r2(this.grapple.anchor.y), z: r2(this.grapple.anchor.z),
       });
     }
+  }
+
+  // ------------------------------------------------------- juggernaut leap
+
+  /**
+   * Begin (or cancel) the juggernaut's charged leap.
+   *
+   * Aims at whatever the crosshair is on, clamped to the leap's range, and
+   * sets a wind-up proportional to how far that is. Pressing G again during
+   * the wind-up aborts it, so committing to a long leap is a real decision
+   * rather than a misclick you cannot take back.
+   */
+  _chargeLeap(cam) {
+    const L = CFG.juggernaut.leap;
+    if (this.leapCharge > 0) {          // already winding up: abort
+      this.leapCharge = 0;
+      this.leapCooldown = Math.max(this.leapCooldown, 0.4);
+      Audio.uiBack();
+      return;
+    }
+    if (this.leapCooldown > 0 || !this.grounded) return;
+    // A leap is a jump, and jumps cost stamina.
+    if (!this.stamina.canAct) { this._tiredCue = 0.5; return; }
+
+    cam.aimDirection(_aim);
+    // Straight down or straight up would make the ballistic solve meaningless.
+    const pitch = Math.asin(clamp(_aim.y, -1, 1));
+    const clamped = clamp(pitch, -L.maxPitch, L.maxPitch);
+    if (clamped !== pitch) {
+      const horiz = Math.hypot(_aim.x, _aim.z) || 1e-6;
+      const s = Math.cos(clamped) / horiz;
+      _aim.set(_aim.x * s, Math.sin(clamped), _aim.z * s);
+    }
+
+    // Land on the surface under the crosshair when there is one in range,
+    // otherwise at the range limit along the aim.
+    const hit = this.collision.raycast(
+      cam.pos.x, cam.pos.y, cam.pos.z, _aim.x, _aim.y, _aim.z, L.range);
+    if (hit) _leapTarget.set(hit.x, hit.y, hit.z);
+    else _leapTarget.copy(cam.pos).addScaledVector(_aim, L.range);
+
+    const d = Math.hypot(_leapTarget.x - this.pos.x, _leapTarget.z - this.pos.z);
+    const k = clamp(d / L.range, 0, 1);
+    this.leapTarget.copy(_leapTarget);
+    this.leapDist = d;
+    this.leapChargeTotal = lerp(L.minCharge, L.maxCharge, k);
+    this.leapCharge = this.leapChargeTotal;
+
+    Audio.tone({
+      freq: 90, to: 240, dur: this.leapChargeTotal,
+      type: 'sawtooth', volume: 0.13, pos: this.pos,
+    });
+    this.events.push({
+      t: 'leapUp', c: r2(this.leapChargeTotal),
+      x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
+    });
+  }
+
+  /** Tick the wind-up, then launch. */
+  _updateLeap(dt) {
+    if (this.leapCooldown > 0) this.leapCooldown -= dt;
+    if (this.leapCharge <= 0) return;
+
+    // Rooted while charging: the whole point is that it is committed and
+    // readable. Coming off the ground cancels it.
+    if (!this.grounded) { this.leapCharge = 0; return; }
+    this.vel.x *= Math.exp(-14 * dt);
+    this.vel.z *= Math.exp(-14 * dt);
+
+    const t = 1 - this.leapCharge / this.leapChargeTotal;
+    this._leapFx = (this._leapFx || 0) - dt;
+    if (this._leapFx <= 0) {
+      this._leapFx = 0.09;
+      // A ring that tightens as the charge completes.
+      this.effects.ring(
+        _tmp.set(this.pos.x, this.pos.y + 0.15, this.pos.z),
+        2.6 * (1 - t) + 0.4, 0.5, 0.22, 0xffb03c, false, { x: 0, y: 1, z: 0 });
+    }
+
+    this.leapCharge -= dt;
+    if (this.leapCharge > 0) return;
+    this._launchLeap();
+  }
+
+  /**
+   * Hurl the toad at the charged target.
+   *
+   * Solves the ballistic arc for a chosen flight time, so it genuinely lands
+   * where it aimed instead of being launched at a fixed angle and hoping.
+   */
+  _launchLeap() {
+    const L = CFG.juggernaut.leap;
+    const g = CFG.move.gravity;                   // negative
+    const dx = this.leapTarget.x - this.pos.x;
+    const dz = this.leapTarget.z - this.pos.z;
+    const dy = this.leapTarget.y - this.pos.y;
+    const k = clamp(this.leapDist / L.range, 0, 1);
+    const T = lerp(L.flightMin, L.flightMax, k);
+
+    this.vel.x = dx / T;
+    this.vel.z = dz / T;
+    // vy chosen so the arc passes through the target at exactly time T.
+    this.vel.y = (dy - 0.5 * g * T * T) / T;
+
+    this.stamina.spend(CFG.stamina.jumpCost);
+    this.leapCooldown = L.cooldown;
+    this.grounded = false;
+    this.coyote = 0;
+    this.airTime = 0;
+
+    _tmp.set(this.pos.x, this.pos.y + 0.2, this.pos.z);
+    this.effects.dustPuff(_tmp, 20, 6, 0xcfc0a0);
+    this.effects.ring(_tmp, 0.4, 5.0, 0.5, 0xffb03c, true);
+    Audio.doubleJump(this.pos);
+    Audio.land(this.pos, true);
+    this.events.push({
+      t: 'leap', x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
+    });
   }
 
   _handleGrappleEvents() {
@@ -989,13 +1132,26 @@ export class Player {
     this.events.push({ t: 'pickup', id: crate.id });
   }
 
+  /**
+   * Damage for one katana hit, before the story's broken-sword multiplier.
+   *
+   * The juggernaut's blade is a flat figure rather than a combo ramp — it is
+   * an execution tool, not a rhythm, and a monster that hits for a different
+   * amount depending on which swing landed is just confusing to fight.
+   */
+  swordDamage(h) {
+    if (this.isJuggernaut) return CFG.juggernaut.swordDamage;
+    return h.damage;
+  }
+
   _applyHits(hits, cam) {
     // Spectators swing through everyone. Dummies still react, so there is
     // something to do while you wait.
     if (this.spectating) {
       for (const h of hits) {
         if (h.target.isDummy && h.target.onHit) {
-          h.target.onHit(Math.round(h.damage * this.damageMultiplier), h.dirX, h.dirZ);
+          h.target.onHit(
+            Math.round(this.swordDamage(h) * this.damageMultiplier), h.dirX, h.dirZ);
         }
       }
       return;
@@ -1010,7 +1166,8 @@ export class Player {
       // own short damage flash and never touch the network.
       if (h.target.isDummy) {
         if (h.target.onHit) {
-          h.target.onHit(Math.round(h.damage * this.damageMultiplier), h.dirX, h.dirZ);
+          h.target.onHit(
+            Math.round(this.swordDamage(h) * this.damageMultiplier), h.dirX, h.dirZ);
         }
         continue;
       }
@@ -1027,11 +1184,15 @@ export class Player {
       // Any other mode without damage leaves the swing purely cosmetic.
       if (!this.combatEnabled) continue;
 
-      this.effects.damageNumber(_tmp, Math.round(h.damage * this.damageMultiplier), h.heavy);
+      // The number shown and the number SENT are the same value. They used to
+      // be computed separately, so a damage multiplier would show one figure
+      // and inflict another.
+      const dmg = Math.round(this.swordDamage(h) * this.damageMultiplier);
+      this.effects.damageNumber(_tmp, dmg, h.heavy);
       this.events.push({
         t: 'hit',
         id: h.target.id,
-        dmg: h.damage,
+        dmg,
         kx: r2(h.dirX * h.knockback),
         ky: r2(h.knockbackUp),
         kz: r2(h.dirZ * h.knockback),

@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v22';
+export const BUILD = 'v23';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -161,7 +161,29 @@ export const CFG = {
     // 2.0x becomes 1.5x, so the run still helps but never closes a gap fast.
     sprintBonusScale: 0.5,
     swordScale: 2.1,         // a massive katana, matched to the toad's bulk
-    reach: 1.9,              // its longer blade genuinely reaches further
+    // Absolute reach, not a multiplier — compare with combat.reach (3.5).
+    // Toadel's own boss reach is 5.2, and this sits just under it.
+    reach: 5.0,
+    swordDamage: 50,         // flat, whichever swing of the combo lands
+
+    /**
+     * The juggernaut cannot grapple — it charges a leap instead. G aims,
+     * winds up, and hurls the whole toad at the spot you were looking at.
+     *
+     * The wind-up scales with distance: a short hop is nearly instant, a
+     * map-crossing leap takes the full 1.5s and is impossible to miss coming.
+     * That telegraph is what stops the mode's one mobility tool from simply
+     * undoing its slowness.
+     */
+    leap: {
+      minCharge: 0.5,
+      maxCharge: 1.5,
+      range: 48,             // furthest it can throw itself
+      flightMin: 0.55,       // airtime for the shortest leap
+      flightMax: 1.25,       // ... and for a full-range one
+      cooldown: 2.0,
+      maxPitch: 0.85,        // cap on how steeply it can aim (radians)
+    },
   },
 
   // ---------------------------------------------------------------- items

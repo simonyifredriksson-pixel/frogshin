@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v22';
-import { CFG } from './config.js?v=v22';
-import { clamp } from './util.js?v=v22';
+import * as THREE from '../lib/three.module.js?v=v23';
+import { CFG } from './config.js?v=v23';
+import { clamp } from './util.js?v=v23';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -87,12 +87,14 @@ export class Combat {
    * @param origin  attacker feet position
    * @param yaw     attacker facing
    * @param targets array of { id, pos, dead, alive }
+   * @param reachOverride longer blades (the juggernaut's) reach further; 0
+   *                      or omitted keeps the standard katana reach
    * @returns array of { target, dir, damage, index }
    */
-  resolve(origin, yaw, targets) {
+  resolve(origin, yaw, targets, reachOverride) {
     if (!this.active) return null;
     const i = this.comboIndex;
-    const reach = CFG.combat.reach;
+    const reach = reachOverride || CFG.combat.reach;
     const results = [];
 
     _fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));

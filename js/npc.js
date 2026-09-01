@@ -8,10 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v22';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v22';
-import { CFG } from './config.js?v=v22';
-import { buildKatana } from './frog.js?v=v22';
+import * as THREE from '../lib/three.module.js?v=v23';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v23';
+import { CFG } from './config.js?v=v23';
+import { buildKatana } from './frog.js?v=v23';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -168,8 +168,12 @@ export class ToadModel {
       this.weapon = buildKatana(this.swordMats);
       this.weapon.scale.setScalar(CFG.juggernaut.swordScale);
       this.arms[1].hand.add(this.weapon);
-      this.weapon.position.set(0, -0.30, 0.10);
-      this.weapon.rotation.x = -0.35;
+      // The club leans BACK over the shoulder (rotation.x -0.4), which reads
+      // fine for a lump of wood but points a blade the wrong way. A positive
+      // X rotation tilts the blade toward +Z — the direction the rig faces —
+      // so the katana is held out in front, tip forward and up.
+      this.weapon.position.set(0, -0.26, 0.14);
+      this.weapon.rotation.set(0.34, 0, -0.10);
     } else {
       this.weapon = new THREE.Group();
       this.weapon.add(part(G.cyl, P.wood, 0.07, 0.90, 0.07, 0, -0.35, 0));

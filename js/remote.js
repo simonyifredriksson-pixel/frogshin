@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v22';
-import { CFG } from './config.js?v=v22';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v22';
-import { FrogModel } from './frog.js?v=v22';
-import { ToadModel } from './npc.js?v=v22';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v22';
-import { Audio } from './audio.js?v=v22';
+import * as THREE from '../lib/three.module.js?v=v23';
+import { CFG } from './config.js?v=v23';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v23';
+import { FrogModel } from './frog.js?v=v23';
+import { ToadModel } from './npc.js?v=v23';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v23';
+import { Audio } from './audio.js?v=v23';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -160,6 +160,26 @@ export class RemotePlayer {
         this.effects.puff(_tmp, col, 20, 5);
         this.effects.ring(_tmp, 0.4, 3.4, 0.45, col, true);
         Audio.tongueRelease(_tmp);
+        break;
+      }
+      case 'leapUp': {
+        // The wind-up is the warning. Everyone nearby needs to see and hear
+        // it start, because dodging it is the entire counterplay.
+        _tmp.set(ev.x, ev.y + 0.15, ev.z);
+        this.effects.ring(_tmp, 3.0, 0.5, Math.max(0.2, ev.c || 0.5), 0xffb03c,
+          false, { x: 0, y: 1, z: 0 });
+        Audio.tone({
+          freq: 90, to: 240, dur: ev.c || 0.8,
+          type: 'sawtooth', volume: 0.13, pos: _tmp,
+        });
+        break;
+      }
+      case 'leap': {
+        _tmp.set(ev.x, ev.y + 0.2, ev.z);
+        this.effects.dustPuff(_tmp, 20, 6, 0xcfc0a0);
+        this.effects.ring(_tmp, 0.4, 5.0, 0.5, 0xffb03c, true);
+        Audio.doubleJump(_tmp);
+        Audio.land(_tmp, true);
         break;
       }
       case 'grapEnd':
