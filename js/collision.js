@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v24';
-import { clamp } from './util.js?v=v24';
+import { CFG } from './config.js?v=v25';
+import { clamp } from './util.js?v=v25';
 
 const EPS = 1e-4;
 

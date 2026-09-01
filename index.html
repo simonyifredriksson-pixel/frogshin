@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v24" />
+<link rel="stylesheet" href="css/style.css?v=v25" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -132,6 +132,11 @@
            no weapons yet, but you keep your dash and tongue. Host a room first
            if you want company, then start the story.</p>
 
+        <div class="divider"><span>THE DUNGEON</span></div>
+        <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON — 15 BOSSES</span></button>
+        <p class="note">Fifteen guardians, each harder than the last, and
+           something far worse at the bottom. Solo.</p>
+
         <div class="divider"><span>OR</span></div>
         <button class="btn btn-quiet" id="btn-solo"><span>ARENA PRACTICE (OFFLINE)</span></button>
 
@@ -167,6 +172,36 @@
         <button class="btn btn-quiet" id="lobby-leave"><span>LEAVE ROOM</span></button>
 
         <div id="lobby-status" class="status"></div>
+      </div>
+    </div>
+
+    <!-- DUNGEON: pick how forgiving the run is -->
+    <div class="panel" id="panel-dungeon">
+      <div class="card">
+        <h2 class="card-title">THE DUNGEON</h2>
+        <p class="note">
+          Fifteen boss rooms. The first guardian is a shadow of the
+          juggernaut. The fourteenth will take everything you have.
+          At the bottom of the shaft something has been waiting a very long
+          time for someone to reach it.
+        </p>
+
+        <div class="divider"><span>HOW DO YOU WANT TO RUN IT?</span></div>
+
+        <button class="btn btn-go" id="btn-dungeon-cp">
+          <span>WITH CHECKPOINTS</span>
+        </button>
+        <p class="note">Die and you restart the room you were in. The way to
+           learn the fights.</p>
+
+        <button class="btn btn-danger" id="btn-dungeon-nocp">
+          <span>NO CHECKPOINTS</span>
+        </button>
+        <p class="note">Die anywhere and you go back to room one. Fifteen
+           rooms, one life at a time.</p>
+
+        <div id="dungeon-status" class="status"></div>
+        <button class="btn btn-back"><span>◀ BACK</span></button>
       </div>
     </div>
 
@@ -231,6 +266,7 @@
               <li><b>Juggernaut.</b> One player becomes an armoured toad with a huge katana, endless kunai and a mountain of health — but moves at half speed and barely benefits from sprinting. Its katana hits for a flat 50. It cannot grapple — <kbd>G</kbd> instead charges a leap at whatever you are looking at, winding up for 0.5s to 1.5s depending how far you are throwing yourself. It wins by putting every frog out; the frogs win by bringing it down. <b>Needs 3 players.</b></li>
               <li>In Tag and Infection there is <b>no damage at all</b> — both the kunai <i>and</i> the katana tag instead of wounding, so it is a pure chase.</li>
               <li><b>Spectating.</b> Knocked out of a juggernaut round, you keep flying around with endless kunai but are invisible and cannot touch anyone (or be touched), and cannot take crates. You rejoin when the round ends.</li>
+              <li><b>The Dungeon.</b> Solo. Fifteen boss rooms, each guardian tougher than the last, and endless kunai throughout. Choose <b>checkpoints</b> (die and restart the room) or <b>no checkpoints</b> (die and go back to room one). Clearing a room heals you. Every attack in the dungeon shows a marker on the floor before it can hurt you — read it, dodge it, punish the recovery. At the bottom is <b>FROGATH, THE FIRST CROAK</b>. He floats, he does not miss, and he is the reason the other fourteen were put there.</li>
             </ul>
           </div>
 
@@ -358,6 +394,7 @@
   <!-- story: boss health bar -->
   <div id="boss-bar">
     <div class="bb-name" id="boss-name">TOADEL</div>
+    <div class="bb-sub" id="boss-sub"></div>
     <div class="bb-frame">
       <div class="bb-cap left"></div>
       <div class="bb-track"><div id="boss-fill"></div><div id="boss-chip"></div></div>
@@ -588,6 +625,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v24"></script>
+<script type="module" src="js/main.js?v=v25"></script>
 </body>
 </html>

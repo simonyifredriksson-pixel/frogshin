@@ -5,29 +5,30 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v24';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v24';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v24';
-import { Input } from './input.js?v=v24';
-import { Audio } from './audio.js?v=v24';
-import { World } from './world.js?v=v24';
-import { Effects } from './effects.js?v=v24';
-import { Atmosphere } from './atmosphere.js?v=v24';
-import { FollowCamera } from './camera.js?v=v24';
-import { Player } from './player.js?v=v24';
-import { RemotePlayer } from './remote.js?v=v24';
-import { HUD } from './hud.js?v=v24';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v24';
-import { FrogModel } from './frog.js?v=v24';
-import { DummyField } from './dummy.js?v=v24';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v24';
-import { ToadModel } from './npc.js?v=v24';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v24';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v24';
-import { MenuScene } from './menu.js?v=v24';
-import { Economy } from './economy.js?v=v24';
-import { Shop } from './shop.js?v=v24';
-import { Network, NetRole } from './net.js?v=v24';
+import * as THREE from '../lib/three.module.js?v=v25';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v25';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v25';
+import { Input } from './input.js?v=v25';
+import { Audio } from './audio.js?v=v25';
+import { World } from './world.js?v=v25';
+import { Effects } from './effects.js?v=v25';
+import { Atmosphere } from './atmosphere.js?v=v25';
+import { FollowCamera } from './camera.js?v=v25';
+import { Player } from './player.js?v=v25';
+import { RemotePlayer } from './remote.js?v=v25';
+import { HUD } from './hud.js?v=v25';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v25';
+import { FrogModel } from './frog.js?v=v25';
+import { DummyField } from './dummy.js?v=v25';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v25';
+import { ToadModel } from './npc.js?v=v25';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v25';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v25';
+import { DungeonRun } from './dungeon.js?v=v25';
+import { MenuScene } from './menu.js?v=v25';
+import { Economy } from './economy.js?v=v25';
+import { Shop } from './shop.js?v=v25';
+import { Network, NetRole } from './net.js?v=v25';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -171,7 +172,8 @@ class Game {
   // ------------------------------------------------------------- menu UI
 
   _buildMenuUI() {
-    const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings', 'credits'];
+    const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings',
+      'credits', 'dungeon'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       Audio.uiClick();
@@ -268,6 +270,11 @@ class Game {
       if (this.net.isOnline && this.net.connected) this._enterGame();
       else this._connect('solo', null);
     };
+
+    // --- the dungeon: solo, offline, and the run style is fixed up front ---
+    $('btn-dungeon').onclick = () => { Audio.uiClick(); this.showPanel('dungeon'); };
+    $('btn-dungeon-cp').onclick = () => this._startDungeon(true);
+    $('btn-dungeon-nocp').onclick = () => this._startDungeon(false);
 
     // --- lobby ---
     // Only the host chooses, and the choice is broadcast — otherwise two
@@ -617,6 +624,13 @@ class Game {
       await this._enterStory(loading, bar, label, frame);
       return;
     }
+    // So does the dungeon.
+    if (this.pendingMode === 'dungeon') {
+      this.pendingMode = null;
+      this.sessionMode = 'dungeon';
+      await this._enterDungeon(loading, bar, label, frame, this._dungeonCheckpoints);
+      return;
+    }
     this.pendingMode = null;
     this.sessionMode = 'arena';
 
@@ -837,6 +851,192 @@ class Game {
     this._resize();
   }
 
+  /**
+   * Kick off a run. Offline and solo by design, so it disconnects first —
+   * a shared clock and a mode built on repeated death do not mix.
+   */
+  _startDungeon(checkpoints) {
+    Audio.uiClick();
+    Audio.init(); Audio.resume();
+    this._dungeonCheckpoints = checkpoints;
+    this.pendingMode = 'dungeon';
+    if (this.net.isOnline) this.net.disconnect();
+    this._enterGame();
+  }
+
+  /**
+   * Build and start a dungeon run.
+   *
+   * Solo and entirely offline: fifteen scripted fights would mean nothing
+   * with someone else's kunai flying through them, and the whole mode is
+   * built around dying and repeating, which does not survive a shared clock.
+   */
+  async _enterDungeon(loading, bar, label, frame, checkpoints) {
+    this.isDungeon = true;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight,
+      CFG.camera.near, CFG.camera.far);
+    this.effects = new Effects(this.scene, this.camera);
+
+    this.dungeon = new DungeonRun({
+      scene: this.scene,
+      effects: this.effects,
+      hud: this.hud,
+      camera: this.camera,
+      followCam: null,          // assigned once the rig exists
+      checkpoints,
+    });
+
+    const tasks = this.dungeon.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 94) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+
+    this.world = this.dungeon.level;
+    this.followCam = new FollowCamera(this.camera, this.dungeon.collision);
+    this.dungeon.followCam = this.followCam;
+
+    // Underground: no sky, no leaves, heavy close fog and a cold key light.
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: 0,
+      cloudCount: 0,
+      shadows: this.quality.shadows,
+      fogNear: 14,
+      fogFar: 130,
+      fogColor: 0x0a0910,
+      skyTop: 0x05040a,
+      skyMid: 0x0a0812,
+      skyBottom: 0x120e18,
+    });
+    this.atmo.sun.color.setHex(0x9aa8d0);
+    this.atmo.sun.intensity = 0.5;
+    this.atmo.hemi.color.setHex(0x4a4260);
+    this.atmo.hemi.groundColor.setHex(0x0a0810);
+    this.atmo.hemi.intensity = 0.55;
+    this.renderer.setClearColor(0x05040a);
+
+    this.dummies = new DummyField(this.scene);
+    this.kunaiSystem = new KunaiSystem(this.scene, this.dungeon.collision, this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
+    this.pickups = null;
+
+    bar.style.width = '100%';
+    await frame();
+
+    const prof = this.profile;
+    if (this.player) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.player = new Player({
+      id: 'local',
+      name: prof.name,
+      color: prof.color,
+      world: this.dungeon.level,
+      effects: this.effects,
+      scene: this.scene,
+      kunai: this.kunaiSystem,
+      pickups: null,
+      skins: this.equippedSkins,
+    });
+    // Fully armed: this is the hardest content in the game.
+    this.player.combatEnabled = true;
+    this.player.inventory.setUnlimitedKunai(true);
+    this.player.inventory.setAbilities(this.shop.equippedAbilities());
+
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.onSlotClick = (i) => {
+      const slot = this.player.inventory.slots[i];
+      if (slot && slot.item.ability) this.player._useAbility(slot.item.id);
+      else if (this.player.inventory.select(i)) Audio.uiClick();
+    };
+    this.hud.resetOverlays();
+    this.hud.show(true);
+    this.hud.setRoom('', checkpoints ? 'Dungeon — checkpoints on'
+      : 'Dungeon — no checkpoints', false);
+
+    this.dungeon.start(this.player, 0);
+    this.followCam.snapTo(this.player.pos);
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.stopMenuMusic();
+    this._resize();
+  }
+
+  /** One frame of a dungeon run. */
+  _updateDungeon(dt, t) {
+    const p = this.player;
+    if (this.mode === 'paused') { this.renderer.render(this.scene, this.camera); return; }
+
+    const look = this.input.takeLook();
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+
+    // The boss is the only target in the room, and it uses the same hit
+    // plumbing every other target does.
+    const targets = [];
+    const boss = this.dungeon.bossTarget();
+    if (boss) targets.push(boss);
+
+    p.update(dt, this.input, this.followCam, targets);
+    this.kunaiSystem.update(dt, targets);
+
+    if (p.deathPending) p.deathPending = false;
+    // Nothing is networked here, but the controller still queues events —
+    // left undrained they would grow without limit for the whole run.
+    if (p.events.length) p.events.length = 0;
+
+    this.dungeon.update(dt, p, (dmg, from) => this._dungeonHit(dmg, from));
+
+    this.effects.update(dt);
+    this.world.update(dt);
+
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    if (!p.cinematic) {
+      this.followCam.update(p.pos, speed, dt, {
+        dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        sprinting: p.sprinting,
+      });
+    }
+    this.atmo.update(dt, this.camera.position);
+    this._updateHud(dt, speed);
+    this._updateAudioListener();
+    Audio.updateAmbient(dt);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** A boss attack landing on the player. */
+  _dungeonHit(damage, from) {
+    const p = this.player;
+    if (p.health.dead || p.health.protected || p.dashTimer > 0) return;
+    // Parrying turns a blow aside, exactly as it does against Toadel.
+    if (p.parrying) {
+      p.parryHits++;
+      p.justParried = 0.2;
+      this.hud.toast('PARRIED', 0.5);
+      Audio.hit(p.pos, false);
+      this.followCam.shake(0.25);
+      if (p.parryHits >= CFG.story.parry.knockdownAfter) {
+        p.parrying = false;
+        p.parryHits = 0;
+      }
+      return;
+    }
+    p.health.damage(damage, 'boss');
+    _v3.copy(from || p.pos);
+    this.effects.damageNumber(
+      _v3.set(p.pos.x, p.pos.y + 1.2, p.pos.z), damage, damage > 40);
+    this.hud.damageFlash(clamp(damage / 60, 0.3, 1));
+    this.followCam.shake(clamp(damage / 40, 0.3, 1.1));
+    Audio.hurt(p.pos);
+  }
+
   _onLockChange(locked) {
     // Voting deliberately releases the mouse so the cards can be clicked —
     // pausing there would drop the pause menu on top of the vote screen.
@@ -850,9 +1050,13 @@ class Game {
     if (this.mode !== 'playing') return;
     this.mode = 'paused';
     $('pause').classList.add('show');
-    $('pause-room').textContent = this.net.isOnline
-      ? `Room code: ${this.net.room}`
-      : 'Offline solo practice — no froglets earned';
+    $('pause-room').textContent = this.isDungeon
+      ? (this.dungeon && this.dungeon.checkpoints
+        ? 'The Dungeon — checkpoints on'
+        : 'The Dungeon — no checkpoints')
+      : (this.net.isOnline
+        ? `Room code: ${this.net.room}`
+        : 'Offline solo practice — no froglets earned');
     this.hud.showScoreboard(false);
   }
 
@@ -866,6 +1070,19 @@ class Game {
   }
 
   _quitToMenu() {
+    // The dungeon owns its own scene too — drop the whole thing.
+    if (this.isDungeon) {
+      if (this.dungeon) this.dungeon.dispose();
+      this.dungeon = null;
+      this.isDungeon = false;
+      this.world = null;
+      this.scene = null;
+      this.atmo = null;
+      this.player = null;
+      this.pickups = null;
+      this.renderer.setClearColor(0x8ec9e8);
+      this._underwater = false;
+    }
     // Story keeps a whole separate scene; drop it so a later arena match
     // does not inherit the swamp.
     if (this.isStory) {
@@ -962,8 +1179,9 @@ class Game {
       // joining clients unable to see the host at all.
       this._flushPendingJoins();
 
-      // Story and arena are two separate loops that share the renderer.
-      if (this.isStory) this._updateStory(dt, t);
+      // Story, dungeon and arena are separate loops sharing the renderer.
+      if (this.isDungeon) this._updateDungeon(dt, t);
+      else if (this.isStory) this._updateStory(dt, t);
       else this._updateGame(dt, t);
     } else {
       this._updateMenu(dt);
@@ -1106,7 +1324,7 @@ class Game {
    */
   get isSoloPractice() {
     return (this.mode === 'playing' || this.mode === 'paused')
-      && !this.net.isOnline && !this.isStory;
+      && !this.net.isOnline && !this.isStory && !this.isDungeon;
   }
 
   _updatePracticeRing(p) {
@@ -1811,6 +2029,15 @@ class Game {
    * a kunai stops curving once its target dies or disconnects.
    */
   _resolveAimTarget(id, out) {
+    // The dungeon's boss is the only thing in the room worth curving toward.
+    if (this.dungeon) {
+      const b = this.dungeon.bossTarget();
+      if (b && b.id === id) {
+        out.set(b.pos.x, b.pos.y + b.hitbox.bodyOffset, b.pos.z);
+        return true;
+      }
+      return false;
+    }
     if (this.player && id === this.player.id && !this.player.health.dead) {
       const b = CFG.hitbox.player;
       out.set(this.player.pos.x, this.player.pos.y + b.bodyOffset, this.player.pos.z);

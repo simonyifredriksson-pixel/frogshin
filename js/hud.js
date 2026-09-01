@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v24';
-import { CFG } from './config.js?v=v24';
-import { staminaBand } from './stamina.js?v=v24';
-import { modeAvailable } from './rounds.js?v=v24';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v24';
-import { Audio } from './audio.js?v=v24';
-import { PX, setIcon } from './icons.js?v=v24';
+import { clamp } from './util.js?v=v25';
+import { CFG } from './config.js?v=v25';
+import { staminaBand } from './stamina.js?v=v25';
+import { modeAvailable } from './rounds.js?v=v25';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v25';
+import { Audio } from './audio.js?v=v25';
+import { PX, setIcon } from './icons.js?v=v25';
 
 const $ = (id) => document.getElementById(id);
 
@@ -238,9 +238,15 @@ export class HUD {
     if (show) $('al-fill').style.width = (clamp(level, 0, 1) * 100) + '%';
   }
 
-  showBossBar(name, fraction) {
+  /**
+   * @param sub optional second line — Frogath's title and his unreadable
+   *            health, which is the point of him
+   */
+  showBossBar(name, fraction, sub) {
     const bar = $('boss-bar');
     $('boss-name').textContent = name;
+    $('boss-sub').textContent = sub || '';
+    bar.classList.toggle('has-sub', !!sub);
     bar.classList.add('show');
     this._bossFrac = fraction;
     $('boss-fill').style.width = (fraction * 100) + '%';

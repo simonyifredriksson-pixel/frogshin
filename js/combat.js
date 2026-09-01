@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v24';
-import { CFG } from './config.js?v=v24';
-import { clamp } from './util.js?v=v24';
+import * as THREE from '../lib/three.module.js?v=v25';
+import { CFG } from './config.js?v=v25';
+import { clamp } from './util.js?v=v25';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -105,11 +105,16 @@ export class Combat {
 
       _to.set(t.pos.x - origin.x, 0, t.pos.z - origin.z);
       const dist = _to.length();
-      // Add the target's body radius so hits land on the frog, not its origin.
-      if (dist > reach + CFG.move.radius) continue;
+      // Add the TARGET's own girth so hits land on its body, not its origin.
+      // A boss five units wide would otherwise need you standing inside it.
+      const girth = (t.hitbox && t.hitbox.bodyRadius) || CFG.move.radius;
+      if (dist > reach + girth) continue;
 
+      // Vertical slice. A target can widen it — a boss that floats above the
+      // floor would otherwise be permanently unreachable by the katana.
+      const vert = (t.hitbox && t.hitbox.vertical) || 2.6;
       const dy = t.pos.y - origin.y;
-      if (dy > 2.6 || dy < -2.6) continue;      // vertical slice
+      if (dy > vert || dy < -vert) continue;
 
       if (dist > 0.001) {
         _to.multiplyScalar(1 / dist);

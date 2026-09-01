@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v24';
+export const BUILD = 'v25';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -137,6 +137,58 @@ export const CFG = {
       delay: 0.45,           // how far behind you the clone copies your moves
       buffer: 4.0,           // seconds of movement history kept
       minGap: 1.7,           // it never stands on top of you, even at a halt
+    },
+  },
+
+  // -------------------------------------------------------------- dungeon
+  /**
+   * Fifteen boss rooms, each harder than the last.
+   *
+   * The curve is set from the player's actual damage output rather than
+   * picked by feel: a full katana combo is 58 over ~1.2s, so roughly 50 damage
+   * per second sustained. Room 1 is about five seconds of that; room 14 is
+   * about forty. Anything more is a health sponge, not a difficulty curve.
+   */
+  dungeon: {
+    rooms: 15,
+    roomRadius: 34,
+    roomSpacing: 108,
+    // Far from every other space in the game, like the castle.
+    origin: { x: -2400, y: 400, z: 0 },
+
+    boss: {
+      // Room 1 is the juggernaut at a third of its strength.
+      baseHealth: 250,
+      healthGrowth: 1.175,     // compounding per room -> ~2000 by room 14
+      baseDamage: 17,
+      damageGrowth: 1.09,      // -> ~52 by room 14, half a health bar
+      baseSpeed: 7.0,
+      speedGrowth: 1.045,
+      reach: 4.6,
+      // How long the wind-up is telegraphed. Shrinks as you descend, but
+      // never below `minTelegraph` — the fight must stay readable.
+      telegraph: 0.62,
+      telegraphShrink: 0.955,
+      minTelegraph: 0.26,
+    },
+
+    /** The god at the bottom. */
+    frogath: {
+      name: 'FROGATH',
+      title: 'THE FIRST CROAK',
+      health: 5200,
+      scale: 3.4,
+      hoverHeight: 7.5,        // how far above the floor he floats
+      // Phase thresholds as fractions of max health.
+      phases: [1.0, 0.70, 0.40, 0.15],
+      contactDamage: 34,
+      swordDamage: 46,
+      beamDamage: 58,
+      starDamage: 30,
+      // Every attack shows its warning for at least this long. Difficulty
+      // comes from the patterns, never from unreadable hitboxes.
+      minWarning: 0.45,
+      arenaRadius: 42,
     },
   },
 
