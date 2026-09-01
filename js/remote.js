@@ -11,11 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { CFG } from './config.js?v=v21';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v21';
-import { FrogModel } from './frog.js?v=v21';
-import { Audio } from './audio.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { CFG } from './config.js?v=v22';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v22';
+import { FrogModel } from './frog.js?v=v22';
+import { ToadModel } from './npc.js?v=v22';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v22';
+import { Audio } from './audio.js?v=v22';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -53,6 +55,8 @@ export class RemotePlayer {
     this.cloneModel = null;
     this._hunting = false;
     this._forced = false;
+    this.spectating = false;
+    this.isJuggernautModel = false;
     // Set by the game: spawns the visual-only kunai this player's clone threw.
     this.onCloneThrow = null;
 
@@ -226,6 +230,29 @@ export class RemotePlayer {
   }
 
   /**
+   * Swap this player between the frog rig and the juggernaut toad.
+   *
+   * Done by rebuilding rather than hiding one of two models, so a long match
+   * never carries a spare rig around; the swap happens once when a round
+   * starts, not per frame.
+   */
+  setJuggernaut(on) {
+    if (this.isJuggernautModel === on) return;
+    this.isJuggernautModel = on;
+    const old = this.model;
+    this.model = on
+      ? new ToadModel(true, findSkin('swords', DEFAULT_SKIN.swords))
+      : new FrogModel(this.color, this.name, false);
+    this.model.root.position.copy(old.root.position);
+    this.model.root.rotation.copy(old.root.rotation);
+    this.model.root.visible = old.root.visible;
+    this.scene.remove(old.root);
+    old.dispose();
+    this.scene.add(this.model.root);
+    this._ghost = undefined;
+  }
+
+  /**
    * Tell this player how the local viewer relates to them.
    *
    * @param hunting the viewer is on the side chasing this player, so their
@@ -250,14 +277,19 @@ export class RemotePlayer {
   _applyVisibility() {
     const F = CFG.abilities.invisibility.friendlyOpacity;
 
-    const meHidden = this._forced || (this.invisible && this._hunting);
+    // Spectators are gone to everybody — teammates included. That is what
+    // makes being knocked out feel like leaving the fight rather than
+    // haunting it.
+    const meHidden = this._forced || this.spectating
+      || (this.invisible && this._hunting);
     this.hidden = meHidden;
     this.model.root.visible = !meHidden;
     this.model.setGhost(this.invisible && !meHidden ? F : 1);
 
     if (!this.cloneModel) return;
     const out = !!this.cloneState;
-    const cHidden = this._forced || (this.cloneInvisible && this._hunting);
+    const cHidden = this._forced || this.spectating
+      || (this.cloneInvisible && this._hunting);
     this.cloneModel.root.visible = out && !cHidden;
     this.cloneModel.setGhost(this.cloneInvisible && !cHidden ? F : 1);
   }
@@ -373,6 +405,8 @@ export class RemotePlayer {
     this.sprinting = !!s.sp;
     this.storyPhase = s.st || 0;
     this.invisible = !!s.iv;
+    this.spectating = !!s.sx;
+    this.setJuggernaut(!!s.jg);
     this.cloneState = s.cl || null;
     if (s.at) this.attackIndex = s.at - 1;
 

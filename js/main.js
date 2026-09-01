@@ -5,27 +5,29 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v21';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v21';
-import { Input } from './input.js?v=v21';
-import { Audio } from './audio.js?v=v21';
-import { World } from './world.js?v=v21';
-import { Effects } from './effects.js?v=v21';
-import { Atmosphere } from './atmosphere.js?v=v21';
-import { FollowCamera } from './camera.js?v=v21';
-import { Player } from './player.js?v=v21';
-import { RemotePlayer } from './remote.js?v=v21';
-import { HUD } from './hud.js?v=v21';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v21';
-import { FrogModel } from './frog.js?v=v21';
-import { DummyField } from './dummy.js?v=v21';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v21';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v21';
-import { MenuScene } from './menu.js?v=v21';
-import { Economy } from './economy.js?v=v21';
-import { Shop } from './shop.js?v=v21';
-import { Network, NetRole } from './net.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v22';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v22';
+import { Input } from './input.js?v=v22';
+import { Audio } from './audio.js?v=v22';
+import { World } from './world.js?v=v22';
+import { Effects } from './effects.js?v=v22';
+import { Atmosphere } from './atmosphere.js?v=v22';
+import { FollowCamera } from './camera.js?v=v22';
+import { Player } from './player.js?v=v22';
+import { RemotePlayer } from './remote.js?v=v22';
+import { HUD } from './hud.js?v=v22';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v22';
+import { FrogModel } from './frog.js?v=v22';
+import { DummyField } from './dummy.js?v=v22';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v22';
+import { ToadModel } from './npc.js?v=v22';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v22';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v22';
+import { MenuScene } from './menu.js?v=v22';
+import { Economy } from './economy.js?v=v22';
+import { Shop } from './shop.js?v=v22';
+import { Network, NetRole } from './net.js?v=v22';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -378,7 +380,9 @@ class Game {
     const skins = this.shop.equippedSkins();
     this.equippedSkins = skins;
     setKunaiSkin(skins.kunai);
-    if (this.player && this.scene) {
+    // The juggernaut wears the toad, not a frog — rebuilding here would put
+    // the player back in a frog body mid-round.
+    if (this.player && this.scene && !this.player.isJuggernaut) {
       const old = this.player.model;
       const rebuilt = new FrogModel(this.player.color, this.player.name, true, skins);
       rebuilt.root.position.copy(old.root.position);
@@ -499,6 +503,14 @@ class Game {
       }
       if (ev.t === 'tag') {
         if (this.round && this.round.authority) this.round.applyTag(ev.id, id);
+        return;
+      }
+      if (ev.t === 'elim') {
+        // A player reporting their own knockout. Only the authority applies it,
+        // and only for the sender — nobody can eliminate anyone else.
+        if (this.round && this.round.authority && ev.id === id) {
+          this.round.eliminate(id);
+        }
         return;
       }
       if (ev.t === 'kunai') {
@@ -886,6 +898,9 @@ class Game {
     this.pendingMode = null;
     this.sessionMode = null;
     this._settingsFromPause = false;
+    // The next match starts as an ordinary frog, whatever this one ended as.
+    this._jugModelOn = false;
+    this._elimAsked = false;
     this._endTrial();
     this._dropClone();
     this.input.releaseLock();
@@ -902,6 +917,9 @@ class Game {
     const killerName = killer ? this.net.nameOf(killer) : null;
     this._killerName = killerName;
     this.hud.addKill(killerName, this.player.name, this.player.name);
+    // In a juggernaut round there is no respawn to count down to — dying is
+    // elimination, and _onEliminate takes it from here.
+    if (this.round && this.round.isJuggernautMode && this.round.playing) return;
     this.hud.showRespawn(CFG.combat.respawnTime, killerName);
   }
 
@@ -1185,16 +1203,7 @@ class Game {
         }
         this.round.teamKills = totals;
       }
-      const isIt = this.round.isTagger(p.id);
-      // Taggers get endless kunai and a snappier throw; runners keep theirs.
-      p.inventory.setUnlimitedKunai(this.round.isTagMode && isIt);
-      p.throwCooldownOverride = (this.round.isTagMode && isIt)
-        ? CFG.rounds.taggerCooldown : 0;
-      p.combatEnabled = this.round.combatEnabled;
-      p.model.setTagger(this.round.isTagMode && isIt);
-      for (const r of this.remotes.values()) {
-        r.model.setTagger(this.round.isTagMode && this.round.isTagger(r.id));
-      }
+      this._applyRoles(p);
 
       const targets = this._buildTargets();
       p.update(dt, this.input, this.followCam, targets);
@@ -1210,15 +1219,26 @@ class Game {
         this._onLocalDeath();
       }
 
-      // Respawn handling.
+      // Respawn handling. In a juggernaut round dying is elimination, not a
+      // respawn — so the request goes out and the spectator switch happens in
+      // _onEliminate, once the authority has agreed.
       if (p.health.dead) {
-        this.hud.showRespawn(p.health.respawnTimer, this._killerName);
-        if (p.health.respawnTimer <= 0) {
-          p.spawn(this.world.randomSpawn());
-          this.followCam.snapTo(p.pos);
-          this.hud.hideRespawn();
-          this._killerName = null;
+        if (this.round.isJuggernautMode && this.round.playing) {
+          if (!this._elimAsked) {
+            this._elimAsked = true;
+            this._requestEliminate(p.id);
+          }
+        } else {
+          this.hud.showRespawn(p.health.respawnTimer, this._killerName);
+          if (p.health.respawnTimer <= 0) {
+            p.spawn(this.world.randomSpawn());
+            this.followCam.snapTo(p.pos);
+            this.hud.hideRespawn();
+            this._killerName = null;
+          }
         }
+      } else {
+        this._elimAsked = false;
       }
 
       this._drainEvents(p);
@@ -1262,6 +1282,64 @@ class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Push the round's roles onto the player and the remotes.
+   *
+   * Everything role-dependent is decided in this one place, every frame, from
+   * the round state — so a role change (tagged, eliminated, made juggernaut)
+   * can never leave a stale privilege like endless kunai behind.
+   */
+  _applyRoles(p) {
+    const R = this.round;
+    const isIt = R.isTagger(p.id);
+    const jug = R.isJuggernaut(p.id);
+    const spec = R.isSpectating(p.id);
+
+    // Endless kunai for taggers, the juggernaut, and anyone spectating.
+    p.inventory.setUnlimitedKunai((R.isTagMode && isIt) || jug || spec);
+    p.throwCooldownOverride = (R.isTagMode && isIt) ? CFG.rounds.taggerCooldown : 0;
+    p.combatEnabled = R.combatEnabled;
+    p.tagMode = R.isTagMode && R.playing;
+    p.spectating = spec;
+    this._setJuggernaut(p, jug);
+    p.model.setTagger(R.isTagMode && isIt);
+
+    for (const r of this.remotes.values()) {
+      r.model.setTagger(R.isTagMode && R.isTagger(r.id));
+    }
+  }
+
+  /**
+   * Put the local player into (or out of) the juggernaut's body.
+   *
+   * The controller does not care which rig it is wearing — ToadModel exposes
+   * the same surface FrogModel does — so this is a straight model swap plus
+   * the stat changes.
+   */
+  _setJuggernaut(p, on) {
+    if (p.isJuggernaut === on && this._jugModelOn === on) return;
+    p.isJuggernaut = on;
+    this._jugModelOn = on;
+
+    const old = p.model;
+    p.model = on
+      ? new ToadModel(true, findSkin('swords', DEFAULT_SKIN.swords))
+      : new FrogModel(p.color, p.name, true, this.shop.equippedSkins());
+    p.model.root.position.copy(old.root.position);
+    p.model.root.rotation.copy(old.root.rotation);
+    this.scene.remove(old.root);
+    old.dispose();
+    this.scene.add(p.model.root);
+
+    // A mountain of health, scaled to the lobby size.
+    const mult = on ? (this.round.juggernautHealth || 1) : 1;
+    p.health.setMaxScale(mult);
+    if (on) {
+      this.hud.toast('You are the JUGGERNAUT — slow, but almost unkillable', 4.5);
+      this.hud.announce('JUGGERNAUT', 'danger', true);
+    }
   }
 
   /**
@@ -1393,6 +1471,10 @@ class Game {
   /** Send the player's queued events over the wire and handle local ones. */
   _drainEvents(p) {
     if (!p.events.length) return;
+    // A spectator leaves no trace: no thrown kunai for others to see, no
+    // slashes, no landing puffs. Being invisible is worthless if your kunai
+    // still sail across the map in front of everyone.
+    if (p.spectating) { p.events.length = 0; return; }
     for (const ev of p.events) {
       if (ev.t === 'hit') {
         // Hits are a direct request to one victim, not a broadcast.
@@ -1430,6 +1512,7 @@ class Game {
 
       this.round.onPhaseChange = (phase) => this._onPhaseChange(phase);
       this.round.onTag = (victimId, byId, mode) => this._onTag(victimId, byId, mode);
+      this.round.onEliminate = (id, wasJug) => this._onEliminate(id, wasJug);
     } else {
       this.round.authority = authority;
     }
@@ -1470,6 +1553,10 @@ class Game {
     this.hud.showVote(false);
 
     if (phase === PHASE.STARTING) {
+      // A new round always brings everyone back into the fight.
+      this.player.spectating = false;
+      this._elimAsked = false;
+      this.hud.setSpectating(false);
       // Fresh spawn for everyone, so no one starts a chase cornered.
       this.player.spawn(this.world.randomSpawn());
       this.followCam.snapTo(this.player.pos);
@@ -1477,7 +1564,11 @@ class Game {
       this.hud.announce(info.name, '', true);
     } else if (phase === PHASE.PLAYING) {
       const it = this.round.isTagger(this.player.id);
-      if (this.round.isTagMode) {
+      if (this.round.isJuggernautMode) {
+        const jug = this.round.isJuggernaut(this.player.id);
+        this.hud.announce(jug ? 'YOU ARE THE JUGGERNAUT' : 'KILL THE JUGGERNAUT!',
+          jug ? 'danger' : 'good');
+      } else if (this.round.isTagMode) {
         this.hud.announce(it ? 'YOU ARE IT!' : 'RUN!', it ? 'danger' : 'good');
         if (it) {
           // Put the kunai in hand — a tagger has nothing else to do with it.
@@ -1492,6 +1583,10 @@ class Game {
       this.hud.announce(this.round.result || 'ROUND OVER', 'good', true);
       Audio.refreshed(this.player.pos);
       this._awardRoundEnd();
+      // The round is decided, so spectating is over — you rejoin the world
+      // for the results and the next vote.
+      this.player.spectating = false;
+      this.hud.setSpectating(false);
     }
   }
 
@@ -1515,6 +1610,17 @@ class Game {
       const mine = R.teamOf(me);
       if (mine !== -1 && R.outcome === 'team' + mine) {
         this.economy.award(E.roundWinReward, 'Team won');
+      }
+      return;
+    }
+
+    if (R.mode === MODES.JUGGERNAUT) {
+      const wasJug = R.isJuggernaut(me);
+      if (R.outcome === 'juggernaut') {
+        // Clearing the whole field is the hardest win in the game.
+        if (wasJug) this.economy.award(E.taggerWinReward, 'Won as juggernaut');
+      } else if (R.outcome === 'survivors' && !wasJug) {
+        this.economy.award(E.roundWinReward, 'Juggernaut down');
       }
       return;
     }
@@ -1564,6 +1670,46 @@ class Game {
   }
 
   /**
+   * Ask for an elimination — a juggernaut-round knockout.
+   * Same shape as _requestTag: only the authority applies the rule.
+   */
+  _requestEliminate(victimId) {
+    if (this.round.authority) this.round.eliminate(victimId);
+    else this.net.sendEvent({ t: 'elim', id: victimId });
+  }
+
+  /**
+   * Someone has been knocked out of a juggernaut round.
+   *
+   * For the local player this is the doorway into spectating: no respawn, no
+   * interaction either way, endless kunai, invisible to everyone.
+   */
+  _onEliminate(id, wasJuggernaut) {
+    const me = this.player.id;
+    const name = id === me ? 'You' : this.net.nameOf(id);
+
+    if (wasJuggernaut) {
+      this.hud.announce('THE JUGGERNAUT IS DOWN!', 'good', true);
+      Audio.headshot(this.player.pos);
+    } else {
+      this.hud.toast(`${name} ${id === me ? 'are' : 'is'} out`, 2.2);
+    }
+
+    if (id !== me) return;
+
+    // Local player is out: stop the respawn clock and start watching.
+    this.player.spectating = true;
+    this.player.health.revive();
+    this.player.health.dead = false;
+    this.player.health.respawnTimer = 0;
+    this.hud.hideRespawn();
+    this.hud.announce(wasJuggernaut ? 'YOU FELL' : 'ELIMINATED', 'danger', true);
+    this.hud.setSpectating(true);
+    this.hud.toast(
+      'Spectating — endless kunai, invisible, out of the fight until the round ends', 5);
+  }
+
+  /**
    * Everything the local player can hit: other frogs plus training dummies.
    * Each entry carries its own `onHit`, which is what lets the katana and
    * thrown kunai share one code path while doing very different things —
@@ -1572,13 +1718,20 @@ class Game {
   _buildTargets() {
     const list = [];
     const K = CFG.kunai;
+    const R = this.round;
+    // Spectators can only interact with the dummies, so they never even see
+    // the living in their target list — no hits, no aim assist, nothing.
+    const ghost = this.player.spectating;
 
-    for (const r of this.remotes.values()) {
+    for (const r of ghost ? [] : this.remotes.values()) {
       if (!r.spawned || r.dead) continue;
       // Teammates are not targets at all — the katana and the kunai's aim
       // assist both read this list, so friendly fire is impossible rather
       // than merely ignored on arrival.
-      if (this.round && this.round.areAllies(this.player.id, r.id)) continue;
+      if (R && R.areAllies(this.player.id, r.id)) continue;
+      // Spectators are not in the world: nothing can touch them, and their
+      // aim assist must not lock onto them either.
+      if (r.spectating || (R && R.isSpectating(r.id))) continue;
       list.push({
         id: r.id, pos: r.pos, dead: r.dead, isDummy: false,
         hitbox: CFG.hitbox.player,
@@ -1762,8 +1915,17 @@ class Game {
       this.hud.setRound(R.modeInfo, R.timer, '', R.taggerCount);
       this.hud.announce(Math.max(1, Math.ceil(R.timer)) + '', '', true);
     } else if (R.phase === PHASE.PLAYING) {
-      const role = R.isTagMode ? (R.isTagger(p.id) ? 'it' : 'runner') : '';
-      this.hud.setRound(R.modeInfo, R.timer, role, R.taggers.size || R.taggerCount);
+      let role = '';
+      let count = R.taggers.size || R.taggerCount;
+      if (R.isSpectating(p.id)) {
+        role = 'out';
+      } else if (R.isJuggernautMode) {
+        role = R.isJuggernaut(p.id) ? 'juggernaut' : 'hunter';
+        count = R.survivorsLeft(this._playerIds());
+      } else if (R.isTagMode) {
+        role = R.isTagger(p.id) ? 'it' : 'runner';
+      }
+      this.hud.setRound(R.modeInfo, R.timer, role, count);
     }
 
     this.hud.update(dt);

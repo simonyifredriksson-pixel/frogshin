@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v21" />
+<link rel="stylesheet" href="css/style.css?v=v22" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -211,8 +211,8 @@
               <li><kbd>SPACE</kbd><span>Jump — tap again mid-air for the frog flip</span></li>
               <li><kbd>Q</kbd><span>Dash — fast, brief invulnerability</span></li>
               <li><kbd>G</kbd><span>Tongue grapple — press again to let go</span></li>
-              <li><kbd>LMB</kbd><span>Katana — 3-hit combo</span></li>
-              <li><kbd>RMB</kbd><span>Throw kunai (equip it first)</span></li>
+              <li><kbd>LMB</kbd><span>Attack — swing the katana, or throw the equipped kunai</span></li>
+              <li><kbd>RMB</kbd><span>Parry — hold, katana only</span></li>
               <li><kbd>1</kbd><kbd>2</kbd>…<kbd>0</kbd><span>Hotbar — or click a slot</span></li>
               <li><kbd>E</kbd><span>Pick up a kunai crate</span></li>
               <li><kbd>TAB</kbd><span>Scoreboard</span></li>
@@ -227,7 +227,10 @@
               <li><b>Tag.</b> Taggers have unlimited kunai. Hit a runner and you swap — they become it, you go free. Brief immunity stops instant tag-backs.</li>
               <li><b>Infection.</b> Same throw, but the runner <i>joins</i> the taggers. Ends when everyone is infected, or the survivors run out the clock.</li>
               <li><b>Classic FFA.</b> Normal deathmatch — katana, kunai, damage and respawns. Most kills wins.</li>
-              <li>In Tag and Infection there is <b>no damage at all</b>. Only the kunai tag counts, so it is a pure chase.</li>
+              <li><b>Team Battle.</b> Two sides, 1v1 up to 5v5, no friendly fire.</li>
+              <li><b>Juggernaut.</b> One player becomes an armoured toad with a huge katana, endless kunai and a mountain of health — but moves at half speed and barely benefits from sprinting. It wins by putting every frog out; the frogs win by bringing it down. <b>Needs 3 players.</b></li>
+              <li>In Tag and Infection there is <b>no damage at all</b> — both the kunai <i>and</i> the katana tag instead of wounding, so it is a pure chase.</li>
+              <li><b>Spectating.</b> Knocked out of a juggernaut round, you keep flying around with endless kunai but are invisible and cannot touch anyone (or be touched), and cannot take crates. You rejoin when the round ends.</li>
             </ul>
           </div>
 
@@ -240,7 +243,7 @@
               <li><b>Lanterns are targets.</b> The glowing lanterns are always grappleable and the crosshair opens up when one is in reach.</li>
               <li><b>The third swing hits hardest.</b> Land all three combo hits — the finisher does heavy damage and big knockback.</li>
               <li><b>Dash through attacks.</b> The dash has brief invulnerability frames.</li>
-              <li><b>Kunai hit for 25 — or 50 to the head.</b> Press <kbd>2</kbd> to equip them and <kbd>RMB</kbd> to throw. They fly dead straight and very fast, so the crosshair is exactly where they land. You start with 10; glowing crates around the valley hold 5 more each and are replaced every 30 seconds.</li>
+              <li><b>Kunai hit for 25 — or 50 to the head.</b> Press <kbd>2</kbd> to equip them and <kbd>LMB</kbd> to throw. They fly dead straight and very fast, so the crosshair is exactly where they land. You start with 10; glowing crates around the valley hold 5 more each and are replaced every 30 seconds.</li>
               <li><b>Practise on the dummies.</b> The straw dummies on the arena platforms show exactly how much damage each hit does.</li>
               <li><b>Watch your stamina.</b> Sprinting drains it and every jump costs a chunk. Empty it and you cannot sprint <i>or</i> jump until it climbs back to 70% — so keep some in reserve for the escape. Dashing and grappling are free.</li>
             </ul>
@@ -397,6 +400,12 @@
   <!-- big centre announcements: countdown, tagged, results -->
   <div id="round-announce"></div>
 
+  <!-- shown while knocked out of a juggernaut round -->
+  <div id="spectator-bar">
+    <b>SPECTATING</b>
+    <span>Endless kunai · invisible · out of the fight until the round ends</span>
+  </div>
+
   <!-- top-left: room -->
   <div id="room-info">
     <div class="ri-code">ROOM <b id="room-code">—</b></div>
@@ -499,6 +508,13 @@
         <div class="vc-blurb">Everyone for themselves. Katana, kunai, no teams. Most kills wins.</div>
         <div class="vc-votes"><span data-count="ffa">0</span> votes</div>
       </button>
+
+      <button class="vote-card" data-mode="juggernaut">
+        <div class="vc-name">JUGGERNAUT</div>
+        <div class="vc-blurb">One armoured toad with a huge katana, endless kunai and a mountain of health, against everyone. Slow, though. Needs 3 players.</div>
+        <div class="vc-votes"><span data-count="juggernaut">0</span> votes</div>
+        <div class="vc-locked">NEEDS 3 PLAYERS</div>
+      </button>
     </div>
 
     <div id="tagger-picker">
@@ -572,6 +588,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v21"></script>
+<script type="module" src="js/main.js?v=v22"></script>
 </body>
 </html>

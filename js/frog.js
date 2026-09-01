@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v22';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -33,6 +33,49 @@ function mesh(geo, mat, sx, sy, sz, px, py, pz) {
   m.position.set(px || 0, py || 0, pz || 0);
   m.castShadow = true;
   return m;
+}
+
+/**
+ * Build a katana.
+ *
+ * Shared by the player frogs and the juggernaut toad so there is exactly one
+ * katana in the game — the juggernaut's is the same weapon scaled up, which
+ * is the point: it should read as the familiar blade, only enormous.
+ *
+ * Modelled along +Y with the grip below the origin: a round tsuba, a habaki
+ * collar, and a black cord wrap with pale diamonds showing through, which is
+ * what gives the handle its woven look at a distance.
+ *
+ * @param m materials: steel, edge, gold (tsuba), grip (cord), same (wrap)
+ * @returns a Group; `userData.blade` is the blade mesh the shine effect uses
+ */
+export function buildKatana(m) {
+  const k = new THREE.Group();
+
+  const blade = mesh(G.box, m.steel, 0.045, 1.35, 0.11, 0, 0.78, 0);
+  k.add(blade);
+  // Bright shinogi line down the flat, so the polish reads in motion.
+  k.add(mesh(G.box, m.edge, 0.048, 1.32, 0.035, 0, 0.78, 0.036));
+  k.add(mesh(G.cone, m.edge, 0.06, 0.22, 0.075, 0, 1.55, 0));       // kissaki
+  k.add(mesh(G.cyl, m.gold, 0.055, 0.10, 0.055, 0, 0.14, 0));       // habaki collar
+
+  // Round tsuba — a disc, not a bar.
+  const tsuba = mesh(G.cyl, m.gold, 0.165, 0.028, 0.165, 0, 0.07, 0);
+  k.add(tsuba);
+
+  // Tsuka: ivory same under a black cord wrap.
+  k.add(mesh(G.cyl, m.same, 0.052, 0.30, 0.052, 0, -0.10, 0));
+  k.add(mesh(G.cyl, m.grip, 0.058, 0.30, 0.058, 0, -0.10, 0));
+  // Diamonds of the underlying same peeking through the cross-wrap.
+  for (let i = 0; i < 5; i++) {
+    const y = -0.005 - i * 0.055;
+    k.add(mesh(G.box, m.same, 0.030, 0.030, 0.125, 0, y, 0, 0));
+    k.add(mesh(G.box, m.same, 0.125, 0.030, 0.030, 0, y - 0.027, 0));
+  }
+  k.add(mesh(G.cyl, m.gold, 0.062, 0.035, 0.062, 0, -0.255, 0));    // kashira
+
+  k.userData.blade = blade;
+  return k;
 }
 
 export class FrogModel {
@@ -78,6 +121,12 @@ export class FrogModel {
       edge: new THREE.MeshLambertMaterial({ color: ss ? ss.edge : 0xf2f6fb }),
       gold: new THREE.MeshLambertMaterial({ color: ss ? ss.guard : 0xc9a227 }),
       grip: new THREE.MeshLambertMaterial({ color: ss ? ss.grip : CLOTH_DARK }),
+      // Ivory rayskin under the cord wrap, and the lacquered scabbard. Both
+      // follow the sword skin so a bought katana stays one coherent object.
+      same: new THREE.MeshLambertMaterial({ color: ss ? ss.guard : 0xe4e0d2 }),
+      saya: new THREE.MeshLambertMaterial({
+        color: new THREE.Color(ss ? ss.grip : CLOTH_DARK).multiplyScalar(1.15),
+      }),
       tongue: new THREE.MeshLambertMaterial({ color: 0xef7d9d }),
     };
 
@@ -237,24 +286,21 @@ export class FrogModel {
 
   _buildGear() {
     // --- katana: parented to a pivot so it can move hand <-> back ---
-    this.katana = new THREE.Group();
-    const blade = mesh(G.box, this.mats.steel, 0.045, 1.35, 0.11, 0, 0.78, 0);
-    this.katana.add(blade);
-    // Angled tip.
-    this.katana.add(mesh(G.cone, this.mats.edge, 0.06, 0.22, 0.075, 0, 1.55, 0));
-    this.katana.add(mesh(G.box, this.mats.gold, 0.17, 0.045, 0.17, 0, 0.08, 0));   // tsuba
-    this.katana.add(mesh(G.cyl, this.mats.grip, 0.055, 0.30, 0.055, 0, -0.10, 0)); // grip
-    this.katana.add(mesh(G.box, this.mats.gold, 0.07, 0.04, 0.07, 0, -0.26, 0));   // pommel
-    this.blade = blade;
+    this.katana = buildKatana(this.mats);
+    this.blade = this.katana.userData.blade;
     this.body.add(this.katana);
 
-    // Sheath worn diagonally across the back.
+    // Sheath worn diagonally across the back: glossy black saya with a pale
+    // koiguchi and kojiri, matching the blade it holds.
     this.sheath = new THREE.Group();
     this.sheath.position.set(-0.16, 0.72, -0.40);
     this.sheath.rotation.set(0.25, 0, -0.62);
     this.body.add(this.sheath);
-    this.sheath.add(mesh(G.box, this.mats.clothDark, 0.085, 0.80, 0.15, 0, 0.30, 0));
+    this.sheath.add(mesh(G.box, this.mats.saya, 0.085, 0.80, 0.15, 0, 0.30, 0));
     this.sheath.add(mesh(G.box, this.mats.gold, 0.095, 0.05, 0.16, 0, 0.68, 0));
+    this.sheath.add(mesh(G.box, this.mats.gold, 0.092, 0.045, 0.158, 0, -0.08, 0));
+    // Sageo cord tied near the mouth of the scabbard.
+    this.sheath.add(mesh(G.cyl, this.mats.grip, 0.10, 0.05, 0.17, 0, 0.60, 0));
 
     // Shoulder strap.
     this.body.add(mesh(G.box, this.mats.clothDark, 0.09, 0.62, 0.09, 0.10, 0.66, -0.10));

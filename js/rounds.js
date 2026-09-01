@@ -17,10 +17,13 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v21';
-import { clamp } from './util.js?v=v21';
+import { CFG } from './config.js?v=v22';
+import { clamp } from './util.js?v=v22';
 
-export const MODES = { TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team' };
+export const MODES = {
+  TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',
+  JUGGERNAUT: 'juggernaut',
+};
 
 /** Squad sizes offered by the TEAM mode: 1v1 through 5v5. */
 export const MAX_TEAM_SIZE = 5;
@@ -43,7 +46,39 @@ export const MODE_INFO = {
     blurb: 'Same fight, two sides. Pick 1v1 up to 5v5. No friendly fire — the '
       + 'team with the most kills takes the round.',
   },
+  [MODES.JUGGERNAUT]: {
+    name: 'JUGGERNAUT',
+    blurb: 'One armoured toad with a huge katana, endless kunai and a mountain '
+      + 'of health, against everyone else. Slow, though. Kill it, or be killed '
+      + 'and watch the rest try. Needs three players.',
+    minPlayers: CFG.juggernaut.minPlayers,
+  },
 };
+
+/**
+ * How much health the juggernaut gets for a given lobby size.
+ *
+ * The table is the specification verbatim. It is not monotonic — five players
+ * give less than four — so it is written out rather than computed, which is
+ * also what makes it a one-line change if those numbers were a slip.
+ */
+export function juggernautHealthMultiplier(playerCount) {
+  const J = CFG.juggernaut;
+  const listed = J.healthByPlayers[playerCount];
+  if (listed !== undefined) return listed;
+  if (playerCount < J.minPlayers) return J.healthByPlayers[J.minPlayers] || 1;
+  // Beyond the table, each extra player adds a flat amount.
+  const keys = Object.keys(J.healthByPlayers).map(Number);
+  const top = Math.max.apply(null, keys);
+  return J.healthByPlayers[top] + (playerCount - top) * J.healthPerExtraPlayer;
+}
+
+/** Modes a lobby of this size is allowed to play. */
+export function modeAvailable(mode, playerCount) {
+  const info = MODE_INFO[mode];
+  if (!info || !info.minPlayers) return true;
+  return playerCount >= info.minPlayers;
+}
 
 /** Team colours, used for nameplates and the scoreboard. */
 export const TEAM_COLORS = [0x4a9ee0, 0xe05a4a];
@@ -77,8 +112,11 @@ export class RoundManager {
     this.taggers = new Set();
     this.immunity = new Map();      // playerId -> seconds of no-tag-back left
     this.votes = new Map();         // playerId -> { mode, taggers }
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0 };
+    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
     this.startingTaggers = new Set();
+    // Juggernaut mode: who the monster is, and who it has already put out.
+    this.juggernaut = null;
+    this.eliminated = new Set();
     this.teams = new Map();         // playerId -> 0 | 1, team mode only
     this.teamSize = 2;              // "2v2"; shares the picker with taggerCount
     this.outcome = '';              // 'survivors' | 'taggers' | 'ffa' | 'team0' | 'team1' | 'draw'
@@ -89,6 +127,7 @@ export class RoundManager {
     // Set by the game so the manager can react without importing anything.
     this.onPhaseChange = null;
     this.onTag = null;              // (victimId, byId, mode) => void
+    this.onEliminate = null;        // (victimId, wasJuggernaut) => void
   }
 
   // ------------------------------------------------------------- queries
@@ -96,9 +135,27 @@ export class RoundManager {
   isTagger(id) { return this.taggers.has(id); }
   get isTagMode() { return this.mode === MODES.TAG || this.mode === MODES.INFECTION; }
   get isTeamMode() { return this.mode === MODES.TEAM; }
+  get isJuggernautMode() { return this.mode === MODES.JUGGERNAUT; }
   get playing() { return this.phase === PHASE.PLAYING; }
-  /** Damage and deaths matter in the two shooting modes, not the chases. */
-  get combatEnabled() { return this.mode === MODES.FFA || this.mode === MODES.TEAM; }
+  /** Damage and deaths matter in the shooting modes, not the chases. */
+  get combatEnabled() {
+    return this.mode === MODES.FFA || this.mode === MODES.TEAM
+      || this.mode === MODES.JUGGERNAUT;
+  }
+
+  isJuggernaut(id) { return this.isJuggernautMode && this.juggernaut === id; }
+
+  /**
+   * Knocked out and watching. Only juggernaut mode eliminates anyone — in
+   * Tag being caught makes you a tagger, which is a role change, not an exit.
+   */
+  isSpectating(id) { return this.eliminated.has(id); }
+
+  /** Frogs still standing against the juggernaut. */
+  survivorsLeft(playerIds) {
+    return playerIds.filter(
+      (id) => id !== this.juggernaut && !this.eliminated.has(id)).length;
+  }
 
   /** Which side a player is on, or -1 outside team mode. */
   teamOf(id) {
@@ -126,6 +183,10 @@ export class RoundManager {
   castVote(playerId, mode, taggerCount, playerCount) {
     if (this.phase !== PHASE.VOTING) return false;
     if (!MODE_INFO[mode]) return false;
+    // A mode the lobby is too small for cannot be voted for at all — the
+    // button is hidden as well, but the rule lives here so a stale or
+    // hand-made packet cannot start a two-player juggernaut round.
+    if (!modeAvailable(mode, playerCount)) return false;
     // Team mode reuses the same picker for squad size, but it is capped at
     // 5v5 rather than by the lobby size.
     const cap = mode === MODES.TEAM ? MAX_TEAM_SIZE : maxTaggers(playerCount);
@@ -138,7 +199,7 @@ export class RoundManager {
   }
 
   _recount() {
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0 };
+    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
     for (const v of this.votes.values()) {
       if (this.tally[v.mode] !== undefined) this.tally[v.mode]++;
     }
@@ -149,7 +210,9 @@ export class RoundManager {
     let bestMode = null;
     let bestVotes = -1;
     // Deterministic order so a tie always resolves the same way everywhere.
-    for (const m of [MODES.TAG, MODES.INFECTION, MODES.FFA, MODES.TEAM]) {
+    for (const m of [MODES.TAG, MODES.INFECTION, MODES.FFA, MODES.TEAM,
+      MODES.JUGGERNAUT]) {
+      if (!modeAvailable(m, playerCount)) continue;
       if (this.tally[m] > bestVotes) { bestVotes = this.tally[m]; bestMode = m; }
     }
     if (bestVotes <= 0) bestMode = CFG.rounds.defaultMode;
@@ -212,6 +275,14 @@ export class RoundManager {
                    playerIds.length > 1 &&
                    playerIds.every((id) => this.taggers.has(id))) {
           this._finish('EVERYONE INFECTED — taggers win!', 'taggers');
+        } else if (this.isJuggernautMode && this.juggernaut) {
+          // The juggernaut wins by clearing the field; the frogs win by
+          // bringing it down. Its own death is reported through eliminate().
+          if (this.eliminated.has(this.juggernaut)) {
+            this._finish('THE JUGGERNAUT FALLS — frogs win!', 'survivors');
+          } else if (this.survivorsLeft(playerIds) === 0) {
+            this._finish('ALL FROGS DOWN — juggernaut wins!', 'juggernaut');
+          }
         }
         break;
       case PHASE.ENDING:
@@ -249,6 +320,16 @@ export class RoundManager {
         outcome: 'team' + win,
       };
     }
+    if (this.mode === MODES.JUGGERNAUT) {
+      // Outlasting the clock counts as beating it — the frogs held the field.
+      const left = this.survivorsLeft(playerIds);
+      return left > 0
+        ? {
+          text: `TIME — ${left} frog${left === 1 ? '' : 's'} outlasted the juggernaut!`,
+          outcome: 'survivors',
+        }
+        : { text: 'ALL FROGS DOWN — juggernaut wins!', outcome: 'juggernaut' };
+    }
     const survivors = playerIds.filter((id) => !this.taggers.has(id)).length;
     if (this.mode === MODES.INFECTION) {
       return survivors > 0
@@ -267,6 +348,9 @@ export class RoundManager {
     this._recount();
     this.taggers.clear();
     this.immunity.clear();
+    // Everyone comes back for the next round — spectating never carries over.
+    this.eliminated.clear();
+    this.juggernaut = null;
     this._setPhase(PHASE.VOTING, CFG.rounds.voteTime);
   }
 
@@ -311,6 +395,14 @@ export class RoundManager {
       }
     }
 
+    // Juggernaut: one player at random becomes the monster, nobody is out yet.
+    this.eliminated.clear();
+    this.juggernaut = null;
+    if (this.mode === MODES.JUGGERNAUT && playerIds.length) {
+      this.juggernaut = playerIds[Math.floor(Math.random() * playerIds.length)];
+      this.juggernautHealth = juggernautHealthMultiplier(playerIds.length);
+    }
+
     this.result = '';
     this.outcome = '';
     this._setPhase(PHASE.STARTING, CFG.rounds.startCountdown);
@@ -353,11 +445,35 @@ export class RoundManager {
     return true;
   }
 
+  /**
+   * Authority: a player has been knocked out of a juggernaut round.
+   *
+   * This is elimination, not death — the frog goes to spectate rather than
+   * respawning. The win check itself lives in update(), so a knockout and a
+   * timeout can never disagree about who won.
+   *
+   * @returns true if this actually put someone out
+   */
+  eliminate(victimId) {
+    if (!this.authority || !this.playing || !this.isJuggernautMode) return false;
+    if (this.eliminated.has(victimId)) return false;
+    this.eliminated.add(victimId);
+    if (this.onEliminate) this.onEliminate(victimId, victimId === this.juggernaut);
+    this.broadcast();
+    return true;
+  }
+
   /** Drop a player who left, and keep the round valid. */
   removePlayer(id) {
     this.votes.delete(id);
     this.taggers.delete(id);
     this.immunity.delete(id);
+    this.eliminated.delete(id);
+    // A juggernaut who quits ends the round rather than leaving the rest
+    // swinging at nothing.
+    if (this.juggernaut === id && this.authority && this.playing) {
+      this._finish('THE JUGGERNAUT FLED — frogs win!', 'survivors');
+    }
     this._recount();
   }
 
@@ -379,6 +495,9 @@ export class RoundManager {
       tm: Array.from(this.teams.entries()),
       ts: this.teamSize,
       tk: this.teamKills || [0, 0],
+      jg: this.juggernaut || '',
+      jh: this.juggernautHealth || 1,
+      el: Array.from(this.eliminated),
       n: this.roundNumber,
     };
   }
@@ -402,8 +521,20 @@ export class RoundManager {
     this.teamSize = s.ts || 2;
     this.teamKills = s.tk || [0, 0];
     this.roundNumber = s.n || 0;
-    this.tally = s.v || { tag: 0, infection: 0, ffa: 0 };
+    this.tally = s.v || { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
     this.taggers = new Set(s.tg || []);
+    this.juggernaut = s.jg || null;
+    this.juggernautHealth = s.jh || 1;
+
+    // Fire onEliminate for anyone newly out, so mirrors get the same
+    // announcement and spectator switch the authority already made.
+    const wasOut = this.eliminated;
+    this.eliminated = new Set(s.el || []);
+    if (this.onEliminate) {
+      for (const id of this.eliminated) {
+        if (!wasOut.has(id)) this.onEliminate(id, id === this.juggernaut);
+      }
+    }
     if (phaseChanged && this.onPhaseChange) this.onPhaseChange(this.phase, this);
   }
 }

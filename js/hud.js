@@ -6,12 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v21';
-import { CFG } from './config.js?v=v21';
-import { staminaBand } from './stamina.js?v=v21';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v21';
-import { Audio } from './audio.js?v=v21';
-import { PX, setIcon } from './icons.js?v=v21';
+import { clamp } from './util.js?v=v22';
+import { CFG } from './config.js?v=v22';
+import { staminaBand } from './stamina.js?v=v22';
+import { modeAvailable } from './rounds.js?v=v22';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v22';
+import { Audio } from './audio.js?v=v22';
+import { PX, setIcon } from './icons.js?v=v22';
 
 const $ = (id) => document.getElementById(id);
 
@@ -70,6 +71,8 @@ export class HUD {
     this.rbTime = $('rb-time');
     this.rbRole = $('rb-role');
     this.announceEl = $('round-announce');
+    this.spectatorBar = $('spectator-bar');
+    this._spectating = false;
     this.hotbarEl = $('hotbar');
     this.pickupPrompt = $('pickup-prompt');
     this.slotEls = [];
@@ -102,6 +105,13 @@ export class HUD {
   }
 
   show(v) { this.root.classList.toggle('hidden', !v); }
+
+  /** Standing banner while knocked out of a juggernaut round. */
+  setSpectating(on) {
+    if (this._spectating === on) return;
+    this._spectating = on;
+    this.spectatorBar.classList.toggle('show', on);
+  }
 
   // ---------------------------------------------------------------- meters
 
@@ -173,6 +183,7 @@ export class HUD {
     this.setAlert(0, false);
     this.setFade(0, 0);
     this.setCritical(false);
+    this.setSpectating(false);
     this.killfeed.innerHTML = '';
     this._feedItems.length = 0;
     this.toastEl.classList.remove('show');
@@ -337,6 +348,11 @@ export class HUD {
     for (const card of this.voteCards) {
       const m = card.dataset.mode;
       card.classList.toggle('picked', m === myMode);
+      // A mode the lobby is too small for is visibly locked rather than
+      // hidden, so people can see it exists and what it needs.
+      const locked = !modeAvailable(m, playerCount);
+      card.classList.toggle('locked', locked);
+      card.disabled = locked;
       const n = card.querySelector('[data-count]');
       const v = round.tally[m] || 0;
       if (n.textContent !== String(v)) n.textContent = v;
@@ -401,12 +417,20 @@ export class HUD {
     if (txt !== this._rbTime) { this._rbTime = txt; this.rbTime.textContent = txt; }
     this.roundBanner.classList.toggle('urgent', s <= 15);
 
+    // `taggerCount` doubles as "frogs still standing" in juggernaut mode.
     let label = '';
     if (role === 'it') label = "YOU ARE IT — tag someone!";
     else if (role === 'runner') label = taggerCount === 1 ? 'RUN — 1 tagger' : `RUN — ${taggerCount} taggers`;
+    else if (role === 'juggernaut') {
+      label = taggerCount === 1 ? 'JUGGERNAUT — 1 frog left' : `JUGGERNAUT — ${taggerCount} frogs left`;
+    } else if (role === 'hunter') {
+      label = taggerCount === 1 ? 'LAST FROG STANDING' : `${taggerCount} frogs left — bring it down`;
+    } else if (role === 'out') label = 'SPECTATING';
+
     if (label !== this._rbRole) { this._rbRole = label; this.rbRole.textContent = label; }
-    this.roundBanner.classList.toggle('it', role === 'it');
-    this.roundBanner.classList.toggle('runner', role === 'runner');
+    this.roundBanner.classList.toggle('it', role === 'it' || role === 'juggernaut');
+    this.roundBanner.classList.toggle('runner', role === 'runner' || role === 'hunter');
+    this.roundBanner.classList.toggle('out', role === 'out');
   }
 
   hideRound() {

@@ -25,8 +25,11 @@ export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 /** blade / edge highlight / guard / grip / optional emissive glow. */
 export const SWORD_SKINS = [
-  { id: 'sword_default', name: 'Worn Steel',   rarity: 'common',
-    blade: 0xd9dee6, edge: 0xf2f6fb, guard: 0xc9a227, grip: 0x1a1a20, glow: 0x2a3038 },
+  // The standard-issue katana every frog carries: mirror-polished blade, a
+  // plain pale tsuba, and a black cord-wrapped tsuka over an ivory same.
+  // Deliberately not gold — this is the shape of the weapon, not a prize.
+  { id: 'sword_default', name: 'Black Cord',    rarity: 'common',
+    blade: 0xe6ecf4, edge: 0xffffff, guard: 0xe4e0d2, grip: 0x141419, glow: 0x39414c },
   { id: 'sword_bamboo',  name: 'Bamboo Cut',   rarity: 'common',
     blade: 0xcfd6c2, edge: 0xe8eedd, guard: 0x7a6a3a, grip: 0x3f4a24, glow: 0x22281a },
   { id: 'sword_river',   name: 'River Iron',   rarity: 'common',

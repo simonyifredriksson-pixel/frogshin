@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { CFG } from './config.js?v=v21';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v21';
-import { FrogModel } from './frog.js?v=v21';
-import { Grapple, GrappleState } from './grapple.js?v=v21';
-import { Combat, Health } from './combat.js?v=v21';
-import { Stamina } from './stamina.js?v=v21';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v21';
-import { Audio } from './audio.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { CFG } from './config.js?v=v22';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v22';
+import { FrogModel } from './frog.js?v=v22';
+import { Grapple, GrappleState } from './grapple.js?v=v22';
+import { Combat, Health } from './combat.js?v=v22';
+import { Stamina } from './stamina.js?v=v22';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v22';
+import { Audio } from './audio.js?v=v22';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -48,6 +48,10 @@ export class Player {
     // chase modes turn player damage off entirely.
     this.throwCooldownOverride = 0;
     this.combatEnabled = true;
+    // Set each frame by the round manager.
+    this.tagMode = false;        // the katana tags rather than wounds
+    this.isJuggernaut = false;   // slower, tougher, wearing the toad
+    this.spectating = false;     // knocked out and watching
 
     // --- story mode ---
     this.cinematic = false;        // frozen for a cutscene
@@ -183,6 +187,11 @@ export class Player {
       // it carries the pose fields that actually change the silhouette, so a
       // watcher sees it swing and throw, not just glide.
       iv: this.invisibleT > 0 ? 1 : 0,
+      // Spectators are invisible to EVERYONE, friend or enemy alike, so this
+      // is sent separately from the invisibility ability rather than folded
+      // into it — the two hide you from different people.
+      sx: this.spectating ? 1 : 0,
+      jg: this.isJuggernaut ? 1 : 0,
       cl: c ? [
         r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed),
         (c.grounded ? 1 : 0) | (c.moving ? 2 : 0) | (c.sprinting ? 4 : 0)
@@ -276,7 +285,14 @@ export class Player {
       this.jumpHeld = input.down('Space');
       if (input.consume('KeyQ')) this._tryDash(_wish, hasInput, cam);
       if (input.consume('KeyG')) this._toggleGrapple(cam);
-      if (input.consumeAttack()) this._tryAttack(cam);
+      // Left mouse uses whatever is in your hand: swing the katana, or throw
+      // the kunai. One button for "attack" is the intuitive mapping, and it
+      // frees the right button to mean guard and nothing else.
+      if (input.consumeAttack()) {
+        const held = this.inventory.selectedItem;
+        if (held === ITEMS.kunai) this._tryThrowKunai(cam);
+        else this._tryAttack(cam);
+      }
 
       // Hotbar: number keys select the matching slot, left to right.
       // An ability slot FIRES instead of selecting — there is nothing to
@@ -289,10 +305,9 @@ export class Player {
       }
       const wheel = input.takeWheel();
       if (wheel) this._cycleSlot(wheel);
-      // Right mouse does one of two things depending on what is in hand:
-      // hold to PARRY with the katana, click to THROW with kunai. That makes
-      // parrying available in every mode, at the cost of having your blade
-      // out instead of your kunai.
+      // Right mouse is PARRY, and only parry. It needs the katana in hand —
+      // you cannot turn a blade aside with a handful of kunai — which is the
+      // real cost of running kunai as your main weapon.
       const slot = this.inventory.selectedSlot;
       const swordOut = !!slot && slot.item === ITEMS.katana;
       if (swordOut) {
@@ -304,12 +319,12 @@ export class Player {
           if (!held) this.parryHits = 0;
           else Audio.uiHover();
         }
-        input.consume('MouseRight');
-      } else {
+      } else if (this.parrying) {
         // Switching off the sword drops any guard you were holding.
-        if (this.parrying) { this.parrying = false; this.parryHits = 0; }
-        if (input.consume('MouseRight')) this._tryThrowKunai(cam);
+        this.parrying = false;
+        this.parryHits = 0;
       }
+      input.consume('MouseRight');
       if (input.consume('KeyE')) this._tryPickup();
     } else {
       this.jumpHeld = false;
@@ -365,11 +380,17 @@ export class Player {
       if (this.dashTimer <= 0) this._endDash();
     } else {
       const sp = CFG.sprint;
-      const boost = this.sprinting ? sp.speedMult : 1;
       // Sprint raises the speed you steer toward. Because acceleration is
       // momentum-preserving, letting go of Shift does not brake you — you
       // simply stop being pushed past the walk cap and coast back down.
-      const wishSpeed = (this.grounded ? CFG.move.runSpeed : CFG.move.airSpeed) * boost;
+      //
+      // The juggernaut moves at half pace and gets only half the sprint
+      // BONUS (2.0x becomes 1.5x), so running still helps it but never lets
+      // it run a frog down — it has to corner you, which is the mode.
+      const boost = this.sprinting ? this._sprintMult(sp.speedMult) : 1;
+      const scale = this.isJuggernaut ? CFG.juggernaut.moveScale : 1;
+      const wishSpeed = (this.grounded ? CFG.move.runSpeed : CFG.move.airSpeed)
+        * boost * scale;
       const accel = (this.grounded ? CFG.move.groundAccel : CFG.move.airAccel)
         * (this.sprinting ? sp.accelMult : 1);
       if (this.grounded && !this.inWater) {
@@ -471,7 +492,7 @@ export class Player {
     const hasInput = _swimWish.lengthSq() > 1e-6;
     // Holding Shift underwater is a 1.5x boost rather than the 2x of a
     // land sprint — water resistance should still be felt.
-    const boost = this.sprinting ? CFG.sprint.swimMult : 1;
+    const boost = this.sprinting ? this._sprintMult(CFG.sprint.swimMult) : 1;
     if (hasInput) {
       _swimWish.normalize();
       // Same momentum-preserving acceleration as on land, in three axes.
@@ -699,6 +720,18 @@ export class Player {
   }
 
   // ------------------------------------------------------------ kunai
+
+  /**
+   * Scale a sprint multiplier for whoever is running.
+   *
+   * The juggernaut halves the BONUS, not the multiplier — halving 2.0x to
+   * 1.0x would make Shift do nothing at all, which is not "less effective",
+   * it is broken. 2.0x becomes 1.5x; 1.5x underwater becomes 1.25x.
+   */
+  _sprintMult(base) {
+    if (!this.isJuggernaut) return base;
+    return 1 + (base - 1) * CFG.juggernaut.sprintBonusScale;
+  }
 
   // ------------------------------------------------------------ abilities
 
@@ -941,6 +974,9 @@ export class Player {
 
   /** Grab the nearest kunai crate. */
   _tryPickup() {
+    // Spectators have endless kunai and no business taking crates the living
+    // still need.
+    if (this.spectating) return;
     if (!this.pickups || this.health.dead) return;
     const crate = this.pickups.nearest(this.pos);
     if (!crate) return;
@@ -954,6 +990,16 @@ export class Player {
   }
 
   _applyHits(hits, cam) {
+    // Spectators swing through everyone. Dummies still react, so there is
+    // something to do while you wait.
+    if (this.spectating) {
+      for (const h of hits) {
+        if (h.target.isDummy && h.target.onHit) {
+          h.target.onHit(Math.round(h.damage * this.damageMultiplier), h.dirX, h.dirZ);
+        }
+      }
+      return;
+    }
     for (const h of hits) {
       _tmp.set(h.target.pos.x, h.target.pos.y + 1.0, h.target.pos.z);
       this.effects.hitBurst(_tmp, { x: h.dirX, y: 0, z: h.dirZ }, h.heavy);
@@ -969,7 +1015,16 @@ export class Player {
         continue;
       }
 
-      // Chase modes have no damage — the katana swing stays purely cosmetic.
+      // Tag and Infection: the blade tags instead of wounding. Routed through
+      // the target's own onHit — the very same callback a thrown kunai uses —
+      // so both weapons obey one copy of the tag rules (who may tag, who is
+      // already it, immunity) and cannot drift apart.
+      if (this.tagMode) {
+        if (h.target.onHit) h.target.onHit(0, h.dirX, h.dirZ, false, _tmp);
+        continue;
+      }
+
+      // Any other mode without damage leaves the swing purely cosmetic.
       if (!this.combatEnabled) continue;
 
       this.effects.damageNumber(_tmp, Math.round(h.damage * this.damageMultiplier), h.heavy);
@@ -987,6 +1042,9 @@ export class Player {
 
   /** Damage requested by another player. Returns true if it landed. */
   receiveHit(dmg, kx, ky, kz, fromId, cam) {
+    // A spectator is out of the match entirely: nothing reaches them, and
+    // nothing they do reaches anyone else.
+    if (this.spectating) return false;
     if (this.health.dead || this.health.protected) return false;
 
     // A raised guard turns the blow aside — same rule everywhere, including

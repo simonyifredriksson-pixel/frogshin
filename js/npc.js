@@ -8,8 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v22';
+import { CFG } from './config.js?v=v22';
+import { buildKatana } from './frog.js?v=v22';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -56,9 +58,15 @@ function part(geo, mat, sx, sy, sz, px, py, pz, rx, ry, rz) {
  * Modelled facing +Z, like the player frog, so `setFacing` matches.
  */
 export class ToadModel {
-  constructor(boss = false) {
+  /**
+   * @param boss       larger, horned, caped — Toadel and the juggernaut
+   * @param swordSkin  when given, the club is replaced by a katana in this
+   *                   palette, scaled up to suit the toad's bulk
+   */
+  constructor(boss = false, swordSkin = null) {
     const P = mats();
     this.boss = boss;
+    this.swordSkin = swordSkin;
     this.root = new THREE.Group();
     this.body = new THREE.Group();
     this.root.add(this.body);
@@ -144,24 +152,43 @@ export class ToadModel {
       this.legs.push({ hip, shin, foot, side: sx });
     }
 
-    // ---- club, held in the right hand ----
-    this.weapon = new THREE.Group();
-    this.weapon.add(part(G.cyl, P.wood, 0.07, 0.90, 0.07, 0, -0.35, 0));
-    this.weapon.add(part(G.cyl, P.wood, 0.17, 0.42, 0.17, 0, 0.34, 0));
-    // Knots and iron bands so it reads as a heavy, crude weapon.
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2;
-      this.weapon.add(part(G.low, P.woodDark, 0.07, 0.07, 0.07,
-        Math.cos(a) * 0.17, 0.22 + (i % 2) * 0.24, Math.sin(a) * 0.17));
+    // ---- weapon, held in the right hand ----
+    if (swordSkin) {
+      // The juggernaut carries the same katana every frog does, just vast.
+      // Reusing the builder is what keeps it recognisably the same weapon.
+      this.swordMats = {
+        steel: new THREE.MeshLambertMaterial({
+          color: swordSkin.blade, emissive: swordSkin.glow,
+        }),
+        edge: new THREE.MeshLambertMaterial({ color: swordSkin.edge }),
+        gold: new THREE.MeshLambertMaterial({ color: swordSkin.guard }),
+        grip: new THREE.MeshLambertMaterial({ color: swordSkin.grip }),
+        same: new THREE.MeshLambertMaterial({ color: swordSkin.guard }),
+      };
+      this.weapon = buildKatana(this.swordMats);
+      this.weapon.scale.setScalar(CFG.juggernaut.swordScale);
+      this.arms[1].hand.add(this.weapon);
+      this.weapon.position.set(0, -0.30, 0.10);
+      this.weapon.rotation.x = -0.35;
+    } else {
+      this.weapon = new THREE.Group();
+      this.weapon.add(part(G.cyl, P.wood, 0.07, 0.90, 0.07, 0, -0.35, 0));
+      this.weapon.add(part(G.cyl, P.wood, 0.17, 0.42, 0.17, 0, 0.34, 0));
+      // Knots and iron bands so it reads as a heavy, crude weapon.
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        this.weapon.add(part(G.low, P.woodDark, 0.07, 0.07, 0.07,
+          Math.cos(a) * 0.17, 0.22 + (i % 2) * 0.24, Math.sin(a) * 0.17));
+      }
+      this.weapon.add(part(G.cyl, iron, 0.19, 0.05, 0.19, 0, 0.50, 0));
+      if (boss) {
+        this.weapon.scale.setScalar(1.25);
+        this.weapon.add(part(G.cone, trim, 0.13, 0.26, 0.13, 0, 0.62, 0));
+      }
+      this.arms[1].hand.add(this.weapon);
+      this.weapon.position.set(0, -0.18, 0.08);
+      this.weapon.rotation.x = -0.4;
     }
-    this.weapon.add(part(G.cyl, iron, 0.19, 0.05, 0.19, 0, 0.50, 0));
-    if (boss) {
-      this.weapon.scale.setScalar(1.25);
-      this.weapon.add(part(G.cone, trim, 0.13, 0.26, 0.13, 0, 0.62, 0));
-    }
-    this.arms[1].hand.add(this.weapon);
-    this.weapon.position.set(0, -0.18, 0.08);
-    this.weapon.rotation.x = -0.4;
 
     if (boss) {
       // Tattered cape.
@@ -185,6 +212,59 @@ export class ToadModel {
 
   setFacing(yaw) { this.root.rotation.y = yaw + Math.PI; }
 
+  // ---- FrogModel-compatible surface ------------------------------------
+  // The juggernaut is a player wearing this model, and the player controller
+  // must not have to care which one it is wearing. These are the parts of
+  // FrogModel's interface it calls; the ones with no toad equivalent are
+  // honest no-ops rather than missing methods that would throw mid-match.
+
+  setVisible(v) { this.root.visible = v; }
+  /** Toads do not croak, flip, or wear an "it" marker. */
+  croak() {}
+  triggerFlip() {}
+  setTagger() {}
+  drawNameplate() {}
+
+  /** Same whole-rig fade the frogs use, so invisibility works identically. */
+  setGhost(k) {
+    if (this._ghost === k) return;
+    this._ghost = k;
+    const on = k < 0.999;
+    this.root.traverse((o) => {
+      const list = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : null);
+      if (!list) return;
+      for (const m of list) {
+        if (m.userData.baseOpacity === undefined) {
+          m.userData.baseOpacity = m.opacity;
+          m.userData.baseTransparent = m.transparent;
+          m.userData.baseDepthWrite = m.depthWrite;
+        }
+        if (on) {
+          m.transparent = true;
+          m.opacity = m.userData.baseOpacity * k;
+          m.depthWrite = false;
+        } else {
+          m.transparent = m.userData.baseTransparent;
+          m.opacity = m.userData.baseOpacity;
+          m.depthWrite = m.userData.baseDepthWrite;
+        }
+      }
+    });
+  }
+
+  dispose() {
+    const seen = new Set();
+    this.root.traverse((o) => {
+      const list = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : null);
+      if (!list) return;
+      for (const m of list) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        m.dispose();
+      }
+    });
+  }
+
   /** Kick off a swing animation. */
   swing(duration = 0.55) {
     this.attackT = duration;
@@ -194,9 +274,16 @@ export class ToadModel {
   flinch() { this.hurtT = 0.18; }
 
   /**
-   * @param s { speed, attacking, dead }
+   * @param s { speed, attacking, dead, attackT }
+   *
+   * `attackT` is how the player controller reports a swing (it counts down
+   * through the attack), so a rising edge here starts the toad's own smash —
+   * that is what lets a player drive this model without a second code path.
    */
   update(dt, s = {}) {
+    if (s.attackT > 0 && !this._wasSwinging && this.attackT <= 0) this.swing(0.42);
+    this._wasSwinging = s.attackT > 0;
+
     this.t += dt;
     const t = this.t;
 

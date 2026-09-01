@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v21';
-import { CFG } from './config.js?v=v21';
-import { clamp } from './util.js?v=v21';
+import * as THREE from '../lib/three.module.js?v=v22';
+import { CFG } from './config.js?v=v22';
+import { clamp } from './util.js?v=v22';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -167,6 +167,20 @@ export class Health {
 
   get fraction() { return clamp(this.hp / this.max, 0, 1); }
   get protected() { return this.spawnProtection > 0 || this.invulnerable > 0; }
+
+  /**
+   * Scale the health pool — the juggernaut's mountain of hit points.
+   *
+   * The CURRENT hp is rescaled by the same proportion rather than refilled,
+   * so gaining or losing the role mid-round cannot be used as a free heal.
+   */
+  setMaxScale(scale) {
+    const want = CFG.combat.maxHealth * (scale || 1);
+    if (want === this.max) return;
+    const frac = this.max > 0 ? this.hp / this.max : 1;
+    this.max = want;
+    this.hp = want * frac;
+  }
 
   /**
    * Apply damage. Returns true if it landed.

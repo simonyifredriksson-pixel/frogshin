@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v21';
+export const BUILD = 'v22';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -135,11 +135,33 @@ export const CFG = {
     voteTime: 22,            // seconds to pick a mode
     startCountdown: 5,       // "get ready" before a round begins
     endTime: 9,              // results screen before voting again
-    duration: { tag: 180, infection: 180, ffa: 300 },
+    duration: { tag: 180, infection: 180, ffa: 300, juggernaut: 240 },
     defaultMode: 'ffa',      // used if nobody votes
     tagImmunity: 2.5,        // stops instant tag-backs
     taggerCooldown: 0.2,     // taggers throw faster (they have infinite kunai)
     syncInterval: 1.0,       // authority state rebroadcast
+  },
+
+  // ----------------------------------------------------------- juggernaut
+  juggernaut: {
+    // One huge toad against everyone else. Pointless one-on-one, so the mode
+    // is hidden until a third player joins.
+    minPlayers: 3,
+    /**
+     * Health multiplier by lobby size, exactly as specified. The numbers do
+     * not rise monotonically (five players give LESS than four) — that is
+     * what was asked for, and it is a single table to change if it was meant
+     * to read differently.
+     */
+    healthByPlayers: { 3: 7, 4: 10, 5: 9 },
+    /** Each player beyond the table adds this much. */
+    healthPerExtraPlayer: 1,
+    moveScale: 0.5,          // half the speed of a frog
+    // "Shift 2x less effective": the sprint BONUS is halved, not removed —
+    // 2.0x becomes 1.5x, so the run still helps but never closes a gap fast.
+    sprintBonusScale: 0.5,
+    swordScale: 2.1,         // a massive katana, matched to the toad's bulk
+    reach: 1.9,              // its longer blade genuinely reaches further
   },
 
   // ---------------------------------------------------------------- items
