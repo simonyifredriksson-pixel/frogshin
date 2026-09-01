@@ -23,85 +23,173 @@ export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 // ---------------------------------------------------------------- swords
 
-/** blade / edge highlight / guard / grip / optional emissive glow. */
+/**
+ * blade / edge highlight / guard / grip / optional emissive glow, plus `fx`.
+ *
+ * `fx` is what stops a skin being a recolour. Colour alone is free, which
+ * would make a crate — and beating Frogath — worth nothing, so every skin
+ * above common changes the WEAPON: its blade profile, its guard, whether it
+ * glows, what hangs off it. The builder reads these and assembles a
+ * different object, not a different palette.
+ *
+ *   shape  katana | broad | serrated | curved | light | fang
+ *   tsuba  disc | square | cross | ring | none
+ *   glow   the blade emits light instead of reflecting it
+ *   runes  colour of glowing marks along the blade
+ *   aura   colour of a soft shell around the blade
+ *   tassel colour of a cord hanging from the pommel
+ */
 export const SWORD_SKINS = [
   // The standard-issue katana every frog carries: mirror-polished blade, a
   // plain pale tsuba, and a black cord-wrapped tsuka over an ivory same.
   // Deliberately not gold — this is the shape of the weapon, not a prize.
   { id: 'sword_default', name: 'Black Cord',    rarity: 'common',
-    blade: 0xe6ecf4, edge: 0xffffff, guard: 0xe4e0d2, grip: 0x141419, glow: 0x39414c },
+    blade: 0xe6ecf4, edge: 0xffffff, guard: 0xe4e0d2, grip: 0x141419, glow: 0x39414c,
+    fx: { shape: 'katana', tsuba: 'disc' } },
   // Frogath's blade of light, as a cosmetic. It looks like the thing that
   // killed you fourteen times; it does exactly what your katana always did.
   { id: 'sword_frogath', name: 'The First Croak', rarity: 'legendary', reward: true,
-    blade: 0xfff3c4, edge: 0xffffff, guard: 0xffd76b, grip: 0x4a3206, glow: 0xc9922a },
+    blade: 0xfff3c4, edge: 0xffffff, guard: 0xffd76b, grip: 0x4a3206, glow: 0xc9922a,
+    fx: {
+      shape: 'light', tsuba: 'ring', glow: true, runes: 0xfff3c4,
+      aura: 0xffd76b, tassel: 0xffd76b, long: 1.35,
+    } },
   { id: 'sword_bamboo',  name: 'Bamboo Cut',   rarity: 'common',
-    blade: 0xcfd6c2, edge: 0xe8eedd, guard: 0x7a6a3a, grip: 0x3f4a24, glow: 0x22281a },
+    blade: 0xcfd6c2, edge: 0xe8eedd, guard: 0x7a6a3a, grip: 0x3f4a24, glow: 0x22281a,
+    fx: { shape: 'katana', tsuba: 'square' } },
   { id: 'sword_river',   name: 'River Iron',   rarity: 'common',
-    blade: 0xaab6c4, edge: 0xdce6f2, guard: 0x6f7c8a, grip: 0x232a33, glow: 0x1d2530 },
+    blade: 0xaab6c4, edge: 0xdce6f2, guard: 0x6f7c8a, grip: 0x232a33, glow: 0x1d2530,
+    fx: { shape: 'curved', tsuba: 'disc' } },
   { id: 'sword_ivy',     name: 'Ivy Edge',     rarity: 'uncommon',
-    blade: 0xa8d9a0, edge: 0xe4ffe0, guard: 0x4e7a34, grip: 0x1f3a1a, glow: 0x1d4a20 },
+    blade: 0xa8d9a0, edge: 0xe4ffe0, guard: 0x4e7a34, grip: 0x1f3a1a, glow: 0x1d4a20,
+    fx: { shape: 'serrated', tsuba: 'cross', tassel: 0x4e7a34 } },
   { id: 'sword_ember',   name: 'Ember Brand',  rarity: 'uncommon',
-    blade: 0xe8a06a, edge: 0xffd9b0, guard: 0x8a4620, grip: 0x2a1409, glow: 0x6a2408 },
+    blade: 0xe8a06a, edge: 0xffd9b0, guard: 0x8a4620, grip: 0x2a1409, glow: 0x6a2408,
+    fx: { shape: 'broad', tsuba: 'square', runes: 0xff7a2a } },
   { id: 'sword_frost',   name: 'Frostbite',    rarity: 'rare',
-    blade: 0xbfe6ff, edge: 0xf0fbff, guard: 0x5f9ec4, grip: 0x142633, glow: 0x2a6a9a },
+    blade: 0xbfe6ff, edge: 0xf0fbff, guard: 0x5f9ec4, grip: 0x142633, glow: 0x2a6a9a,
+    fx: { shape: 'fang', tsuba: 'cross', runes: 0x8fd8ff, aura: 0x8fd8ff } },
   { id: 'sword_venom',   name: 'Venomfang',    rarity: 'rare',
-    blade: 0xc9ff6b, edge: 0xf2ffd0, guard: 0x5a8a2a, grip: 0x1a2a0d, glow: 0x4a8a10 },
+    blade: 0xc9ff6b, edge: 0xf2ffd0, guard: 0x5a8a2a, grip: 0x1a2a0d, glow: 0x4a8a10,
+    fx: { shape: 'serrated', tsuba: 'ring', runes: 0xc9ff6b, tassel: 0x4a8a10 } },
   { id: 'sword_blood',   name: 'Bloodmoon',    rarity: 'epic',
-    blade: 0xff8a8a, edge: 0xffd0d0, guard: 0x8a1a1a, grip: 0x2a0808, glow: 0x9a1010 },
+    blade: 0xff8a8a, edge: 0xffd0d0, guard: 0x8a1a1a, grip: 0x2a0808, glow: 0x9a1010,
+    fx: {
+      shape: 'broad', tsuba: 'cross', runes: 0xff3c3c, aura: 0xc01818,
+      tassel: 0x8a1a1a, long: 1.15,
+    } },
   { id: 'sword_lotus',   name: 'Golden Lotus', rarity: 'legendary',
-    blade: 0xffe9a0, edge: 0xfffbe0, guard: 0xffd24a, grip: 0x3a2a06, glow: 0xc9922a },
+    blade: 0xffe9a0, edge: 0xfffbe0, guard: 0xffd24a, grip: 0x3a2a06, glow: 0xc9922a,
+    fx: {
+      shape: 'curved', tsuba: 'ring', glow: true, runes: 0xfff3c4,
+      aura: 0xffd24a, tassel: 0xffd24a, long: 1.2,
+    } },
 ];
 
 // ----------------------------------------------------------------- kunai
 
-/** blade / facet / wrap / ring. */
+/**
+ * blade / facet / wrap / ring, plus `fx`.
+ *
+ *   shape   classic | broad | needle | crystal | star
+ *   glow    the blade emits light rather than reflecting it
+ *   ribbon  colour of a streamer trailing from the ring
+ *   big     scale multiplier on the blade
+ */
 export const KUNAI_SKINS = [
   { id: 'kunai_default', name: 'Field Kunai', rarity: 'common',
-    blade: 0x2b2f36, facet: 0x5a626d, wrap: 0xc0392b, ring: 0x14161a },
+    blade: 0x2b2f36, facet: 0x5a626d, wrap: 0xc0392b, ring: 0x14161a,
+    fx: { shape: 'classic' } },
   { id: 'kunai_slate',   name: 'Slate',       rarity: 'common',
-    blade: 0x3a4048, facet: 0x6d7682, wrap: 0x4a5560, ring: 0x161a1f },
+    blade: 0x3a4048, facet: 0x6d7682, wrap: 0x4a5560, ring: 0x161a1f,
+    fx: { shape: 'needle' } },
   { id: 'kunai_rust',    name: 'Rusted Fang', rarity: 'common',
-    blade: 0x4a3428, facet: 0x8a6242, wrap: 0x7a4a2a, ring: 0x1d1410 },
+    blade: 0x4a3428, facet: 0x8a6242, wrap: 0x7a4a2a, ring: 0x1d1410,
+    fx: { shape: 'broad' } },
   { id: 'kunai_ivy',     name: 'Ivy Wrap',    rarity: 'uncommon',
-    blade: 0x2a3a2c, facet: 0x6a8a5a, wrap: 0x4e9a3c, ring: 0x14201a },
+    blade: 0x2a3a2c, facet: 0x6a8a5a, wrap: 0x4e9a3c, ring: 0x14201a,
+    fx: { shape: 'classic', ribbon: 0x4e9a3c } },
   { id: 'kunai_copper',  name: 'Copperhead',  rarity: 'uncommon',
-    blade: 0x6a3f22, facet: 0xc08a4a, wrap: 0xd97a2a, ring: 0x2a1a0d },
+    blade: 0x6a3f22, facet: 0xc08a4a, wrap: 0xd97a2a, ring: 0x2a1a0d,
+    fx: { shape: 'broad', ribbon: 0xd97a2a, big: 1.15 } },
   { id: 'kunai_night',   name: 'Nightglass',  rarity: 'rare',
-    blade: 0x1a1830, facet: 0x6a5aa8, wrap: 0x4a3a9a, ring: 0x0d0a1a },
+    blade: 0x1a1830, facet: 0x6a5aa8, wrap: 0x4a3a9a, ring: 0x0d0a1a,
+    fx: { shape: 'crystal', glow: true } },
   { id: 'kunai_koi',     name: 'Koi',         rarity: 'rare',
-    blade: 0xf0e6d8, facet: 0xffffff, wrap: 0xe0502a, ring: 0x2a1a14 },
+    blade: 0xf0e6d8, facet: 0xffffff, wrap: 0xe0502a, ring: 0x2a1a14,
+    fx: { shape: 'needle', ribbon: 0xe0502a, big: 1.1 } },
   { id: 'kunai_cinder',  name: 'Cinderpoint', rarity: 'epic',
-    blade: 0x2a1410, facet: 0xff7a3c, wrap: 0xff4a1a, ring: 0x1a0a06 },
+    blade: 0x2a1410, facet: 0xff7a3c, wrap: 0xff4a1a, ring: 0x1a0a06,
+    fx: { shape: 'star', glow: true, ribbon: 0xff4a1a } },
   { id: 'kunai_sun',     name: 'Sunspire',    rarity: 'legendary',
-    blade: 0xffd76b, facet: 0xfff6d0, wrap: 0xc9922a, ring: 0x3a2a06 },
+    blade: 0xffd76b, facet: 0xfff6d0, wrap: 0xc9922a, ring: 0x3a2a06,
+    fx: { shape: 'crystal', glow: true, ribbon: 0xffd76b, big: 1.25 } },
 ];
 
 // ------------------------------------------------------------------ frog
 
-/** skin / belly / cloth (gi) / scarf. */
+/**
+ * skin / belly / cloth (gi) / scarf, plus `fx`.
+ *
+ * As with the swords, `fx` is what makes a skin worth owning. A recolour is
+ * free; these change the frog. The rig reads them and adds real geometry, so
+ * a legendary is recognisable across the arena at a glance.
+ *
+ *   emissive  the hide self-lights in this colour
+ *   eyeGlow   glowing eyes instead of ordinary ones
+ *   pattern   glowing inlay lines over the back and brow
+ *   aura      a soft shell around the whole frog
+ *   halo      one or two rings above the head
+ *   horns     n horns on the brow
+ *   crown     a ring of points around the skull
+ *   spikes    n spines down the back
+ *   fins      cheek fins
+ */
 export const FROG_SKINS = [
   { id: 'frog_default', name: 'Pond Green',  rarity: 'common',
-    skin: 0x6cc24a, belly: 0xdfe6a8, cloth: 0x24242e, scarf: 0xc0392b },
+    skin: 0x6cc24a, belly: 0xdfe6a8, cloth: 0x24242e, scarf: 0xc0392b,
+    fx: {} },
   { id: 'frog_bog',     name: 'Bog Brown',   rarity: 'common',
-    skin: 0x8a7a3a, belly: 0xe0d6a8, cloth: 0x2a2418, scarf: 0x7a5a2a },
+    skin: 0x8a7a3a, belly: 0xe0d6a8, cloth: 0x2a2418, scarf: 0x7a5a2a,
+    fx: { spikes: 3 } },
   { id: 'frog_reed',    name: 'Reed',        rarity: 'common',
-    skin: 0x9ac24a, belly: 0xeef2c0, cloth: 0x2e3320, scarf: 0x6a8a2a },
+    skin: 0x9ac24a, belly: 0xeef2c0, cloth: 0x2e3320, scarf: 0x6a8a2a,
+    fx: { fins: true } },
   { id: 'frog_tree',    name: 'Tree Frog',   rarity: 'uncommon',
-    skin: 0x3aa8c2, belly: 0xd8f2f8, cloth: 0x16242e, scarf: 0xe0a02a },
+    skin: 0x3aa8c2, belly: 0xd8f2f8, cloth: 0x16242e, scarf: 0xe0a02a,
+    fx: { fins: true, spikes: 4, pattern: 0xe0a02a } },
   { id: 'frog_slate',   name: 'Slate Ninja', rarity: 'uncommon',
-    skin: 0x6a7280, belly: 0xd0d8e0, cloth: 0x14161c, scarf: 0x8a9aa8 },
+    skin: 0x6a7280, belly: 0xd0d8e0, cloth: 0x14161c, scarf: 0x8a9aa8,
+    fx: { horns: 2, spikes: 5 } },
   { id: 'frog_dart',    name: 'Poison Dart', rarity: 'rare',
-    skin: 0xff5a3c, belly: 0xffd0a8, cloth: 0x1a0e0a, scarf: 0x2a2a2a },
+    skin: 0xff5a3c, belly: 0xffd0a8, cloth: 0x1a0e0a, scarf: 0x2a2a2a,
+    fx: { pattern: 0xffe14a, eyeGlow: 0xffe14a, spikes: 6 } },
   { id: 'frog_midnight', name: 'Midnight',   rarity: 'rare',
-    skin: 0x3a3a6a, belly: 0xa8a8d8, cloth: 0x0d0d1a, scarf: 0x6a5aff },
+    skin: 0x3a3a6a, belly: 0xa8a8d8, cloth: 0x0d0d1a, scarf: 0x6a5aff,
+    fx: { emissive: 0x1a1a3a, eyeGlow: 0x8f7aff, aura: 0x3a2a8a, horns: 2 } },
   { id: 'frog_golden',  name: 'Golden Toad', rarity: 'epic',
-    skin: 0xe0b83a, belly: 0xfff0b0, cloth: 0x3a2a06, scarf: 0xc0392b },
+    skin: 0xe0b83a, belly: 0xfff0b0, cloth: 0x3a2a06, scarf: 0xc0392b,
+    fx: {
+      emissive: 0x6a4a08, pattern: 0xfff3c4, eyeGlow: 0xfff0b0,
+      crown: true, horns: 2, aura: 0xe0b83a,
+    } },
   { id: 'frog_spirit',  name: 'Spirit Frog', rarity: 'legendary',
-    skin: 0xa8f0e0, belly: 0xe8fffa, cloth: 0x1a3a3a, scarf: 0x6affd0 },
+    skin: 0xa8f0e0, belly: 0xe8fffa, cloth: 0x1a3a3a, scarf: 0x6affd0,
+    fx: {
+      emissive: 0x2a6a5a, pattern: 0x6affd0, eyeGlow: 0xe8fffa,
+      aura: 0x6affd0, halo: 0x6affd0, fins: true, spikes: 5,
+    } },
   // Not in any crate. The only way to own this is to put Frogath down, and
-  // it is his LOOK only — none of what made him hard comes with it.
+  // it is his LOOK only — none of what made him hard comes with it. Same
+  // size, same hitbox, same everything that matters; only the god's
+  // appearance, at frog scale.
   { id: 'frog_frogath', name: 'Frogath',     rarity: 'legendary', reward: true,
-    skin: 0xe8b73a, belly: 0xffe9a8, cloth: 0x4a3206, scarf: 0xfff3c4 },
+    skin: 0xe8b73a, belly: 0xffe9a8, cloth: 0x4a3206, scarf: 0xfff3c4,
+    fx: {
+      emissive: 0x6a4a08, pattern: 0xfff3c4, eyeGlow: 0xfff6d0,
+      aura: 0xffd76b, halo: 0xffd76b, halo2: true, crown: true,
+      horns: 2, spikes: 4, embers: 0xffd76b,
+    } },
 ];
 
 /** Catalog lookup by the same keys the Economy stores unlocks under. */

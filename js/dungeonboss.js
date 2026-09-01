@@ -16,11 +16,11 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { CFG } from './config.js?v=v29';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v29';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v29';
-import { Audio } from './audio.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { CFG } from './config.js?v=v30';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v30';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v30';
+import { Audio } from './audio.js?v=v30';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -80,9 +80,11 @@ export class DungeonBoss {
     this.moves = this.spec.moves;
 
     const g = (base, growth) => base * Math.pow(growth, index);
-    this.maxHealth = Math.round(g(D.baseHealth, D.healthGrowth));
+    // Per-boss trim on top of the curve, for the ones the curve overshot.
+    const tune = this.spec.tune || 1;
+    this.maxHealth = Math.round(g(D.baseHealth, D.healthGrowth) * tune);
     this.health = this.maxHealth;
-    this.damage = Math.round(g(D.baseDamage, D.damageGrowth));
+    this.damage = Math.round(g(D.baseDamage, D.damageGrowth) * tune);
     this.speed = g(D.baseSpeed, D.speedGrowth);
     this.telegraph = Math.max(D.minTelegraph,
       D.telegraph * Math.pow(D.telegraphShrink, index));

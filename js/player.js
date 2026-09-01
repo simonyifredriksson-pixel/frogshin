@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { CFG } from './config.js?v=v29';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v29';
-import { FrogModel } from './frog.js?v=v29';
-import { Grapple, GrappleState } from './grapple.js?v=v29';
-import { Combat, Health } from './combat.js?v=v29';
-import { Stamina } from './stamina.js?v=v29';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v29';
-import { Audio } from './audio.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { CFG } from './config.js?v=v30';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v30';
+import { FrogModel } from './frog.js?v=v30';
+import { Grapple, GrappleState } from './grapple.js?v=v30';
+import { Combat, Health } from './combat.js?v=v30';
+import { Stamina } from './stamina.js?v=v30';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v30';
+import { Audio } from './audio.js?v=v30';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -68,6 +68,9 @@ export class Player {
     this.storyParry = false;       // right mouse becomes parry, not throw
     this.parrying = false;
     this.parryHits = 0;            // blows absorbed during the current parry
+    this.parryHeld = 0;            // how long this guard has been up
+    this.parryCooldown = 0;        // seconds until you may guard again
+    this._parryCue = 0;
     this.knockdown = 0;            // seconds face-down and helpless
     this.damageMultiplier = 1;     // broken sword scales this down
     this.justParried = 0;
@@ -321,20 +324,8 @@ export class Player {
       // real cost of running kunai as your main weapon.
       const slot = this.inventory.selectedSlot;
       const swordOut = !!slot && slot.item === ITEMS.katana;
-      if (swordOut) {
-        const held = input.rightHeld;
-        if (held !== this.parrying) {
-          this.parrying = held;
-          // Releasing the parry clears the tally, so each guard is judged
-          // on its own — that is what makes holding it forever a risk.
-          if (!held) this.parryHits = 0;
-          else Audio.uiHover();
-        }
-      } else if (this.parrying) {
-        // Switching off the sword drops any guard you were holding.
-        this.parrying = false;
-        this.parryHits = 0;
-      }
+      if (swordOut) this._updateParry(dt, input.rightHeld);
+      else if (this.parrying) this._dropParry();
       input.consume('MouseRight');
       if (input.consume('KeyE')) this._tryPickup();
     } else {
@@ -365,6 +356,7 @@ export class Player {
     // launch this frame is not immediately overwritten by walk acceleration.
     this._updateLeap(dt);
 
+    if (this._parryCue > 0) this._parryCue -= dt;
     if (this._tiredCue > 0) this._tiredCue -= dt;
     if (this.kunaiCooldown > 0) this.kunaiCooldown -= dt;
     if (this.throwT > 0) this.throwT -= dt;
@@ -1221,7 +1213,7 @@ export class Player {
       this.parryHits++;
       this.justParried = 0.2;
       if (this.parryHits >= CFG.story.parry.knockdownAfter) {
-        this._knockDown(nx, nz);
+        this._breakParry(nx, nz);
         return false;
       }
       this.vel.x += nx * 7;
@@ -1333,6 +1325,74 @@ export class Player {
       if (story) { this.deathPending = false; story.beginDefeat(this); }
       else this._die(null);
     }
+  }
+
+  /**
+   * The guard.
+   *
+   * Holding right mouse used to be free: the block never dropped, never ran
+   * out and never had to be timed, so against anything that telegraphs you
+   * could simply stand there. It is now a commitment — a short window, on a
+   * cooldown, that punishes you badly if it breaks.
+   */
+  _updateParry(dt, held) {
+    const P = CFG.story.parry;
+    if (this.parryCooldown > 0) this.parryCooldown -= dt;
+
+    if (this.parrying) {
+      this.parryHeld += dt;
+      // Drops on its own, so a held button is never a permanent shield.
+      if (!held || this.parryHeld >= P.maxHold) this._dropParry();
+      return;
+    }
+    if (!held || this.parryCooldown > 0) {
+      // A cue the first time you try to guard too soon, rate-limited so it
+      // cannot spam while the button is held down.
+      if (held && (!this._parryCue || this._parryCue <= 0)) {
+        this._parryCue = 0.5;
+        Audio.uiBack();
+      }
+      return;
+    }
+    this.parrying = true;
+    this.parryHeld = 0;
+    this.parryHits = 0;
+    Audio.uiHover();
+  }
+
+  /** Lower the guard and start its cooldown. */
+  _dropParry() {
+    if (!this.parrying) return;
+    this.parrying = false;
+    this.parryHits = 0;
+    this.parryHeld = 0;
+    this.parryCooldown = CFG.story.parry.cooldown;
+  }
+
+  /**
+   * A guard broken by a second blow.
+   *
+   * Rather than the story's full knockdown, this is a short total lockout:
+   * you cannot move, attack, dash or guard for `breakLock` seconds. Greedy
+   * blocking has to cost something, and it is the same cost everywhere.
+   */
+  _breakParry(nx, nz) {
+    const P = CFG.story.parry;
+    this.parrying = false;
+    this.parryHits = 0;
+    this.parryHeld = 0;
+    this.parryCooldown = P.cooldown;
+    this.knockdown = Math.max(this.knockdown, P.breakLock);
+    this.justKnockedDown = true;
+    this.combat.reset();
+    this.grapple.cancel();
+    this.dashTimer = 0;
+    this.vel.x += nx * 9;
+    this.vel.z += nz * 9;
+    _tmp.set(this.pos.x, this.pos.y + 1.1, this.pos.z);
+    this.effects.puff(_tmp, 0xffd24a, 16, 6);
+    this.effects.ring(_tmp, 0.4, 3.4, 0.4, 0xffd24a, false, { x: nx, y: 0, z: nz });
+    Audio.exhausted(this.pos);
   }
 
   _knockDown(nx, nz) {

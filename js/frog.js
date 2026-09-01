@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v30';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -25,10 +25,12 @@ const G = {
   capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
   cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
   cone: new THREE.ConeGeometry(1, 1, 7),
+  torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
 };
 
-function mesh(geo, mat, sx, sy, sz, px, py, pz) {
+function mesh(geo, mat, sx, sy, sz, px, py, pz, rx, ry, rz) {
   const m = new THREE.Mesh(geo, mat);
+  if (rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0);
   m.scale.set(sx, sy, sz);
   m.position.set(px || 0, py || 0, pz || 0);
   m.castShadow = true;
@@ -49,30 +51,114 @@ function mesh(geo, mat, sx, sy, sz, px, py, pz) {
  * @param m materials: steel, edge, gold (tsuba), grip (cord), same (wrap)
  * @returns a Group; `userData.blade` is the blade mesh the shine effect uses
  */
-export function buildKatana(m) {
+export function buildKatana(m, fx) {
   const k = new THREE.Group();
+  const F = fx || {};
+  const L = F.long || 1;                      // blade length multiplier
 
-  const blade = mesh(G.box, m.steel, 0.045, 1.35, 0.11, 0, 0.78, 0);
+  // ---- blade ----
+  // Each shape is a genuinely different weapon, not a tinted katana. This is
+  // the whole reason a sword crate is worth opening.
+  const blade = mesh(G.box, m.steel, 0.045, 1.35 * L, 0.11, 0, 0.78 * L, 0);
+  const tipY = 1.55 * L;
+  switch (F.shape) {
+    case 'broad':
+      // A heavy cleaver: wide, blunt-shouldered, squared off.
+      blade.scale.set(0.06, 1.30 * L, 0.24);
+      k.add(mesh(G.box, m.edge, 0.065, 1.26 * L, 0.05, 0, 0.78 * L, 0.09));
+      k.add(mesh(G.box, m.steel, 0.06, 0.16, 0.24, 0, tipY - 0.10, 0));
+      break;
+    case 'serrated':
+      // Teeth down one edge.
+      blade.scale.set(0.05, 1.32 * L, 0.13);
+      for (let i = 0; i < 9; i++) {
+        k.add(mesh(G.cone, m.edge, 0.05, 0.09, 0.05,
+          0, 0.28 + i * 0.135 * L, 0.085, 0, 0, -Math.PI / 2));
+      }
+      k.add(mesh(G.cone, m.edge, 0.055, 0.20, 0.07, 0, tipY, 0));
+      break;
+    case 'curved': {
+      // A sabre: stacked segments describing an arc.
+      blade.visible = false;
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        k.add(mesh(G.box, m.steel, 0.05, 0.22 * L, 0.115,
+          0, (0.24 + i * 0.21) * L, t * t * 0.28, 0, 0, 0, t * 0.16));
+      }
+      k.add(mesh(G.cone, m.edge, 0.055, 0.22, 0.07, 0, tipY, 0.30, 0.22));
+      break;
+    }
+    case 'fang':
+      // Short, thick and wickedly pointed.
+      blade.scale.set(0.075, 1.05 * L, 0.15);
+      blade.position.y = 0.62 * L;
+      k.add(mesh(G.cone, m.edge, 0.09, 0.40, 0.17, 0, 1.30 * L, 0));
+      break;
+    case 'light':
+      // Not steel at all — a bar of light, like the god's.
+      blade.scale.set(0.10, 1.42 * L, 0.30);
+      k.add(mesh(G.box, m.edge, 0.14, 1.36 * L, 0.16, 0, 0.80 * L, 0));
+      k.add(mesh(G.cone, m.edge, 0.12, 0.34, 0.30, 0, tipY + 0.06, 0));
+      break;
+    default:                                   // katana
+      k.add(mesh(G.box, m.edge, 0.048, 1.32 * L, 0.035, 0, 0.78 * L, 0.036));
+      k.add(mesh(G.cone, m.edge, 0.06, 0.22, 0.075, 0, tipY, 0));
+      break;
+  }
   k.add(blade);
-  // Bright shinogi line down the flat, so the polish reads in motion.
-  k.add(mesh(G.box, m.edge, 0.048, 1.32, 0.035, 0, 0.78, 0.036));
-  k.add(mesh(G.cone, m.edge, 0.06, 0.22, 0.075, 0, 1.55, 0));       // kissaki
-  k.add(mesh(G.cyl, m.gold, 0.055, 0.10, 0.055, 0, 0.14, 0));       // habaki collar
 
-  // Round tsuba — a disc, not a bar.
-  const tsuba = mesh(G.cyl, m.gold, 0.165, 0.028, 0.165, 0, 0.07, 0);
-  k.add(tsuba);
+  // Glowing marks along the flat.
+  if (F.runes && m.rune) {
+    for (let i = 0; i < 5; i++) {
+      k.add(mesh(G.box, m.rune, 0.055, 0.035, 0.035,
+        0, (0.32 + i * 0.24) * L, 0.05));
+    }
+  }
+  // A soft shell of light around the blade.
+  if (F.aura && m.aura) {
+    const a = mesh(G.box, m.aura, 0.20, 1.5 * L, 0.34, 0, 0.80 * L, 0);
+    a.castShadow = false;
+    k.add(a);
+  }
 
-  // Tsuka: ivory same under a black cord wrap.
+  k.add(mesh(G.cyl, m.gold, 0.055, 0.10, 0.055, 0, 0.14, 0));       // habaki
+
+  // ---- guard ----
+  switch (F.tsuba) {
+    case 'square':
+      k.add(mesh(G.box, m.gold, 0.30, 0.032, 0.30, 0, 0.07, 0));
+      break;
+    case 'cross':
+      k.add(mesh(G.box, m.gold, 0.46, 0.05, 0.09, 0, 0.07, 0));
+      k.add(mesh(G.box, m.gold, 0.09, 0.05, 0.30, 0, 0.07, 0));
+      break;
+    case 'ring':
+      k.add(mesh(G.torus, m.gold, 0.19, 0.19, 0.19, 0, 0.07, 0, Math.PI / 2));
+      break;
+    case 'none':
+      break;
+    default:                                   // disc
+      k.add(mesh(G.cyl, m.gold, 0.165, 0.028, 0.165, 0, 0.07, 0));
+      break;
+  }
+
+  // ---- tsuka: ivory same under a cord wrap ----
   k.add(mesh(G.cyl, m.same, 0.052, 0.30, 0.052, 0, -0.10, 0));
   k.add(mesh(G.cyl, m.grip, 0.058, 0.30, 0.058, 0, -0.10, 0));
-  // Diamonds of the underlying same peeking through the cross-wrap.
   for (let i = 0; i < 5; i++) {
     const y = -0.005 - i * 0.055;
     k.add(mesh(G.box, m.same, 0.030, 0.030, 0.125, 0, y, 0, 0));
     k.add(mesh(G.box, m.same, 0.125, 0.030, 0.030, 0, y - 0.027, 0));
   }
   k.add(mesh(G.cyl, m.gold, 0.062, 0.035, 0.062, 0, -0.255, 0));    // kashira
+
+  // A cord hanging from the pommel.
+  if (F.tassel && m.tassel) {
+    for (let i = 0; i < 3; i++) {
+      k.add(mesh(G.box, m.tassel, 0.022, 0.16, 0.022,
+        (i - 1) * 0.03, -0.36 - i * 0.02, 0));
+    }
+  }
 
   k.userData.blade = blade;
   return k;
@@ -102,9 +188,22 @@ export class FrogModel {
     const skin = new THREE.Color(useCustomFrog ? fs.skin : color);
     const skinDark = skin.clone().multiplyScalar(0.72);
 
+    // `fx` is what makes a skin more than a recolour — glowing hide, inlay,
+    // horns, a halo. Read once here and used by the builders below.
+    const ffx = (useCustomFrog && fs.fx) || {};
+    const sfx = (ss && ss.fx) || {};
+    this.fx = ffx;
+    this.swordFx = sfx;
+
     this.mats = {
-      skin: new THREE.MeshLambertMaterial({ color: skin }),
-      skinDark: new THREE.MeshLambertMaterial({ color: skinDark }),
+      skin: new THREE.MeshLambertMaterial({
+        color: skin, emissive: ffx.emissive || 0x000000,
+      }),
+      skinDark: new THREE.MeshLambertMaterial({
+        color: skinDark,
+        emissive: ffx.emissive
+          ? new THREE.Color(ffx.emissive).multiplyScalar(0.6) : 0x000000,
+      }),
       belly: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.belly : BELLY }),
       cloth: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.cloth : CLOTH }),
       clothDark: new THREE.MeshLambertMaterial({
@@ -114,11 +213,17 @@ export class FrogModel {
       eye: new THREE.MeshBasicMaterial({ color: EYE_WHITE }),
       pupil: new THREE.MeshBasicMaterial({ color: 0x101014 }),
       shine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      steel: new THREE.MeshLambertMaterial({
-        color: ss ? ss.blade : 0xd9dee6,
-        emissive: ss ? ss.glow : 0x2a3038,
-      }),
-      edge: new THREE.MeshLambertMaterial({ color: ss ? ss.edge : 0xf2f6fb }),
+      // A glowing blade is emissive-lit rather than shaded — it is the light
+      // source, not a thing the world lights.
+      steel: sfx.glow
+        ? new THREE.MeshBasicMaterial({ color: ss.blade })
+        : new THREE.MeshLambertMaterial({
+          color: ss ? ss.blade : 0xd9dee6,
+          emissive: ss ? ss.glow : 0x2a3038,
+        }),
+      edge: sfx.glow
+        ? new THREE.MeshBasicMaterial({ color: ss.edge })
+        : new THREE.MeshLambertMaterial({ color: ss ? ss.edge : 0xf2f6fb }),
       gold: new THREE.MeshLambertMaterial({ color: ss ? ss.guard : 0xc9a227 }),
       grip: new THREE.MeshLambertMaterial({ color: ss ? ss.grip : CLOTH_DARK }),
       // Ivory rayskin under the cord wrap, and the lacquered scabbard. Both
@@ -130,6 +235,28 @@ export class FrogModel {
       tongue: new THREE.MeshLambertMaterial({ color: 0xef7d9d }),
     };
 
+    // ---- optional materials, only made when a skin asks for them ----
+    if (sfx.runes) this.mats.rune = new THREE.MeshBasicMaterial({ color: sfx.runes });
+    if (sfx.tassel) this.mats.tassel = new THREE.MeshLambertMaterial({ color: sfx.tassel });
+    if (sfx.aura) {
+      this.mats.aura = new THREE.MeshBasicMaterial({
+        color: sfx.aura, transparent: true, opacity: 0.22, depthWrite: false,
+      });
+    }
+    if (ffx.pattern) this.mats.inlay = new THREE.MeshBasicMaterial({ color: ffx.pattern });
+    if (ffx.eyeGlow) this.mats.eyeLit = new THREE.MeshBasicMaterial({ color: ffx.eyeGlow });
+    if (ffx.halo) {
+      this.mats.halo = new THREE.MeshBasicMaterial({
+        color: ffx.halo, transparent: true, opacity: 0.9,
+      });
+    }
+    if (ffx.aura) {
+      this.mats.bodyAura = new THREE.MeshBasicMaterial({
+        color: ffx.aura, transparent: true, opacity: 0.14,
+        side: THREE.BackSide, depthWrite: false,
+      });
+    }
+
     this.root = new THREE.Group();          // origin at the feet
     this.body = new THREE.Group();          // squash/stretch + bob live here
     this.root.add(this.body);
@@ -139,6 +266,7 @@ export class FrogModel {
     this._buildLimbs();
     this._buildGear();
     this._buildTongue();
+    this._buildSkinFx();
     if (!isLocal) this._buildNameplate();
 
     // ---- animation state -------------------------------------------------
@@ -286,7 +414,7 @@ export class FrogModel {
 
   _buildGear() {
     // --- katana: parented to a pivot so it can move hand <-> back ---
-    this.katana = buildKatana(this.mats);
+    this.katana = buildKatana(this.mats, this.swordFx);
     this.blade = this.katana.userData.blade;
     this.body.add(this.katana);
 
@@ -321,6 +449,82 @@ export class FrogModel {
     // Belt pouch + shuriken detail.
     this.body.add(mesh(G.box, this.mats.clothDark, 0.13, 0.13, 0.08, -0.30, 0.48, 0.14));
     this.sheathPos = this.katana.position.clone();
+  }
+
+  /**
+   * Everything a skin adds beyond colour.
+   *
+   * This is the whole answer to "why buy a crate" — a recolour costs nothing
+   * and is worth nothing, so a skin above common physically changes the frog:
+   * spines, fins, horns, a crown, glowing inlay, a halo, a shell of light.
+   * Built last so it sits on top of the finished rig.
+   */
+  _buildSkinFx() {
+    const F = this.fx;
+    const M = this.mats;
+    const b = this.body;
+
+    // Spines down the back.
+    for (let i = 0; i < (F.spikes || 0); i++) {
+      const t = i / Math.max(1, (F.spikes || 1) - 1);
+      b.add(mesh(G.cone, M.skinDark, 0.07, 0.16 + (1 - t) * 0.10, 0.07,
+        0, 0.80 + t * 0.28, -0.34 - t * 0.05, -0.5));
+    }
+    // Cheek fins.
+    if (F.fins) {
+      for (const sx of [-1, 1]) {
+        this.head.add(mesh(G.cone, M.skinDark, 0.06, 0.26, 0.16,
+          sx * 0.42, 0.02, -0.10, 0, 0, sx * 1.25));
+      }
+    }
+    // Horns on the brow.
+    for (let i = 0; i < (F.horns || 0); i++) {
+      const sx = i % 2 === 0 ? -1 : 1;
+      const tier = Math.floor(i / 2);
+      this.head.add(mesh(G.cone, M.skinDark, 0.055, 0.20 + tier * 0.07, 0.055,
+        sx * (0.26 + tier * 0.07), 0.30 + tier * 0.06, 0.02, -0.35, 0, sx * 0.6));
+    }
+    // A ring of points around the skull.
+    if (F.crown && M.inlay) {
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        this.head.add(mesh(G.cone, M.inlay, 0.035, 0.14, 0.035,
+          Math.cos(a) * 0.36, 0.26, Math.sin(a) * 0.34));
+      }
+    }
+    // Glowing inlay across the back and brow.
+    if (M.inlay) {
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI - Math.PI / 2;
+        b.add(mesh(G.box, M.inlay, 0.035, 0.035, 0.42,
+          Math.sin(a) * 0.40, 0.68 + Math.cos(a) * 0.16, -0.05, 0.3));
+      }
+      this.head.add(mesh(G.box, M.inlay, 0.30, 0.028, 0.028, 0, 0.16, 0.34));
+    }
+    // Haloes.
+    if (M.halo) {
+      this.halo = mesh(G.torus, M.halo, 0.30, 0.30, 0.30, 0, 1.92, 0, Math.PI / 2);
+      this.halo.castShadow = false;
+      b.add(this.halo);
+      if (F.halo2) {
+        this.halo2 = mesh(G.torus, M.halo, 0.42, 0.42, 0.42, 0, 2.02, 0, Math.PI / 2);
+        this.halo2.castShadow = false;
+        b.add(this.halo2);
+      }
+    }
+    // A shell of light around the whole frog.
+    if (M.bodyAura) {
+      this.bodyAura = mesh(G.sphere, M.bodyAura, 1.05, 1.25, 1.05, 0, 0.85, 0);
+      this.bodyAura.castShadow = false;
+      b.add(this.bodyAura);
+    }
+    // Glowing eyes replace the ordinary pupils.
+    if (M.eyeLit) {
+      for (const e of this.eyes) {
+        e.pupil.material = M.eyeLit;
+        e.white.material = M.eyeLit;
+      }
+    }
   }
 
   _buildTongue() {
@@ -599,6 +803,15 @@ export class FrogModel {
     }
     this.head.rotation.x = dampAngle(this.head.rotation.x, headTiltX, 12, dt);
     this.head.rotation.y = dampAngle(this.head.rotation.y, headTiltY, 12, dt);
+
+    // Skin extras that live rather than sit there: haloes turn, the aura
+    // breathes. Cheap, and it is what makes a legendary read as special
+    // rather than as a differently-coloured frog.
+    if (this.halo) this.halo.rotation.z += dt * 0.9;
+    if (this.halo2) this.halo2.rotation.z -= dt * 0.6;
+    if (this.bodyAura) {
+      this.bodyAura.material.opacity = 0.11 + Math.sin(t * 2.4) * 0.04;
+    }
 
     // Throat pulse — a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);

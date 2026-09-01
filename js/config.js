@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v29';
+export const BUILD = 'v30';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -83,6 +83,11 @@ export const CFG = {
       knockdownAfter: 2,     // hits absorbed in one parry before you go down
       knockdownTime: 0.7,    // seconds on the floor, unable to act
       chipStagger: 0.18,     // brief hitstop when a blow is turned aside
+      // A raised guard used to cost nothing: you could hold it forever and
+      // simply never be hit. It is now a timed commitment.
+      cooldown: 1.5,         // seconds between one guard and the next
+      maxHold: 1.2,          // a guard drops on its own after this long
+      breakLock: 0.6,        // helpless after a guard is broken
     },
     /**
      * Market fruit in the village. Cheap on purpose: it is the only healing

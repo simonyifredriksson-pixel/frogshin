@@ -9,10 +9,10 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v29';
-import { Audio } from './audio.js?v=v29';
-import { PX } from './icons.js?v=v29';
-import { CFG } from './config.js?v=v29';
+} from './skins.js?v=v30';
+import { Audio } from './audio.js?v=v30';
+import { PX } from './icons.js?v=v30';
+import { CFG } from './config.js?v=v30';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -20,48 +20,177 @@ const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
 // --------------------------------------------------------------- previews
 
-/** Katana, drawn diagonally so the blade colour reads. */
+/**
+ * Katana, drawn diagonally so the blade colour reads.
+ *
+ * The card has to show the SHAPE, not just the palette — otherwise every
+ * sword in the shop looks identical and there is nothing to choose between
+ * them. Each `fx.shape` gets its own silhouette, matching the 3D build.
+ */
 function swordSVG(s) {
-  return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
-    <polygon points="54,6 60,12 22,50 16,44" fill="${hex(s.blade)}"/>
-    <polygon points="54,6 60,12 42,30 36,24" fill="${hex(s.edge)}"/>
-    <rect x="12" y="41" width="16" height="6" fill="${hex(s.guard)}"
+  const f = s.fx || {};
+  const g = hex(s.guard);
+  let blade;
+  switch (f.shape) {
+    case 'broad':
+      blade = `<polygon points="52,4 62,14 24,52 14,42" fill="${hex(s.blade)}"/>
+        <polygon points="52,4 62,14 40,36 30,26" fill="${hex(s.edge)}"/>`;
+      break;
+    case 'serrated':
+      blade = `<polygon points="54,6 60,12 22,50 16,44" fill="${hex(s.blade)}"/>
+        ${[0, 1, 2, 3, 4].map((i) => `<polygon fill="${hex(s.edge)}" points="${
+          52 - i * 7},${10 + i * 7} ${57 - i * 7},${15 + i * 7} ${
+          49 - i * 7},${17 + i * 7}"/>`).join('')}`;
+      break;
+    case 'curved':
+      blade = `<path d="M56,6 Q62,14 46,30 Q30,46 18,46 L14,42 Q30,40 44,26 Q54,14 52,4 Z"
+        fill="${hex(s.blade)}"/>
+        <path d="M56,6 Q60,13 48,26 L44,22 Q52,12 52,5 Z" fill="${hex(s.edge)}"/>`;
+      break;
+    case 'fang':
+      blade = `<polygon points="50,10 60,20 26,48 18,40" fill="${hex(s.blade)}"/>
+        <polygon points="50,10 60,20 44,32 36,24" fill="${hex(s.edge)}"/>`;
+      break;
+    case 'light':
+      blade = `<polygon points="56,2 63,9 21,51 14,44" fill="${hex(s.edge)}"
+          opacity="0.55"/>
+        <polygon points="55,5 60,10 20,50 15,45" fill="${hex(s.blade)}"/>`;
+      break;
+    default:
+      blade = `<polygon points="54,6 60,12 22,50 16,44" fill="${hex(s.blade)}"/>
+        <polygon points="54,6 60,12 42,30 36,24" fill="${hex(s.edge)}"/>`;
+      break;
+  }
+  // Guards differ too, so two swords never share an outline.
+  let guard;
+  switch (f.tsuba) {
+    case 'square':
+      guard = `<rect x="11" y="40" width="18" height="8" fill="${g}"
+        transform="rotate(-45 20 44)"/>`;
+      break;
+    case 'cross':
+      guard = `<rect x="8" y="42" width="24" height="5" fill="${g}"
           transform="rotate(-45 20 44)"/>
+        <rect x="17" y="34" width="5" height="20" fill="${g}"
+          transform="rotate(-45 20 44)"/>`;
+      break;
+    case 'ring':
+      guard = `<circle cx="20" cy="44" r="8" fill="none" stroke="${g}" stroke-width="4"/>`;
+      break;
+    case 'none': guard = ''; break;
+    default:
+      guard = `<rect x="12" y="41" width="16" height="6" fill="${g}"
+        transform="rotate(-45 20 44)"/>`;
+      break;
+  }
+  const runes = f.runes
+    ? [0, 1, 2].map((i) => `<circle cx="${44 - i * 9}" cy="${18 + i * 9}" r="1.8"
+        fill="${hex(f.runes)}"/>`).join('')
+    : '';
+  const tassel = f.tassel
+    ? `<rect x="1" y="57" width="3" height="6" fill="${hex(f.tassel)}"/>` : '';
+  return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
+    ${blade}${runes}${guard}
     <rect x="4" y="47" width="15" height="8" fill="${hex(s.grip)}"
           transform="rotate(-45 11.5 51)"/>
-    <rect x="1" y="53" width="6" height="6" fill="${hex(s.guard)}"
-          transform="rotate(-45 4 56)"/>
+    <rect x="1" y="53" width="6" height="6" fill="${g}"
+          transform="rotate(-45 4 56)"/>${tassel}
   </svg>`;
 }
 
-/** Kunai, matching the in-world model's silhouette. */
+/** Kunai, matching the in-world model's silhouette — including its shape. */
 function kunaiSVG(s) {
+  const f = s.fx || {};
+  let blade;
+  switch (f.shape) {
+    case 'broad':
+      blade = `<polygon points="32,6 50,30 32,38 14,30" fill="${hex(s.blade)}"/>
+        <polygon points="32,6 32,38 14,30" fill="${hex(s.facet)}"/>`;
+      break;
+    case 'needle':
+      blade = `<polygon points="32,1 39,32 32,37 25,32" fill="${hex(s.blade)}"/>
+        <polygon points="32,1 32,37 25,32" fill="${hex(s.facet)}"/>`;
+      break;
+    case 'crystal':
+      blade = `<polygon points="32,3 44,20 32,38 20,20" fill="${hex(s.blade)}"/>
+        <polygon points="32,3 32,38 20,20" fill="${hex(s.facet)}"/>
+        <polygon points="32,3 36,12 32,20 28,12" fill="${hex(s.facet)}"/>`;
+      break;
+    case 'star':
+      blade = `${[0, 90, 180, 270].map((a) => `<polygon fill="${hex(s.blade)}"
+        points="32,4 38,26 26,26" transform="rotate(${a} 32 26)"/>`).join('')}
+        <circle cx="32" cy="26" r="6" fill="${hex(s.facet)}"/>`;
+      break;
+    default:
+      blade = `<polygon points="32,4 45,32 32,38 19,32" fill="${hex(s.blade)}"/>
+        <polygon points="32,4 32,38 19,32" fill="${hex(s.facet)}"/>`;
+      break;
+  }
+  const ribbon = f.ribbon
+    ? `<rect x="30" y="56" width="4" height="8" fill="${hex(f.ribbon)}"/>
+       <rect x="31" y="60" width="2" height="4" fill="${hex(f.ribbon)}" opacity="0.6"/>`
+    : '';
+  const star = f.shape === 'star';
   return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
-    <polygon points="32,4 45,32 32,38 19,32" fill="${hex(s.blade)}"/>
-    <polygon points="32,4 32,38 19,32" fill="${hex(s.facet)}"/>
-    <rect x="26" y="36" width="12" height="5" fill="${hex(s.ring)}"/>
+    ${blade}
+    ${star ? '' : `<rect x="26" y="36" width="12" height="5" fill="${hex(s.ring)}"/>
     <rect x="28" y="41" width="8" height="14" fill="${hex(s.wrap)}"/>
     <rect x="27" y="45" width="10" height="2" fill="${hex(s.ring)}" opacity="0.5"/>
     <rect x="27" y="50" width="10" height="2" fill="${hex(s.ring)}" opacity="0.5"/>
-    <circle cx="32" cy="58" r="5" fill="none" stroke="${hex(s.ring)}" stroke-width="3"/>
+    <circle cx="32" cy="58" r="5" fill="none" stroke="${hex(s.ring)}" stroke-width="3"/>`}
+    ${ribbon}
   </svg>`;
 }
 
-/** Frog bust: head, eyes, mask and scarf, in the skin's palette. */
+/**
+ * Frog bust: head, eyes, mask and scarf — plus everything the skin's `fx`
+ * adds, so the card shows what you would actually be wearing.
+ */
 function frogSVG(s) {
+  const f = s.fx || {};
+  const eye = f.eyeGlow ? hex(f.eyeGlow) : '#12121a';
+  const white = f.eyeGlow ? hex(f.eyeGlow) : '#fefbe8';
+  const halo = f.halo
+    ? `<ellipse cx="32" cy="8" rx="17" ry="4" fill="none"
+        stroke="${hex(f.halo)}" stroke-width="3"/>`
+    + (f.halo2 ? `<ellipse cx="32" cy="5" rx="22" ry="4" fill="none"
+        stroke="${hex(f.halo)}" stroke-width="2" opacity="0.7"/>` : '')
+    : '';
+  const horns = f.horns
+    ? `<polygon points="14,14 10,3 20,11" fill="${hex(s.skin)}"/>
+       <polygon points="50,14 54,3 44,11" fill="${hex(s.skin)}"/>` : '';
+  const crown = f.crown && f.pattern
+    ? [0, 1, 2, 3, 4].map((i) => `<polygon fill="${hex(f.pattern)}"
+        points="${16 + i * 8},13 ${19 + i * 8},4 ${22 + i * 8},13"/>`).join('')
+    : '';
+  const spikes = f.spikes
+    ? [0, 1, 2].map((i) => `<polygon fill="${hex(s.cloth)}"
+        points="8,${26 + i * 8} 2,${30 + i * 8} 8,${34 + i * 8}"/>`).join('')
+    : '';
+  const fins = f.fins
+    ? `<polygon points="12,20 2,26 12,30" fill="${hex(s.skin)}"/>
+       <polygon points="52,20 62,26 52,30" fill="${hex(s.skin)}"/>` : '';
+  const pattern = f.pattern
+    ? `<rect x="16" y="34" width="32" height="2" fill="${hex(f.pattern)}"/>
+       <rect x="20" y="46" width="24" height="2" fill="${hex(f.pattern)}"/>` : '';
+  const aura = f.aura
+    ? `<circle cx="32" cy="34" r="29" fill="${hex(f.aura)}" opacity="0.16"/>` : '';
+
   return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
+    ${aura}${halo}${fins}${spikes}${horns}${crown}
     <rect x="10" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
     <rect x="44" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
-    <rect x="12" y="16" width="6" height="5" fill="#fefbe8"/>
-    <rect x="46" y="16" width="6" height="5" fill="#fefbe8"/>
-    <rect x="15" y="18" width="3" height="3" fill="#12121a"/>
-    <rect x="46" y="18" width="3" height="3" fill="#12121a"/>
+    <rect x="12" y="16" width="6" height="5" fill="${white}"/>
+    <rect x="46" y="16" width="6" height="5" fill="${white}"/>
+    <rect x="15" y="18" width="3" height="3" fill="${eye}"/>
+    <rect x="46" y="18" width="3" height="3" fill="${eye}"/>
     <rect x="12" y="22" width="40" height="20" fill="${hex(s.skin)}"/>
     <rect x="12" y="26" width="40" height="5" fill="${hex(s.scarf)}"/>
     <rect x="12" y="31" width="40" height="7" fill="${hex(s.cloth)}"/>
     <rect x="20" y="42" width="24" height="12" fill="${hex(s.skin)}"/>
     <rect x="24" y="44" width="16" height="8" fill="${hex(s.belly)}"/>
     <rect x="14" y="38" width="36" height="4" fill="${hex(s.cloth)}"/>
+    ${pattern}
   </svg>`;
 }
 

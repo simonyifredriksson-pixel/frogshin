@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { CFG } from './config.js?v=v29';
-import { clamp } from './util.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { CFG } from './config.js?v=v30';
+import { clamp } from './util.js?v=v30';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -203,6 +203,13 @@ function kunaiGeometries() {
     grip: new THREE.CylinderGeometry(0.042, 0.042, 0.34, 6),
     ring: new THREE.TorusGeometry(0.075, 0.028, 5, 10),
     collar: new THREE.CylinderGeometry(0.055, 0.055, 0.05, 6),
+    // Extra profiles, so a kunai skin changes the BLADE and not just its
+    // colour — a recolour is free, and free is not worth 1500 froglets.
+    broad: new THREE.ConeGeometry(0.19, 0.36, 4),
+    needle: new THREE.ConeGeometry(0.07, 0.62, 4),
+    crystal: new THREE.OctahedronGeometry(0.20, 0),
+    point: new THREE.ConeGeometry(0.09, 0.24, 4),
+    ribbon: new THREE.BoxGeometry(0.05, 0.02, 0.30),
   };
   return _kunaiGeo;
 }
@@ -219,18 +226,44 @@ function kunaiMaterials() {
     edge: new THREE.MeshLambertMaterial({ color: 0x5a626d }),
     wrap: new THREE.MeshLambertMaterial({ color: 0xc0392b }),
     ring: new THREE.MeshLambertMaterial({ color: 0x14161a }),
+    // A glowing blade is lit rather than shaded; a skin toggles which is used.
+    lit: new THREE.MeshBasicMaterial({ color: 0x5a626d }),
+    ribbon: new THREE.MeshLambertMaterial({
+      color: 0xc0392b, transparent: true, opacity: 0.9,
+    }),
   };
   return _kunaiMats;
 }
 
-/** Apply a kunai skin to every existing and future blade. */
+/**
+ * The shape the current kunai skin asks for.
+ *
+ * Held at module level because every blade in the pool is built from it, and
+ * the pool is rebuilt when it changes.
+ */
+let _kunaiFx = {};
+export function kunaiFx() { return _kunaiFx; }
+
+/**
+ * Apply a kunai skin to every existing and future blade.
+ * @returns true if the SHAPE changed and the pool must be rebuilt
+ */
 export function setKunaiSkin(skin) {
-  if (!skin) return;
+  if (!skin) return false;
   const M = kunaiMaterials();
   M.steel.color.setHex(skin.blade);
   M.edge.color.setHex(skin.facet);
+  M.lit.color.setHex(skin.facet);
   M.wrap.color.setHex(skin.wrap);
   M.ring.color.setHex(skin.ring);
+  const fx = skin.fx || {};
+  M.ribbon.color.setHex(fx.ribbon || skin.wrap);
+  const changed = fx.shape !== _kunaiFx.shape
+    || !!fx.glow !== !!_kunaiFx.glow
+    || (fx.big || 1) !== (_kunaiFx.big || 1)
+    || !!fx.ribbon !== !!_kunaiFx.ribbon;
+  _kunaiFx = fx;
+  return changed;
 }
 
 /**
@@ -240,20 +273,62 @@ export function setKunaiSkin(skin) {
 export function createKunaiMesh() {
   const G = kunaiGeometries();
   const M = kunaiMaterials();
+  const F = _kunaiFx;
   const g = new THREE.Group();
+  const big = F.big || 1;
+  const edgeMat = F.glow ? M.lit : M.edge;
 
-  const blade = new THREE.Mesh(G.blade, M.steel);
-  blade.rotation.x = Math.PI / 2;      // point the cone along +Z
-  blade.position.z = 0.21;
+  // ---- blade: a genuinely different profile per skin ----
+  let bladeGeo = G.blade;
+  let bladeZ = 0.21;
+  if (F.shape === 'broad') { bladeGeo = G.broad; bladeZ = 0.18; }
+  else if (F.shape === 'needle') { bladeGeo = G.needle; bladeZ = 0.31; }
+  else if (F.shape === 'crystal') { bladeGeo = G.crystal; bladeZ = 0.20; }
+
+  const blade = new THREE.Mesh(bladeGeo, F.glow ? M.lit : M.steel);
+  if (F.shape !== 'crystal') blade.rotation.x = Math.PI / 2;
+  blade.position.z = bladeZ;
+  blade.scale.setScalar(big);
   g.add(blade);
 
-  // Slim lighter facet so the blade reads as edged rather than a flat cone.
-  const facet = new THREE.Mesh(G.blade, M.edge);
-  facet.rotation.x = Math.PI / 2;
-  facet.rotation.z = Math.PI / 4;
-  facet.scale.set(0.55, 1.005, 0.55);
-  facet.position.z = 0.208;
-  g.add(facet);
+  if (F.shape === 'crystal') {
+    // A shard rather than a blade: a second, sharper spike out the front.
+    const spike = new THREE.Mesh(G.needle, edgeMat);
+    spike.rotation.x = Math.PI / 2;
+    spike.position.z = 0.42 * big;
+    spike.scale.setScalar(big * 0.8);
+    g.add(spike);
+  } else if (F.shape === 'star') {
+    // Four points around the collar — a shuriken, not a knife.
+    for (let i = 0; i < 4; i++) {
+      const p = new THREE.Mesh(G.point, edgeMat);
+      const a = (i / 4) * Math.PI * 2;
+      p.position.set(Math.cos(a) * 0.16 * big, Math.sin(a) * 0.16 * big, 0.06);
+      p.rotation.z = -a + Math.PI / 2;
+      p.rotation.x = Math.PI / 2;
+      p.scale.setScalar(big);
+      g.add(p);
+    }
+  } else {
+    // Slim lighter facet so the blade reads as edged rather than a flat cone.
+    const facet = new THREE.Mesh(bladeGeo, edgeMat);
+    facet.rotation.x = Math.PI / 2;
+    facet.rotation.z = Math.PI / 4;
+    facet.scale.set(0.55 * big, 1.005 * big, 0.55 * big);
+    facet.position.z = bladeZ - 0.002;
+    g.add(facet);
+  }
+
+  // A streamer trailing off the ring.
+  if (F.ribbon) {
+    for (let i = 0; i < 3; i++) {
+      const r = new THREE.Mesh(G.ribbon, M.ribbon);
+      r.position.set(0, 0, -0.50 - i * 0.26);
+      r.scale.set(1, 1, 1 - i * 0.2);
+      r.castShadow = false;
+      g.add(r);
+    }
+  }
 
   const collar = new THREE.Mesh(G.collar, M.ring);
   collar.rotation.x = Math.PI / 2;
@@ -307,6 +382,27 @@ export class KunaiSystem {
         owner: null,
         local: false,
       });
+    }
+  }
+
+  /**
+   * Rebuild every blade in the pool.
+   *
+   * Colour changes repaint shared materials in place, but a SHAPE change
+   * needs new geometry — and the pool is built once at startup, so without
+   * this a bought kunai skin would only ever recolour the old silhouette.
+   */
+  rebuild() {
+    for (const k of this.pool) {
+      const wasVisible = k.mesh.visible;
+      this.scene.remove(k.mesh);
+      k.mesh.traverse((o) => { if (o.geometry && o.geometry.dispose) o.geometry = o.geometry; });
+      const mesh = createKunaiMesh();
+      mesh.visible = wasVisible;
+      mesh.position.copy(k.mesh.position);
+      mesh.quaternion.copy(k.mesh.quaternion);
+      this.scene.add(mesh);
+      k.mesh = mesh;
     }
   }
 

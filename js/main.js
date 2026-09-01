@@ -5,30 +5,30 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v29';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v29';
-import { Input } from './input.js?v=v29';
-import { Audio } from './audio.js?v=v29';
-import { World } from './world.js?v=v29';
-import { Effects } from './effects.js?v=v29';
-import { Atmosphere } from './atmosphere.js?v=v29';
-import { FollowCamera } from './camera.js?v=v29';
-import { Player } from './player.js?v=v29';
-import { RemotePlayer } from './remote.js?v=v29';
-import { HUD } from './hud.js?v=v29';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v29';
-import { FrogModel } from './frog.js?v=v29';
-import { DummyField } from './dummy.js?v=v29';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v29';
-import { ToadModel } from './npc.js?v=v29';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v29';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v29';
-import { DungeonRun } from './dungeon.js?v=v29';
-import { MenuScene } from './menu.js?v=v29';
-import { Economy } from './economy.js?v=v29';
-import { Shop } from './shop.js?v=v29';
-import { Network, NetRole } from './net.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v30';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v30';
+import { Input } from './input.js?v=v30';
+import { Audio } from './audio.js?v=v30';
+import { World } from './world.js?v=v30';
+import { Effects } from './effects.js?v=v30';
+import { Atmosphere } from './atmosphere.js?v=v30';
+import { FollowCamera } from './camera.js?v=v30';
+import { Player } from './player.js?v=v30';
+import { RemotePlayer } from './remote.js?v=v30';
+import { HUD } from './hud.js?v=v30';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v30';
+import { FrogModel } from './frog.js?v=v30';
+import { DummyField } from './dummy.js?v=v30';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v30';
+import { ToadModel } from './npc.js?v=v30';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v30';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v30';
+import { DungeonRun } from './dungeon.js?v=v30';
+import { MenuScene } from './menu.js?v=v30';
+import { Economy } from './economy.js?v=v30';
+import { Shop } from './shop.js?v=v30';
+import { Network, NetRole } from './net.js?v=v30';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -386,7 +386,8 @@ class Game {
   _applySkins() {
     const skins = this.shop.equippedSkins();
     this.equippedSkins = skins;
-    setKunaiSkin(skins.kunai);
+    // A shape change needs the pooled blades rebuilt, not just repainted.
+    if (setKunaiSkin(skins.kunai) && this.kunaiSystem) this.kunaiSystem.rebuild();
     // The juggernaut wears the toad, not a frog — rebuilding here would put
     // the player back in a frog body mid-round.
     if (this.player && this.scene && !this.player.isJuggernaut) {
@@ -1048,16 +1049,23 @@ class Game {
   _dungeonHit(damage, from) {
     const p = this.player;
     if (p.health.dead || p.health.protected || p.dashTimer > 0) return;
-    // Parrying turns a blow aside, exactly as it does against Toadel.
+    // Parrying turns a blow aside — routed through the player's own guard so
+    // the cooldown and the broken-guard lockout apply here exactly as they do
+    // everywhere else, rather than this path keeping its own softer copy.
     if (p.parrying) {
       p.parryHits++;
       p.justParried = 0.2;
-      this.hud.toast('PARRIED', 0.5);
-      Audio.hit(p.pos, false);
-      this.followCam.shake(0.25);
+      const dx = p.pos.x - (from ? from.x : p.pos.x);
+      const dz = p.pos.z - (from ? from.z : p.pos.z);
+      const len = Math.hypot(dx, dz) || 1;
       if (p.parryHits >= CFG.story.parry.knockdownAfter) {
-        p.parrying = false;
-        p.parryHits = 0;
+        p._breakParry(dx / len, dz / len);
+        this.hud.toast('GUARD BROKEN', 1.2);
+        this.followCam.shake(0.6);
+      } else {
+        this.hud.toast('PARRIED', 0.5);
+        Audio.parry(p.pos);
+        this.followCam.shake(0.25);
       }
       return;
     }

@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
@@ -103,11 +103,16 @@ export const GUARDIANS = [
     moves: ['shockwave', 'slam', 'shockwave', 'charge'],
     blurb: 'Every footfall is a hazard.',
   },
+  // The last four carry a `tune` multiplier on health and damage. The
+  // compounding curve alone made them a wall rather than a climb, so the top
+  // of the run is pulled back slightly — the shape of each fight is
+  // unchanged, there is just a little less of it.
   {
     name: 'NIX, LAST OF THE CHOIR',
     body: 'wraith', skin: 0x2a2a44, dark: 0x16162a, trim: 0x6cc2ff,
     head: 'skull', weapon: 'spear', horns: 0, eyes: 0x6cf0ff,
     moves: ['volley', 'blink', 'volley', 'ringout'],
+    tune: 0.90,
     blurb: 'Sings three notes. All of them arrive.',
   },
   {
@@ -115,6 +120,7 @@ export const GUARDIANS = [
     body: 'hulk', skin: 0x2f4a3a, dark: 0x1b2f24, trim: 0x6fd99a,
     head: 'mossy', weapon: 'none', horns: 0, eyes: 0x8fffc4,
     moves: ['puddle', 'leap', 'puddle', 'combo'],
+    tune: 0.88,
     blurb: 'Leaves the floor behind it worse than it found it.',
   },
   {
@@ -122,6 +128,7 @@ export const GUARDIANS = [
     body: 'wraith', skin: 0x3a2a4a, dark: 0x231830, trim: 0xffd76b,
     head: 'crowned', weapon: 'great', horns: 3, eyes: 0xffd76b,
     moves: ['spin', 'charge', 'volley', 'combo', 'shockwave'],
+    tune: 0.86,
     blurb: 'Wore a crown once. Still behaves as though it does.',
   },
   {
@@ -129,6 +136,7 @@ export const GUARDIANS = [
     body: 'hulk', skin: 0x1f1f2e, dark: 0x101018, trim: 0xff5a3c,
     head: 'crowned', weapon: 'great', horns: 4, eyes: 0xff3c2c,
     moves: ['combo', 'charge', 'shockwave', 'volley', 'spin', 'slam', 'blink'],
+    tune: 0.85,
     blurb: 'The last thing between you and the door.',
   },
 ];

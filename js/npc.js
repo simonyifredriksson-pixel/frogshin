@@ -8,10 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v29';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v29';
-import { CFG } from './config.js?v=v29';
-import { buildKatana, FrogModel } from './frog.js?v=v29';
+import * as THREE from '../lib/three.module.js?v=v30';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v30';
+import { CFG } from './config.js?v=v30';
+import { buildKatana, FrogModel } from './frog.js?v=v30';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -157,16 +157,32 @@ export class ToadModel {
     if (swordSkin) {
       // The juggernaut carries the same katana every frog does, just vast.
       // Reusing the builder is what keeps it recognisably the same weapon.
+      const sfx = swordSkin.fx || {};
       this.swordMats = {
-        steel: new THREE.MeshLambertMaterial({
-          color: swordSkin.blade, emissive: swordSkin.glow,
-        }),
-        edge: new THREE.MeshLambertMaterial({ color: swordSkin.edge }),
+        steel: sfx.glow
+          ? new THREE.MeshBasicMaterial({ color: swordSkin.blade })
+          : new THREE.MeshLambertMaterial({
+            color: swordSkin.blade, emissive: swordSkin.glow,
+          }),
+        edge: sfx.glow
+          ? new THREE.MeshBasicMaterial({ color: swordSkin.edge })
+          : new THREE.MeshLambertMaterial({ color: swordSkin.edge }),
         gold: new THREE.MeshLambertMaterial({ color: swordSkin.guard }),
         grip: new THREE.MeshLambertMaterial({ color: swordSkin.grip }),
         same: new THREE.MeshLambertMaterial({ color: swordSkin.guard }),
       };
-      this.weapon = buildKatana(this.swordMats);
+      if (sfx.runes) {
+        this.swordMats.rune = new THREE.MeshBasicMaterial({ color: sfx.runes });
+      }
+      if (sfx.tassel) {
+        this.swordMats.tassel = new THREE.MeshLambertMaterial({ color: sfx.tassel });
+      }
+      if (sfx.aura) {
+        this.swordMats.aura = new THREE.MeshBasicMaterial({
+          color: sfx.aura, transparent: true, opacity: 0.22, depthWrite: false,
+        });
+      }
+      this.weapon = buildKatana(this.swordMats, swordSkin.fx);
       this.weapon.scale.setScalar(CFG.juggernaut.swordScale);
       this.arms[1].hand.add(this.weapon);
       // The club leans BACK over the shoulder (rotation.x -0.4), which reads
