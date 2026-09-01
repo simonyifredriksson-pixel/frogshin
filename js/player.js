@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v23';
-import { CFG } from './config.js?v=v23';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v23';
-import { FrogModel } from './frog.js?v=v23';
-import { Grapple, GrappleState } from './grapple.js?v=v23';
-import { Combat, Health } from './combat.js?v=v23';
-import { Stamina } from './stamina.js?v=v23';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v23';
-import { Audio } from './audio.js?v=v23';
+import * as THREE from '../lib/three.module.js?v=v24';
+import { CFG } from './config.js?v=v24';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v24';
+import { FrogModel } from './frog.js?v=v24';
+import { Grapple, GrappleState } from './grapple.js?v=v24';
+import { Combat, Health } from './combat.js?v=v24';
+import { Stamina } from './stamina.js?v=v24';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v24';
+import { Audio } from './audio.js?v=v24';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -50,6 +50,7 @@ export class Player {
     this.throwCooldownOverride = 0;
     this.combatEnabled = true;
     // Set each frame by the round manager.
+    this.interactPressed = false; // E pressed where there are no crates
     this.tagMode = false;        // the katana tags rather than wounds
     this.isJuggernaut = false;   // slower, tougher, wearing the toad
     this.spectating = false;     // knocked out and watching
@@ -1120,7 +1121,11 @@ export class Player {
     // Spectators have endless kunai and no business taking crates the living
     // still need.
     if (this.spectating) return;
-    if (!this.pickups || this.health.dead) return;
+    // No crate system means we are somewhere with other things to interact
+    // with (the story's fruit stalls). Raise a one-shot flag the game reads,
+    // rather than reaching out of the controller into the world.
+    if (!this.pickups) { this.interactPressed = true; return; }
+    if (this.health.dead) return;
     const crate = this.pickups.nearest(this.pos);
     if (!crate) return;
     this.inventory.addKunai(CFG.kunai.boxCount);

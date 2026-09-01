@@ -10,11 +10,11 @@
  * Layout runs along +Z: spawn at z=0, gate at z=PATH_LENGTH.
  */
 
-import * as THREE from '../lib/three.module.js?v=v23';
-import { CFG } from './config.js?v=v23';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v23';
-import { Terrain, CollisionWorld } from './collision.js?v=v23';
-import { lanternGlowTexture } from './world.js?v=v23';
+import * as THREE from '../lib/three.module.js?v=v24';
+import { CFG } from './config.js?v=v24';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v24';
+import { Terrain, CollisionWorld } from './collision.js?v=v24';
+import { lanternGlowTexture } from './world.js?v=v24';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -139,6 +139,7 @@ export class StoryLevel {
       ['Cutting the dungeon halls', () => this._castleLower()],
       ['Raising the great hall', () => this._castleHall()],
       ['Opening the courtyard', () => this._castleOuter()],
+      ['Waking the village', () => this._buildVillage()],
       ['Choking the air with smoke', () => {
         for (const k in this.batches) {
           this.batches[k].mesh = this.batches[k].build(this.scene, k !== 'blob');
@@ -881,6 +882,246 @@ export class StoryLevel {
       // Gatehouse pair.
       [[X(246), O.z - 5], [X(256), O.z + 5]],
     ];
+  }
+
+  // --------------------------------------------------------------- village
+
+  /**
+   * The medieval village outside the castle gate.
+   *
+   * Built on the same raised slab as the castle (the terrain out here is far
+   * below), laid out as a walled market town: a street from the gatehouse to
+   * a market square, houses either side, and a perimeter fence with exactly
+   * one gap in it. That gap is the way out, and the guide frog's whole job is
+   * to take you to it — so the layout has to make it findable but not
+   * obvious, which is why it sits behind the market rather than in line with
+   * the gate.
+   */
+  _buildVillage() {
+    const O = PRISON_ORIGIN;
+    const B = this.batches;
+    const rnd = this.rnd;
+    const y = O.y;
+    const X = (n) => O.x + n;
+
+    // X0 deliberately OVERLAPS the gatehouse floor (which ends at 262). A
+    // village slab that merely butted up against it would leave a seam the
+    // player drops through — and the ground here is three hundred units down.
+    const X0 = 256, X1 = 446;          // village extent along +x
+    const Z0 = -64, Z1 = 64;
+
+    // ---- cobbled ground ----
+    const step = 4;
+    for (let x = X0; x < X1; x += step) {
+      for (let z = Z0; z < Z1; z += step) {
+        // Two-tone cobbles, with the street a shade lighter than the yards.
+        const street = Math.abs(z) < 7 || (x > 320 && x < 372 && Math.abs(z) < 30);
+        const shade = street ? 0x6d6a63 : 0x585549;
+        const jitter = (rnd() * 0.12 - 0.06);
+        B.box.add(X(x + step / 2), y - 0.16, z + step / 2,
+          step + 0.05, 0.34, step + 0.05,
+          _c.setHex(shade).offsetHSL(0, 0, jitter).getHex());
+      }
+    }
+    // One big collider for the whole plaza rather than hundreds of tiles.
+    this.collision.addBox(X((X0 + X1) / 2), y - 0.16, (Z0 + Z1) / 2,
+      (X1 - X0) / 2, 0.17, (Z1 - Z0) / 2, 'stone');
+
+    this.villageEnter = new THREE.Vector3(X(272), y + 1, O.z);
+    // The bush sits just off the street, close enough that the whisper makes
+    // sense and you can see who is talking.
+    this.bushPos = new THREE.Vector3(X(288), y, O.z - 13);
+
+    // ---- perimeter fence, with one gap ----
+    this.fenceHole = new THREE.Vector3(X(438), y + 1, 30);
+    this._fenceRun(X0, Z0, X1, Z0, y, null);              // south
+    this._fenceRun(X0, Z1, X1, Z1, y, null);              // north
+    this._fenceRun(X1, Z0, X1, Z1, y, 30);               // east, with the gap
+    // West side: the castle wall only covers the gatehouse itself, so the
+    // village has to close the rest of that edge or you can walk off the slab.
+    this._fenceRun(X0, Z0, X0, -11, y, null);
+    this._fenceRun(X0, 11, X0, Z1, y, null);
+    // Marker posts either side of the gap so it reads as a way through.
+    for (const dz of [-3.4, 3.4]) {
+      B.post.add(X(X1), y + 1.5, 30 + dz, 0.42, 3.0, 0.42, 0x6b4a2a);
+    }
+    this._lantern(X(X1) - 1.6, y + 3.4, 30, 0xffd76b);
+
+    // ---- houses either side of the street ----
+    this.villageHouses = [];
+    for (let i = 0; i < 18; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const px = X0 + 14 + (i >> 1) * 20 + rnd() * 5;
+      if (px > X1 - 16) continue;
+      const pz = side * (15 + rnd() * 26);
+      // Keep the market square open.
+      if (px > 316 && px < 376 && Math.abs(pz) < 32) continue;
+      this._cottage(X(px), y, pz, 4 + rnd() * 2.4, 4 + rnd() * 2.2,
+        4.2 + rnd() * 1.6, rnd);
+      this.villageHouses.push({ x: X(px), z: pz });
+    }
+
+    // ---- market square: fruit stalls ----
+    this.fruitStands = [];
+    const stalls = [[330, -14], [330, 14], [364, -14], [364, 14]];
+    for (let i = 0; i < stalls.length; i++) {
+      const [sx, sz] = stalls[i];
+      this._fruitStall(X(sx), y, sz, i, rnd);
+    }
+    // A well in the middle of the square.
+    B.post.add(X(347), y + 0.7, 0, 3.4, 1.4, 3.4, 0x585a5c);
+    this.collision.addBox(X(347), y + 0.7, 0, 1.7, 0.7, 1.7, 'stone');
+    this._lantern(X(347), y + 4.6, 0, 0xffd76b);
+
+    // Street lanterns down the main run.
+    for (let x = X0 + 18; x < X1 - 10; x += 26) {
+      this._lantern(X(x), y + 4.2, -6.5, 0xffd76b);
+      this._lantern(X(x), y + 4.2, 6.5, 0xffd76b);
+    }
+
+    // ---- where the cast stands ----
+    // The villager who spots you, and the two soldiers who hear her.
+    this.accuserSpot = new THREE.Vector3(X(300), y, O.z + 9);
+    this.watchSpots = [
+      new THREE.Vector3(X(316), y, O.z - 6),
+      new THREE.Vector3(X(319), y, O.z + 4),
+    ];
+
+    // Idle villagers wander between these.
+    this.villagerSpots = [];
+    for (let i = 0; i < 12; i++) {
+      this.villagerSpots.push(new THREE.Vector3(
+        X(X0 + 20 + rnd() * (X1 - X0 - 40)), y, Z0 + 12 + rnd() * (Z1 - Z0 - 24)));
+    }
+
+    // ---- the guide's route to the gap ----
+    // Deliberately not a straight line: it rounds the market so you are led
+    // through the busiest part of the village rather than along the wall.
+    this.guideRoute = [
+      new THREE.Vector3(X(300), y, O.z - 16),
+      new THREE.Vector3(X(322), y, O.z - 26),
+      new THREE.Vector3(X(352), y, O.z - 24),
+      new THREE.Vector3(X(378), y, O.z - 6),
+      new THREE.Vector3(X(402), y, 14),
+      new THREE.Vector3(X(424), y, 26),
+      new THREE.Vector3(X(435), y, 30),
+    ];
+
+    // ---- 15 guards, scattered ----
+    this.villageGuardRoutes = [];
+    // Keep every beat well inside the fence: a waypoint outside it would send
+    // a guard walking at a wall, or off the slab entirely.
+    const PAD = 10;
+    const cx = (n) => clamp(n, X0 + PAD, X1 - PAD);
+    const cz = (n) => clamp(n, Z0 + PAD, Z1 - PAD);
+    for (let i = 0; i < 15; i++) {
+      // Spread around the whole village, each pacing a short beat.
+      const gx = X0 + 22 + (i % 5) * 34 + rnd() * 8;
+      const gz = Z0 + 16 + Math.floor(i / 5) * 34 + rnd() * 10;
+      const len = 10 + rnd() * 14;
+      const horiz = rnd() < 0.5;
+      this.villageGuardRoutes.push(horiz
+        ? [[X(cx(gx)), cz(gz)], [X(cx(gx + len)), cz(gz)]]
+        : [[X(cx(gx)), cz(gz)], [X(cx(gx)), cz(gz + len)]]);
+    }
+  }
+
+  /**
+   * A run of fence posts and rails, optionally with a gap at `holeZ`.
+   *
+   * The colliders deliberately OVERLAP along the run (half-extent 1.6 on a
+   * 3-unit spacing). Square colliders sized to the posts left 1.2-unit gaps
+   * between them, which a frog is slim enough to walk straight through — the
+   * fence looked solid and wasn't.
+   */
+  _fenceRun(x0, z0, x1, z1, y, holeZ) {
+    const B = this.batches;
+    const O = PRISON_ORIGIN;
+    const X = (n) => O.x + n;
+    const SPACING = 3;
+    const runLen = Math.hypot(x1 - x0, z1 - z0);
+    const steps = Math.max(1, Math.round(runLen / SPACING));
+    // Which way the fence runs decides how the rails and colliders lie.
+    const alongX = Math.abs(x1 - x0) > Math.abs(z1 - z0);
+    const railYaw = alongX ? 0 : Math.PI / 2;
+    const hx = alongX ? 1.6 : 0.45;
+    const hz = alongX ? 0.45 : 1.6;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x0 + (x1 - x0) * t;
+      const z = z0 + (z1 - z0) * t;
+      // Leave a frog-sized gap — the way out.
+      if (holeZ !== null && Math.abs(z - holeZ) < 3.2) continue;
+      B.post.add(X(x), y + 1.4, z, 0.34, 2.8, 0.34, 0x5c4126);
+      B.box.add(X(x), y + 2.1, z, 3.1, 0.22, 0.16, 0x6b4a2a, railYaw);
+      B.box.add(X(x), y + 1.2, z, 3.1, 0.22, 0.16, 0x6b4a2a, railYaw);
+      this.collision.addBox(X(x), y + 1.5, z, hx, 1.5, hz, 'wood');
+    }
+  }
+
+  /** A timber-framed village house. */
+  _cottage(x, y, z, w, d, h, rnd) {
+    const B = this.batches;
+    // Plaster walls with a dark timber frame — the medieval look.
+    B.box.add(x, y + h * 0.5, z, w * 2, h, d * 2, 0xd8cfb4);
+    this.collision.addBox(x, y + h * 0.5, z, w, h * 0.5, d, 'wood');
+    // Corner posts and a mid rail.
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        B.post.add(x + sx * w, y + h * 0.5, z + sz * d, 0.34, h, 0.34, 0x4a3420);
+      }
+    }
+    B.box.add(x, y + h * 0.62, z, w * 2 + 0.1, 0.26, d * 2 + 0.1, 0x4a3420);
+    // Jettied upper floor, overhanging the street.
+    B.box.add(x, y + h + 0.9, z, w * 2.3, 1.8, d * 2.3, 0xcfc5a6);
+    B.box.add(x, y + h + 1.8, z, w * 2.35, 0.24, d * 2.35, 0x4a3420);
+    // Steep tiled roof.
+    B.roof.add(x, y + h + 3.4, z, Math.max(w, d) * 2.5, 3.4,
+      Math.max(w, d) * 2.5, 0x6b3f30, Math.PI / 4);
+    // Door and a shuttered window.
+    B.box.add(x, y + 1.1, z + d + 0.05, 1.2, 2.2, 0.14, 0x4a3420);
+    B.box.add(x - w * 0.5, y + 2.2, z + d + 0.05, 1.0, 1.0, 0.12, 0x5c7a8a);
+    if (rnd() < 0.5) {
+      // Chimney.
+      B.box.add(x + w * 0.6, y + h + 3.8, z, 0.8, 2.6, 0.8, 0x6d6a63);
+    }
+  }
+
+  /**
+   * A market fruit stall. Recorded in `fruitStands` so the story can offer a
+   * purchase when the player stands at the counter.
+   */
+  _fruitStall(x, y, z, index, rnd) {
+    const B = this.batches;
+    // Counter.
+    B.box.add(x, y + 0.55, z, 5.0, 1.1, 2.4, 0x7d6242);
+    this.collision.addBox(x, y + 0.55, z, 2.5, 0.55, 1.2, 'wood');
+    // Awning posts and striped canopy.
+    for (const sx of [-1, 1]) {
+      B.post.add(x + sx * 2.3, y + 1.6, z - 1.0, 0.16, 3.2, 0.16, 0x4a3420);
+      B.post.add(x + sx * 2.3, y + 1.6, z + 1.0, 0.16, 3.2, 0.16, 0x4a3420);
+    }
+    const cloth = [0xc0392b, 0x2f7a4f, 0xc9a227, 0x3f5f8a][index % 4];
+    B.box.add(x, y + 3.3, z, 5.6, 0.3, 3.2, cloth);
+    B.box.add(x, y + 3.5, z - 1.5, 5.6, 0.5, 0.3, cloth);
+
+    // Heaped fruit on the counter.
+    const colors = [0xd94f3d, 0xe8a33d, 0x8fc44a, 0xb04ac9];
+    for (let i = 0; i < 14; i++) {
+      B.blob.add(
+        x + (rnd() - 0.5) * 4.2, y + 1.25 + rnd() * 0.25, z + (rnd() - 0.5) * 1.6,
+        0.26, 0.26, 0.26, colors[Math.floor(rnd() * colors.length)], rnd() * 3);
+    }
+    // Crates of stock underneath.
+    B.box.add(x - 1.6, y + 0.4, z + 1.8, 1.4, 0.8, 1.0, 0x6b4a2a);
+    B.box.add(x + 1.5, y + 0.4, z + 1.8, 1.2, 0.8, 1.0, 0x6b4a2a);
+
+    this.fruitStands.push({
+      // Stand in FRONT of the counter, on the street side.
+      pos: new THREE.Vector3(x, y, z + 2.6),
+      id: 'stall' + index,
+    });
   }
 
   /** Barriers are only inserted once the fight actually starts. */

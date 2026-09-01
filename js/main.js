@@ -5,29 +5,29 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v23';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v23';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v23';
-import { Input } from './input.js?v=v23';
-import { Audio } from './audio.js?v=v23';
-import { World } from './world.js?v=v23';
-import { Effects } from './effects.js?v=v23';
-import { Atmosphere } from './atmosphere.js?v=v23';
-import { FollowCamera } from './camera.js?v=v23';
-import { Player } from './player.js?v=v23';
-import { RemotePlayer } from './remote.js?v=v23';
-import { HUD } from './hud.js?v=v23';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v23';
-import { FrogModel } from './frog.js?v=v23';
-import { DummyField } from './dummy.js?v=v23';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v23';
-import { ToadModel } from './npc.js?v=v23';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v23';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v23';
-import { MenuScene } from './menu.js?v=v23';
-import { Economy } from './economy.js?v=v23';
-import { Shop } from './shop.js?v=v23';
-import { Network, NetRole } from './net.js?v=v23';
+import * as THREE from '../lib/three.module.js?v=v24';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v24';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v24';
+import { Input } from './input.js?v=v24';
+import { Audio } from './audio.js?v=v24';
+import { World } from './world.js?v=v24';
+import { Effects } from './effects.js?v=v24';
+import { Atmosphere } from './atmosphere.js?v=v24';
+import { FollowCamera } from './camera.js?v=v24';
+import { Player } from './player.js?v=v24';
+import { RemotePlayer } from './remote.js?v=v24';
+import { HUD } from './hud.js?v=v24';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v24';
+import { FrogModel } from './frog.js?v=v24';
+import { DummyField } from './dummy.js?v=v24';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v24';
+import { ToadModel } from './npc.js?v=v24';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v24';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v24';
+import { MenuScene } from './menu.js?v=v24';
+import { Economy } from './economy.js?v=v24';
+import { Shop } from './shop.js?v=v24';
+import { Network, NetRole } from './net.js?v=v24';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1029,6 +1029,8 @@ class Game {
         }
       }
 
+      this._updateFruitStalls(p);
+
       this._drainEvents(p);
       // Everyone plays the village and the duel alone, even in a shared
       // session. Two players only become visible to each other once BOTH
@@ -1062,6 +1064,29 @@ class Game {
       this.net.tickState(dt, () => p.netState());
     }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * The village market: stand at a stall and press E to buy fruit.
+   *
+   * The prompt is driven off the same proximity test the purchase uses, so
+   * there is never a moment where it says you can buy and the key does
+   * nothing.
+   */
+  _updateFruitStalls(p) {
+    const stand = this.story.nearestStand(p.pos);
+    const F = CFG.story.fruit;
+    this.hud.setPickupPrompt(!!stand,
+      stand ? `Buy fruit — ${F.price} froglets, +${F.heal} health` : '');
+
+    if (!p.interactPressed) return;
+    p.interactPressed = false;
+    if (!stand) return;
+    const res = this.story.buyFruit(p, this.economy);
+    if (res) {
+      this.hud.toast(res.text, 2.2);
+      if (res.bad) Audio.uiBack();
+    }
   }
 
   /**
@@ -1861,9 +1886,13 @@ class Game {
     } else if (p._abilityCue <= 0) {
       this._cueShown = false;
     }
-    // No supply crates in the story level.
-    this.hud.setPickupPrompt(
-      !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
+    // No supply crates in the story level — there the prompt belongs to the
+    // village's fruit stalls, and _updateFruitStalls owns it. Setting it here
+    // too would blank their prompt on the same frame it appeared.
+    if (!this.isStory) {
+      this.hud.setPickupPrompt(
+        !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
+    }
 
     // One-shot messages raised by the player controller.
     if (p.pickedUpCue) {

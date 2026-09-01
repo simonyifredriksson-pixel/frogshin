@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v23';
-import { CFG } from './config.js?v=v23';
-import { staminaBand } from './stamina.js?v=v23';
-import { modeAvailable } from './rounds.js?v=v23';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v23';
-import { Audio } from './audio.js?v=v23';
-import { PX, setIcon } from './icons.js?v=v23';
+import { clamp } from './util.js?v=v24';
+import { CFG } from './config.js?v=v24';
+import { staminaBand } from './stamina.js?v=v24';
+import { modeAvailable } from './rounds.js?v=v24';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v24';
+import { Audio } from './audio.js?v=v24';
+import { PX, setIcon } from './icons.js?v=v24';
 
 const $ = (id) => document.getElementById(id);
 
@@ -75,6 +75,8 @@ export class HUD {
     this._spectating = false;
     this.hotbarEl = $('hotbar');
     this.pickupPrompt = $('pickup-prompt');
+    this.pickupLabel = $('pickup-label');
+    this._pickupLabel = 'Take kunai';
     this.slotEls = [];
     this.onSlotClick = null;
     this.comboEl = $('combo');
@@ -564,7 +566,16 @@ export class HUD {
   }
 
   /** "Press E" prompt shown when standing near a crate. */
-  setPickupPrompt(show) {
+  /**
+   * @param label optional text — the village's fruit stalls reuse this
+   *              prompt, so the wording has to be able to change
+   */
+  setPickupPrompt(show, label) {
+    const text = label || 'Take kunai';
+    if (text !== this._pickupLabel) {
+      this._pickupLabel = text;
+      this.pickupLabel.textContent = text;
+    }
     if (show === this._pickupShown) return;
     this._pickupShown = show;
     this.pickupPrompt.classList.toggle('show', show);

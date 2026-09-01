@@ -8,10 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v23';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v23';
-import { CFG } from './config.js?v=v23';
-import { buildKatana } from './frog.js?v=v23';
+import * as THREE from '../lib/three.module.js?v=v24';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v24';
+import { CFG } from './config.js?v=v24';
+import { buildKatana, FrogModel } from './frog.js?v=v24';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
@@ -480,6 +480,156 @@ export class PatrolGuard {
     this.model.root.position.copy(this.pos);
     this.model.setFacing(this.yaw);
     this.model.update(dt, { speed: this.speed });
+  }
+}
+
+/**
+ * A toad going about its day in the village.
+ *
+ * Wanders between loose waypoints and stops to look around. No vision, no
+ * aggression — these are civilians, and the point of them is that the village
+ * feels lived in right up until one of them notices what you are.
+ */
+export class VillagerToad {
+  constructor(spots, index, collision) {
+    this.model = new ToadModel(false);
+    this.spots = spots;
+    this.collision = collision;
+    this.index = index % spots.length;
+    const s = spots[this.index];
+    this.pos = new THREE.Vector3(s.x, s.y, s.z);
+    this.yaw = Math.random() * Math.PI * 2;
+    this.speed = 0;
+    this.waitTimer = Math.random() * 3;
+    this.model.root.position.copy(this.pos);
+    // Slight size variation so a crowd does not look cloned.
+    this.model.root.scale.setScalar(0.9 + Math.random() * 0.2);
+    this.frozen = false;
+  }
+
+  /** Stop dead and stare at a point — used when the alarm goes up. */
+  lookAt(x, z) {
+    this.frozen = true;
+    this.yaw = Math.atan2(x - this.pos.x, z - this.pos.z);
+  }
+
+  update(dt) {
+    if (this.frozen) {
+      this.model.setFacing(this.yaw);
+      this.model.update(dt, { speed: 0 });
+      return;
+    }
+    if (this.waitTimer > 0) {
+      this.waitTimer -= dt;
+      this.speed = 0;
+    } else {
+      const goal = this.spots[this.index];
+      const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 1.8) {
+        this.index = Math.floor(Math.random() * this.spots.length);
+        this.waitTimer = 1.5 + Math.random() * 4;
+      } else {
+        this.speed = 2.6;
+        this.yaw = dampAngle(this.yaw, Math.atan2(dx, dz), 3, dt);
+        this.pos.x += (dx / d) * this.speed * dt;
+        this.pos.z += (dz / d) * this.speed * dt;
+      }
+    }
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.yaw);
+    this.model.update(dt, { speed: this.speed });
+  }
+}
+
+/**
+ * The frog who hides in the bush and then leads you out of the village.
+ *
+ * Runs a fixed route to the gap in the fence, but paces himself against the
+ * player: he will not get more than `leash` ahead, and stops and waves you on
+ * when you fall behind. A guide you can lose is not a guide.
+ */
+export class GuideFrog {
+  constructor(route, collision) {
+    this.model = new FrogModel(0x7fd45a, '', true);
+    this.model.root.scale.setScalar(0.95);
+    this.route = route;
+    this.collision = collision;
+    this.index = 0;
+    this.pos = route[0].clone();
+    this.yaw = 0;
+    this.speed = 0;
+    this.leash = 16;          // never get further ahead than this
+    this.runSpeed = 11;
+    this.arrived = false;
+    this.waiting = false;
+    // Set by the story: fired once, when he reaches the gap in the fence.
+    this.onArrive = null;
+    this.model.root.position.copy(this.pos);
+  }
+
+  /** Sit in the bush with only the head showing. */
+  hideIn(pos) {
+    this.pos.copy(pos);
+    this.pos.y -= 0.62;               // sunk into the leaves
+    this.model.root.position.copy(this.pos);
+  }
+
+  /** Stand up and start leading. */
+  begin(from) {
+    if (from) this.pos.copy(from);
+    this.index = 0;
+    this.arrived = false;
+    this.model.root.position.copy(this.pos);
+  }
+
+  update(dt, playerPos) {
+    if (this.arrived) {
+      this.model.root.position.copy(this.pos);
+      this.model.setFacing(this.yaw);
+      this.model.update(dt, { speed: 0, moving: false, grounded: true });
+      return;
+    }
+
+    const goal = this.route[this.index];
+    const dx = goal.x - this.pos.x, dz = goal.z - this.pos.z;
+    const d = Math.hypot(dx, dz);
+
+    if (d < 2.2) {
+      if (this.index < this.route.length - 1) this.index++;
+      else {
+        // Reached the gap: hop through and stay put on the far side.
+        this.arrived = true;
+        this.waiting = false;
+        if (this.onArrive) this.onArrive();
+        return;
+      }
+    }
+
+    // Hold position if the player has fallen behind.
+    const lag = playerPos
+      ? Math.hypot(playerPos.x - this.pos.x, playerPos.z - this.pos.z) : 0;
+    this.waiting = lag > this.leash;
+    this.speed = this.waiting ? 0 : this.runSpeed;
+
+    if (d > 0.05) {
+      // While waiting, turn back and face the player rather than the route.
+      const wantYaw = this.waiting && playerPos
+        ? Math.atan2(playerPos.x - this.pos.x, playerPos.z - this.pos.z)
+        : Math.atan2(dx, dz);
+      this.yaw = dampAngle(this.yaw, wantYaw, 8, dt);
+    }
+    if (this.speed > 0) {
+      this.pos.x += (dx / d) * this.speed * dt;
+      this.pos.z += (dz / d) * this.speed * dt;
+    }
+
+    this.model.root.position.copy(this.pos);
+    this.model.setFacing(this.yaw);
+    this.model.update(dt, {
+      speed: this.speed, moving: this.speed > 0.5, grounded: true,
+      sprinting: this.speed > 8,
+    });
   }
 }
 

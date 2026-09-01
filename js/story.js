@@ -15,14 +15,16 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v23';
-import { CFG } from './config.js?v=v23';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v23';
-import { ToadModel, VillageScene, PatrolGuard } from './npc.js?v=v23';
-import { FrogModel } from './frog.js?v=v23';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v23';
-import { Audio } from './audio.js?v=v23';
-import { ITEMS } from './items.js?v=v23';
+import * as THREE from '../lib/three.module.js?v=v24';
+import { CFG } from './config.js?v=v24';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v24';
+import {
+  ToadModel, VillageScene, PatrolGuard, VillagerToad, GuideFrog,
+} from './npc.js?v=v24';
+import { FrogModel } from './frog.js?v=v24';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v24';
+import { Audio } from './audio.js?v=v24';
+import { ITEMS } from './items.js?v=v24';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',
@@ -30,6 +32,12 @@ export const STORY_PHASE = {
   BOSS: 'boss',
   DEFEAT: 'defeat',
   PRISON: 'prison',
+  // --- the village chapter, after the castle ---
+  VILLAGE_CUT1: 'villageCut1',   // the frog in the bush calls you over
+  VILLAGE_WALK: 'villageWalk',   // make your way to him
+  VILLAGE_CUT2: 'villageCut2',   // a villager spots you; the soldiers turn
+  VILLAGE_CHASE: 'villageChase', // fifteen guards, one gap in the fence
+  VILLAGE_DONE: 'villageDone',
 };
 
 /**
@@ -62,6 +70,11 @@ export const STORY_PHASE_CODE = {
   [STORY_PHASE.BOSS]: 2,
   [STORY_PHASE.DEFEAT]: 3,
   [STORY_PHASE.PRISON]: 4,
+  [STORY_PHASE.VILLAGE_CUT1]: 5,
+  [STORY_PHASE.VILLAGE_WALK]: 6,
+  [STORY_PHASE.VILLAGE_CUT2]: 7,
+  [STORY_PHASE.VILLAGE_CHASE]: 8,
+  [STORY_PHASE.VILLAGE_DONE]: 9,
 };
 /** At or past this code means "has woken up in the castle". */
 export const PRISON_CODE = 4;
@@ -69,6 +82,16 @@ export const PRISON_CODE = 4;
 const TOADEL_LINE =
   '“Another villager? How unfortunate. You should have stayed in your ' +
   'little house and waited for the flames to reach you.”';
+
+/** Every spoken line in the village chapter, in the order it is heard. */
+const VILLAGE_LINES = {
+  hey: '“Hey! What do you think you are doing?”',
+  comeHere: '“Come here, quick!”',
+  spotted: '“Hey, look! It’s a frog!”',
+  followMe: '“Follow me, quickly!”',
+};
+const GUIDE_NAME = 'A FROG IN THE BUSH';
+const VILLAGER_NAME = 'TOAD VILLAGER';
 
 const _v = new THREE.Vector3();
 const _toPlayer = new THREE.Vector3();
@@ -99,6 +122,14 @@ export class StoryMode {
     this.boss = null;
     this.cutscene = null;
     this.shake = 0;
+
+    // --- village chapter ---
+    this.villagers = null;
+    this.villageGuards = [];
+    this.guide = null;
+    this.accuser = null;
+    this.watchers = [];
+    this._villageDown = 0;
 
     // Slow motion multiplier applied to gameplay (never to the UI).
     this.timeScale = 1;
@@ -208,8 +239,43 @@ export class StoryMode {
         break;
       case STORY_PHASE.DEFEAT: this._updateDefeat(dt, player); break;
       case STORY_PHASE.PRISON: this._updatePrison(dt, player); break;
+      case STORY_PHASE.VILLAGE_CUT1: this._updateVillageCut1(dt, player); break;
+      case STORY_PHASE.VILLAGE_WALK: this._updateVillageWalk(dt, player); break;
+      case STORY_PHASE.VILLAGE_CUT2: this._updateVillageCut2(dt, player); break;
+      case STORY_PHASE.VILLAGE_CHASE: this._updateVillageChase(dt, player); break;
+      case STORY_PHASE.VILLAGE_DONE: this._updateVillageDone(dt, player); break;
       default: break;
     }
+
+    // The village keeps living through every one of its phases, cutscenes
+    // included — a market that freezes the moment someone speaks looks dead.
+    if (this.inVillage) {
+      if (this.phase !== STORY_PHASE.VILLAGE_CHASE) {
+        for (const v of this.villagers) v.update(gdt);
+      }
+      this._catchVillageFall(player);
+    }
+  }
+
+  /**
+   * The village is a slab three hundred units above the swamp. The fence
+   * keeps you in, but a frog with a grapple and a double jump will get over
+   * anything — so leaving the slab puts you back at the gate rather than
+   * dropping you into a very long fall.
+   */
+  _catchVillageFall(player) {
+    const floor = this.level.villageEnter.y;
+    if (player.pos.y > floor - 25) return;
+    player.pos.copy(this.level.villageEnter);
+    player.vel.set(0, 0, 0);
+    this.followCam.snapTo(player.pos);
+    this.hud.toast('You are not getting out that way', 2.5);
+  }
+
+  /** Chapter over: the village keeps living, nobody is hunting you. */
+  _updateVillageDone(dt) {
+    this.guide.update(dt, null);
+    for (const g of this.villageGuards) g.update(dt, null, null);
   }
 
   // ------------------------------------------------------------- tutorial
@@ -605,15 +671,371 @@ export class StoryMode {
       }
     }
 
-    // Reached the gatehouse.
+    // Reached the gatehouse — out of the castle and into the village.
     if (!this.escaped && this.level.castleExit &&
         player.pos.distanceTo(this.level.castleExit) < 7) {
       this.escaped = true;
       this._completeObjective('escape-castle');
-      this.hud.announce('YOU ESCAPED THE CASTLE', 'good', true);
+      this.hud.announce('YOU ESCAPED THE CASTLE', 'good');
       this.hud.setAlert(0, false);
       Audio.respawn(player.pos);
+      this._enterVillage(player);
     }
+  }
+
+  // ------------------------------------------------------------- village
+
+  /** Populate the village and play the frog-in-the-bush cutscene. */
+  _enterVillage(player) {
+    this._populateVillage();
+
+    this.phase = STORY_PHASE.VILLAGE_CUT1;
+    this.cutscene = { t: 0, stage: 0 };
+    player.cinematic = true;
+    player.vel.set(0, 0, 0);
+    this.hud.setCinematic(true);
+    this.hud.setSubtitle('');
+    this._addObjective('village', 'Get out of the village');
+  }
+
+  /** Villagers, stalls, the guide frog and the guards that will hunt you. */
+  _populateVillage() {
+    if (this.villagers) return;
+    const L = this.level;
+
+    this.villagers = [];
+    for (let i = 0; i < 10; i++) {
+      const v = new VillagerToad(L.villagerSpots, i, L.collision);
+      this.scene.add(v.model.root);
+      this.villagers.push(v);
+    }
+
+    // The one who spots you, and the two soldiers who hear her.
+    this.accuser = new VillagerToad([L.accuserSpot], 0, L.collision);
+    this.accuser.pos.copy(L.accuserSpot);
+    this.accuser.frozen = true;
+    // Facing away to begin with — she turns around in the cutscene.
+    this.accuser.yaw = Math.PI;
+    this.scene.add(this.accuser.model.root);
+
+    this.watchers = [];
+    for (const spot of L.watchSpots) {
+      const t = new ToadModel(false);
+      t.root.position.copy(spot);
+      t.setFacing(0.4);            // looking away down the street
+      this.scene.add(t.root);
+      this.watchers.push(t);
+    }
+
+    // The guide, hiding with only his head above the leaves.
+    this.guide = new GuideFrog(L.guideRoute, L.collision);
+    this.guide.hideIn(L.bushPos);
+    this.scene.add(this.guide.model.root);
+    this.guide.onArrive = () => this._guideThroughFence();
+
+    // The bush itself.
+    const bush = new THREE.Group();
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x3f6b2c });
+    for (let i = 0; i < 7; i++) {
+      const b = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), leafMat);
+      b.position.set(
+        (Math.random() - 0.5) * 1.9, 0.5 + Math.random() * 0.7,
+        (Math.random() - 0.5) * 1.9);
+      b.scale.setScalar(0.7 + Math.random() * 0.5);
+      bush.add(b);
+    }
+    bush.position.copy(L.bushPos);
+    this.scene.add(bush);
+    this.bush = bush;
+
+    // The guards do not exist until the alarm goes up — spawning them early
+    // would have fifteen toads pacing an otherwise peaceful market.
+    this.villageGuards = [];
+  }
+
+  _updateVillageCut1(dt, player) {
+    const c = this.cutscene;
+    const L = this.level;
+    c.t += dt;
+
+    // Frame the bush from over the player's shoulder.
+    _v.set(L.bushPos.x, L.bushPos.y + 1.1, L.bushPos.z);
+    const angle = Math.atan2(player.pos.x - L.bushPos.x, player.pos.z - L.bushPos.z);
+    const dist = lerp(13, 7, clamp(c.t / 5, 0, 1));
+    this.camera.position.set(
+      L.bushPos.x + Math.sin(angle) * dist,
+      L.bushPos.y + 3.4,
+      L.bushPos.z + Math.cos(angle) * dist
+    );
+    this.camera.lookAt(_v);
+    this.guide.model.setFacing(angle);
+
+    if (c.stage === 0 && c.t > 0.9) {
+      c.stage = 1;
+      this.hud.setSubtitle(VILLAGE_LINES.hey, GUIDE_NAME);
+      Audio.uiHover();
+    } else if (c.stage === 1 && c.t > 3.6) {
+      c.stage = 2;
+      this.hud.setSubtitle(VILLAGE_LINES.comeHere, GUIDE_NAME);
+      Audio.uiClick();
+    } else if (c.stage === 2 && c.t > 6.4) {
+      this.phase = STORY_PHASE.VILLAGE_WALK;
+      this.cutscene = null;
+      player.cinematic = false;
+      this.hud.setCinematic(false);
+      this.hud.setSubtitle('');
+      this.hud.toast('Get to the frog in the bush', 4);
+      Audio.startAmbient();
+    }
+  }
+
+  /** Free movement until you reach the bush. */
+  _updateVillageWalk(dt, player) {
+    this.guide.model.update(dt, { speed: 0, moving: false, grounded: true });
+    if (player.pos.distanceTo(this.level.bushPos) < 4.5) {
+      this._beginVillageCut2(player);
+    }
+  }
+
+  _beginVillageCut2(player) {
+    this.phase = STORY_PHASE.VILLAGE_CUT2;
+    this.cutscene = { t: 0, stage: 0 };
+    player.cinematic = true;
+    player.vel.set(0, 0, 0);
+    this.hud.setCinematic(true);
+    this.hud.setSubtitle('');
+  }
+
+  _updateVillageCut2(dt, player) {
+    const c = this.cutscene;
+    const L = this.level;
+    c.t += dt;
+
+    if (c.stage === 0) {
+      // The villager turns around and points straight at you.
+      _v.set(L.accuserSpot.x, L.accuserSpot.y + 2.2, L.accuserSpot.z);
+      const a = c.t * 0.5 - 1.2;
+      this.camera.position.set(
+        L.accuserSpot.x + Math.sin(a) * 8,
+        L.accuserSpot.y + 3.6,
+        L.accuserSpot.z + Math.cos(a) * 8);
+      this.camera.lookAt(_v);
+      // Spin her to face the player, then throw an arm out.
+      this.accuser.yaw = dampAngle(this.accuser.yaw,
+        Math.atan2(player.pos.x - this.accuser.pos.x,
+          player.pos.z - this.accuser.pos.z), 4, dt);
+      this.accuser.model.setFacing(this.accuser.yaw);
+      this.accuser.model.update(dt, { speed: 0 });
+      const point = clamp((c.t - 1.0) / 0.4, 0, 1);
+      this.accuser.model.arms[0].shoulder.rotation.x = lerp(0.1, -1.45, point);
+      this.accuser.model.arms[0].fore.rotation.x = lerp(-0.5, -0.1, point);
+
+      if (c.t > 1.2 && !c.spoken) {
+        c.spoken = true;
+        this.hud.setSubtitle(VILLAGE_LINES.spotted, VILLAGER_NAME);
+        Audio.exhausted(this.accuser.pos);
+      }
+      if (c.t > 3.4) { c.stage = 1; c.t = 0; c.spoken = false; }
+    } else if (c.stage === 1) {
+      // Cut to the two soldiers turning to look back at you.
+      const w = this.watchers[0];
+      _v.set(w.root.position.x, w.root.position.y + 2.0, w.root.position.z);
+      this.camera.position.set(
+        w.root.position.x - 5.5, w.root.position.y + 3.2, w.root.position.z - 6.5);
+      this.camera.lookAt(_v);
+      for (const t of this.watchers) {
+        // Heads come round first, then the whole body.
+        const k = clamp(c.t / 1.4, 0, 1);
+        const want = Math.atan2(
+          player.pos.x - t.root.position.x, player.pos.z - t.root.position.z);
+        t.setFacing(lerp(0.4, want, k));
+        t.update(dt, { speed: 0 });
+      }
+      if (c.t > 0.2 && !c.spoken) { c.spoken = true; Audio.hurt(w.root.position); }
+      if (c.t > 2.6) { c.stage = 2; c.t = 0; c.spoken = false; }
+    } else if (c.stage === 2) {
+      // Back to the bush: "Follow me, quickly!"
+      _v.set(L.bushPos.x, L.bushPos.y + 1.2, L.bushPos.z);
+      const angle = Math.atan2(
+        player.pos.x - L.bushPos.x, player.pos.z - L.bushPos.z);
+      this.camera.position.set(
+        L.bushPos.x + Math.sin(angle) * 6.5,
+        L.bushPos.y + 3.0,
+        L.bushPos.z + Math.cos(angle) * 6.5);
+      this.camera.lookAt(_v);
+      // He stands up out of the leaves.
+      this.guide.pos.y = lerp(L.bushPos.y - 0.62, L.bushPos.y, clamp(c.t / 0.8, 0, 1));
+      this.guide.model.root.position.copy(this.guide.pos);
+      this.guide.model.setFacing(angle);
+      this.guide.model.update(dt, { speed: 0, grounded: true });
+
+      if (c.t > 0.5 && !c.spoken) {
+        c.spoken = true;
+        this.hud.setSubtitle(VILLAGE_LINES.followMe, GUIDE_NAME);
+        Audio.uiClick();
+      }
+      if (c.t > 3.0) this._beginVillageChase(player);
+    }
+  }
+
+  _beginVillageChase(player) {
+    this.phase = STORY_PHASE.VILLAGE_CHASE;
+    this.cutscene = null;
+    player.cinematic = false;
+    this.hud.setCinematic(false);
+    this.hud.setSubtitle('');
+
+    // Every villager stops and stares — the whole square knows now.
+    for (const v of this.villagers) v.lookAt(player.pos.x, player.pos.z);
+
+    // Fifteen guards, scattered, already looking for you.
+    const y = this.level.bushPos.y;
+    for (const route of this.level.villageGuardRoutes) {
+      const g = new PatrolGuard(route, y, this.level.collision);
+      // They have been told there is a frog in the village, so they start
+      // suspicious rather than oblivious.
+      g.alertLevel = 0.55;
+      g.state = 'alert';
+      g.lastSeen = { x: player.pos.x, y: player.pos.y, z: player.pos.z };
+      this.scene.add(g.model.root);
+      this.villageGuards.push(g);
+    }
+
+    this.guide.begin(this.level.bushPos);
+    this.guide.pos.y = this.level.bushPos.y;
+
+    this._completeObjective('village', false);
+    this._addObjective('village-escape', 'Follow the frog — get out of the village');
+    this.hud.announce('RUN!', 'danger');
+    this.hud.toast('Follow the frog. Fifteen guards are looking for you.', 5);
+    Audio.startBossMusic();
+  }
+
+  _updateVillageChase(dt, player) {
+    const L = this.level;
+    const target = player.health.dead ? null : player.pos;
+    let anyChasing = false;
+    let maxAlert = 0;
+
+    for (const g of this.villageGuards) {
+      g.update(dt, target, (guard) => {
+        const dx = player.pos.x - guard.pos.x;
+        const dz = player.pos.z - guard.pos.z;
+        const len = Math.hypot(dx, dz) || 1;
+        player.vel.x += (dx / len) * 11;
+        player.vel.z += (dz / len) * 11;
+        player.vel.y = Math.max(player.vel.y, 0) + 5;
+        player.health.damage(24, 'guard');
+        _v.set(player.pos.x, player.pos.y + 1.1, player.pos.z);
+        this.effects.hitBurst(_v, { x: -dx / len, y: 0, z: -dz / len }, false);
+        this.effects.damageNumber(_v, 24, false);
+        Audio.hit(player.pos, false);
+        Audio.hurt(player.pos);
+        this.followCam.shake(0.35);
+      });
+      if (g.state === 'chase') anyChasing = true;
+      maxAlert = Math.max(maxAlert, g.alertLevel);
+    }
+    this.hud.setAlert(maxAlert, anyChasing);
+
+    // Villagers are frozen mid-stare during the chase, so they are updated
+    // here rather than by the shared tick.
+    for (const v of this.villagers) v.update(dt);
+    this.guide.update(dt, player.pos);
+
+    // A nudge when he is stood waiting for you.
+    if (this.guide.waiting) {
+      this._waveCue = (this._waveCue || 0) - dt;
+      if (this._waveCue <= 0) {
+        this._waveCue = 2.6;
+        this.hud.toast('The frog is waiting — keep up!', 1.8);
+      }
+    }
+
+    // Beaten down: you wake back at the castle gate and try again.
+    if (player.health.dead && !this._villageDown) {
+      this._villageDown = 2.5;
+      this.hud.announce('CAUGHT', 'danger', true);
+    }
+    if (this._villageDown > 0) {
+      this._villageDown -= dt;
+      if (this._villageDown <= 0) {
+        this._villageDown = 0;
+        player.health.revive();
+        player.pos.copy(L.villageEnter);
+        player.vel.set(0, 0, 0);
+        this.followCam.snapTo(player.pos);
+        this.hud.clearAnnounce();
+        this.hud.toast('Dragged back to the gate — go again', 4);
+        for (const g of this.villageGuards) {
+          g.state = 'patrol';
+          g.alertLevel = 0.3;
+        }
+      }
+    }
+
+    // Through the gap in the fence.
+    if (player.pos.distanceTo(L.fenceHole) < 5) this._finishVillage(player);
+  }
+
+  /** The guide reaches the gap and hops through it. */
+  _guideThroughFence() {
+    const L = this.level;
+    this.guide.pos.set(L.fenceHole.x + 4, L.fenceHole.y - 1, L.fenceHole.z);
+    this.guide.yaw = Math.PI * 0.5;
+    this.guide.model.root.position.copy(this.guide.pos);
+    this.guide.model.triggerFlip();
+    this.effects.dustPuff(L.fenceHole, 10, 3, 0xcfc0a0);
+    Audio.jump(L.fenceHole);
+    this.hud.toast('Through the fence — go!', 3);
+  }
+
+  _finishVillage(player) {
+    this.phase = STORY_PHASE.VILLAGE_DONE;
+    this._completeObjective('village-escape');
+    this.hud.setAlert(0, false);
+    this.hud.announce('YOU ESCAPED THE VILLAGE', 'good', true);
+    Audio.stopBossMusic();
+    Audio.respawn(player.pos);
+    for (const g of this.villageGuards) { g.state = 'patrol'; g.alertLevel = 0; }
+  }
+
+  /**
+   * Buy a piece of fruit from the nearest stall.
+   * @returns a short message for the HUD, or null if there is no stall here
+   */
+  buyFruit(player, economy) {
+    const stand = this.nearestStand(player.pos);
+    if (!stand) return null;
+    const F = CFG.story.fruit;
+    if (player.health.hp >= player.health.max) {
+      return { text: 'You are not hurt — save your froglets', bad: true };
+    }
+    if (!economy.canAfford(F.price)) {
+      return { text: `Not enough froglets — fruit costs ${F.price}`, bad: true };
+    }
+    economy.spend(F.price);
+    player.health.hp = Math.min(player.health.max, player.health.hp + F.heal);
+    this.effects.puff(
+      _v.set(player.pos.x, player.pos.y + 1.2, player.pos.z), 0xd94f3d, 12, 3);
+    Audio.pickup(player.pos);
+    return { text: `Fruit bought — +${F.heal} health`, bad: false };
+  }
+
+  /** The stall the player is standing at, if any. */
+  nearestStand(pos) {
+    if (!this.level || !this.level.fruitStands) return null;
+    if (!this.inVillage) return null;
+    for (const s of this.level.fruitStands) {
+      if (pos.distanceTo(s.pos) < CFG.story.fruit.reach) return s;
+    }
+    return null;
+  }
+
+  /** True once the player is out in the village. */
+  get inVillage() {
+    const c = STORY_PHASE_CODE[this.phase] || 0;
+    return c >= STORY_PHASE_CODE[STORY_PHASE.VILLAGE_CUT1];
   }
 
   /** A player landed a hit on Toadel. Always local — the duel is solo. */
@@ -665,7 +1087,18 @@ export class StoryMode {
     this.hud.setSubtitle('');
     this.hud.setTutorial(null);
     this.hud.setFade(0, 0);
+    this.hud.setPickupPrompt(false);
     Audio.stopBossMusic();
+
+    // Free the village cast's GPU resources. The scene itself is dropped by
+    // the caller, but the models own their own materials.
+    for (const list of [this.villagers, this.villageGuards]) {
+      if (!list) continue;
+      for (const v of list) v.model.dispose();
+    }
+    if (this.guide) this.guide.model.dispose();
+    if (this.accuser) this.accuser.model.dispose();
+    for (const w of this.watchers) w.dispose();
   }
 }
 

@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v23';
+export const BUILD = 'v24';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -83,6 +83,16 @@ export const CFG = {
       knockdownAfter: 2,     // hits absorbed in one parry before you go down
       knockdownTime: 0.7,    // seconds on the floor, unable to act
       chipStagger: 0.18,     // brief hitstop when a blow is turned aside
+    },
+    /**
+     * Market fruit in the village. Cheap on purpose: it is the only healing
+     * in the chase, and froglets should never be the thing standing between
+     * a player and finishing the story.
+     */
+    fruit: {
+      price: 25,
+      heal: 35,
+      reach: 4.2,            // how close to a stall counts as standing at it
     },
     boss: {
       name: 'TOADEL, THE TOAD LEADER',
