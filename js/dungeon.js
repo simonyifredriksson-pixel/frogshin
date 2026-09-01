@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v25';
-import { CFG } from './config.js?v=v25';
-import { clamp } from './util.js?v=v25';
-import { DungeonLevel } from './dungeonlevel.js?v=v25';
-import { DungeonBoss } from './dungeonboss.js?v=v25';
-import { Frogath } from './frogath.js?v=v25';
-import { Audio } from './audio.js?v=v25';
+import * as THREE from '../lib/three.module.js?v=v26';
+import { CFG } from './config.js?v=v26';
+import { clamp } from './util.js?v=v26';
+import { DungeonLevel } from './dungeonlevel.js?v=v26';
+import { DungeonBoss } from './dungeonboss.js?v=v26';
+import { Frogath } from './frogath.js?v=v26';
+import { Audio } from './audio.js?v=v26';
 
 const _v = new THREE.Vector3();
 
@@ -82,8 +82,12 @@ export class DungeonRun {
 
   _enterRoom(player) {
     this._clearBoss();
+    // Every door opens, then this room's shut once the fight starts. Doing
+    // it wholesale means a reset can never leave a stale barrier behind.
+    this.level.openAllDoors();
     this.state = RUN_STATE.ENTERING;
     this.timer = 0;
+    this._announcedOpen = false;
 
     player.pos.copy(this.spawnFor(this.room));
     player.vel.set(0, 0, 0);
@@ -139,6 +143,7 @@ export class DungeonRun {
       case RUN_STATE.FIGHT: this._updateFight(dt, player, onHit); break;
       case RUN_STATE.CLEARED: this._updateCleared(dt, player); break;
       case RUN_STATE.DEAD: this._updateDead(dt, player); break;
+      case RUN_STATE.WON: this._updateWon(dt); break;
       default: break;
     }
   }
@@ -153,6 +158,9 @@ export class DungeonRun {
 
     this.state = RUN_STATE.FIGHT;
     this.timer = 0;
+    // The doors shut. You fight what is in front of you.
+    this.level.setDoors(this.room, true);
+    this.hud.toast('The doors seal behind you', 2.2);
     if (this.frogath) {
       // The entrance takes over the camera; the player is a spectator to it.
       player.cinematic = true;
@@ -194,6 +202,7 @@ export class DungeonRun {
   _onBossDown(player) {
     this.state = RUN_STATE.CLEARED;
     this.timer = 0;
+    this.level.setDoors(this.room, false);
     this.hud.hideBossBar();
     this.hud.announce('GUARDIAN DOWN', 'good');
     Audio.stopBossMusic();
@@ -207,6 +216,8 @@ export class DungeonRun {
 
   _onFrogathDown(player) {
     this.state = RUN_STATE.WON;
+    this.timer = 0;
+    this.level.setDoors(this.room, false);
     this.hud.hideBossBar();
     this.hud.setCinematic(false);
     this.hud.setSubtitle('');
@@ -219,6 +230,22 @@ export class DungeonRun {
     _v.copy(this.level.throne.center);
     this.effects.ring(_v, 1, 70, 2.5, 0xfff3c4, true);
     this.followCam.shake(2.0);
+  }
+
+  /**
+   * After the god falls. The arena stays open — the run is over, and how
+   * long you stand in it is your business.
+   */
+  _updateWon(dt) {
+    this.timer += dt;
+    if (this._wonToast || this.timer < 5) return;
+    this._wonToast = true;
+    this.hud.clearAnnounce();
+    const mins = Math.floor(this.runTime / 60);
+    const secs = Math.floor(this.runTime % 60);
+    this.hud.toast(
+      `Fifteen rooms, ${this.deaths} death${this.deaths === 1 ? '' : 's'}, `
+      + `${mins}m ${secs}s. Press ESC to leave.`, 12);
   }
 
   _onPlayerDown(player) {
@@ -238,15 +265,18 @@ export class DungeonRun {
   _updateCleared(dt, player) {
     this.timer += dt;
     if (this.timer < 1.6) return;
-    if (this.timer < 1.7) {
+    // Guarded so the message fires once, not on every frame of the window.
+    if (!this._announcedOpen) {
+      this._announcedOpen = true;
       this.hud.clearAnnounce();
-      this.hud.toast(this.isFinalRoom ? '' : 'The way on is open', 3);
+      this.hud.toast('The way on is open', 3);
     }
     // Walking out of the room advances the run.
     const r = this.level.rooms[this.room];
-    if (player.pos.x > r.exit.x) {
+    if (r && player.pos.x > r.exit.x) {
       this.room++;
       this.deepest = Math.max(this.deepest, this.room);
+      this._announcedOpen = false;
       this._enterRoom(player);
     }
   }

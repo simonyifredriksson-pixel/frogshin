@@ -12,11 +12,11 @@
  * Layout runs along +x: room i is centred at origin.x + i * roomSpacing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v25';
-import { CFG } from './config.js?v=v25';
-import { mulberry32, clamp, lerp } from './util.js?v=v25';
-import { Terrain, CollisionWorld } from './collision.js?v=v25';
-import { lanternGlowTexture } from './world.js?v=v25';
+import * as THREE from '../lib/three.module.js?v=v26';
+import { CFG } from './config.js?v=v26';
+import { mulberry32, clamp, lerp } from './util.js?v=v26';
+import { Terrain, CollisionWorld } from './collision.js?v=v26';
+import { lanternGlowTexture } from './world.js?v=v26';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -217,10 +217,26 @@ export class DungeonLevel {
       }
     }
 
+    // ---- door barriers ----
+    // Built now and left disabled. Without them you could simply sprint past
+    // a live guardian and be standing in front of Frogath inside a minute,
+    // which would make the whole mode skippable.
+    const doors = [];
+    for (const sx of [-1, 1]) {
+      if (sx < 0 && i === 0) continue;                 // no door behind room 1
+      if (sx > 0 && i >= D.rooms - 1) continue;
+      const b = this.collision.addBox(
+        c.x + sx * (R + 1.6), c.y + WALL_H / 2, c.z,
+        2.6, WALL_H / 2, DOOR_W / 2 + 1.5, 'barrier');
+      b.disabled = true;
+      doors.push(b);
+    }
+
     this.rooms.push({
       index: i,
       center: c,
       radius: R,
+      doors,
       // Where the player stands on entering, and where the boss waits.
       entry: new THREE.Vector3(c.x - R * 0.72, c.y + 0.6, c.z),
       bossSpot: new THREE.Vector3(c.x + R * 0.45, c.y + 0.6, c.z),
@@ -275,11 +291,40 @@ export class DungeonLevel {
         1.4, 0.06, 1.4, 0x8a6f1a, a);
     }
 
+    // The way in seals behind you. There is no leaving this room.
+    const door = this.collision.addBox(
+      c.x - (R + 2), c.y + 12, c.z, 3.0, 12, DOOR_W / 2 + 2, 'barrier');
+    door.disabled = true;
+
     this.throne = {
       center: c,
       radius: R,
+      doors: [door],
       entry: new THREE.Vector3(c.x - R * 0.8, c.y + 0.6, c.z),
     };
+  }
+
+  /**
+   * Seal or open a room's doorways.
+   *
+   * The boxes are created up front and merely switched, so the broadphase is
+   * never rebuilt mid-fight — re-baking every time a door moved would be a
+   * visible hitch at exactly the wrong moment.
+   */
+  setDoors(room, sealed) {
+    const r = (room === CFG.dungeon.rooms - 1) ? this.throne : this.rooms[room];
+    if (!r || !r.doors) return;
+    for (const d of r.doors) d.disabled = !sealed;
+  }
+
+  /** Open every door in the dungeon — used when a run resets. */
+  openAllDoors() {
+    for (const r of this.rooms) {
+      if (r.doors) for (const d of r.doors) d.disabled = true;
+    }
+    if (this.throne && this.throne.doors) {
+      for (const d of this.throne.doors) d.disabled = true;
+    }
   }
 
   _lantern(x, y, z, color) {
