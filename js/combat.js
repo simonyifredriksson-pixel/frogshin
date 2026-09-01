@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v30';
-import { CFG } from './config.js?v=v30';
-import { clamp } from './util.js?v=v30';
+import * as THREE from '../lib/three.module.js?v=v31';
+import { CFG } from './config.js?v=v31';
+import { clamp } from './util.js?v=v31';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -170,10 +170,19 @@ export class Health {
     this.lastAttacker = null;
     this.justDied = false;
     this.justHurt = 0;
+    this.god = false;             // developer invincibility
   }
 
   get fraction() { return clamp(this.hp / this.max, 0, 1); }
-  get protected() { return this.spawnProtection > 0 || this.invulnerable > 0; }
+  /**
+   * `god` is the developer menu's invincibility. It sits in `protected`
+   * rather than in `damage()` so that every path that already asks "can this
+   * land?" — thrown kunai, boss attacks, the parry — honours it without
+   * needing to know it exists.
+   */
+  get protected() {
+    return this.god || this.spawnProtection > 0 || this.invulnerable > 0;
+  }
 
   /**
    * Scale the health pool — the juggernaut's mountain of hit points.

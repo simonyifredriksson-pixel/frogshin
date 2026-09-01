@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v30';
-import { CFG } from './config.js?v=v30';
-import { staminaBand } from './stamina.js?v=v30';
-import { modeAvailable } from './rounds.js?v=v30';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v30';
-import { Audio } from './audio.js?v=v30';
-import { PX, setIcon } from './icons.js?v=v30';
+import { clamp } from './util.js?v=v31';
+import { CFG } from './config.js?v=v31';
+import { staminaBand } from './stamina.js?v=v31';
+import { modeAvailable } from './rounds.js?v=v31';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v31';
+import { Audio } from './audio.js?v=v31';
+import { PX, setIcon } from './icons.js?v=v31';
 
 const $ = (id) => document.getElementById(id);
 

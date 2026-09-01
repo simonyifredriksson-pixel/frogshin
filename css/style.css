@@ -1106,6 +1106,96 @@ kbd {
   border: 3px solid rgba(255,207,92,0.4);
   box-shadow: 0 3px 0 rgba(0,0,0,0.5);
 }
+/* ==========================================================================
+   DEVELOPER MENU  (F3 + J + L)
+   Deliberately plain — it is a tool, not part of the game's presentation.
+   ========================================================================== */
+
+#cheats {
+  position: fixed; inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center; justify-content: center;
+  background: rgba(4,6,10,0.55);
+}
+#cheats.show { display: flex; }
+
+.cheat-panel {
+  width: min(520px, 94vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 16px 18px 18px;
+  background: #10141c;
+  border: 3px solid #3ad17a;
+  box-shadow: 0 0 0 2px #0a0d13, 0 10px 40px rgba(0,0,0,0.7);
+  font-family: var(--font-px);
+  color: #cfe0d8;
+}
+.cheat-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  border-bottom: 2px solid #23303f;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+.cheat-head b { font-size: 13px; letter-spacing: 3px; color: #3ad17a; }
+.cheat-head span { font-size: 8px; letter-spacing: 1px; color: #5f7383; }
+
+.cheat-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.cheat-btn {
+  flex: 1 1 0;
+  padding: 10px 8px;
+  background: #1b2431;
+  border: 2px solid #2f4257;
+  color: #cfe0d8;
+  font-family: var(--font-px);
+  font-size: 8px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.cheat-btn:hover { background: #26374a; border-color: #3ad17a; }
+.cheat-btn.on { background: #17402a; border-color: #3ad17a; color: #8dffc0; }
+.cheat-btn.wide { width: 100%; margin-top: 10px; }
+
+.cheat-sep {
+  margin: 14px 0 8px;
+  border-top: 2px solid #23303f;
+  text-align: center;
+}
+.cheat-sep span {
+  position: relative; top: -8px;
+  background: #10141c;
+  padding: 0 10px;
+  font-size: 8px; letter-spacing: 2px; color: #5f7383;
+}
+
+/* One small square per room, so jumping to room 12 is a single click. */
+#cheat-rooms {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+  margin-bottom: 9px;
+}
+.cheat-room {
+  padding: 9px 0;
+  background: #1b2431;
+  border: 2px solid #2f4257;
+  color: #cfe0d8;
+  font-family: var(--font-px);
+  font-size: 9px;
+  cursor: pointer;
+}
+.cheat-room:hover { background: #26374a; border-color: #3ad17a; }
+.cheat-room.here { background: #17402a; border-color: #3ad17a; color: #8dffc0; }
+.cheat-room.boss { border-color: #c9a227; color: #ffd76b; }
+
+.cheat-note {
+  font-size: 8px;
+  line-height: 1.8;
+  color: #7f95a6;
+  min-height: 14px;
+  margin-top: 4px;
+}
+
 /* Knocked out of a juggernaut round: a standing reminder of why nothing
    you do lands any more. */
 #spectator-bar {

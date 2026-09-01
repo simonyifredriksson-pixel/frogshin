@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v30';
-import { CFG } from './config.js?v=v30';
-import { clamp } from './util.js?v=v30';
-import { DungeonLevel } from './dungeonlevel.js?v=v30';
-import { DungeonBoss } from './dungeonboss.js?v=v30';
-import { Frogath } from './frogath.js?v=v30';
-import { Audio } from './audio.js?v=v30';
+import * as THREE from '../lib/three.module.js?v=v31';
+import { CFG } from './config.js?v=v31';
+import { clamp } from './util.js?v=v31';
+import { DungeonLevel } from './dungeonlevel.js?v=v31';
+import { DungeonBoss } from './dungeonboss.js?v=v31';
+import { Frogath } from './frogath.js?v=v31';
+import { Audio } from './audio.js?v=v31';
 
 const _v = new THREE.Vector3();
 
@@ -82,6 +82,29 @@ export class DungeonRun {
     this.room = room;
     this.deepest = Math.max(this.deepest, room);
     this._enterRoom(player);
+  }
+
+  /**
+   * Developer menu: drop straight into any room.
+   *
+   * Goes through the same _enterRoom the normal flow uses, so a jumped-to
+   * room is set up identically to one you walked into — same doors, same
+   * boss, same objective. A shortcut that built a slightly different room
+   * would be worse than useless for testing.
+   */
+  jumpToRoom(room, player) {
+    const n = clamp(Math.round(room), 0, CFG.dungeon.rooms - 1);
+    this.room = n;
+    this.deepest = Math.max(this.deepest, n);
+    this._enterRoom(player);
+  }
+
+  /** Developer menu: drop whatever is in the room. */
+  killBoss() {
+    if (this.state !== RUN_STATE.FIGHT) return false;
+    if (this.frogath) { this.frogath.takeDamage(this.frogath.health); return true; }
+    if (this.boss) { this.boss.takeDamage(this.boss.health); return true; }
+    return false;
   }
 
   _enterRoom(player) {

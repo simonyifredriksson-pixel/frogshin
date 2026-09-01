@@ -35,8 +35,11 @@ export class Input {
       if (!this.keys.has(code)) this.pressed.add(code);
       this.keys.add(code);
 
-      // Stop Space/arrows from scrolling the page mid-fight.
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(code)) {
+      // Stop Space/arrows from scrolling the page mid-fight. F3 is in the
+      // list because it opens the browser's find bar, and it is half of the
+      // developer menu's chord.
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab',
+        'F3'].includes(code)) {
         e.preventDefault();
       }
     });

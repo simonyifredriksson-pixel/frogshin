@@ -5,30 +5,31 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v30';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v30';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v30';
-import { Input } from './input.js?v=v30';
-import { Audio } from './audio.js?v=v30';
-import { World } from './world.js?v=v30';
-import { Effects } from './effects.js?v=v30';
-import { Atmosphere } from './atmosphere.js?v=v30';
-import { FollowCamera } from './camera.js?v=v30';
-import { Player } from './player.js?v=v30';
-import { RemotePlayer } from './remote.js?v=v30';
-import { HUD } from './hud.js?v=v30';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v30';
-import { FrogModel } from './frog.js?v=v30';
-import { DummyField } from './dummy.js?v=v30';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v30';
-import { ToadModel } from './npc.js?v=v30';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v30';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v30';
-import { DungeonRun } from './dungeon.js?v=v30';
-import { MenuScene } from './menu.js?v=v30';
-import { Economy } from './economy.js?v=v30';
-import { Shop } from './shop.js?v=v30';
-import { Network, NetRole } from './net.js?v=v30';
+import * as THREE from '../lib/three.module.js?v=v31';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v31';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v31';
+import { Input } from './input.js?v=v31';
+import { Audio } from './audio.js?v=v31';
+import { World } from './world.js?v=v31';
+import { Effects } from './effects.js?v=v31';
+import { Atmosphere } from './atmosphere.js?v=v31';
+import { FollowCamera } from './camera.js?v=v31';
+import { Player } from './player.js?v=v31';
+import { RemotePlayer } from './remote.js?v=v31';
+import { HUD } from './hud.js?v=v31';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v31';
+import { FrogModel } from './frog.js?v=v31';
+import { DummyField } from './dummy.js?v=v31';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v31';
+import { ToadModel } from './npc.js?v=v31';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v31';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v31';
+import { DungeonRun } from './dungeon.js?v=v31';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v31';
+import { MenuScene } from './menu.js?v=v31';
+import { Economy } from './economy.js?v=v31';
+import { Shop } from './shop.js?v=v31';
+import { Network, NetRole } from './net.js?v=v31';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -54,6 +55,10 @@ class Game {
     this.lastFrame = this.clock;
     this.remotes = new Map();
     this._pendingJoins = new Map();
+    // --- developer menu (F3 + J + L) ---
+    this.cheatsOpen = false;
+    this.cheatStamina = false;
+    this._chordHeld = false;
     this._ctpShown = false;
     this.settings = this.loadSettings();
 
@@ -77,6 +82,7 @@ class Game {
     window.addEventListener('resize', () => this._resize());
 
     this._buildMenuUI();
+    this._buildCheatUI();
     this._applyQuality(this.settings.quality);
 
     this._loop = this._loop.bind(this);
@@ -1078,12 +1084,124 @@ class Game {
     Audio.hurt(p.pos);
   }
 
+  // ------------------------------------------------------- developer menu
+
+  /**
+   * Build the dev menu once. Opened with F3 + J + L.
+   *
+   * A three-key chord including a function key, because it must be
+   * impossible to hit by accident mid-fight — this is a playtesting tool,
+   * not a feature, and nothing here is networked or saved.
+   */
+  _buildCheatUI() {
+    const rooms = $('cheat-rooms');
+    for (let i = 0; i < CFG.dungeon.rooms; i++) {
+      const b = document.createElement('button');
+      b.className = 'cheat-room' + (i === CFG.dungeon.rooms - 1 ? ' boss' : '');
+      b.textContent = i + 1;
+      b.title = i === CFG.dungeon.rooms - 1
+        ? 'FROGATH' : (GUARDIAN_NAMES[i] || ('Room ' + (i + 1)));
+      b.onclick = () => this._cheatJump(i);
+      rooms.appendChild(b);
+    }
+
+    $('cheat-god').onclick = () => {
+      const p = this.player;
+      if (!p) return this._cheatNote('Start a game first.');
+      p.health.god = !p.health.god;
+      this._cheatRefresh();
+      this._cheatNote(p.health.god
+        ? 'Nothing can hurt you.' : 'Invincibility off.');
+    };
+    $('cheat-stam').onclick = () => {
+      this.cheatStamina = !this.cheatStamina;
+      this._cheatRefresh();
+      this._cheatNote(this.cheatStamina
+        ? 'Stamina is pinned full.' : 'Stamina back to normal.');
+    };
+    $('cheat-heal').onclick = () => {
+      const p = this.player;
+      if (!p) return this._cheatNote('Start a game first.');
+      p.health.revive();
+      p.stamina.reset();
+      this._cheatNote('Healed.');
+    };
+    $('cheat-kunai').onclick = () => {
+      const p = this.player;
+      if (!p) return this._cheatNote('Start a game first.');
+      p.inventory.addKunai(50);
+      this._cheatNote('+50 kunai.');
+    };
+    $('cheat-kill').onclick = () => {
+      if (!this.dungeon) return this._cheatNote('Only in the dungeon.');
+      this._cheatNote(this.dungeon.killBoss()
+        ? 'Boss killed.' : 'Nothing is fighting you right now.');
+    };
+    $('cheat-frogath').onclick = () => this._cheatJump(CFG.dungeon.rooms - 1);
+    $('cheat-close').onclick = () => this._toggleCheats(false);
+  }
+
+  _cheatJump(room) {
+    if (!this.dungeon || !this.player) {
+      return this._cheatNote('Room jumps only work in the dungeon.');
+    }
+    this.dungeon.jumpToRoom(room, this.player);
+    this._cheatRefresh();
+    const name = room === CFG.dungeon.rooms - 1
+      ? 'FROGATH' : (GUARDIAN_NAMES[room] || '');
+    return this._cheatNote(`Jumped to room ${room + 1} — ${name}`);
+  }
+
+  _cheatNote(msg) { $('cheat-note').textContent = msg; }
+
+  /** Keep the toggles showing what is actually on. */
+  _cheatRefresh() {
+    const god = !!(this.player && this.player.health.god);
+    const g = $('cheat-god');
+    g.textContent = 'INVINCIBLE: ' + (god ? 'ON' : 'OFF');
+    g.classList.toggle('on', god);
+    const s = $('cheat-stam');
+    s.textContent = 'INFINITE STAMINA: ' + (this.cheatStamina ? 'ON' : 'OFF');
+    s.classList.toggle('on', !!this.cheatStamina);
+
+    const here = this.dungeon ? this.dungeon.room : -1;
+    const btns = $('cheat-rooms').children;
+    for (let i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('here', i === here);
+    }
+  }
+
+  /** F3 + J + L, on the rising edge of all three being held. */
+  _updateCheatChord() {
+    const held = this.input.down('F3')
+      && this.input.down('KeyJ') && this.input.down('KeyL');
+    if (held && !this._chordHeld) this._toggleCheats(!this.cheatsOpen);
+    this._chordHeld = held;
+  }
+
+  _toggleCheats(open) {
+    if (open === this.cheatsOpen) return;
+    this.cheatsOpen = open;
+    $('cheats').classList.toggle('show', open);
+    this._cheatRefresh();
+    if (open) {
+      // Needs the mouse. The lock-change handler checks `cheatsOpen` so this
+      // does not trip the pause menu on the way out.
+      this.input.releaseLock();
+      this._cheatNote('');
+    } else if (this.mode === 'playing') {
+      this.input.requestLock();
+    }
+  }
+
   _onLockChange(locked) {
     // Voting deliberately releases the mouse so the cards can be clicked —
     // pausing there would drop the pause menu on top of the vote screen.
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
-    // The practice ring's try-out panel also releases the mouse on purpose.
-    if (this.mode === 'playing' && !locked && !voting && !this._tryPanelOpen) this._pause();
+    // The practice ring's try-out panel and the dev menu also release the
+    // mouse on purpose, and neither should drop the pause screen on top.
+    if (this.mode === 'playing' && !locked && !voting
+      && !this._tryPanelOpen && !this.cheatsOpen) this._pause();
     else if (this.mode === 'paused' && locked) this._resume();
   }
 
@@ -1204,6 +1322,12 @@ class Game {
     // Clamp so an alt-tab or a stall can never teleport anyone through a wall.
     dt = clamp(dt, 0, 0.05);
     this.clock = t;
+
+    // The dev menu chord is checked in every mode, including the menus.
+    this._updateCheatChord();
+    // Pinning stamina is done here rather than inside Stamina, so the cheat
+    // cannot leak into a normal game by leaving state behind.
+    if (this.cheatStamina && this.player) this.player.stamina.reset();
 
     // Froglets accrue for time played, so this ticks in menus too — but not
     // in solo practice, where there is nobody to earn them against.

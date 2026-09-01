@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v30';
+import * as THREE from '../lib/three.module.js?v=v31';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
