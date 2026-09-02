@@ -25,10 +25,10 @@
  *   Phase 5  THE LAST JUDGMENT   8%  silence, a line, then everything
  */
 
-import * as THREE from '../lib/three.module.js?v=v33';
-import { CFG } from './config.js?v=v33';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v33';
-import { Audio } from './audio.js?v=v33';
+import * as THREE from '../lib/three.module.js?v=v34';
+import { CFG } from './config.js?v=v34';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v34';
+import { Audio } from './audio.js?v=v34';
 
 const _v = new THREE.Vector3();
 const _tmp = new THREE.Vector3();

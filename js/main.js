@@ -5,32 +5,32 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v33';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v33';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v33';
-import { Input } from './input.js?v=v33';
-import { Audio } from './audio.js?v=v33';
-import { World } from './world.js?v=v33';
-import { Effects } from './effects.js?v=v33';
-import { Atmosphere } from './atmosphere.js?v=v33';
-import { FollowCamera } from './camera.js?v=v33';
-import { Player } from './player.js?v=v33';
-import { RemotePlayer } from './remote.js?v=v33';
-import { HUD } from './hud.js?v=v33';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v33';
-import { FrogModel } from './frog.js?v=v33';
-import { DummyField } from './dummy.js?v=v33';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v33';
-import { ToadModel } from './npc.js?v=v33';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v33';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v33';
-import { DungeonRun } from './dungeon.js?v=v33';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v33';
-import { JudgmentRun } from './judgment.js?v=v33';
-import { MenuScene } from './menu.js?v=v33';
-import { Economy } from './economy.js?v=v33';
-import { Shop } from './shop.js?v=v33';
-import { Network, NetRole } from './net.js?v=v33';
+import * as THREE from '../lib/three.module.js?v=v34';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v34';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v34';
+import { Input } from './input.js?v=v34';
+import { Audio } from './audio.js?v=v34';
+import { World } from './world.js?v=v34';
+import { Effects } from './effects.js?v=v34';
+import { Atmosphere } from './atmosphere.js?v=v34';
+import { FollowCamera } from './camera.js?v=v34';
+import { Player } from './player.js?v=v34';
+import { RemotePlayer } from './remote.js?v=v34';
+import { HUD } from './hud.js?v=v34';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v34';
+import { FrogModel } from './frog.js?v=v34';
+import { DummyField } from './dummy.js?v=v34';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v34';
+import { ToadModel } from './npc.js?v=v34';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v34';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v34';
+import { DungeonRun } from './dungeon.js?v=v34';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v34';
+import { JudgmentRun } from './judgment.js?v=v34';
+import { MenuScene } from './menu.js?v=v34';
+import { Economy } from './economy.js?v=v34';
+import { Shop } from './shop.js?v=v34';
+import { Network, NetRole } from './net.js?v=v34';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1079,6 +1079,9 @@ class Game {
     this.input.flush();
     this.input.requestLock();
     Audio.stopMenuMusic();
+    // Lift the black the sacrifice put up. Without this the arena loads
+    // correctly behind a screen that never clears.
+    this.hud.setFade(0, 0.9);
     this._resize();
   }
 
@@ -1292,9 +1295,7 @@ class Game {
       // Straight into the judgment arena, skipping the statue entirely —
       // otherwise testing him means a clean dungeon run every time.
       this._toggleCheats(false);
-      this.pendingMode = 'judgment';
-      if (this.net.isOnline) this.net.disconnect();
-      this._enterGame();
+      this.gotoJudgment();
     };
     $('cheat-close').onclick = () => this._toggleCheats(false);
   }
@@ -1661,6 +1662,8 @@ class Game {
 
   /** Give it up. The statue takes it, and takes you with it. */
   _sacrificeCrystal(p, s) {
+    if (this._sacrificing) return;
+    this._sacrificing = true;
     this.economy.crystal = false;
     this.economy.save();
     this.hud.setPickupPrompt(false);
@@ -1676,11 +1679,27 @@ class Game {
     Audio.death(p.pos);
 
     // Long enough for the flash to land before the world changes.
-    setTimeout(() => {
-      this.pendingMode = 'judgment';
-      if (this.net.isOnline) this.net.disconnect();
-      this._enterGame();
-    }, 1200);
+    setTimeout(() => this.gotoJudgment(), 1200);
+  }
+
+  /**
+   * Leave whatever is running and load the judgment arena.
+   *
+   * The teardown is the whole point: `_enterGame` refuses to start while a
+   * match is already live, so calling it straight from the arena did nothing
+   * at all and left the player sitting behind the fade. Quitting first puts
+   * the game back in a state it will accept, and the fade is re-applied over
+   * the top so the menu never flashes through the transition.
+   */
+  gotoJudgment() {
+    if (this.mode === 'loading') return;
+    this._sacrificing = false;
+    if (this.net.isOnline) this.net.disconnect();
+    this._quitToMenu();
+    // _quitToMenu resets the overlays, which clears the fade — put it back.
+    this.hud.setFade(1, 0);
+    this.pendingMode = 'judgment';
+    this._enterGame();
   }
 
   /**
