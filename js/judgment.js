@@ -11,12 +11,12 @@
  * standing, so cover would only make his patterns unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v37';
-import { CFG } from './config.js?v=v37';
-import { clamp, lerp } from './util.js?v=v37';
-import { Terrain, CollisionWorld } from './collision.js?v=v37';
-import { Ascended } from './ascended.js?v=v37';
-import { Audio } from './audio.js?v=v37';
+import * as THREE from '../lib/three.module.js?v=v38';
+import { CFG } from './config.js?v=v38';
+import { clamp, lerp } from './util.js?v=v38';
+import { Terrain, CollisionWorld } from './collision.js?v=v38';
+import { Ascended } from './ascended.js?v=v38';
+import { Audio } from './audio.js?v=v38';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -395,14 +395,18 @@ export class JudgmentRun {
     if (!this.boss) return;
     this._updateArena(dt);
 
-    if (this.boss.inEntrance) {
+    // The skip prompt. Clearing it has to happen OUTSIDE the entrance test:
+    // the moment the entrance ends this block stops running, so a clear
+    // nested inside it never fires and the prompt is stranded on screen for
+    // the rest of the fight.
+    const showSkip = this.boss.inEntrance && this.boss.skippable;
+    if (showSkip) {
       const p = this.boss.updateSkip(dt, !!skipHeld);
-      if (this.boss.skippable) {
-        this.hud.setTutorial('HOLD', 'SPACE',
-          p > 0 ? `SKIPPING… ${Math.round(p * 100)}%` : 'TO SKIP');
-      }
-      if (!this.boss.inEntrance) this.hud.setTutorial(null);
+      this.hud.setTutorial('HOLD', 'SPACE',
+        p > 0 ? `SKIPPING… ${Math.round(p * 100)}%` : 'TO SKIP');
     }
+    if (this._skipPrompt && !showSkip) this.hud.setTutorial(null);
+    this._skipPrompt = showSkip;
 
     if (this.state === 'entering') {
       const d = Math.hypot(player.pos.x - this.center.x, player.pos.z - this.center.z);

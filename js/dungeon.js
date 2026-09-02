@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v37';
-import { CFG } from './config.js?v=v37';
-import { clamp } from './util.js?v=v37';
-import { DungeonLevel } from './dungeonlevel.js?v=v37';
-import { DungeonBoss } from './dungeonboss.js?v=v37';
-import { Frogath } from './frogath.js?v=v37';
-import { Audio } from './audio.js?v=v37';
+import * as THREE from '../lib/three.module.js?v=v38';
+import { CFG } from './config.js?v=v38';
+import { clamp } from './util.js?v=v38';
+import { DungeonLevel } from './dungeonlevel.js?v=v38';
+import { DungeonBoss } from './dungeonboss.js?v=v38';
+import { Frogath } from './frogath.js?v=v38';
+import { Audio } from './audio.js?v=v38';
 
 const _v = new THREE.Vector3();
 
@@ -172,14 +172,18 @@ export class DungeonRun {
     this.runTime += dt;
 
     // Skipping Frogath's entrance, once he has earned the right to be skipped.
-    if (this.frogath && this.frogath.inEntrance) {
+    // Clearing the prompt has to happen OUTSIDE the entrance test: the moment
+    // the entrance ends this block stops running, so a clear nested inside it
+    // never fires and the prompt is stranded on screen for the whole fight.
+    const showSkip = !!this.frogath && this.frogath.inEntrance
+      && this.frogath.skippable;
+    if (showSkip) {
       const p = this.frogath.updateSkip(dt, !!skipHeld);
-      if (this.frogath.skippable) {
-        this.hud.setTutorial(p > 0 ? 'HOLD' : 'HOLD', 'SPACE',
-          p > 0 ? `SKIPPING… ${Math.round(p * 100)}%` : 'TO SKIP');
-      }
-      if (!this.frogath.inEntrance) this.hud.setTutorial(null);
+      this.hud.setTutorial('HOLD', 'SPACE',
+        p > 0 ? `SKIPPING… ${Math.round(p * 100)}%` : 'TO SKIP');
     }
+    if (this._skipPrompt && !showSkip) this.hud.setTutorial(null);
+    this._skipPrompt = showSkip;
 
     switch (this.state) {
       case RUN_STATE.ENTERING: this._updateEntering(dt, player); break;

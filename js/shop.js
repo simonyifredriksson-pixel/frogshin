@@ -9,10 +9,10 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v37';
-import { Audio } from './audio.js?v=v37';
-import { PX } from './icons.js?v=v37';
-import { CFG } from './config.js?v=v37';
+} from './skins.js?v=v38';
+import { Audio } from './audio.js?v=v38';
+import { PX } from './icons.js?v=v38';
+import { CFG } from './config.js?v=v38';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;

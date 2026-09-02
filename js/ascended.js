@@ -36,10 +36,10 @@
  * learn is ever invalidated — it only has to be done faster.
  */
 
-import * as THREE from '../lib/three.module.js?v=v37';
-import { CFG } from './config.js?v=v37';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v37';
-import { Audio } from './audio.js?v=v37';
+import * as THREE from '../lib/three.module.js?v=v38';
+import { CFG } from './config.js?v=v38';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v38';
+import { Audio } from './audio.js?v=v38';
 
 const _v = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -52,6 +52,17 @@ const HOT = 0xfff3c4;
 const WHITE = 0xffffff;
 const WARN = 0xffb03c;      // move out of it
 const WARN_JUMP = 0xffe14a; // ground wave — jump it
+
+/**
+ * How far off dead-centre his back is turned during the entrance.
+ *
+ * A perfectly square back is a flat silhouette, and it also leaves the turn
+ * exactly 180° from its target — the one angle where "shortest way round" has
+ * no answer, so he could rotate either way from one run to the next. A few
+ * degrees of bias fixes both: the pose reads better and the turn is always
+ * the same direction.
+ */
+const BACK_BIAS = 0.20;
 
 const ENTRANCE_LINE =
   '“You were told a god had fallen. You were not told which one.”';
@@ -753,8 +764,20 @@ export class Ascended {
 
   _skip() {
     const A = CFG.ascended;
+    // Nothing left to skip — and this is what takes the prompt off screen,
+    // since the burst it drops you into is still part of the entrance.
+    this.skippable = false;
+    this.skipHeld = 0;
     this.pos.set(this.center.x, this.center.y + A.hoverHeight + 14, this.center.z);
     this.rig.root.visible = true;
+    // Skipping lands mid-turn otherwise — the burst is shorter than the turn
+    // takes, so he would still be coming round as the fight started. A skip
+    // should drop you at the pose the entrance was heading for.
+    this.turnToPlayer = true;
+    if (this._camAngle !== undefined) {
+      this.yaw = this._camAngle;
+      this._yawPosed = true;
+    }
     this.wingOpen = 1;
     this.hud.setSubtitle('');
     this.hud.setFade(0, 0.25);
@@ -889,6 +912,10 @@ export class Ascended {
 
   _cam(camera, player, dist, pitch) {
     const a = Math.atan2(player.pos.x - this.center.x, player.pos.z - this.center.z);
+    // Remembered so the entrance can pose him relative to the SHOT rather
+    // than to the world — see _animate. Without this, which side of him you
+    // see is decided by whichever way you happened to walk in from.
+    this._camAngle = a;
     camera.position.set(
       this.center.x + Math.sin(a) * dist,
       this.center.y + 3.0,
@@ -2231,7 +2258,27 @@ export class Ascended {
     }
 
     rig.root.position.copy(this.pos);
-    if (this.turnToPlayer || this.fighting) {
+    // Through the entrance he is posed against the CAMERA, not the world.
+    //
+    // He comes down out of the sky with his back to you — enormous, and not
+    // yet interested. Then he turns all the way around and looks straight
+    // down the lens, and that is the first time you see his face.
+    //
+    // Camera-relative is the whole point: posing him in world space meant the
+    // shot depended on which side of the arena you walked in from, so the
+    // same beat read as a back, a profile or a face depending on your path.
+    if (this.inEntrance && this._camAngle !== undefined) {
+      const want = this.turnToPlayer
+        ? this._camAngle                        // face the lens
+        : this._camAngle + Math.PI + BACK_BIAS; // shoulders to the lens
+      if (!this._yawPosed) {
+        // First framed frame: snap, so he is never caught mid-spin.
+        this._yawPosed = true;
+        this.yaw = want;
+      } else {
+        this.yaw = dampAngle(this.yaw, want, this.turnToPlayer ? 1.5 : 9, dt);
+      }
+    } else if (this.turnToPlayer || this.fighting) {
       const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
       this.yaw = dampAngle(this.yaw, want, this.fighting ? 6 : 1.8, dt);
     }

@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v37';
-import { CFG } from './config.js?v=v37';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v37';
-import { Audio } from './audio.js?v=v37';
+import * as THREE from '../lib/three.module.js?v=v38';
+import { CFG } from './config.js?v=v38';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v38';
+import { Audio } from './audio.js?v=v38';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -32,6 +32,17 @@ const _tmp = new THREE.Vector3();
 const GOLD = 0xffd76b;
 const GOLD_HOT = 0xfff3c4;
 const GOLD_DEEP = 0xc9922a;
+
+/**
+ * How far off dead-centre his back is turned during the entrance.
+ *
+ * A perfectly square back is a flat silhouette, and it also leaves the turn
+ * exactly 180° from its target — the one angle where "shortest way round" has
+ * no answer, so he could rotate either way from one run to the next. A few
+ * degrees of bias fixes both: the pose reads better and the turn is always
+ * the same direction.
+ */
+const BACK_BIAS = 0.20;
 
 /** The speech, exactly as scripted, one screen at a time. */
 export const FROGATH_SPEECH = [
@@ -281,8 +292,19 @@ export class Frogath {
   /** Jump straight to the stare, so "Begin." still lands. */
   _skipEntrance() {
     const F = CFG.dungeon.frogath;
+    // Nothing left to skip — and this is what takes the prompt off screen,
+    // since the stare it drops you into is still part of the entrance.
+    this.skippable = false;
+    this.skipHeld = 0;
     this.pos.set(this.center.x, this.center.y + F.hoverHeight + 16, this.center.z);
+    // Face-on immediately: the stare a skip drops you into is shorter than
+    // the turn takes, so he would otherwise still be coming round when
+    // "Begin." lands.
     this.turningToPlayer = true;
+    if (this._camAngle !== undefined) {
+      this.yaw = this._camAngle;
+      this._yawPosed = true;
+    }
     this.eyesHot = true;
     this.hud.setSubtitle('');
     this.hud.setFade(0, 0.25);
@@ -497,6 +519,10 @@ export class Frogath {
   /** Frame him from below, so he fills the sky. */
   _cinematicCamera(camera, player, dist, pitch) {
     const a = Math.atan2(player.pos.x - this.center.x, player.pos.z - this.center.z);
+    // Remembered so the entrance can pose him relative to the SHOT rather
+    // than to the world — see _animate. Without this, which side of him you
+    // see is decided by whichever way you happened to walk in from.
+    this._camAngle = a;
     camera.position.set(
       this.center.x + Math.sin(a) * dist,
       this.center.y + 2.5,
@@ -981,12 +1007,27 @@ export class Frogath {
     const rig = this.rig;
     rig.root.position.copy(this.pos);
 
-    // Through the entrance he faces nowhere in particular — he is speaking to
-    // the room. From "Tell me, little mortal..." onward he turns, slowly, to
-    // look directly at the player and never looks away again.
-    if (this.turningToPlayer && this.state !== STATE.FIGHT) {
-      const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
-      this.yaw = dampAngle(this.yaw, want, 1.6, dt);
+    // Through the entrance he is posed against the CAMERA, not the world.
+    //
+    // He descends and speaks with his back to you — you are looking at the
+    // shoulders of something that has not acknowledged you yet. Then, on
+    // "Tell me, little mortal...", he turns all the way around and looks
+    // straight down the lens.
+    //
+    // Camera-relative is the whole point: posing him in world space meant the
+    // shot depended on which side of the arena you walked in from, so the
+    // same beat read as a back, a profile or a face depending on your path.
+    if (this.state !== STATE.FIGHT && this._camAngle !== undefined) {
+      const want = this.turningToPlayer
+        ? this._camAngle                        // face the lens
+        : this._camAngle + Math.PI + BACK_BIAS; // shoulders to the lens
+      if (!this._yawPosed) {
+        // First framed frame: snap, so he is never caught mid-spin.
+        this._yawPosed = true;
+        this.yaw = want;
+      } else {
+        this.yaw = dampAngle(this.yaw, want, this.turningToPlayer ? 1.6 : 9, dt);
+      }
     }
     rig.root.rotation.y = this.yaw + Math.PI;
 
