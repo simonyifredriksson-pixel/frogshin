@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v36" />
+<link rel="stylesheet" href="css/style.css?v=v37" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -570,7 +570,8 @@
 </div>
 
 <!-- ════════════════════════════════════════════════════════ DEVELOPER MENU ══ -->
-<!-- Opened with F3 + J + L. Deliberately awkward to hit by accident.
+<!-- Opened with F3 + J + L, or Ctrl + L + J + M. Both are deliberately
+     awkward to hit by accident.
      OUTSIDE #hud on purpose: the HUD is pointer-events:none so the game can
      be clicked through it, and it is display:none in the menus — either would
      leave this panel visible-but-dead, or missing entirely. -->
@@ -578,7 +579,7 @@
   <div class="cheat-panel">
     <div class="cheat-head">
       <b>DEV MENU</b>
-      <span>F3 + J + L</span>
+      <span>F3+J+L &nbsp;/&nbsp; CTRL+L+J+M</span>
     </div>
 
     <div class="cheat-row">
@@ -672,6 +673,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v36"></script>
+<script type="module" src="js/main.js?v=v37"></script>
 </body>
 </html>

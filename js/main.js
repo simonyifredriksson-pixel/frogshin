@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v36';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v36';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v36';
-import { Input } from './input.js?v=v36';
-import { Audio } from './audio.js?v=v36';
-import { World } from './world.js?v=v36';
-import { Effects } from './effects.js?v=v36';
-import { Atmosphere } from './atmosphere.js?v=v36';
-import { FollowCamera } from './camera.js?v=v36';
-import { Player } from './player.js?v=v36';
-import { RemotePlayer } from './remote.js?v=v36';
-import { HUD } from './hud.js?v=v36';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v36';
-import { FrogModel } from './frog.js?v=v36';
-import { DummyField } from './dummy.js?v=v36';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v36';
-import { ToadModel } from './npc.js?v=v36';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v36';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v36';
-import { DungeonRun } from './dungeon.js?v=v36';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v36';
-import { JudgmentRun } from './judgment.js?v=v36';
-import { COMBO_NAMES } from './ascended.js?v=v36';
-import { MenuScene } from './menu.js?v=v36';
-import { Economy } from './economy.js?v=v36';
-import { Shop } from './shop.js?v=v36';
-import { Network, NetRole } from './net.js?v=v36';
+import * as THREE from '../lib/three.module.js?v=v37';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v37';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v37';
+import { Input } from './input.js?v=v37';
+import { Audio } from './audio.js?v=v37';
+import { World } from './world.js?v=v37';
+import { Effects } from './effects.js?v=v37';
+import { Atmosphere } from './atmosphere.js?v=v37';
+import { FollowCamera } from './camera.js?v=v37';
+import { Player } from './player.js?v=v37';
+import { RemotePlayer } from './remote.js?v=v37';
+import { HUD } from './hud.js?v=v37';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v37';
+import { FrogModel } from './frog.js?v=v37';
+import { DummyField } from './dummy.js?v=v37';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v37';
+import { ToadModel } from './npc.js?v=v37';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v37';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v37';
+import { DungeonRun } from './dungeon.js?v=v37';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v37';
+import { JudgmentRun } from './judgment.js?v=v37';
+import { COMBO_NAMES } from './ascended.js?v=v37';
+import { MenuScene } from './menu.js?v=v37';
+import { Economy } from './economy.js?v=v37';
+import { Shop } from './shop.js?v=v37';
+import { Network, NetRole } from './net.js?v=v37';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -58,7 +58,7 @@ class Game {
     this.remotes = new Map();
     this._lastSweep = 0;
     this._pendingJoins = new Map();
-    // --- developer menu (F3 + J + L) ---
+    // --- developer menu (F3 + J + L, or Ctrl + L + J + M) ---
     this.cheatsOpen = false;
     this.cheatStamina = false;
     this._chordHeld = false;
@@ -1276,7 +1276,7 @@ class Game {
   // ------------------------------------------------------- developer menu
 
   /**
-   * Build the dev menu once. Opened with F3 + J + L.
+   * Build the dev menu once. Opened with F3+J+L or Ctrl+L+J+M.
    *
    * A three-key chord including a function key, because it must be
    * impossible to hit by accident mid-fight — this is a playtesting tool,
@@ -1408,10 +1408,26 @@ class Game {
     }
   }
 
-  /** F3 + J + L, on the rising edge of all three being held. */
+  /**
+   * The developer menu answers to two chords, on the rising edge of either
+   * being fully held:
+   *
+   *     F3 + J + L          the original
+   *     Ctrl + L + J + M    the second
+   *
+   * A word on the Ctrl one. Chrome reserves Ctrl+L for the address bar and
+   * will not let the page cancel it, and focusing the address bar blurs the
+   * window, which clears every held key — so pressing Ctrl FIRST can lose the
+   * chord before it completes. Because this only reads which keys are held
+   * and not the order they arrived in, holding L+J+M and then tapping Ctrl
+   * works everywhere: none of those three is a browser shortcut on its own,
+   * and Ctrl by itself does nothing.
+   */
   _updateCheatChord() {
-    const held = this.input.down('F3')
-      && this.input.down('KeyJ') && this.input.down('KeyL');
+    const k = (code) => this.input.down(code);
+    const ctrl = k('ControlLeft') || k('ControlRight');
+    const held = (k('F3') && k('KeyJ') && k('KeyL'))
+      || (ctrl && k('KeyL') && k('KeyJ') && k('KeyM'));
     if (held && !this._chordHeld) this._toggleCheats(!this.cheatsOpen);
     this._chordHeld = held;
   }

@@ -6,6 +6,18 @@
  * lands between frames is never dropped.
  */
 
+/**
+ * The keys of the Ctrl-based developer chord (Ctrl+L+J+M), plus Ctrl itself.
+ *
+ * Held keys are normally dropped the moment a modifier is down, so that
+ * Ctrl+C, Ctrl+R and friends reach the browser untouched. These five are the
+ * only exception: without it a Ctrl chord could never be seen at all, because
+ * the keys would never make it into the held set.
+ */
+const CHORD_KEYS = new Set([
+  'ControlLeft', 'ControlRight', 'KeyL', 'KeyJ', 'KeyM',
+]);
+
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -26,12 +38,15 @@ export class Input {
 
   _bind() {
     window.addEventListener('keydown', (e) => {
-      // Never swallow browser shortcuts or typing in the room-code field.
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const code = e.code;
+      const modified = e.ctrlKey || e.metaKey || e.altKey;
+      // Never swallow browser shortcuts — except the developer chord's own
+      // keys, which have to be tracked or the chord can never be recognised.
+      if (modified && !CHORD_KEYS.has(code)) return;
+      // Never swallow typing in the room-code field either.
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-      const code = e.code;
       if (!this.keys.has(code)) this.pressed.add(code);
       this.keys.add(code);
 
@@ -42,6 +57,11 @@ export class Input {
         'F3'].includes(code)) {
         e.preventDefault();
       }
+      // Ctrl+L / Ctrl+J / Ctrl+M are the other chord. Ask the browser not to
+      // act on them. Chrome reserves some of these (Ctrl+L focuses the
+      // address bar) and will ignore this — which is why the chord is also
+      // designed to work with Ctrl pressed LAST, see _updateCheatChord.
+      if (modified && CHORD_KEYS.has(code)) e.preventDefault();
     });
 
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
