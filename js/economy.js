@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v32';
+import { CFG } from './config.js?v=v33';
 
 export class Economy {
   constructor() {
@@ -22,6 +22,10 @@ export class Economy {
     this.equipped = { sword: null, frog: null, kunai: null };
     this.abilities = [];        // purchased ability ids
     this.loadout = [];          // the (at most two) carried into a match
+    // Dropped by the First Croak on a no-checkpoint run. Carried to the
+    // statue in the arena, and consumed there.
+    this.crystal = false;
+    this.ascendedBeaten = false;
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -49,6 +53,8 @@ export class Economy {
       if (d.equipped) Object.assign(this.equipped, d.equipped);
       if (Array.isArray(d.abilities)) this.abilities = d.abilities;
       if (Array.isArray(d.loadout)) this.loadout = d.loadout;
+      this.crystal = !!d.crystal;
+      this.ascendedBeaten = !!d.ascendedBeaten;
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -66,6 +72,8 @@ export class Economy {
         equipped: this.equipped,
         abilities: this.abilities,
         loadout: this.loadout,
+        crystal: this.crystal,
+        ascendedBeaten: this.ascendedBeaten,
       }));
     } catch (e) {
       console.warn('[frogshin] could not save progress:', e);

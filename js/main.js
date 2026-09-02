@@ -5,31 +5,32 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v32';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v32';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v32';
-import { Input } from './input.js?v=v32';
-import { Audio } from './audio.js?v=v32';
-import { World } from './world.js?v=v32';
-import { Effects } from './effects.js?v=v32';
-import { Atmosphere } from './atmosphere.js?v=v32';
-import { FollowCamera } from './camera.js?v=v32';
-import { Player } from './player.js?v=v32';
-import { RemotePlayer } from './remote.js?v=v32';
-import { HUD } from './hud.js?v=v32';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v32';
-import { FrogModel } from './frog.js?v=v32';
-import { DummyField } from './dummy.js?v=v32';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v32';
-import { ToadModel } from './npc.js?v=v32';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v32';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v32';
-import { DungeonRun } from './dungeon.js?v=v32';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v32';
-import { MenuScene } from './menu.js?v=v32';
-import { Economy } from './economy.js?v=v32';
-import { Shop } from './shop.js?v=v32';
-import { Network, NetRole } from './net.js?v=v32';
+import * as THREE from '../lib/three.module.js?v=v33';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v33';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v33';
+import { Input } from './input.js?v=v33';
+import { Audio } from './audio.js?v=v33';
+import { World } from './world.js?v=v33';
+import { Effects } from './effects.js?v=v33';
+import { Atmosphere } from './atmosphere.js?v=v33';
+import { FollowCamera } from './camera.js?v=v33';
+import { Player } from './player.js?v=v33';
+import { RemotePlayer } from './remote.js?v=v33';
+import { HUD } from './hud.js?v=v33';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v33';
+import { FrogModel } from './frog.js?v=v33';
+import { DummyField } from './dummy.js?v=v33';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v33';
+import { ToadModel } from './npc.js?v=v33';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v33';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v33';
+import { DungeonRun } from './dungeon.js?v=v33';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v33';
+import { JudgmentRun } from './judgment.js?v=v33';
+import { MenuScene } from './menu.js?v=v33';
+import { Economy } from './economy.js?v=v33';
+import { Shop } from './shop.js?v=v33';
+import { Network, NetRole } from './net.js?v=v33';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -638,6 +639,13 @@ class Game {
       await this._enterDungeon(loading, bar, label, frame, this._dungeonCheckpoints);
       return;
     }
+    // And the judgment arena, reached only through the statue.
+    if (this.pendingMode === 'judgment') {
+      this.pendingMode = null;
+      this.sessionMode = 'judgment';
+      await this._enterJudgment(loading, bar, label, frame);
+      return;
+    }
     this.pendingMode = null;
     this.sessionMode = 'arena';
 
@@ -968,6 +976,10 @@ class Game {
 
     // Beating the god unlocks his appearance — a cosmetic, permanently.
     this.dungeon.onVictory = () => this._awardFrogathSkin();
+    this.dungeon.onCrystal = () => {
+      this.economy.crystal = true;
+      this.economy.save();
+    };
 
     this.dungeon.start(this.player, 0);
     this.followCam.snapTo(this.player.pos);
@@ -978,6 +990,139 @@ class Game {
     this.input.requestLock();
     Audio.stopMenuMusic();
     this._resize();
+  }
+
+  /**
+   * The judgment arena. Same shape as the dungeon entry, one room, one boss.
+   */
+  async _enterJudgment(loading, bar, label, frame) {
+    this.isJudgment = true;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight,
+      CFG.camera.near, CFG.camera.far);
+    this.effects = new Effects(this.scene, this.camera);
+
+    this.judgment = new JudgmentRun({
+      scene: this.scene, effects: this.effects, hud: this.hud,
+      camera: this.camera, followCam: null,
+    });
+
+    const tasks = this.judgment.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 94) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+
+    this.world = { collision: this.judgment.collision, update: () => {} };
+    this.followCam = new FollowCamera(this.camera, this.judgment.collision);
+    this.judgment.followCam = this.followCam;
+
+    // Black, with only his light in it.
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: 0, cloudCount: 0, shadows: this.quality.shadows,
+      fogNear: 30, fogFar: 220,
+      fogColor: 0x05040a, skyTop: 0x020206, skyMid: 0x05040c, skyBottom: 0x0a0814,
+    });
+    this.atmo.sun.color.setHex(0xffd76b);
+    this.atmo.sun.intensity = 0.35;
+    this.atmo.hemi.color.setHex(0x3a3050);
+    this.atmo.hemi.groundColor.setHex(0x05040a);
+    this.atmo.hemi.intensity = 0.4;
+    this.renderer.setClearColor(0x020206);
+
+    this.dummies = new DummyField(this.scene);
+    this.kunaiSystem = new KunaiSystem(this.scene, this.judgment.collision, this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
+    this.pickups = null;
+
+    bar.style.width = '100%';
+    await frame();
+
+    const prof = this.profile;
+    if (this.player) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.player = new Player({
+      id: 'local', name: prof.name, color: prof.color,
+      world: this.world, effects: this.effects, scene: this.scene,
+      kunai: this.kunaiSystem, pickups: null, skins: this.equippedSkins,
+    });
+    this.player.combatEnabled = true;
+    this.player.inventory.setUnlimitedKunai(true);
+    this.player.inventory.setAbilities(this.shop.equippedAbilities());
+
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.onSlotClick = (i) => {
+      const slot = this.player.inventory.slots[i];
+      if (slot && slot.item.ability) this.player._useAbility(slot.item.id);
+      else if (this.player.inventory.select(i)) Audio.uiClick();
+    };
+    this.hud.resetOverlays();
+    this.hud.show(true);
+    this.hud.setRoom('', 'The Last Judgment', false);
+
+    this.judgment.onVictory = () => {
+      this.economy.ascendedBeaten = true;
+      this.economy.award(CFG.economy.roundWinReward * 40, 'THE ASCENDED FALLS');
+      this.economy.save();
+      this.hud.toast('You have beaten the god above gods.', 14);
+    };
+    this.judgment.start(this.player);
+    this.followCam.snapTo(this.player.pos);
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.stopMenuMusic();
+    this._resize();
+  }
+
+  /** One frame of the judgment fight. */
+  _updateJudgment(dt, t) {
+    const p = this.player;
+    if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
+
+    const look = this.input.takeLook();
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+
+    const targets = [];
+    const boss = this.judgment.bossTarget();
+    if (boss) targets.push(boss);
+
+    p.update(dt, this.input, this.followCam, targets);
+    this.kunaiSystem.update(dt, targets);
+    if (p.deathPending) p.deathPending = false;
+    // Same as the dungeon: the katana queues its hits as events because the
+    // arena needs them networked, so here is where they are applied.
+    for (const ev of p.events) {
+      if (ev.t === 'hit') {
+        this.judgment.damageBoss(ev.dmg);
+        this.hud.hitmarker(ev.c === 2);
+      }
+    }
+    p.events.length = 0;
+
+    this.judgment.update(dt, p, (dmg, from) => this._dungeonHit(dmg, from),
+      this.input.down('Space'));
+
+    this.effects.update(dt);
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    if (!p.cinematic) {
+      this.followCam.update(p.pos, speed, dt, {
+        dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        sprinting: p.sprinting,
+      });
+    }
+    this.atmo.update(dt, this.camera.position);
+    this._updateHud(dt, speed);
+    this._updateAudioListener();
+    Audio.updateAmbient(dt);
+    this.renderer.render(this.scene, this.camera);
   }
 
   /** One frame of a dungeon run. */
@@ -1138,6 +1283,19 @@ class Game {
         ? 'Boss killed.' : 'Nothing is fighting you right now.');
     };
     $('cheat-frogath').onclick = () => this._cheatJump(CFG.dungeon.rooms - 1);
+    $('cheat-crystal').onclick = () => {
+      this.economy.crystal = true;
+      this.economy.save();
+      this._cheatNote('Crystal granted. Take it to the statue in the arena.');
+    };
+    $('cheat-ascended').onclick = () => {
+      // Straight into the judgment arena, skipping the statue entirely —
+      // otherwise testing him means a clean dungeon run every time.
+      this._toggleCheats(false);
+      this.pendingMode = 'judgment';
+      if (this.net.isOnline) this.net.disconnect();
+      this._enterGame();
+    };
     $('cheat-close').onclick = () => this._toggleCheats(false);
   }
 
@@ -1239,6 +1397,19 @@ class Game {
   }
 
   _quitToMenu() {
+    // The judgment arena owns its own scene as well.
+    if (this.isJudgment) {
+      if (this.judgment) this.judgment.dispose();
+      this.judgment = null;
+      this.isJudgment = false;
+      this.world = null;
+      this.scene = null;
+      this.atmo = null;
+      this.player = null;
+      this.pickups = null;
+      this.renderer.setClearColor(0x8ec9e8);
+      this._underwater = false;
+    }
     // The dungeon owns its own scene too — drop the whole thing.
     if (this.isDungeon) {
       if (this.dungeon) this.dungeon.dispose();
@@ -1354,8 +1525,9 @@ class Game {
       // joining clients unable to see the host at all.
       this._flushPendingJoins();
 
-      // Story, dungeon and arena are separate loops sharing the renderer.
-      if (this.isDungeon) this._updateDungeon(dt, t);
+      // Each mode is its own loop; they share the renderer and nothing else.
+      if (this.isJudgment) this._updateJudgment(dt, t);
+      else if (this.isDungeon) this._updateDungeon(dt, t);
       else if (this.isStory) this._updateStory(dt, t);
       else this._updateGame(dt, t);
     } else {
@@ -1459,6 +1631,56 @@ class Game {
       this.net.tickState(dt, () => p.netState());
     }
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * The stone frog in the arena.
+   *
+   * Scenery, unless you are carrying the crystal — then it is the only way
+   * to the Ascended. The prompt is driven off the same proximity test the
+   * sacrifice uses, so it can never say you can and then do nothing.
+   */
+  _updateStatue(p) {
+    const s = this.world && this.world.statue;
+    if (!s) return;
+    const near = p.pos.distanceTo(s.stand) < 5.0;
+    const armed = near && this.economy.crystal;
+    this._statuePrompt = armed;
+    if (armed) this.hud.setPickupPrompt(true, 'Sacrifice the crystal');
+
+    if (!p.interactPressed) return;
+    p.interactPressed = false;
+    if (!near) return;
+    if (!this.economy.crystal) {
+      this.hud.toast(
+        'The stone is cold. Something is missing from its hands.', 3);
+      return;
+    }
+    this._sacrificeCrystal(p, s);
+  }
+
+  /** Give it up. The statue takes it, and takes you with it. */
+  _sacrificeCrystal(p, s) {
+    this.economy.crystal = false;
+    this.economy.save();
+    this.hud.setPickupPrompt(false);
+
+    _v3.copy(s.pos).y += 3;
+    this.effects.puff(_v3, 0xffffff, 90, 26);
+    this.effects.ring(_v3, 1, 60, 1.0, 0xfff3c4, false, { x: 0, y: 1, z: 0 });
+    this.effects.ring(s.pos, 1, 70, 1.2, 0xffd76b, true);
+    this.followCam.shake(2.4);
+    this.hud.setFade(1, 1.1);
+    this.hud.announce('THE STONE OPENS ITS EYES', 'danger', true);
+    Audio.headshot(p.pos);
+    Audio.death(p.pos);
+
+    // Long enough for the flash to land before the world changes.
+    setTimeout(() => {
+      this.pendingMode = 'judgment';
+      if (this.net.isOnline) this.net.disconnect();
+      this._enterGame();
+    }, 1200);
   }
 
   /**
@@ -1693,6 +1915,7 @@ class Game {
       this.effects.update(dt);
 
       this._updatePracticeRing(p);
+      this._updateStatue(p);
 
       this._updateHud(dt, speed);
       this._updateAudioListener();
@@ -2293,7 +2516,9 @@ class Game {
     // No supply crates in the story level — there the prompt belongs to the
     // village's fruit stalls, and _updateFruitStalls owns it. Setting it here
     // too would blank their prompt on the same frame it appeared.
-    if (!this.isStory) {
+    // The statue's prompt takes precedence when it is up, or the two would
+    // fight over the same element every frame.
+    if (!this.isStory && !this._statuePrompt) {
       this.hud.setPickupPrompt(
         !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
     }

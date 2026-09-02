@@ -9,10 +9,10 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v32';
-import { CFG } from './config.js?v=v32';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v32';
-import { Terrain, CollisionWorld } from './collision.js?v=v32';
+import * as THREE from '../lib/three.module.js?v=v33';
+import { CFG } from './config.js?v=v33';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v33';
+import { Terrain, CollisionWorld } from './collision.js?v=v33';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -350,6 +350,60 @@ export class World {
     this.practiceRing = { pos: new THREE.Vector3(x, y, z), radius, group, ring, glow, pillar };
   }
 
+  /**
+   * A weathered stone frog god, sitting just off the arena dais.
+   *
+   * Deliberately plain grey and easy to walk past — it is scenery until you
+   * are carrying the crystal, and then it is the only thing in the map that
+   * matters. Built from the same primitives as everything else so it reads
+   * as part of the world rather than a dropped-in prop.
+   */
+  _buildFrogathStatue(x, y, z) {
+    const stone = 0x8a8880;
+    const dark = 0x6b6961;
+    const moss = 0x5a6b45;
+
+    // Plinth and its steps.
+    this.solid(x, y + 0.5, z, 4.6, 0.5, 4.6, dark, 'stone');
+    this.solid(x, y + 1.2, z, 3.8, 0.35, 3.8, stone, 'stone');
+    this.deco(x, y + 1.6, z, 3.2, 0.12, 3.2, 0x9a978c);
+
+    // Body: a broad squat frog, hunched.
+    this.solid(x, y + 3.0, z, 2.1, 1.5, 1.9, stone, 'stone');
+    this.deco(x, y + 2.7, z + 1.3, 1.5, 1.0, 0.5, 0x94918a);      // belly
+    // Head.
+    this.solid(x, y + 4.7, z + 0.2, 1.7, 0.9, 1.6, stone, 'stone');
+    this.deco(x, y + 4.3, z + 1.5, 1.9, 0.12, 0.3, dark);         // mouth line
+    for (const sx of [-1, 1]) {
+      this.deco(x + sx * 0.85, y + 5.4, z + 0.3, 0.55, 0.5, 0.55, stone);
+      // Blank carved eyes — no glow. It is a statue, not a shrine.
+      this.deco(x + sx * 0.85, y + 5.45, z + 0.75, 0.28, 0.28, 0.14, dark);
+    }
+    // Front limbs braced on the plinth.
+    for (const sx of [-1, 1]) {
+      this.deco(x + sx * 1.5, y + 2.2, z + 0.9, 0.4, 1.0, 0.4, stone);
+      this.deco(x + sx * 1.5, y + 1.75, z + 1.4, 0.6, 0.18, 0.7, stone);
+    }
+    // The halo, broken — a ring with a piece missing, propped behind him.
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 12) * Math.PI * 2 + 0.5;
+      this.deco(x + Math.cos(a) * 1.9, y + 6.6 + Math.sin(a) * 1.9, z - 0.3,
+        0.34, 0.34, 0.34, dark);
+    }
+    // Moss, because it has been here a very long time.
+    this.deco(x - 1.0, y + 1.68, z + 1.1, 1.0, 0.06, 0.8, moss);
+    this.deco(x + 1.3, y + 3.8, z - 0.9, 0.7, 0.06, 0.6, moss);
+
+    this.collision.addBox(x, y + 3.2, z, 1.3, 2.6, 1.2, 'stone');
+
+    /** Where the player must stand to use it. */
+    this.statue = {
+      pos: new THREE.Vector3(x, y + 1.6, z),
+      // In front of the statue, on the approach from the dais.
+      stand: new THREE.Vector3(x, y + 1.6, z + 3.4),
+    };
+  }
+
   torii(x, z, rotY = 0, scale = 1) {
     const y = this.heightAt(x, z);
     const w = 3.2 * scale, h = 6.2 * scale;
@@ -405,6 +459,8 @@ export class World {
     // Two more on the central dais so there is always one close at hand.
     this.dummySpots.push([-6.5, baseY + 1.45, 6.5, Math.atan2(6.5, -6.5)]);
     this.dummySpots.push([6.5, baseY + 1.45, -6.5, Math.atan2(-6.5, 6.5)]);
+
+    this._buildFrogathStatue(0, baseY + 1.5, -16);
 
     // ---- practice ring, dead centre of the dummy platform ----
     // Standing in it lets a solo player try every skin and ability.

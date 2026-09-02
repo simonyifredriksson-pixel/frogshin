@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v32';
-import { CFG } from './config.js?v=v32';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v32';
-import { FrogModel } from './frog.js?v=v32';
-import { Grapple, GrappleState } from './grapple.js?v=v32';
-import { Combat, Health } from './combat.js?v=v32';
-import { Stamina } from './stamina.js?v=v32';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v32';
-import { Audio } from './audio.js?v=v32';
+import * as THREE from '../lib/three.module.js?v=v33';
+import { CFG } from './config.js?v=v33';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v33';
+import { FrogModel } from './frog.js?v=v33';
+import { Grapple, GrappleState } from './grapple.js?v=v33';
+import { Combat, Health } from './combat.js?v=v33';
+import { Stamina } from './stamina.js?v=v33';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v33';
+import { Audio } from './audio.js?v=v33';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1118,6 +1118,9 @@ export class Player {
     // rather than reaching out of the controller into the world.
     if (!this.pickups) { this.interactPressed = true; return; }
     if (this.health.dead) return;
+    // A crate wins if there is one in reach; otherwise E is free for
+    // whatever else is here — the arena's statue, for one.
+    if (!this.pickups.nearest(this.pos)) { this.interactPressed = true; return; }
     const crate = this.pickups.nearest(this.pos);
     if (!crate) return;
     this.inventory.addKunai(CFG.kunai.boxCount);

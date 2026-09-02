@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v32';
+export const BUILD = 'v33';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -195,6 +195,38 @@ export const CFG = {
       minWarning: 0.45,
       arenaRadius: 42,
     },
+  },
+
+  /**
+   * FROGATH, THE ASCENDED — the fight behind the fight.
+   *
+   * Reached only by beating the First Croak on a NO-CHECKPOINT run, taking
+   * the light crystal he drops to the statue in the arena, and giving it up.
+   *
+   * The design rule from the dungeon still holds and matters more here than
+   * anywhere: every attack draws its danger before it can land. He is meant
+   * to be beaten by mastery, so a perfect player must be able to take zero
+   * damage — the difficulty is in how much there is to read, how fast, and
+   * how little space is left between one pattern and the next.
+   */
+  ascended: {
+    name: 'FROGATH, THE ASCENDED',
+    title: 'THE DIVINE JUDGMENT',
+    finalTitle: 'THE LAST JUDGMENT',
+    health: 9000,
+    scale: 4.6,
+    hoverHeight: 9,
+    arenaRadius: 52,
+    // Phase thresholds, as fractions of max health.
+    phases: [1.0, 0.70, 0.45, 0.20, 0.08],
+    // Warnings shrink with each phase but never below this floor.
+    minWarning: 0.34,
+    swordDamage: 52,
+    beamDamage: 64,
+    starDamage: 34,
+    shockDamage: 40,
+    orbDamage: 30,
+    diveDamage: 58,
   },
 
   // --------------------------------------------------------------- rounds

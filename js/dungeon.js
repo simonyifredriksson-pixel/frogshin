@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v32';
-import { CFG } from './config.js?v=v32';
-import { clamp } from './util.js?v=v32';
-import { DungeonLevel } from './dungeonlevel.js?v=v32';
-import { DungeonBoss } from './dungeonboss.js?v=v32';
-import { Frogath } from './frogath.js?v=v32';
-import { Audio } from './audio.js?v=v32';
+import * as THREE from '../lib/three.module.js?v=v33';
+import { CFG } from './config.js?v=v33';
+import { clamp } from './util.js?v=v33';
+import { DungeonLevel } from './dungeonlevel.js?v=v33';
+import { DungeonBoss } from './dungeonboss.js?v=v33';
+import { Frogath } from './frogath.js?v=v33';
+import { Audio } from './audio.js?v=v33';
 
 const _v = new THREE.Vector3();
 
@@ -28,6 +28,7 @@ export const RUN_STATE = {
   FIGHT: 'fight',
   CLEARED: 'cleared',     // boss down, door open
   DEAD: 'dead',
+  ASCEND: 'ascend',       // the no-checkpoint ending: he rises and breaks
   WON: 'won',
 };
 
@@ -51,6 +52,10 @@ export class DungeonRun {
     this.frogathDeaths = 0;
     // Set by the game: fired once, when Frogath falls.
     this.onVictory = null;
+    // Fired when the crystal is picked up (no-checkpoint runs only).
+    this.onCrystal = null;
+    this.crystal = null;
+    this._exploded = false;
     this.timer = 0;
     this.runTime = 0;
     this._sealed = false;
@@ -181,6 +186,7 @@ export class DungeonRun {
       case RUN_STATE.FIGHT: this._updateFight(dt, player, onHit); break;
       case RUN_STATE.CLEARED: this._updateCleared(dt, player); break;
       case RUN_STATE.DEAD: this._updateDead(dt, player); break;
+      case RUN_STATE.ASCEND: this._updateAscend(dt, player); break;
       case RUN_STATE.WON: this._updateWon(dt); break;
       default: break;
     }
@@ -280,7 +286,90 @@ export class DungeonRun {
 
     // His look, and nothing else. The skin is the trophy; none of what made
     // him hard comes with it.
-    if (this.onVictory) this.onVictory();
+    if (this.onVictory) this.onVictory(!this.checkpoints);
+    // Beaten without checkpoints, he does not simply die.
+    if (!this.checkpoints) {
+      this.state = RUN_STATE.ASCEND;
+      this.timer = 0;
+      this.hud.clearAnnounce();
+    }
+  }
+
+  /**
+   * The no-checkpoint ending: he rises, comes apart, and leaves something
+   * behind. Only on a clean run — the crystal has to mean the hard way.
+   */
+  _updateAscend(dt, player) {
+    this.timer += dt;
+    const b = this.frogath;
+    if (!b) { this.state = RUN_STATE.WON; return; }
+    const c = this.level.throne.center;
+
+    if (this.timer < 4.0) {
+      // Rising, faster and brighter.
+      const k = this.timer / 4.0;
+      b.pos.set(c.x, c.y + 8 + k * k * 46, c.z);
+      b.rig.root.position.copy(b.pos);
+      b.auraFlash = 1 + k * 3;
+      this.followCam.shake(0.2 + k * 0.9);
+      if (Math.random() < 0.9) {
+        _v.set(b.pos.x + (Math.random() - 0.5) * 20, b.pos.y + (Math.random() - 0.5) * 16,
+          b.pos.z + (Math.random() - 0.5) * 20);
+        this.effects.puff(_v, 0xfff3c4, 4, 5);
+      }
+      if (this.timer % 0.4 < dt) this.effects.ring(c, 4, 60, 1.2, 0xffd76b, true);
+      return;
+    }
+
+    if (!this._exploded) {
+      this._exploded = true;
+      _v.copy(b.pos);
+      this.effects.puff(_v, 0xffffff, 90, 34);
+      this.effects.ring(_v, 1, 90, 1.2, 0xffffff, false, { x: 0, y: 1, z: 0 });
+      this.effects.ring(c, 1, 110, 1.4, 0xfff3c4, true);
+      this.hud.setFade(1, 0.12);
+      this.followCam.shake(2.4);
+      Audio.headshot(b.pos);
+      Audio.death(b.pos);
+      b.rig.root.visible = false;
+      // What is left of him.
+      this.crystal = new THREE.Mesh(
+        new THREE.OctahedronGeometry(1.5, 0),
+        new THREE.MeshBasicMaterial({ color: 0xfff3c4 })
+      );
+      this.crystal.position.set(c.x, c.y + 2.2, c.z);
+      this.scene.add(this.crystal);
+      this.hud.announce('', '', false);
+    }
+    if (this.timer > 4.2 && this.timer < 4.35) this.hud.setFade(0, 0.7);
+
+    // The crystal turns and waits to be picked up.
+    if (this.crystal) {
+      this.crystal.rotation.y += dt * 1.6;
+      this.crystal.rotation.x += dt * 0.7;
+      this.crystal.position.y = c.y + 2.2 + Math.sin(this.timer * 2) * 0.3;
+      if (Math.random() < dt * 30) {
+        _v.copy(this.crystal.position);
+        this.effects.puff(_v, 0xfff3c4, 2, 2);
+      }
+      if (player.pos.distanceTo(this.crystal.position) < 4) {
+        this.scene.remove(this.crystal);
+        this.crystal.geometry.dispose();
+        this.crystal.material.dispose();
+        this.crystal = null;
+        this.effects.puff(player.pos, 0xffffff, 30, 10);
+        Audio.pickup(player.pos);
+        this.hud.announce('YOU TAKE THE LIGHT', 'good', true);
+        this.hud.toast(
+          'Carry it to the stone frog in the arena.', 12);
+        if (this.onCrystal) this.onCrystal();
+        this.state = RUN_STATE.WON;
+        this.timer = 0;
+      }
+    }
+    if (this.timer > 6 && this.timer < 6.1) {
+      this.hud.announce('TAKE IT', 'good', true);
+    }
   }
 
   /**
