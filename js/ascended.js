@@ -36,10 +36,10 @@
  * learn is ever invalidated — it only has to be done faster.
  */
 
-import * as THREE from '../lib/three.module.js?v=v38';
-import { CFG } from './config.js?v=v38';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v38';
-import { Audio } from './audio.js?v=v38';
+import * as THREE from '../lib/three.module.js?v=v39';
+import { CFG } from './config.js?v=v39';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v39';
+import { Audio } from './audio.js?v=v39';
 
 const _v = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -775,7 +775,7 @@ export class Ascended {
     // should drop you at the pose the entrance was heading for.
     this.turnToPlayer = true;
     if (this._camAngle !== undefined) {
-      this.yaw = this._camAngle;
+      this.yaw = this._camAngle + Math.PI;      // already looking at you
       this._yawPosed = true;
     }
     this.wingOpen = 1;
@@ -1208,7 +1208,7 @@ export class Ascended {
 
   _hover(dt, player) {
     const A = CFG.ascended;
-    const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+    const want = lookYaw(this.pos.x, this.pos.z, player.pos.x, player.pos.z);
     this.yaw = dampAngle(this.yaw, want, 5, dt);
 
     if (this.hoverTarget) {
@@ -1503,7 +1503,7 @@ export class Ascended {
       }
       case 'instantTurn':
         // He does not arc around. He is simply facing you again.
-        this.yaw = Math.atan2(P.x - this.pos.x, P.z - this.pos.z);
+        this.yaw = lookYaw(this.pos.x, this.pos.z, P.x, P.z);
         this.effects.puff(this.pos, HOT, 12, 8);
         break;
       case 'vanishClouds':
@@ -2268,9 +2268,11 @@ export class Ascended {
     // shot depended on which side of the arena you walked in from, so the
     // same beat read as a back, a profile or a face depending on your path.
     if (this.inEntrance && this._camAngle !== undefined) {
+      // `_camAngle` is the direction the camera sits in. A yaw equal to it
+      // turns his BACK that way (see lookYaw); half a turn on top faces it.
       const want = this.turnToPlayer
-        ? this._camAngle                        // face the lens
-        : this._camAngle + Math.PI + BACK_BIAS; // shoulders to the lens
+        ? this._camAngle + Math.PI              // face the lens
+        : this._camAngle + BACK_BIAS;           // shoulders to the lens
       if (!this._yawPosed) {
         // First framed frame: snap, so he is never caught mid-spin.
         this._yawPosed = true;
@@ -2279,7 +2281,7 @@ export class Ascended {
         this.yaw = dampAngle(this.yaw, want, this.turnToPlayer ? 1.5 : 9, dt);
       }
     } else if (this.turnToPlayer || this.fighting) {
-      const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+      const want = lookYaw(this.pos.x, this.pos.z, player.pos.x, player.pos.z);
       this.yaw = dampAngle(this.yaw, want, this.fighting ? 6 : 1.8, dt);
     }
     rig.root.rotation.y = this.yaw + Math.PI;

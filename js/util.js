@@ -34,6 +34,32 @@ export function dampAngle(a, b, lambda, dt) {
   return a + angleDelta(a, b) * (1 - Math.exp(-lambda * dt));
 }
 
+/**
+ * The gameplay yaw that makes something at (fx,fz) LOOK AT (tx,tz).
+ *
+ * Read this before writing any facing code. Every rig in the game is modelled
+ * facing +Z and every setFacing() adds a half turn, so a gameplay yaw of 0
+ * points along -Z (see FrogModel.setFacing). The consequence is unintuitive:
+ *
+ *     Math.atan2(tx - fx, tz - fz)      // the direction TO the target
+ *
+ * is NOT a yaw that looks at the target — used as one it turns the model
+ * around and points it directly away. The two arguments have to be
+ * subtracted the other way round, which is all this helper does.
+ *
+ * It exists because that mistake had been made independently in all three
+ * boss files, which left every boss in the game fighting with its back to
+ * the player.
+ */
+export function lookYaw(fx, fz, tx, tz) {
+  return Math.atan2(fx - tx, fz - tz);
+}
+
+/** The yaw that turns a model's BACK to (tx,tz) — the opposite of lookYaw. */
+export function awayYaw(fx, fz, tx, tz) {
+  return Math.atan2(tx - fx, tz - fz);
+}
+
 // ------------------------------------------------------------------ noise
 
 /**

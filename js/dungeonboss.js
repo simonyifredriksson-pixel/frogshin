@@ -16,11 +16,11 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v38';
-import { CFG } from './config.js?v=v38';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v38';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v38';
-import { Audio } from './audio.js?v=v38';
+import * as THREE from '../lib/three.module.js?v=v39';
+import { CFG } from './config.js?v=v39';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v39';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v39';
+import { Audio } from './audio.js?v=v39';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -191,7 +191,10 @@ export class DungeonBoss {
     const dist = _to.length();
     if (dist > 0.001) _to.multiplyScalar(1 / dist);
 
-    const want = Math.atan2(_to.x, _to.z);
+    // A rig's yaw points along -Z, so the direction TO the player is not a
+    // yaw that looks at them — see lookYaw. This guardian used to turn its
+    // back on you and fight over its shoulder.
+    const want = lookYaw(this.pos.x, this.pos.z, target.x, target.z);
     const turn = this.state === STATE.TELEGRAPH ? 2.0 : 5.5;
     this.yaw = dampAngle(this.yaw, want, turn, dt);
 

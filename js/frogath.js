@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v38';
-import { CFG } from './config.js?v=v38';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v38';
-import { Audio } from './audio.js?v=v38';
+import * as THREE from '../lib/three.module.js?v=v39';
+import { CFG } from './config.js?v=v39';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v39';
+import { Audio } from './audio.js?v=v39';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -302,7 +302,7 @@ export class Frogath {
     // "Begin." lands.
     this.turningToPlayer = true;
     if (this._camAngle !== undefined) {
-      this.yaw = this._camAngle;
+      this.yaw = this._camAngle + Math.PI;      // already looking at you
       this._yawPosed = true;
     }
     this.eyesHot = true;
@@ -582,8 +582,9 @@ export class Frogath {
 
   _hover(dt, player) {
     const F = CFG.dungeon.frogath;
-    // Always faces you.
-    const want = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+    // Always faces you. (Not atan2(dx,dz) — see lookYaw; that points a rig
+    // the other way, which is exactly the bug this replaced.)
+    const want = lookYaw(this.pos.x, this.pos.z, player.pos.x, player.pos.z);
     this.yaw = dampAngle(this.yaw, want, 4.5, dt);
 
     if (this.hoverTarget) {
@@ -1018,9 +1019,11 @@ export class Frogath {
     // shot depended on which side of the arena you walked in from, so the
     // same beat read as a back, a profile or a face depending on your path.
     if (this.state !== STATE.FIGHT && this._camAngle !== undefined) {
+      // `_camAngle` is the direction the camera sits in. A yaw equal to it
+      // turns his BACK that way (see lookYaw); half a turn on top faces it.
       const want = this.turningToPlayer
-        ? this._camAngle                        // face the lens
-        : this._camAngle + Math.PI + BACK_BIAS; // shoulders to the lens
+        ? this._camAngle + Math.PI              // face the lens
+        : this._camAngle + BACK_BIAS;           // shoulders to the lens
       if (!this._yawPosed) {
         // First framed frame: snap, so he is never caught mid-spin.
         this._yawPosed = true;
