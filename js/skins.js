@@ -78,6 +78,14 @@ export const SWORD_SKINS = [
       shape: 'broad', tsuba: 'cross', runes: 0xff3c3c, aura: 0xc01818,
       tassel: 0x8a1a1a, long: 1.15,
     } },
+  // The Ascended's blade. Comes with the Frogath the Divine frog skin and is
+  // the weapon half of it: double-ended, white-cored, trailing light.
+  { id: 'sword_divine', name: 'The Divine Judgment', rarity: 'legendary', reward: true,
+    blade: 0xffffff, edge: 0xfff3c4, guard: 0xfffaf0, grip: 0x6a5210, glow: 0xffd76b,
+    fx: {
+      shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+      aura: 0xfff3c4, tassel: 0xfff3c4, long: 1.5, doubled: true,
+    } },
   { id: 'sword_lotus',   name: 'Golden Lotus', rarity: 'legendary',
     blade: 0xffe9a0, edge: 0xfffbe0, guard: 0xffd24a, grip: 0x3a2a06, glow: 0xc9922a,
     fx: {
@@ -189,6 +197,25 @@ export const FROG_SKINS = [
       emissive: 0x6a4a08, pattern: 0xfff3c4, eyeGlow: 0xfff6d0,
       aura: 0xffd76b, halo: 0xffd76b, halo2: true, crown: true,
       horns: 2, spikes: 4, embers: 0xffd76b,
+    } },
+  /**
+   * FROGATH THE DIVINE. The Ascended himself, at frog scale.
+   *
+   * Awarded only for putting THE DIVINE JUDGMENT down, and the rarest thing
+   * in the game — there is no crate that can produce it. `divine` builds the
+   * whole rig: armour, wings, orbiting runes, rings, corona, white eyes.
+   *
+   * It has TWO forms, exactly as he does. You wear phase 1; the first kill of
+   * a life ascends you to phase 2 until you die. Purely cosmetic — see
+   * `divinePhase` in Player, which touches nothing but the model.
+   */
+  { id: 'frog_divine', name: 'Frogath the Divine', rarity: 'legendary', reward: true,
+    skin: 0xf0d78a, belly: 0xfff3c4, cloth: 0x6a5210, scarf: 0xfffaf0,
+    fx: {
+      divine: true,
+      emissive: 0x8a6a12, pattern: 0xfff3c4, eyeGlow: 0xffffff,
+      aura: 0xffd76b, halo: 0xfff3c4, halo2: true, crown: true,
+      horns: 2, embers: 0xfff3c4,
     } },
 ];
 

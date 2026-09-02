@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v34';
-import { CFG } from './config.js?v=v34';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v34';
-import { FrogModel } from './frog.js?v=v34';
-import { ToadModel } from './npc.js?v=v34';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v34';
-import { Audio } from './audio.js?v=v34';
+import * as THREE from '../lib/three.module.js?v=v36';
+import { CFG } from './config.js?v=v36';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v36';
+import { FrogModel } from './frog.js?v=v36';
+import { ToadModel } from './npc.js?v=v36';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v36';
+import { Audio } from './audio.js?v=v36';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -63,6 +63,7 @@ export class RemotePlayer {
     this.buffer = [];          // { t, s } ordered by time
     this.lastPacket = 0;
     this.spawned = false;
+    this.ascendT = 0;          // divine-skin transformation progress
     this.dashFxTimer = 0;
     this.speed = 0;
     this._prev = new THREE.Vector3();
@@ -146,6 +147,9 @@ export class RemotePlayer {
         Audio.respawn(_tmp);
         this.dead = false;
         this.hp = this.maxHp;
+        // Their streak died with them: back to the first form.
+        this.ascendT = 0;
+        if (this.model.isDivine) this.model.setDivinePhase(1, 1);
         // Teleport rather than interpolate across the map.
         this.buffer.length = 0;
         this.pos.copy(_tmp);
@@ -160,6 +164,19 @@ export class RemotePlayer {
         this.effects.puff(_tmp, col, 20, 5);
         this.effects.ring(_tmp, 0.4, 3.4, 0.45, col, true);
         Audio.tongueRelease(_tmp);
+        break;
+      }
+      case 'ascend': {
+        // Frogath the Divine took a life. Everyone watches them ascend —
+        // the whole point of the cosmetic is that it is visible to the room.
+        if (!this.model.isDivine) break;
+        this.ascendT = CFG.divine.duration;
+        this.model.setDivinePhase(2, 0);
+        _tmp.copy(this.pos); _tmp.y += 0.9;
+        this.effects.puff(_tmp, 0xfff3c4, 60, 14);
+        this.effects.ring(_tmp, 1, CFG.divine.shockwave, 0.9, 0xffd76b, true);
+        this.effects.ring(_tmp, 1, CFG.divine.shockwave * 0.6, 0.6, 0xffffff, true);
+        Audio.headshot(_tmp);
         break;
       }
       case 'leapUp': {
@@ -208,6 +225,13 @@ export class RemotePlayer {
     // matches what the viewer sees, even through packet loss.
     this.speed = this._prev.distanceTo(this.pos) / Math.max(dt, 1e-5);
     if (this.speed > 60) this.speed = 60;
+
+    // Their divine ascension, unfolding on our copy of them.
+    if (this.ascendT > 0) {
+      this.ascendT = Math.max(0, this.ascendT - dt);
+      this.model.setDivinePhase(2,
+        clamp(1 - this.ascendT / CFG.divine.duration, 0, 1));
+    }
 
     if (this.dashFxTimer > 0) {
       this.dashFxTimer -= dt;

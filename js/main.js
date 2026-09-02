@@ -5,32 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v34';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v34';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v34';
-import { Input } from './input.js?v=v34';
-import { Audio } from './audio.js?v=v34';
-import { World } from './world.js?v=v34';
-import { Effects } from './effects.js?v=v34';
-import { Atmosphere } from './atmosphere.js?v=v34';
-import { FollowCamera } from './camera.js?v=v34';
-import { Player } from './player.js?v=v34';
-import { RemotePlayer } from './remote.js?v=v34';
-import { HUD } from './hud.js?v=v34';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v34';
-import { FrogModel } from './frog.js?v=v34';
-import { DummyField } from './dummy.js?v=v34';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v34';
-import { ToadModel } from './npc.js?v=v34';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v34';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v34';
-import { DungeonRun } from './dungeon.js?v=v34';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v34';
-import { JudgmentRun } from './judgment.js?v=v34';
-import { MenuScene } from './menu.js?v=v34';
-import { Economy } from './economy.js?v=v34';
-import { Shop } from './shop.js?v=v34';
-import { Network, NetRole } from './net.js?v=v34';
+import * as THREE from '../lib/three.module.js?v=v36';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v36';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v36';
+import { Input } from './input.js?v=v36';
+import { Audio } from './audio.js?v=v36';
+import { World } from './world.js?v=v36';
+import { Effects } from './effects.js?v=v36';
+import { Atmosphere } from './atmosphere.js?v=v36';
+import { FollowCamera } from './camera.js?v=v36';
+import { Player } from './player.js?v=v36';
+import { RemotePlayer } from './remote.js?v=v36';
+import { HUD } from './hud.js?v=v36';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v36';
+import { FrogModel } from './frog.js?v=v36';
+import { DummyField } from './dummy.js?v=v36';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v36';
+import { ToadModel } from './npc.js?v=v36';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v36';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v36';
+import { DungeonRun } from './dungeon.js?v=v36';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v36';
+import { JudgmentRun } from './judgment.js?v=v36';
+import { COMBO_NAMES } from './ascended.js?v=v36';
+import { MenuScene } from './menu.js?v=v36';
+import { Economy } from './economy.js?v=v36';
+import { Shop } from './shop.js?v=v36';
+import { Network, NetRole } from './net.js?v=v36';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -55,6 +56,7 @@ class Game {
     this.clock = now();
     this.lastFrame = this.clock;
     this.remotes = new Map();
+    this._lastSweep = 0;
     this._pendingJoins = new Map();
     // --- developer menu (F3 + J + L) ---
     this.cheatsOpen = false;
@@ -565,6 +567,12 @@ class Game {
    * parked and materialised once the game scene is ready.
    */
   _addRemote(id, prof) {
+    // Last line of defence against the delayed-clone bug: whatever the
+    // network says, we are not a player in our own roster. A remote plays
+    // back interpDelay in the past, so a self-remote reads as a copy of you
+    // trailing behind and sliding into you when you stop — and it inflates
+    // the lobby count.
+    if (!id || id === this.net.selfId) return;
     this._refreshLobby();          // keep the lobby's player count honest
     // Tell a late joiner which mode is already running.
     if (this.sessionMode && (!this.net.isOnline || this.net.isHost)) {
@@ -590,6 +598,30 @@ class Game {
     };
     this.remotes.set(id, r);
     if (this.hud) this.hud.toast(`${prof.name} joined the hunt`);
+  }
+
+  /**
+   * Drop remotes that are not real players.
+   *
+   * The roster is the only authority on who is in the room, so anything we
+   * are still drawing that the roster does not list is a ghost — the leftover
+   * of a missed `leave`, or a duplicate born from an id change. A player whose
+   * connection merely stalls stays in the roster and is therefore kept, so
+   * this cannot evict somebody who is still really here.
+   */
+  _sweepGhosts(t) {
+    if (!this.net.isOnline || !this.remotes.size) return;
+    if (t - this._lastSweep < 2) return;
+    this._lastSweep = t;
+    for (const id of Array.from(this.remotes.keys())) {
+      if (id !== this.net.selfId && this.net.profiles.has(id)) continue;
+      const r = this.remotes.get(id);
+      r.dispose();
+      this.remotes.delete(id);
+      this._pendingJoins.delete(id);
+      if (this.round) this.round.removePlayer(id);
+      this._refreshLobby();
+    }
   }
 
   _flushPendingJoins() {
@@ -1068,8 +1100,17 @@ class Game {
     this.judgment.onVictory = () => {
       this.economy.ascendedBeaten = true;
       this.economy.award(CFG.economy.roundWinReward * 40, 'THE ASCENDED FALLS');
+      // The rarest thing in the game: his own form, both of them. There is
+      // no crate that can produce this.
+      const gotFrog = this.economy.unlock('frogs', 'frog_divine');
+      const gotSword = this.economy.unlock('swords', 'sword_divine');
       this.economy.save();
       this.hud.toast('You have beaten the god above gods.', 14);
+      if (gotFrog || gotSword) {
+        setTimeout(() => this.hud.toast(
+          'UNLOCKED — FROGATH THE DIVINE. His form is yours; take a life with '
+          + 'it on and you will wear his second one.', 16), 3200);
+      }
     };
     this.judgment.start(this.player);
     this.followCam.snapTo(this.player.pos);
@@ -1297,6 +1338,43 @@ class Game {
       this._toggleCheats(false);
       this.gotoJudgment();
     };
+    // Phase 2 is gated behind half his health, and the last stand behind 90%
+    // of it. Without these, testing either one means winning most of the
+    // fight first, every single time.
+    const boss = () => (this.judgment && this.judgment.boss) || null;
+    $('cheat-ascend').onclick = () => {
+      const b = boss();
+      if (!b) return this._cheatNote('Fight the Ascended first.');
+      if (b.ascended) return this._cheatNote('He has already ascended.');
+      if (!b.acting) return this._cheatNote('Wait for the fight to start.');
+      this._toggleCheats(false);
+      b.takeDamage(Math.max(0, b.health - b.maxHealth * CFG.ascended.ascendAt) + 1);
+      this._cheatNote('Ascension triggered.');
+    };
+    $('cheat-laststand').onclick = () => {
+      const b = boss();
+      if (!b) return this._cheatNote('Fight the Ascended first.');
+      if (!b.ascended) return this._cheatNote('He has to ascend first.');
+      if (!b.acting) return this._cheatNote('Wait for the fight to resume.');
+      this._toggleCheats(false);
+      b.takeDamage(Math.max(0, b.health - b.maxHealth * CFG.ascended.finalAt) + 1);
+      this._cheatNote('Last stand triggered.');
+    };
+    $('cheat-combo').onclick = () => {
+      const b = boss();
+      if (!b || !b.ascended) return this._cheatNote('Only after he ascends.');
+      // Cycle the signature combos so each can be looked at on demand.
+      this._comboIdx = ((this._comboIdx || 0) + 1) % COMBO_NAMES.length;
+      const name = COMBO_NAMES[this._comboIdx];
+      b.forceCombo(name);
+      this._cheatNote('Combo: ' + name);
+    };
+    $('cheat-divine').onclick = () => {
+      this.economy.unlock('frogs', 'frog_divine');
+      this.economy.unlock('swords', 'sword_divine');
+      this.economy.save();
+      this._cheatNote('Frogath the Divine unlocked — equip it in the shop.');
+    };
     $('cheat-close').onclick = () => this._toggleCheats(false);
   }
 
@@ -1491,7 +1569,40 @@ class Game {
     if (ev.by && ev.by === this.net.selfId) {
       this.player.kills++;
       this.hud.toast(`You slew ${victim.name}!`, 2.0);
+      this._divineAscend();
     }
+  }
+
+  /**
+   * The Frogath skin's kill transformation.
+   *
+   * Fires once per life on the first confirmed kill. Everything below is
+   * cosmetic — the model swaps form, the screen says so, and an `ascend`
+   * event goes out so every other client sees the same thing on their copy
+   * of this frog. No stat is touched anywhere in this path.
+   */
+  _divineAscend() {
+    const p = this.player;
+    if (!p || !p.beginDivineAscension()) return;
+    const D = CFG.divine;
+
+    _v3c.copy(p.pos);
+    _v3c.y += 0.9;
+    this.effects.puff(_v3c, 0xfff3c4, 60, 14);
+    this.effects.ring(_v3c, 1, D.shockwave, 0.9, 0xffd76b, true);
+    this.effects.ring(_v3c, 1, D.shockwave * 0.6, 0.6, 0xffffff, true);
+    this.followCam.shake(0.9);
+
+    this.hud.announce('DIVINE ASCENSION', 'divine', false);
+    // The second card lands as the wings finish opening.
+    clearTimeout(this._divineCard);
+    this._divineCard = setTimeout(() => {
+      if (this.mode === 'playing') this.hud.announce('FROGATH — PHASE II', 'divine', false);
+    }, Math.round(D.duration * 700));
+
+    Audio.headshot(p.pos);
+    // The same cue the boss ascends to, cut to a sting.
+    Audio.sting('ascension', 2.4, 0.7);
   }
 
   // ------------------------------------------------------------------ loop
@@ -1903,6 +2014,7 @@ class Game {
       }
 
       this._drainEvents(p);
+      this._sweepGhosts(t);
 
       for (const r of this.remotes.values()) {
         r.update(dt, t);

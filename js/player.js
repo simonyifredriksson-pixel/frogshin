@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v34';
-import { CFG } from './config.js?v=v34';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v34';
-import { FrogModel } from './frog.js?v=v34';
-import { Grapple, GrappleState } from './grapple.js?v=v34';
-import { Combat, Health } from './combat.js?v=v34';
-import { Stamina } from './stamina.js?v=v34';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v34';
-import { Audio } from './audio.js?v=v34';
+import * as THREE from '../lib/three.module.js?v=v36';
+import { CFG } from './config.js?v=v36';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v36';
+import { FrogModel } from './frog.js?v=v36';
+import { Grapple, GrappleState } from './grapple.js?v=v36';
+import { Combat, Health } from './combat.js?v=v36';
+import { Stamina } from './stamina.js?v=v36';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v36';
+import { Audio } from './audio.js?v=v36';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -88,6 +88,11 @@ export class Player {
     this._thrDir = new THREE.Vector3(0, 0, -1);
     this._cloneMoving = false;
     this._cloneWasAttacking = false;
+
+    // Frogath the Divine's two forms. Cosmetic; see setDivinePhase.
+    this.divinePhase = 1;
+    this.divineMorph = 1;
+    this.ascendT = 0;
 
     // Cosmetic palettes from the shop, if any are equipped.
     this.model = new FrogModel(this.color, this.name, true, opts.skins || null);
@@ -172,12 +177,59 @@ export class Player {
     this.cloneTrail.length = 0;
     this.leapCharge = 0;
     this.leapCooldown = 0;
+    // Frogath the Divine goes back to his first form on every respawn: the
+    // ascended look is a kill streak you are wearing, so dying costs it.
+    this.setDivinePhase(1, true);
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.z = 0;
     this.model.body.position.y = 0;
     this.effects.respawnBurst(this.pos, this.color);
     Audio.respawn(this.pos);
     this.events.push({ t: 'respawn', x: this.pos.x, y: this.pos.y, z: this.pos.z });
+  }
+
+  /**
+   * FROGATH THE DIVINE — the two-form skin.
+   *
+   * `divinePhase` is 1 until the first kill of a life, then 2 until death.
+   * `divineMorph` runs 0→1 over the transformation so the wings unfold
+   * rather than pop, and `ascendT` holds the brief freeze at the start of it.
+   *
+   * COSMETIC ONLY. Nothing here is read by movement, combat, health or
+   * stamina — the ascended form has exactly the stats of the default skin.
+   */
+  setDivinePhase(n, instant) {
+    this.divinePhase = n;
+    this.divineMorph = n >= 2 ? (instant ? 1 : 0) : 1;
+    this.ascendT = 0;
+    if (this.model.setDivinePhase) this.model.setDivinePhase(n, this.divineMorph);
+  }
+
+  /** Begin the ascension. Returns false if it is not applicable. */
+  beginDivineAscension() {
+    if (!this.model.isDivine || this.divinePhase >= 2) return false;
+    this.divinePhase = 2;
+    this.divineMorph = 0;
+    this.ascendT = CFG.divine.duration;
+    this.model.setDivinePhase(2, 0);
+    this.events.push({ t: 'ascend' });
+    return true;
+  }
+
+  /** Advance the transformation. Called every frame from the player update. */
+  _updateDivine(dt) {
+    if (!this.model.isDivine) return;
+    if (this.ascendT > 0) {
+      this.ascendT = Math.max(0, this.ascendT - dt);
+      const D = CFG.divine;
+      this.divineMorph = clamp(1 - this.ascendT / D.duration, 0, 1);
+      this.model.setDivinePhase(2, this.divineMorph);
+    }
+  }
+
+  /** The fraction-of-a-second hold at the very start of the ascension. */
+  get divineFrozen() {
+    return this.ascendT > CFG.divine.duration - CFG.divine.freeze;
   }
 
   get mouthPosition() {
@@ -246,6 +298,7 @@ export class Player {
     this.health.update(dt);
     this.combat.update(dt);
     this.stamina.update(dt);
+    this._updateDivine(dt);
     this.timeAlive += dt;
 
     // Hitstop: slow the local simulation to a crawl for a few frames on a
@@ -259,7 +312,9 @@ export class Player {
 
     // Cutscenes, knockdowns and the defeat sequence all take control away.
     // Gravity and collision still run so the body settles on the ground.
-    if (this.knockdown > 0 || this.cinematic || this.frozen) {
+    // The divine ascension borrows this for its opening instant — a sixth of
+    // a second, short enough that it can never cost you an exchange.
+    if (this.knockdown > 0 || this.cinematic || this.frozen || this.divineFrozen) {
       if (this.knockdown > 0) this.knockdown -= dt;
       this._makeHelpless(input);
       this._updateHelpless(dt, cam);

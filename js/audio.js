@@ -1,11 +1,37 @@
 /**
  * Audio engine.
  *
- * Every sound is synthesized with WebAudio at runtime — no audio files — so
+ * Every SOUND EFFECT is synthesized with WebAudio at runtime — no files — so
  * the game stays a pure static drop-in. Positional sounds are attenuated and
  * panned relative to the camera, which is what makes another player's dash or
  * katana swing readable before you can see them.
+ *
+ * MUSIC TRACKS are the one exception: see TRACKS below. They are optional
+ * files, faded in and out through the music bus, and every one of them falls
+ * back to the synthesized boss music if the file is not there — so the game
+ * never breaks because a track is missing.
  */
+
+/**
+ * Optional music files, looked up by the name callers pass to playTrack().
+ *
+ * ── DROPPING IN A TRACK ────────────────────────────────────────────────────
+ * Put the file at the path below (relative to frogshin/) and it is picked up
+ * on the next load. Nothing else needs changing. Any format the browser can
+ * decode works; .mp3 and .ogg are the safe choices.
+ *
+ *   phase1     THE DIVINE JUDGMENT — Frogath before the ascension, looped
+ *   ascension  the 50% cutscene, played once, NOT looped
+ *   ascended   PHASE II — the whole back half of the fight, looped
+ *
+ * `ascension` is also used, cut short, for the Frogath-skin transformation,
+ * so it wants to be recognisable in its first two seconds.
+ */
+const TRACKS = {
+  phase1: 'audio/frogath-phase1.mp3',
+  ascension: 'audio/frogath-ascension.mp3',
+  ascended: 'audio/frogath-ascended.mp3',
+};
 
 export class AudioEngine {
   constructor() {
@@ -23,6 +49,9 @@ export class AudioEngine {
     this._music = null;
     this._birdTimer = 0;
     this._lastStep = 0;
+    this._buffers = new Map();    // track name -> AudioBuffer | 'missing'
+    this._playing = new Map();    // track name -> { src, gain }
+    this._fetching = new Map();
   }
 
   /** Must be called from a user gesture (browser autoplay policy). */
@@ -504,6 +533,141 @@ export class AudioEngine {
     }, 250);
 
     this._boss = { timer, droneGain, oscs };
+  }
+
+  // ------------------------------------------------------------ music files
+
+  /**
+   * Fetch and decode a track, once. Resolves to null if it is not there.
+   *
+   * A missing file is remembered as 'missing' so a boss that asks for its
+   * track on every phase change does not re-request a 404 each time.
+   */
+  async _load(name) {
+    if (!this.ready) return null;
+    const cached = this._buffers.get(name);
+    if (cached) return cached === 'missing' ? null : cached;
+    if (this._fetching.has(name)) return this._fetching.get(name);
+
+    const url = TRACKS[name];
+    if (!url) return null;
+    const job = (async () => {
+      try {
+        const res = await fetch(url, { cache: 'force-cache' });
+        if (!res.ok) throw new Error(String(res.status));
+        const buf = await this.ctx.decodeAudioData(await res.arrayBuffer());
+        this._buffers.set(name, buf);
+        return buf;
+      } catch (e) {
+        // Absent or undecodable. Not an error worth breaking a fight over.
+        this._buffers.set(name, 'missing');
+        return null;
+      } finally {
+        this._fetching.delete(name);
+      }
+    })();
+    this._fetching.set(name, job);
+    return job;
+  }
+
+  /** Warm the cache so a cue does not wait on the network mid-fight. */
+  prefetchTracks(names) {
+    if (!this.ready) return;
+    for (const n of (names || Object.keys(TRACKS))) this._load(n);
+  }
+
+  /** True once we know whether a track exists (either way). */
+  trackKnown(name) { return this._buffers.has(name); }
+  trackAvailable(name) {
+    const b = this._buffers.get(name);
+    return !!b && b !== 'missing';
+  }
+
+  /**
+   * Start a music track.
+   *
+   * @param name    key in TRACKS
+   * @param opts    { loop, volume, fade, from, fallback }
+   *
+   * If the file is missing, `fallback` decides what happens: 'boss' (the
+   * default) starts the synthesized boss music instead, and false leaves it
+   * silent — which is what the ascension cutscene wants, because its silence
+   * is the point.
+   */
+  playTrack(name, opts = {}) {
+    if (!this.ready) return;
+    const fade = opts.fade === undefined ? 0.8 : opts.fade;
+    this._load(name).then((buf) => {
+      if (!buf) {
+        const fb = opts.fallback === undefined ? 'boss' : opts.fallback;
+        if (fb === 'boss') this.startBossMusic();
+        return;
+      }
+      // A second call for a track already playing is a no-op, so a phase
+      // that re-asserts its music does not restart it.
+      if (this._playing.has(name)) return;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.musicBus);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = !!opts.loop;
+      src.connect(gain);
+      const t = this.ctx.currentTime;
+      const vol = opts.volume === undefined ? 0.9 : opts.volume;
+      gain.gain.linearRampToValueAtTime(vol, t + fade);
+      src.start(0, opts.from || 0);
+      const entry = { src, gain, vol };
+      this._playing.set(name, entry);
+      src.onended = () => {
+        if (this._playing.get(name) === entry) this._playing.delete(name);
+      };
+    });
+  }
+
+  /** Fade a track out and let it go. Safe to call when it is not playing. */
+  stopTrack(name, fade = 0.6) {
+    const e = this._playing.get(name);
+    if (!e) return;
+    this._playing.delete(name);
+    const t = this.ctx.currentTime;
+    try {
+      e.gain.gain.cancelScheduledValues(t);
+      e.gain.gain.setValueAtTime(e.gain.gain.value, t);
+      e.gain.gain.linearRampToValueAtTime(0, t + fade);
+    } catch (err) { /* noop */ }
+    setTimeout(() => { try { e.src.stop(); } catch (err) { /* noop */ } },
+      Math.ceil(fade * 1000) + 120);
+  }
+
+  stopAllTracks(fade = 0.5) {
+    for (const name of Array.from(this._playing.keys())) this.stopTrack(name, fade);
+  }
+
+  /**
+   * Play the opening of a track as a one-shot sting.
+   *
+   * This is how the Frogath skin borrows the ascension music for its
+   * transformation: the same cue the boss uses, cut to length.
+   */
+  sting(name, duration = 2.2, volume = 0.8) {
+    if (!this.ready) return;
+    this._load(name).then((buf) => {
+      if (!buf) return;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(this.musicBus);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(gain);
+      const t = this.ctx.currentTime;
+      gain.gain.linearRampToValueAtTime(volume, t + 0.08);
+      gain.gain.setValueAtTime(volume, t + Math.max(0.1, duration - 0.5));
+      gain.gain.linearRampToValueAtTime(0, t + duration);
+      src.start();
+      setTimeout(() => { try { src.stop(); } catch (e) { /* noop */ } },
+        Math.ceil(duration * 1000) + 150);
+    });
   }
 
   stopBossMusic() {

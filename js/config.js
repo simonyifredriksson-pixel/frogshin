@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v34';
+export const BUILD = 'v36';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -212,21 +212,61 @@ export const CFG = {
   ascended: {
     name: 'FROGATH, THE ASCENDED',
     title: 'THE DIVINE JUDGMENT',
-    finalTitle: 'THE LAST JUDGMENT',
+    // Phase 2. He stops holding back, and the bar says so.
+    name2: 'FROGATH — THE ASCENDED GOD',
+    title2: 'PHASE II — THE DIVINE ASCENSION',
+    finalTitle: 'PHASE II — ONE FINAL LESSON',
     health: 9000,
     scale: 4.6,
     hoverHeight: 9,
     arenaRadius: 52,
-    // Phase thresholds, as fractions of max health.
-    phases: [1.0, 0.70, 0.45, 0.20, 0.08],
-    // Warnings shrink with each phase but never below this floor.
+
+    /**
+     * ONE hard split, at half health: the ascension. Everything about him
+     * changes there — moveset, silhouette, arena, music.
+     *
+     * `esc` is a separate, much gentler ladder that only tightens timing.
+     * It exists so the back half of each phase still ramps, WITHOUT giving
+     * him new tools he has not shown you yet.
+     */
+    ascendAt: 0.50,
+    finalAt: 0.10,
+    esc: [1.00, 0.75, 0.50, 0.30, 0.10],
+    rest: [1.25, 1.00, 0.62, 0.44, 0.26],
+    tele: [1.00, 0.90, 0.74, 0.64, 0.52],
+    // Warnings shrink with escalation but never below this floor.
     minWarning: 0.34,
+
     swordDamage: 52,
     beamDamage: 64,
     starDamage: 34,
     shockDamage: 40,
     orbDamage: 30,
     diveDamage: 58,
+    // Phase 2 only.
+    featherDamage: 24,
+    meteorDamage: 46,
+    markDamage: 95,
+
+    /**
+     * The brand. A golden symbol lands on you and arms after `time`; if you
+     * have not covered `escape` metres of ground by then it detonates.
+     * It is not a damage source so much as a rule: you may not stand still.
+     */
+    mark: { time: 4.2, escape: 20, radius: 19, every: 15 },
+  },
+
+  /**
+   * FROGATH THE DIVINE — the reward skin's kill transformation.
+   *
+   * Purely cosmetic. `freeze` is the beat where the player is held still at
+   * the moment of the kill; it is deliberately short enough that it can never
+   * cost them a fight.
+   */
+  divine: {
+    duration: 1.6,          // whole ascension, seconds
+    freeze: 0.18,           // the held instant at the start of it
+    shockwave: 22,          // radius of the golden ring it throws out
   },
 
   // --------------------------------------------------------------- rounds

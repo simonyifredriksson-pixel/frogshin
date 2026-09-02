@@ -2027,6 +2027,24 @@ kbd {
 #round-announce.hold { opacity: 1; }
 #round-announce.danger { color: #ff7a5e; text-shadow: 0 4px 0 #3a0a04, 0 0 26px rgba(255,70,40,0.5); }
 #round-announce.good { color: #8fe05c; text-shadow: 0 4px 0 #0d2a06, 0 0 26px rgba(120,230,80,0.5); }
+/**
+ * DIVINE ASCENSION. Frogath's own palette: a white-hot core bleeding gold,
+ * with a slow shimmer so it reads as lit rather than merely coloured.
+ */
+#round-announce.divine {
+  color: #fffdf2;
+  letter-spacing: 0.06em;
+  text-shadow:
+    0 0 6px #fff3c4,
+    0 0 22px rgba(255,215,107,0.95),
+    0 0 54px rgba(255,190,60,0.75),
+    0 4px 0 #4a3206;
+  animation: annPop 0.5s ease-out forwards, divineShimmer 1.6s ease-in-out infinite;
+}
+@keyframes divineShimmer {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.35); }
+}
 @keyframes annPop {
   0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
   35%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }

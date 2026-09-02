@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v34';
-import { CFG } from './config.js?v=v34';
-import { staminaBand } from './stamina.js?v=v34';
-import { modeAvailable } from './rounds.js?v=v34';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v34';
-import { Audio } from './audio.js?v=v34';
-import { PX, setIcon } from './icons.js?v=v34';
+import { clamp } from './util.js?v=v36';
+import { CFG } from './config.js?v=v36';
+import { staminaBand } from './stamina.js?v=v36';
+import { modeAvailable } from './rounds.js?v=v36';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v36';
+import { Audio } from './audio.js?v=v36';
+import { PX, setIcon } from './icons.js?v=v36';
 
 const $ = (id) => document.getElementById(id);
 
@@ -453,14 +453,14 @@ export class HUD {
    */
   announce(text, tone = '', hold = false) {
     this.announceEl.textContent = text;
-    this.announceEl.classList.remove('show', 'hold', 'good', 'danger');
+    this.announceEl.classList.remove('show', 'hold', 'good', 'danger', 'divine');
     void this.announceEl.offsetWidth;        // restart the animation
     if (tone) this.announceEl.classList.add(tone);
     this.announceEl.classList.add(hold ? 'hold' : 'show');
   }
 
   clearAnnounce() {
-    this.announceEl.classList.remove('show', 'hold', 'good', 'danger');
+    this.announceEl.classList.remove('show', 'hold', 'good', 'danger', 'divine');
   }
 
   // --------------------------------------------------------------- hotbar

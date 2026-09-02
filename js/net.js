@@ -16,8 +16,8 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v34';
-import { roomCode as makeRoomCode } from './util.js?v=v34';
+import { CFG, BUILD } from './config.js?v=v36';
+import { roomCode as makeRoomCode } from './util.js?v=v36';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -69,6 +69,23 @@ function peerOptions() {
   return { debug: 0, config: ICE_CONFIG };
 }
 
+/**
+ * Who we are, independently of the network.
+ *
+ * A PeerJS id belongs to a *connection*, not to a person: dial the host twice
+ * and you are two ids, so the host counts you twice and everybody watches a
+ * duplicate of you trail one interpDelay behind. This tag is minted once per
+ * page load and travels with every connection attempt, so the host can tell
+ * "a new player" from "the same player again" and replace the old slot
+ * instead of adding one.
+ */
+const CLIENT_UID = (() => {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch (e) { /* fall through */ }
+  return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+})();
+
 export class Network {
   constructor() {
     this.role = NetRole.OFFLINE;
@@ -94,6 +111,8 @@ export class Network {
 
     this._sendAccum = 0;
     this._destroyed = false;
+    this._opened = false;           // 'open' is handled once per Peer, see host()/join()
+    this.uid = CLIENT_UID;          // who we are across connections, see above
   }
 
   get isHost() { return this.role === NetRole.HOST; }
@@ -111,6 +130,7 @@ export class Network {
 
   /** Single-player fallback. Explicitly offline — nothing is faked. */
   startSolo(profile) {
+    this._resetSession();
     this.role = NetRole.OFFLINE;
     this.selfId = 'local';
     this.profile = profile;
@@ -126,6 +146,7 @@ export class Network {
    */
   host(profile, code) {
     if (!Network.available) return this._fail('Networking library failed to load.');
+    this._resetSession();
     this.profile = profile;
     this.room = (code || makeRoomCode()).toUpperCase();
     this.role = NetRole.HOST;
@@ -134,6 +155,12 @@ export class Network {
     this.peer = new window.Peer(CFG.net.prefix + this.room, peerOptions());
 
     this.peer.on('open', (id) => {
+      // ONCE. `peer.reconnect()` fires 'open' again, and re-running this
+      // would reassign selfId mid-session — after which our own state
+      // packets arrive at everyone else under an id they have never seen,
+      // and they build a second copy of us out of them.
+      if (this._opened) { this._status(`Room ${this.room} — signalling back`); return; }
+      this._opened = true;
       this.selfId = id;
       this.connected = true;
       this._status(`Room ${this.room} — waiting for players`);
@@ -144,6 +171,13 @@ export class Network {
 
     this.peer.on('error', (err) => {
       if (err.type === 'unavailable-id') {
+        // Only meaningful while we are still trying to CLAIM the code. Once
+        // we own the room, this same error means the broker is still holding
+        // our own previous session after a reconnect — and tearing the room
+        // down to "join ourselves" would strand every client while keeping
+        // their stale roster entries, which is where phantom players and
+        // inflated lobby counts came from.
+        if (this._opened) { this._status(`Room ${this.room} — signalling back`); return; }
         // Somebody already hosts this code — join them instead.
         this._status('Room already exists — joining instead…');
         this._cleanupPeer();
@@ -163,6 +197,7 @@ export class Network {
   join(profile, code) {
     if (!Network.available) return this._fail('Networking library failed to load.');
     if (!code) return this._fail('Enter a room code first.');
+    this._resetSession();
     this.profile = profile;
     this.room = code.toUpperCase();
     this.role = NetRole.CLIENT;
@@ -171,11 +206,20 @@ export class Network {
     this.peer = new window.Peer(undefined, peerOptions());
 
     this.peer.on('open', (id) => {
+      // ONCE — see the matching guard in host(). A signalling drop makes
+      // PeerJS call reconnect(), which fires 'open' with a BRAND NEW random
+      // id (we asked for `undefined`). Without this guard we would dial the
+      // host a second time under that new id: the host accepts it as a
+      // whole new player, so everyone gets a duplicate of us that mirrors
+      // our movement one interpDelay behind. The existing data channel
+      // survives a broker hiccup on its own, so there is nothing to redo.
+      if (this._opened) { this._status(`Connected to room ${this.room}`); return; }
+      this._opened = true;
       this.selfId = id;
       const conn = this.peer.connect(CFG.net.prefix + this.room, {
         reliable: true,
         serialization: 'json',
-        metadata: { name: profile.name, color: profile.color },
+        metadata: { name: profile.name, color: profile.color, uid: this.uid },
       });
       this.hostConn = conn;
 
@@ -196,7 +240,7 @@ export class Network {
       conn.on('open', () => {
         clearTimeout(timeout);
         this.connected = true;
-        this._send(conn, { m: 'hello', name: profile.name, color: profile.color, v: BUILD });
+        this._send(conn, { m: 'hello', name: profile.name, color: profile.color, uid: this.uid, v: BUILD });
         this._status(`Connected to room ${this.room}`);
         if (this.onReady) this.onReady({ role: this.role, room: this.room });
       });
@@ -268,21 +312,45 @@ export class Network {
 
   _acceptClient(conn) {
     conn.on('open', () => {
-      this.connections.set(conn.peer, conn);
+      // A peer we already hold has redialled (renegotiation, or a client that
+      // survived a broker hiccup). Swap the socket, but do NOT announce a
+      // second join — that is what breeds duplicate players.
+      const dupe = this.connections.get(conn.peer);
+      if (dupe && dupe !== conn) {
+        this.connections.set(conn.peer, conn);
+        try { dupe.close(); } catch (e) { /* noop */ }
+        this._send(conn, {
+          m: 'welcome', you: conn.peer, room: this.room, v: BUILD,
+          roster: this._roster(conn.peer),
+        });
+        return;
+      }
+      if (conn.peer === this.selfId) { try { conn.close(); } catch (e) { /* noop */ } return; }
+
       const meta = conn.metadata || {};
+
+      // Someone already in the room has dialled in on a fresh peer id — a
+      // reload, a rejoin, or a link that healed onto a new connection. They
+      // are one person, so retire the slot they used to hold before handing
+      // them a new one. Skipping this is what left a second copy of them in
+      // the roster, fed by their live packets and therefore following them
+      // around one interpDelay behind.
+      this._retireOldSlot(meta.uid, conn.peer);
+
+      this.connections.set(conn.peer, conn);
       const prof = {
         name: (meta.name || 'Frog').slice(0, 14),
         color: meta.color || 0x6cc24a,
+        uid: meta.uid || null,
         kills: 0, deaths: 0,
       };
       this.profiles.set(conn.peer, prof);
 
       // Tell the newcomer about everyone already here (including the host).
-      const roster = [{ id: this.selfId, name: this.profile.name, color: this.profile.color }];
-      for (const [id, p] of this.profiles) {
-        if (id !== conn.peer) roster.push({ id, name: p.name, color: p.color });
-      }
-      this._send(conn, { m: 'welcome', you: conn.peer, roster, room: this.room, v: BUILD });
+      this._send(conn, {
+        m: 'welcome', you: conn.peer, room: this.room, v: BUILD,
+        roster: this._roster(conn.peer),
+      });
 
       // Tell everyone else about the newcomer.
       this._broadcast({ m: 'join', id: conn.peer, name: prof.name, color: prof.color }, conn.peer);
@@ -292,8 +360,35 @@ export class Network {
     });
 
     conn.on('data', (d) => this._onHostData(conn, d));
-    conn.on('close', () => this._dropClient(conn.peer));
-    conn.on('error', () => this._dropClient(conn.peer));
+    // Only the socket we are actually using speaks for the player. A stale
+    // duplicate closing must not evict whoever is live on that id.
+    const bye = () => { if (this.connections.get(conn.peer) === conn) this._dropClient(conn.peer); };
+    conn.on('close', bye);
+    conn.on('error', bye);
+  }
+
+  /**
+   * Host: one person owns one slot. Remove any roster entry that carries the
+   * same client tag as `keepId` so a rejoin replaces the old entry instead of
+   * sitting beside it as a duplicate.
+   */
+  _retireOldSlot(uid, keepId) {
+    if (!uid) return;
+    for (const [oldId, p] of Array.from(this.profiles)) {
+      if (oldId === keepId || p.uid !== uid) continue;
+      const old = this.connections.get(oldId);
+      if (old) { try { old.close(); } catch (e) { /* noop */ } }
+      this._dropClient(oldId);
+    }
+  }
+
+  /** Everyone in the room except `exceptId`, host first. */
+  _roster(exceptId) {
+    const roster = [{ id: this.selfId, name: this.profile.name, color: this.profile.color }];
+    for (const [id, p] of this.profiles) {
+      if (id !== exceptId) roster.push({ id, name: p.name, color: p.color });
+    }
+    return roster;
   }
 
   _dropClient(id) {
@@ -317,6 +412,9 @@ export class Network {
           prof.name = (d.name || prof.name).slice(0, 14);
           prof.color = d.color || prof.color;
           prof.build = d.v || 'older';
+          // Metadata is the normal carrier for the client tag; this is the
+          // fallback for a link that arrived without it.
+          if (d.uid && !prof.uid) { prof.uid = d.uid; this._retireOldSlot(d.uid, from); }
         }
         // A build mismatch does not stop play, but it must be visible —
         // silently disagreeing about the rules is far more confusing.
@@ -353,6 +451,10 @@ export class Network {
   /** Client: messages from the host. */
   _onClientData(d) {
     if (!d || !d.m) return;
+    // We are never one of our own remotes. `welcome` has always filtered the
+    // roster; every other id-carrying message needs the same rule, or a stale
+    // entry on the host's side is enough to spawn a copy of us.
+    if (d.id && d.id === this.selfId && d.m !== 'hit') return;
     switch (d.m) {
       case 'welcome':
         if ((d.v || 'older') !== BUILD && this.onVersionMismatch) {
@@ -455,12 +557,44 @@ export class Network {
 
   // --------------------------------------------------------------- teardown
 
+  /**
+   * Wipe every trace of a previous session before starting another one.
+   *
+   * `host()` and `join()` used to leave `connections` and `profiles` intact,
+   * so a room you had already been in kept contributing players to the next
+   * one — frogs nobody could see standing in a lobby count that was too high.
+   */
+  _resetSession() {
+    // Listeners go first. A `close` landing a tick later would otherwise run
+    // _hostLost() or _dropClient() against the session we are just starting.
+    const shut = (conn) => {
+      if (!conn) return;
+      try { conn.removeAllListeners(); } catch (e) { /* noop */ }
+      try { conn.close(); } catch (e) { /* noop */ }
+    };
+    for (const conn of this.connections.values()) shut(conn);
+    this.connections.clear();
+    shut(this.hostConn);
+    this.hostConn = null;
+    for (const id of Array.from(this.profiles.keys())) {
+      if (this.onLeave) this.onLeave(id);
+    }
+    this.profiles.clear();
+    this.connected = false;
+    this._iceWatched = false;
+    this._sendAccum = 0;
+    // An orphaned Peer keeps its data channels open, so a second attempt from
+    // this tab would hold two live links to the same room at once.
+    this._cleanupPeer();
+  }
+
   _cleanupPeer() {
     if (this.peer) {
       try { this.peer.removeAllListeners(); } catch (e) { /* noop */ }
       try { this.peer.destroy(); } catch (e) { /* noop */ }
     }
     this.peer = null;
+    this._opened = false;   // the next Peer gets its own single 'open'
   }
 
   disconnect() {

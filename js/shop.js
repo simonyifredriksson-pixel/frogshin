@@ -9,10 +9,10 @@
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
   rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v34';
-import { Audio } from './audio.js?v=v34';
-import { PX } from './icons.js?v=v34';
-import { CFG } from './config.js?v=v34';
+} from './skins.js?v=v36';
+import { Audio } from './audio.js?v=v36';
+import { PX } from './icons.js?v=v36';
+import { CFG } from './config.js?v=v36';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -367,7 +367,12 @@ export class Shop {
     card.style.borderBottomColor = r.color;
     // A reward skin is not in any crate — say so, rather than letting someone
     // spend five thousand froglets hunting for something they cannot roll.
-    const lockLabel = skin.reward ? 'BEAT FROGATH' : 'LOCKED';
+    // Name the right boss, too: the two Frogath rewards come from different
+    // fights, and "BEAT FROGATH" on the Ascended's gear would send you back
+    // down the dungeon for something that is not there.
+    const lockLabel = skin.reward
+      ? (skin.id.includes('divine') ? 'BEAT THE ASCENDED' : 'BEAT FROGATH')
+      : 'LOCKED';
     card.innerHTML =
       `<div class="skin-art">${previewSVG(kind, skin)}</div>`
       + `<div class="skin-name">${skin.name}</div>`

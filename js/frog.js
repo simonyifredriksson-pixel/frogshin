@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v34';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v34';
+import * as THREE from '../lib/three.module.js?v=v36';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v36';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -27,6 +27,10 @@ const G = {
   cone: new THREE.ConeGeometry(1, 1, 7),
   torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
 };
+
+// Scratch colours for the divine skin's phase blend, so it allocates none.
+const _dvA = new THREE.Color();
+const _dvB = new THREE.Color();
 
 function mesh(geo, mat, sx, sy, sz, px, py, pz, rx, ry, rz) {
   const m = new THREE.Mesh(geo, mat);
@@ -106,6 +110,17 @@ export function buildKatana(m, fx) {
       break;
   }
   k.add(blade);
+
+  // A second blade out of the pommel — the Ascended's double-ended weapon.
+  // Mirrored below the grip so the whole thing reads as one bar of light
+  // through his fist rather than two swords.
+  if (F.doubled) {
+    const back = blade.clone();
+    back.position.y = -blade.position.y - 0.34;
+    back.rotation.z = Math.PI;
+    k.add(back);
+    k.add(mesh(G.cone, m.edge, 0.12, 0.30, 0.28, 0, -tipY - 0.30, 0, Math.PI));
+  }
 
   // Glowing marks along the flat.
   if (F.runes && m.rune) {
@@ -525,6 +540,235 @@ export class FrogModel {
         e.white.material = M.eyeLit;
       }
     }
+    if (F.divine) this._buildDivine();
+  }
+
+  /**
+   * FROGATH THE DIVINE — the god's rig, at frog scale.
+   *
+   * Both forms are built here and phase 2 starts hidden, because the
+   * transformation has to land on one frame in the middle of a firefight; it
+   * cannot be waiting on geometry. `setDivinePhase` only ever flips
+   * visibility and a couple of scalars.
+   *
+   * Everything is parented to `this.body`, so it squashes, leans and bobs
+   * with the frog and needs no animation of its own beyond the wingbeat.
+   *
+   * NOTE: nothing here touches the collider or any stat. The silhouette is
+   * much bigger; the frog underneath is exactly the same size as default.
+   */
+  _buildDivine() {
+    const M = this.mats;
+    const b = this.body;
+    const F = this.fx;
+
+    const lit = (c, o) => new THREE.MeshBasicMaterial({
+      color: c, transparent: o !== undefined, opacity: o === undefined ? 1 : o,
+      depthWrite: o === undefined,
+    });
+    M.dvWing = lit(0xfff3c4, 0.66);
+    M.dvCore = lit(0xffffff, 0.92);
+    M.dvPlate = new THREE.MeshLambertMaterial({ color: 0xfffaf0, emissive: 0x8a7a3a });
+    M.dvRune = lit(0xfff3c4);
+    M.dvCorona = new THREE.MeshBasicMaterial({
+      color: 0xffd76b, transparent: true, opacity: 0.10,
+      side: THREE.BackSide, depthWrite: false,
+    });
+
+    const D = { wings1: [], wings2: [], rings: [], runes: [], blades: [] };
+
+    // ---- divine armour: breastplate, pauldrons, a collar ring ----
+    b.add(mesh(G.sphere, M.dvPlate, 0.40, 0.26, 0.34, 0, 0.74, 0.06));
+    for (const sx of [-1, 1]) {
+      b.add(mesh(G.lowSphere, M.dvPlate, 0.19, 0.13, 0.18, sx * 0.40, 0.86, 0));
+      b.add(mesh(G.cone, M.dvPlate, 0.07, 0.16, 0.07, sx * 0.44, 1.00, 0, 0, 0, sx * 0.5));
+    }
+    b.add(mesh(G.torus, M.dvPlate, 0.30, 0.30, 0.30, 0, 0.52, 0, Math.PI / 2));
+
+    // ---- PHASE 1 wings: one pair, the shape he descends with ----
+    for (const sx of [-1, 1]) {
+      const w = new THREE.Group();
+      w.position.set(sx * 0.30, 0.80, -0.16);
+      b.add(w);
+      const feathers = [];
+      for (let i = 0; i < 7; i++) {
+        const t = i / 6;
+        const len = 0.85 + Math.sin(t * Math.PI) * 0.62;
+        const f = new THREE.Group();
+        f.rotation.z = sx * (0.25 + t * 1.05);
+        f.rotation.y = sx * (-0.15 - t * 0.30);
+        w.add(f);
+        f.add(mesh(G.box, M.dvWing, 0.075, len, 0.02, sx * len * 0.42, len * 0.30, 0,
+          0, 0, sx * -0.55));
+        f.add(mesh(G.box, M.dvCore, 0.026, len * 0.9, 0.026,
+          sx * len * 0.42, len * 0.30, 0, 0, 0, sx * -0.55));
+        feathers.push(f);
+      }
+      D.wings1.push({ group: w, feathers, side: sx });
+    }
+
+    // ---- PHASE 2 wings: four pairs, much larger and barbed ----
+    const SPEC = [
+      { count: 9, base: 1.55, span: 1.35, y: 0.90, z: -0.20, tilt: 0, w: 0.095 },
+      { count: 6, base: 0.95, span: 0.75, y: 1.14, z: -0.30, tilt: 0.55, w: 0.062 },
+      { count: 6, base: 0.88, span: 0.66, y: 0.52, z: -0.30, tilt: -0.60, w: 0.062 },
+      { count: 4, base: 0.60, span: 0.44, y: 0.90, z: -0.42, tilt: 0, w: 0.048 },
+    ];
+    for (let s = 0; s < SPEC.length; s++) {
+      const spec = SPEC[s];
+      for (const sx of [-1, 1]) {
+        const w = new THREE.Group();
+        w.position.set(sx * 0.30, spec.y, spec.z);
+        w.rotation.x = spec.tilt;
+        w.visible = false;
+        b.add(w);
+        const feathers = [];
+        for (let i = 0; i < spec.count; i++) {
+          const t = i / (spec.count - 1);
+          const len = spec.base + Math.sin(t * Math.PI) * spec.span;
+          const f = new THREE.Group();
+          f.rotation.z = sx * (0.18 + t * 1.20);
+          f.rotation.y = sx * (-0.12 - t * 0.34);
+          w.add(f);
+          f.add(mesh(G.box, M.dvWing, spec.w, len, 0.018,
+            sx * len * 0.44, len * 0.30, 0, 0, 0, sx * -0.55));
+          f.add(mesh(G.box, M.dvCore, 0.022, len * 0.94, 0.022,
+            sx * len * 0.44, len * 0.30, 0, 0, 0, sx * -0.55));
+          f.add(mesh(G.cone, M.dvCore, 0.03, 0.26, 0.03,
+            sx * len * 0.86, len * 0.62, 0, 0, 0, sx * -1.05));
+          feathers.push(f);
+        }
+        D.wings2.push({ group: w, feathers, side: sx, tier: s });
+      }
+    }
+
+    // ---- rings and runes: phase 2 only ----
+    for (let i = 0; i < 3; i++) {
+      const r = mesh(G.torus, M.dvRune, 0.62 - i * 0.11, 0.62 - i * 0.11,
+        0.62 - i * 0.11, 0, 0.80, 0, Math.PI / 2 + i * 0.5, 0, i * 0.7);
+      r.visible = false;
+      r.castShadow = false;
+      b.add(r);
+      D.rings.push({ mesh: r, spin: 0.6 + i * 0.4, tilt: i * 0.5 });
+    }
+    for (let i = 0; i < 10; i++) {
+      const r = mesh(G.box, M.dvRune, 0.055, 0.055, 0.014, 0, 0, 0);
+      r.visible = false;
+      r.castShadow = false;
+      b.add(r);
+      D.runes.push({ mesh: r, a: (i / 10) * Math.PI * 2,
+        r: 0.66 + (i % 3) * 0.10, y: 0.35 + (i % 5) * 0.16 });
+    }
+    // Escort blades, so the phase-2 form is armed like he is.
+    for (let i = 0; i < 4; i++) {
+      const e = new THREE.Group();
+      e.visible = false;
+      e.add(mesh(G.box, M.dvWing, 0.03, 0.62, 0.075, 0, 0, 0));
+      e.add(mesh(G.box, M.dvCore, 0.014, 0.58, 0.032, 0, 0, 0));
+      e.add(mesh(G.cone, M.dvCore, 0.03, 0.12, 0.075, 0, 0.35, 0));
+      b.add(e);
+      D.blades.push({ mesh: e, a: (i / 4) * Math.PI * 2, r: 0.78,
+        y: 0.7 + (i % 2) * 0.28 });
+    }
+
+    // The corona. Present in both forms, far brighter in phase 2.
+    D.corona = mesh(G.sphere, M.dvCorona, 1.35, 1.55, 1.35, 0, 0.85, 0);
+    D.corona.castShadow = false;
+    b.add(D.corona);
+
+    D.phase = 1;
+    D.morph = 0;          // 0..1 progress of the ascension effect
+    D.flap = 0;
+    this.divine = D;
+  }
+
+  /**
+   * Switch the divine skin between his two forms.
+   *
+   * @param n      1 or 2
+   * @param morph  0..1, drives the transformation. 1 = fully settled.
+   */
+  setDivinePhase(n, morph) {
+    const D = this.divine;
+    if (!D) return;
+    D.phase = n;
+    D.morph = morph === undefined ? 1 : morph;
+    const two = n >= 2;
+    for (const w of D.wings1) w.group.visible = !two;
+    for (const w of D.wings2) w.group.visible = two;
+    for (const r of D.rings) r.mesh.visible = two;
+    for (const r of D.runes) r.mesh.visible = two;
+    for (const e of D.blades) e.mesh.visible = two;
+    if (two) D.flap = 1;
+  }
+
+  /** Is this rig wearing the divine skin? */
+  get isDivine() { return !!this.divine; }
+
+  _animateDivine(dt, t) {
+    const D = this.divine;
+    if (!D) return;
+    D.flap = damp(D.flap, 0, 3.5, dt);
+    const beat = Math.sin(t * 2.2) * 0.12 + D.flap * 0.8;
+    const two = D.phase >= 2;
+    const m = D.morph;
+
+    for (const w of (two ? [] : D.wings1)) {
+      w.group.rotation.z = w.side * 0.12 - beat * w.side * 0.5;
+      for (let i = 0; i < w.feathers.length; i++) {
+        const k = i / (w.feathers.length - 1);
+        w.feathers[i].rotation.x =
+          Math.sin(t * 2.2 - k * 0.9) * 0.14 + beat * 0.5 * (1 - k * 0.4);
+      }
+    }
+    for (const w of (two ? D.wings2 : [])) {
+      // Tiers open in sequence during the morph, so the ascension unfolds
+      // rather than popping.
+      const open = clamp(m * 1.5 - w.tier * 0.16, 0, 1);
+      w.group.rotation.z = w.side * (0.05 + (1 - open) * 1.5) - beat * w.side * 0.6;
+      w.group.rotation.y = w.side * (1 - open) * 1.0;
+      for (let i = 0; i < w.feathers.length; i++) {
+        const k = i / (w.feathers.length - 1);
+        const f = w.feathers[i];
+        f.rotation.x = Math.sin(t * 2.6 - k * 1.1) * 0.16 + beat * 0.6 * (1 - k * 0.4);
+        f.scale.setScalar(open);
+      }
+    }
+    if (two) {
+      for (let i = 0; i < D.rings.length; i++) {
+        const r = D.rings[i];
+        r.mesh.rotation.y += dt * r.spin;
+        r.mesh.rotation.z = r.tilt + Math.sin(t * 0.7 + i) * 0.22;
+        r.mesh.scale.setScalar(m);
+      }
+      for (let i = 0; i < D.runes.length; i++) {
+        const r = D.runes[i];
+        r.a -= dt * (0.7 + i * 0.03);
+        r.mesh.position.set(Math.cos(r.a) * r.r * m,
+          r.y + Math.sin(r.a * 2 + i) * 0.10, Math.sin(r.a) * r.r * m);
+        r.mesh.rotation.y = -r.a;
+        r.mesh.rotation.z += dt * 2.4;
+      }
+      for (let i = 0; i < D.blades.length; i++) {
+        const e = D.blades[i];
+        e.a += dt * 1.3;
+        e.mesh.position.set(Math.cos(e.a) * e.r * m, e.y + Math.sin(e.a * 1.7) * 0.10,
+          Math.sin(e.a) * e.r * m);
+        e.mesh.rotation.set(Math.sin(e.a * 2) * 0.3, -e.a, 0.4 + Math.sin(e.a) * 0.4);
+      }
+    }
+
+    // The corona: a steady glow in phase 1, an unmistakable one in phase 2.
+    const pulse = 0.5 + Math.sin(t * 2.6) * 0.5;
+    this.mats.dvCorona.opacity = two
+      ? (0.16 + pulse * 0.10) * m
+      : 0.09 + pulse * 0.04;
+    D.corona.scale.setScalar((two ? 1.35 + 0.5 * m : 1.35)
+      * (1 + pulse * 0.03));
+    // Phase 2 burns hotter — the wing membrane goes from gold to white.
+    this.mats.dvWing.color.copy(
+      _dvA.setHex(0xfff3c4).lerp(_dvB.setHex(0xffffff), two ? m : 0));
+    this.mats.dvWing.opacity = two ? 0.55 + m * 0.28 : 0.62;
   }
 
   _buildTongue() {
@@ -812,6 +1056,7 @@ export class FrogModel {
     if (this.bodyAura) {
       this.bodyAura.material.opacity = 0.11 + Math.sin(t * 2.4) * 0.04;
     }
+    if (this.divine) this._animateDivine(dt, t);
 
     // Throat pulse — a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);

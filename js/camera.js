@@ -6,9 +6,9 @@
  * screen shake used by every impactful action in the game.
  */
 
-import * as THREE from '../lib/three.module.js?v=v34';
-import { CFG } from './config.js?v=v34';
-import { clamp, damp, lerp } from './util.js?v=v34';
+import * as THREE from '../lib/three.module.js?v=v36';
+import { CFG } from './config.js?v=v36';
+import { clamp, damp, lerp } from './util.js?v=v36';
 
 const _desired = new THREE.Vector3();
 const _focus = new THREE.Vector3();
@@ -32,6 +32,8 @@ export class FollowCamera {
     this.initialised = false;
     this.rollTarget = 0;
     this.roll = 0;
+    this.punch = 0;              // extra distance from punchOut(), decaying
+    this.punchDecay = 1;
   }
 
   /** Feed accumulated mouse delta. */
@@ -47,6 +49,18 @@ export class FollowCamera {
   /** Add screen shake. `amount` is roughly 0..1. */
   shake(amount) {
     this.trauma = clamp(this.trauma + amount, 0, 1);
+  }
+
+  /**
+   * Throw the camera backwards, then reel it in.
+   *
+   * Used for the moment a boss stops being a fight and becomes an event —
+   * the recoil sells scale in a way shake cannot, because shake says "that
+   * was loud" and this says "get back".
+   */
+  punchOut(extra, duration) {
+    this.punch = Math.max(this.punch || 0, extra);
+    this.punchDecay = 1 / Math.max(0.15, duration || 1);
   }
 
   /** Unit vector the player is aiming along (used by grapple + attacks). */
@@ -111,7 +125,15 @@ export class FollowCamera {
       ? want
       : damp(this.currentDistance, want, 6, dt);
 
-    _desired.copy(this.focus).addScaledVector(_dir, this.currentDistance);
+    // A punch-out is added AFTER wall avoidance and deliberately not clamped
+    // by it: during the beat it is used for, the camera is meant to leave the
+    // arena rather than politely stop at a pillar.
+    if (this.punch > 0) {
+      this.punch = Math.max(0, this.punch - dt * this.punch * this.punchDecay * 3.2
+        - dt * 1.5);
+    }
+    _desired.copy(this.focus)
+      .addScaledVector(_dir, this.currentDistance + (this.punch || 0));
 
     // --- speed FOV -------------------------------------------------------
     const speedT = clamp((speed - 12) / 26, 0, 1);
@@ -156,6 +178,7 @@ export class FollowCamera {
     this.initialised = false;
     this.currentDistance = this.distance;
     this.trauma = 0;
+    this.punch = 0;
     this.update(target, 0, 1 / 60);
   }
 }
