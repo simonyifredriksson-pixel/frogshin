@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v42';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v42';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v42';
-import { Input } from './input.js?v=v42';
-import { Audio } from './audio.js?v=v42';
-import { World } from './world.js?v=v42';
-import { Effects } from './effects.js?v=v42';
-import { Atmosphere } from './atmosphere.js?v=v42';
-import { FollowCamera } from './camera.js?v=v42';
-import { Player } from './player.js?v=v42';
-import { RemotePlayer } from './remote.js?v=v42';
-import { HUD } from './hud.js?v=v42';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v42';
-import { FrogModel } from './frog.js?v=v42';
-import { DummyField } from './dummy.js?v=v42';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v42';
-import { ToadModel } from './npc.js?v=v42';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v42';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v42';
-import { DungeonRun } from './dungeon.js?v=v42';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v42';
-import { JudgmentRun } from './judgment.js?v=v42';
-import { COMBO_NAMES } from './ascended.js?v=v42';
-import { MenuScene } from './menu.js?v=v42';
-import { Economy } from './economy.js?v=v42';
-import { Shop } from './shop.js?v=v42';
-import { Network, NetRole } from './net.js?v=v42';
+import * as THREE from '../lib/three.module.js?v=v43';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v43';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v43';
+import { Input } from './input.js?v=v43';
+import { Audio } from './audio.js?v=v43';
+import { World } from './world.js?v=v43';
+import { Effects } from './effects.js?v=v43';
+import { Atmosphere } from './atmosphere.js?v=v43';
+import { FollowCamera } from './camera.js?v=v43';
+import { Player } from './player.js?v=v43';
+import { RemotePlayer } from './remote.js?v=v43';
+import { HUD } from './hud.js?v=v43';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v43';
+import { FrogModel } from './frog.js?v=v43';
+import { DummyField } from './dummy.js?v=v43';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v43';
+import { ToadModel } from './npc.js?v=v43';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v43';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v43';
+import { DungeonRun } from './dungeon.js?v=v43';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v43';
+import { JudgmentRun } from './judgment.js?v=v43';
+import { COMBO_NAMES } from './ascended.js?v=v43';
+import { MenuScene } from './menu.js?v=v43';
+import { Economy } from './economy.js?v=v43';
+import { Shop } from './shop.js?v=v43';
+import { Network, NetRole } from './net.js?v=v43';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2266,15 +2266,29 @@ class Game {
    * still reads on everyone else's screen.
    */
   _isHunting(hunterId, preyId) {
+    // You always see yourself — at the friendly fade, never gone.
+    if (hunterId === preyId) return false;
+
     const R = this.round;
-    if (!R || !R.playing) return false;
+    // No round in progress: practice, warm-up, the lull between rounds. There
+    // are no sides, so everyone present is an opponent. Returning false here
+    // meant invisibility did nothing at all outside a live round, which is
+    // exactly where people first try the ability out.
+    if (!R || !R.playing) return true;
+
     if (R.isTagMode) {
       // Only the hunted benefit — a tagger going invisible would be unfair
       // and, on their own screen, pointless.
       return R.isTagger(hunterId) && !R.isTagger(preyId);
     }
     if (R.isTeamMode) return !R.areAllies(hunterId, preyId);
-    return false;   // FFA: everyone hunts everyone, so nobody is special
+
+    // FFA (and juggernaut): everyone hunts everyone. This used to return
+    // false, with a comment saying "everyone hunts everyone, so nobody is
+    // special" — which had the consequence backwards. Nobody counted as a
+    // hunter, so an invisible frog was only ever faded to the friendly 30%
+    // and stayed plainly visible to the entire lobby.
+    return true;
   }
 
   /**
