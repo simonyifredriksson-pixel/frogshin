@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v40';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v40';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v40';
-import { Input } from './input.js?v=v40';
-import { Audio } from './audio.js?v=v40';
-import { World } from './world.js?v=v40';
-import { Effects } from './effects.js?v=v40';
-import { Atmosphere } from './atmosphere.js?v=v40';
-import { FollowCamera } from './camera.js?v=v40';
-import { Player } from './player.js?v=v40';
-import { RemotePlayer } from './remote.js?v=v40';
-import { HUD } from './hud.js?v=v40';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v40';
-import { FrogModel } from './frog.js?v=v40';
-import { DummyField } from './dummy.js?v=v40';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v40';
-import { ToadModel } from './npc.js?v=v40';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v40';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v40';
-import { DungeonRun } from './dungeon.js?v=v40';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v40';
-import { JudgmentRun } from './judgment.js?v=v40';
-import { COMBO_NAMES } from './ascended.js?v=v40';
-import { MenuScene } from './menu.js?v=v40';
-import { Economy } from './economy.js?v=v40';
-import { Shop } from './shop.js?v=v40';
-import { Network, NetRole } from './net.js?v=v40';
+import * as THREE from '../lib/three.module.js?v=v41';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v41';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v41';
+import { Input } from './input.js?v=v41';
+import { Audio } from './audio.js?v=v41';
+import { World } from './world.js?v=v41';
+import { Effects } from './effects.js?v=v41';
+import { Atmosphere } from './atmosphere.js?v=v41';
+import { FollowCamera } from './camera.js?v=v41';
+import { Player } from './player.js?v=v41';
+import { RemotePlayer } from './remote.js?v=v41';
+import { HUD } from './hud.js?v=v41';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v41';
+import { FrogModel } from './frog.js?v=v41';
+import { DummyField } from './dummy.js?v=v41';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v41';
+import { ToadModel } from './npc.js?v=v41';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v41';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v41';
+import { DungeonRun } from './dungeon.js?v=v41';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v41';
+import { JudgmentRun } from './judgment.js?v=v41';
+import { COMBO_NAMES } from './ascended.js?v=v41';
+import { MenuScene } from './menu.js?v=v41';
+import { Economy } from './economy.js?v=v41';
+import { Shop } from './shop.js?v=v41';
+import { Network, NetRole } from './net.js?v=v41';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -528,6 +528,18 @@ class Game {
         if (this.round && this.round.authority && ev.id === id) {
           this.round.eliminate(id);
         }
+        return;
+      }
+      if (ev.t === 'froglets') {
+        // A gift from the developer menu. Froglets live in each player's own
+        // browser, so the sender cannot credit anyone directly — it asks, and
+        // the recipient pays itself. `to` is a player id, or '*' for the room.
+        const me = this.net.selfId || 'local';
+        if (ev.to !== '*' && ev.to !== me) return;
+        const n = clamp(Math.round(Number(ev.n) || 0), 1, 9999999);
+        this.economy.grant(n, `Gift from ${this.net.nameOf(id) || 'a frog'}`);
+        this.hud.toast(
+          `${this.net.nameOf(id) || 'Someone'} gave you ${n} froglets`, 4);
         return;
       }
       if (ev.t === 'kunai') {
@@ -1444,7 +1456,45 @@ class Game {
       this.economy.save();
       this._cheatNote('Frogath the Divine unlocked — equip it in the shop.');
     };
+    // ---- froglets ----
+    const amount = () => {
+      const n = Math.round(Number($('cheat-amount').value) || 0);
+      return clamp(n, 1, 9999999);
+    };
+    $('cheat-give-me').onclick = () => {
+      const n = this.economy.grant(amount(), 'Developer menu');
+      this._cheatRefresh();
+      this._cheatNote(`+${n} froglets. You now have ${this.economy.froglets}.`);
+    };
+    $('cheat-give-all').onclick = () => {
+      const n = amount();
+      if (!this.net.isOnline || !this.remotes.size) {
+        return this._cheatNote('Nobody else is here.');
+      }
+      // Sent to everyone at once; each client credits its own wallet, because
+      // froglets live in that player's browser and nowhere else.
+      this.net.sendEvent({ t: 'froglets', to: '*', n });
+      this._cheatNote(`Sent ${n} froglets to ${this.remotes.size} player(s).`);
+    };
     $('cheat-close').onclick = () => this._toggleCheats(false);
+  }
+
+  /** Rebuild the per-player grant buttons. Called whenever the menu opens. */
+  _cheatPlayers() {
+    const host = $('cheat-players');
+    if (!host) return;
+    host.innerHTML = '';
+    for (const [id, r] of this.remotes) {
+      const b = document.createElement('button');
+      b.className = 'cheat-btn';
+      b.textContent = `GIVE → ${r.name}`;
+      b.onclick = () => {
+        const n = clamp(Math.round(Number($('cheat-amount').value) || 0), 1, 9999999);
+        this.net.sendEvent({ t: 'froglets', to: id, n });
+        this._cheatNote(`Sent ${n} froglets to ${r.name}.`);
+      };
+      host.appendChild(b);
+    }
   }
 
   _cheatJump(room) {
@@ -1501,6 +1551,7 @@ class Game {
   _toggleCheats(open) {
     if (open === this.cheatsOpen) return;
     this.cheatsOpen = open;
+    if (open) this._cheatPlayers();      // who is here can change between opens
     $('cheats').classList.toggle('show', open);
     this._cheatRefresh();
     if (open) {

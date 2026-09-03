@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v40';
+import { CFG } from './config.js?v=v41';
 
 export class Economy {
   constructor() {
@@ -94,6 +94,26 @@ export class Economy {
     this.totalEarned += n;
     this.pending.push({ amount: n, reason: reason || '' });
     this._dirty = true;
+  }
+
+  /**
+   * Hand over froglets outright — the developer menu, and gifts from other
+   * players.
+   *
+   * Deliberately NOT `award()`: that is the earning path and is switched off
+   * in solo practice, which would silently swallow a grant. This is not
+   * earning, so the gate does not apply. It still counts toward totalEarned
+   * so the shop's lifetime figure stays truthful about what you have had.
+   */
+  grant(amount, reason) {
+    const n = Math.round(amount);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    this.froglets += n;
+    this.totalEarned += n;
+    this.pending.push({ amount: n, reason: reason || 'Granted' });
+    this._dirty = true;
+    this.save();
+    return n;
   }
 
   canAfford(cost) { return this.froglets >= cost; }

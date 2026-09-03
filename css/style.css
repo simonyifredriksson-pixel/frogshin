@@ -1154,6 +1154,21 @@ kbd {
 }
 .cheat-btn:hover { background: #26374a; border-color: #3ad17a; }
 .cheat-btn.on { background: #17402a; border-color: #3ad17a; color: #8dffc0; }
+/* Amount field for the froglet grants. */
+.cheat-num {
+  flex: 0 0 96px;
+  padding: 10px 8px;
+  background: #101823;
+  border: 2px solid #2f4257;
+  color: #ffd76b;
+  font-family: var(--font-px);
+  font-size: 9px;
+  text-align: center;
+}
+.cheat-num:focus { outline: none; border-color: #3ad17a; }
+/* One row per other player in the room. */
+#cheat-players { display: grid; gap: 5px; margin-bottom: 9px; }
+#cheat-players:empty { display: none; }
 .cheat-btn.wide { width: 100%; margin-top: 10px; }
 
 .cheat-sep {

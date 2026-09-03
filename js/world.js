@@ -9,10 +9,10 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v40';
-import { CFG } from './config.js?v=v40';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v40';
-import { Terrain, CollisionWorld } from './collision.js?v=v40';
+import * as THREE from '../lib/three.module.js?v=v41';
+import { CFG } from './config.js?v=v41';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v41';
+import { Terrain, CollisionWorld } from './collision.js?v=v41';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -358,49 +358,101 @@ export class World {
    * matters. Built from the same primitives as everything else so it reads
    * as part of the world rather than a dropped-in prop.
    */
+  /**
+   * The golden frog in the bamboo.
+   *
+   * This is the crystal altar, and it has to advertise itself as *something*
+   * without a single word of explanation — you should walk into the clearing,
+   * see gold where everything else is stone and green, and know it matters
+   * long before you know why. Hence: gold rather than granite, a lantern-lit
+   * clearing cut out of the grove, and a broken halo that says this was built
+   * for someone who is no longer being worshipped.
+   *
+   * `y` is the GROUND height at (x,z) — the plinth is built up from there, so
+   * it stands on the floor instead of hovering above or sinking into it.
+   */
   _buildFrogathStatue(x, y, z) {
-    const stone = 0x8a8880;
-    const dark = 0x6b6961;
+    const gold = 0xd4a933;         // weathered temple gold
+    const goldLit = 0xf3d878;      // where the light catches it
+    const goldDark = 0x8a6a18;     // deep shadow, and the carved lines
+    const stone = 0x6f6a5e;        // the plinth stays stone: it is the pedestal
+    const stoneLit = 0x8a8478;
     const moss = 0x5a6b45;
 
-    // Plinth and its steps.
-    this.solid(x, y + 0.5, z, 4.6, 0.5, 4.6, dark, 'stone');
-    this.solid(x, y + 1.2, z, 3.8, 0.35, 3.8, stone, 'stone');
-    this.deco(x, y + 1.6, z, 3.2, 0.12, 3.2, 0x9a978c);
+    // ---- plinth: three stone steps, so it reads as approachable ----
+    this.solid(x, y + 0.35, z, 4.8, 0.35, 4.8, stone, 'stone');
+    this.solid(x, y + 0.95, z, 4.0, 0.30, 4.0, stoneLit, 'stone');
+    this.solid(x, y + 1.45, z, 3.3, 0.25, 3.3, stone, 'stone');
+    this.deco(x, y + 1.72, z, 2.9, 0.06, 2.9, goldDark);          // gold inlay top
 
-    // Body: a broad squat frog, hunched.
-    this.solid(x, y + 3.0, z, 2.1, 1.5, 1.9, stone, 'stone');
-    this.deco(x, y + 2.7, z + 1.3, 1.5, 1.0, 0.5, 0x94918a);      // belly
-    // Head.
-    this.solid(x, y + 4.7, z + 0.2, 1.7, 0.9, 1.6, stone, 'stone');
-    this.deco(x, y + 4.3, z + 1.5, 1.9, 0.12, 0.3, dark);         // mouth line
-    for (const sx of [-1, 1]) {
-      this.deco(x + sx * 0.85, y + 5.4, z + 0.3, 0.55, 0.5, 0.55, stone);
-      // Blank carved eyes — no glow. It is a statue, not a shrine.
-      this.deco(x + sx * 0.85, y + 5.45, z + 0.75, 0.28, 0.28, 0.14, dark);
+    // Carved band of marks around the top step. Nobody can read them, which
+    // is the point.
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      this.deco(x + Math.cos(a) * 3.0, y + 1.62, z + Math.sin(a) * 3.0,
+        0.34, 0.05, 0.14, goldLit, a);
     }
-    // Front limbs braced on the plinth.
-    for (const sx of [-1, 1]) {
-      this.deco(x + sx * 1.5, y + 2.2, z + 0.9, 0.4, 1.0, 0.4, stone);
-      this.deco(x + sx * 1.5, y + 1.75, z + 1.4, 0.6, 0.18, 0.7, stone);
+
+    const by = y + 1.7;            // everything above sits on the plinth
+
+    // ---- body: a broad squat frog, hunched forward ----
+    this.solid(x, by + 1.5, z, 2.1, 1.5, 1.9, gold, 'stone');
+    this.deco(x, by + 1.2, z + 1.3, 1.5, 1.0, 0.5, goldLit);      // belly
+    // Ribs of carved line work down the back.
+    for (let i = 0; i < 4; i++) {
+      this.deco(x, by + 2.5 - i * 0.42, z - 1.55, 1.5 - i * 0.18, 0.05, 0.3, goldDark);
     }
-    // The halo, broken — a ring with a piece missing, propped behind him.
+
+    // ---- head ----
+    const hy = by + 3.2;                                          // head centre
+    this.solid(x, hy, z + 0.2, 1.7, 0.9, 1.6, gold, 'stone');
+    const headTop = hy + 0.9;
+    const headFront = z + 0.2 + 1.6;
+    this.deco(x, hy - 0.4, z + 1.5, 1.9, 0.12, 0.3, goldDark);    // mouth line
+
+    // ---- eyes ----
+    //
+    // A frog's eyes sit ON TOP of its skull, and these are built to sit proud
+    // of it: the previous pair were centred inside the head volume, so the
+    // face itself occluded them and they only appeared from the one angle
+    // that looked past the skull. Everything here clears `headTop`, so there
+    // is nothing in front of them from any direction.
+    for (const sx of [-1, 1]) {
+      // The bulge, breaking the line of the skull.
+      this.deco(x + sx * 0.82, headTop + 0.30, z + 0.35, 0.62, 0.55, 0.62, gold);
+      // Pale ring, entirely above the skull.
+      this.deco(x + sx * 0.82, headTop + 0.62, z + 0.35, 0.50, 0.34, 0.50, goldLit);
+      // And the pupil, proud of the eye on the FRONT face — high contrast,
+      // and readable across the clearing.
+      this.deco(x + sx * 0.82, headTop + 0.60, z + 0.92, 0.30, 0.26, 0.16, 0x1a1408);
+      this.deco(x + sx * 0.82, headTop + 0.74, z + 0.90, 0.12, 0.08, 0.10, 0xfff3c4);
+    }
+
+    // ---- front limbs, braced on the plinth ----
+    for (const sx of [-1, 1]) {
+      this.deco(x + sx * 1.5, by + 0.7, z + 0.9, 0.4, 1.0, 0.4, gold);
+      this.deco(x + sx * 1.5, by + 0.25, z + 1.4, 0.6, 0.18, 0.7, goldLit);
+    }
+
+    // ---- the halo, broken ----
+    // A ring with a piece missing. Whatever this was, it is not finished.
     for (let i = 0; i < 10; i++) {
       const a = (i / 12) * Math.PI * 2 + 0.5;
-      this.deco(x + Math.cos(a) * 1.9, y + 6.6 + Math.sin(a) * 1.9, z - 0.3,
-        0.34, 0.34, 0.34, dark);
+      this.deco(x + Math.cos(a) * 1.9, headTop + 1.6 + Math.sin(a) * 1.9, z - 0.3,
+        0.34, 0.34, 0.34, goldLit);
     }
-    // Moss, because it has been here a very long time.
-    this.deco(x - 1.0, y + 1.68, z + 1.1, 1.0, 0.06, 0.8, moss);
-    this.deco(x + 1.3, y + 3.8, z - 0.9, 0.7, 0.06, 0.6, moss);
 
-    this.collision.addBox(x, y + 3.2, z, 1.3, 2.6, 1.2, 'stone');
+    // Moss, because it has been here a very long time and nobody tends it.
+    this.deco(x - 1.0, y + 1.76, z + 1.1, 1.0, 0.05, 0.8, moss);
+    this.deco(x + 1.3, by + 2.3, z - 0.9, 0.7, 0.05, 0.6, moss);
+
+    this.collision.addBox(x, by + 1.7, z, 1.3, 2.6, 1.2, 'stone');
 
     /** Where the player must stand to use it. */
     this.statue = {
-      pos: new THREE.Vector3(x, y + 1.6, z),
-      // In front of the statue, on the approach from the dais.
-      stand: new THREE.Vector3(x, y + 1.6, z + 3.4),
+      pos: new THREE.Vector3(x, y + 1.7, z),
+      // In front of the statue, at the foot of the steps.
+      stand: new THREE.Vector3(x, y + 1.7, z + 3.8),
     };
   }
 
@@ -459,8 +511,6 @@ export class World {
     // Two more on the central dais so there is always one close at hand.
     this.dummySpots.push([-6.5, baseY + 1.45, 6.5, Math.atan2(6.5, -6.5)]);
     this.dummySpots.push([6.5, baseY + 1.45, -6.5, Math.atan2(-6.5, 6.5)]);
-
-    this._buildFrogathStatue(0, baseY + 1.5, -16);
 
     // ---- practice ring, dead centre of the dummy platform ----
     // Standing in it lets a solo player try every skin and ability.
@@ -584,10 +634,18 @@ export class World {
   _buildBambooGrove() {
     const cx = 128, cz = 26, rnd = this.rnd;
 
+    // The shrine sits at the heart of the grove, in a clearing. Placed first
+    // so the planting below can be told to keep out of it.
+    const sx = cx, sz = cz;
+    const CLEARING = 9.5;
+
     // Dense bamboo — thin tall posts, cheap and very readable.
     for (let i = 0; i < 190; i++) {
       const a = rnd() * Math.PI * 2, d = rnd() * 42;
       const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      // Nothing grows in the clearing. Without this the shrine ends up with
+      // stalks through its skull, which reads as a bug rather than a shrine.
+      if (Math.hypot(x - sx, z - sz) < CLEARING) continue;
       const y = this.heightAt(x, z);
       if (y < CFG.world.waterLevel + 0.5) continue;
       const h = 11 + rnd() * 10;
@@ -598,6 +656,21 @@ export class World {
       // Leaf tuft.
       this.batches.blob.add(x, y + h, z, 1.1, 1.5, 1.1, 0x7cc24a);
     }
+
+    // A deliberate wall of taller, denser bamboo right on the clearing's edge,
+    // so the shrine is hidden until you are inside it and then unmissable.
+    for (let i = 0; i < 64; i++) {
+      const a = (i / 64) * Math.PI * 2 + rnd() * 0.06;
+      const d = CLEARING + 0.4 + rnd() * 2.2;
+      const x = sx + Math.cos(a) * d, z = sz + Math.sin(a) * d;
+      const y = this.heightAt(x, z);
+      if (y < CFG.world.waterLevel + 0.5) continue;
+      const h = 15 + rnd() * 9;
+      this.batches.post.add(x, y + h / 2, z, 0.2, h, 0.2, 0x64a336);
+      this.batches.blob.add(x, y + h, z, 1.2, 1.7, 1.2, 0x86cf52);
+    }
+
+    this._buildShrineClearing(sx, sz, CLEARING);
 
     // Canopy platforms strung through the grove.
     const plats = [];
@@ -618,6 +691,60 @@ export class World {
     this.bambooPlatforms = plats;
     this.spawnPoints.push([cx - 20, this.heightAt(cx - 20, cz + 6) + 1, cz + 6]);
     this.spawnPoints.push([plats[0][0], plats[0][1] + 1.5, plats[0][2]]);
+  }
+
+  /**
+   * The clearing the golden frog stands in.
+   *
+   * Everything here is staging for one thing: making a player who stumbles
+   * into it stop. A cut stone floor where the rest of the grove is dirt, a
+   * path that plainly leads somewhere, gold lanterns instead of the grove's
+   * green ones, and an approach that frames the statue head-on.
+   */
+  _buildShrineClearing(x, z, radius) {
+    const gy = this.heightAt(x, z);
+
+    // Flagstone floor, so the clearing is obviously made rather than found.
+    const step = 3.2;
+    for (let ax = -radius; ax <= radius; ax += step) {
+      for (let az = -radius; az <= radius; az += step) {
+        if (Math.hypot(ax + step / 2, az + step / 2) > radius - 0.4) continue;
+        const shade = 0x6a6357 + (Math.floor(this.rnd() * 3) * 0x040404);
+        this.deco(x + ax + step / 2, gy + 0.06, z + az + step / 2,
+          step * 0.5, 0.06, step * 0.5, shade);
+      }
+    }
+    this.collision.addBox(x, gy - 0.1, z, radius, 0.2, radius, 'stone');
+
+    // Two rings of gold inlay around the plinth.
+    for (const r of [5.2, 7.4]) {
+      const n = Math.round(r * 4);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        this.deco(x + Math.cos(a) * r, gy + 0.14, z + Math.sin(a) * r,
+          0.5, 0.04, 0.16, 0xc9a227, a);
+      }
+    }
+
+    // A path in from the south — it reads as "this way" from outside.
+    for (let i = 0; i < 7; i++) {
+      this.deco(x, gy + 0.10, z + radius + 1.2 + i * 2.6, 1.5, 0.05, 1.0, 0x6a6357);
+    }
+
+    // Gold lanterns on posts, facing the approach. The rest of the grove is
+    // lit green, so this corner of the map is the only warm light in it.
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const px = x + Math.cos(a) * 6.6, pz = z + Math.sin(a) * 6.6;
+      const py = this.heightAt(px, pz);
+      this.solid(px, py + 1.7, pz, 0.22, 1.7, 0.22, 0x4a3a24, 'wood');
+      this.lantern(px, py + 4.0, pz, 0xffd76b);
+    }
+
+    // A torii on the path, because you do not put a gate in front of nothing.
+    this.torii(x, z + radius + 3.0, 0, 0.95);
+
+    this._buildFrogathStatue(x, gy, z);
   }
 
   // ------------------------------------------------------- rock spires (W)

@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v40';
+export const BUILD = 'v41';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -321,10 +321,19 @@ export const CFG = {
     healthByPlayers: { 3: 7, 4: 10, 5: 9 },
     /** Each player beyond the table adds this much. */
     healthPerExtraPlayer: 1,
-    moveScale: 0.5,          // half the speed of a frog
-    // "Shift 2x less effective": the sprint BONUS is halved, not removed —
-    // 2.0x becomes 1.5x, so the run still helps but never closes a gap fast.
-    sprintBonusScale: 0.5,
+    /**
+     * The juggernaut moves and sprints exactly like everyone else, and
+     * grapples like everyone else.
+     *
+     * It used to be half speed with a halved sprint and no tongue, which made
+     * the mode a chase nobody could lose: the frogs simply walked away and
+     * shot it. The fight is now a straight 1-vs-N — same mobility, same
+     * tools — and the asymmetry is entirely in what it can take and what it
+     * hits for. These two are kept as knobs so it can be slowed again from
+     * config alone if that turns out too strong.
+     */
+    moveScale: 1.0,
+    sprintBonusScale: 1.0,
     swordScale: 2.1,         // a massive katana, matched to the toad's bulk
     // Absolute reach, not a multiplier — compare with combat.reach (3.5).
     // Toadel's own boss reach is 5.2, and this sits just under it.

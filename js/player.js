@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v40';
-import { CFG } from './config.js?v=v40';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v40';
-import { FrogModel } from './frog.js?v=v40';
-import { Grapple, GrappleState } from './grapple.js?v=v40';
-import { Combat, Health } from './combat.js?v=v40';
-import { Stamina } from './stamina.js?v=v40';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v40';
-import { Audio } from './audio.js?v=v40';
+import * as THREE from '../lib/three.module.js?v=v41';
+import { CFG } from './config.js?v=v41';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v41';
+import { FrogModel } from './frog.js?v=v41';
+import { Grapple, GrappleState } from './grapple.js?v=v41';
+import { Combat, Health } from './combat.js?v=v41';
+import { Stamina } from './stamina.js?v=v41';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v41';
+import { Audio } from './audio.js?v=v41';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -740,8 +740,11 @@ export class Player {
   // --------------------------------------------------------------- grapple
 
   _toggleGrapple(cam) {
-    // The juggernaut has no tongue to grapple with — G charges a leap.
-    if (this.isJuggernaut) { this._chargeLeap(cam); return; }
+    // The juggernaut grapples like everyone else. It used to charge a leap
+    // here instead, as compensation for being slow — now that it moves at
+    // full speed it gets the same tongue as the frogs it is hunting, and the
+    // mode is a straight fight rather than a chase. `_chargeLeap` and its
+    // update are left intact so the leap can be given back if wanted.
     if (this.grapple.active) { this.grapple.release(); return; }
     cam.aimDirection(_aim);
     if (this.grapple.tryFire(this.mouthPosition, _aim)) {

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v40" />
+<link rel="stylesheet" href="css/style.css?v=v41" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -611,6 +611,16 @@
       <button class="cheat-btn" id="cheat-combo">NEXT PHASE-2 COMBO</button>
       <button class="cheat-btn" id="cheat-divine">UNLOCK DIVINE SKIN</button>
     </div>
+    <div class="cheat-sep"><span>FROGLETS</span></div>
+    <div class="cheat-row">
+      <input class="cheat-num" id="cheat-amount" type="number" value="1000"
+             min="1" max="9999999" step="100" />
+      <button class="cheat-btn" id="cheat-give-me">GIVE ME</button>
+      <button class="cheat-btn" id="cheat-give-all">GIVE EVERYONE</button>
+    </div>
+    <!-- One button per other player in the room, rebuilt when the menu opens. -->
+    <div id="cheat-players"></div>
+
     <div class="cheat-note" id="cheat-note"></div>
 
     <button class="cheat-btn wide" id="cheat-close">CLOSE</button>
@@ -673,6 +683,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v40"></script>
+<script type="module" src="js/main.js?v=v41"></script>
 </body>
 </html>
