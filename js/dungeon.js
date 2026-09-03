@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v39';
-import { CFG } from './config.js?v=v39';
-import { clamp } from './util.js?v=v39';
-import { DungeonLevel } from './dungeonlevel.js?v=v39';
-import { DungeonBoss } from './dungeonboss.js?v=v39';
-import { Frogath } from './frogath.js?v=v39';
-import { Audio } from './audio.js?v=v39';
+import * as THREE from '../lib/three.module.js?v=v40';
+import { CFG } from './config.js?v=v40';
+import { clamp } from './util.js?v=v40';
+import { DungeonLevel } from './dungeonlevel.js?v=v40';
+import { DungeonBoss } from './dungeonboss.js?v=v40';
+import { Frogath } from './frogath.js?v=v40';
+import { Audio } from './audio.js?v=v40';
 
 const _v = new THREE.Vector3();
 
@@ -68,6 +68,16 @@ export class DungeonRun {
   }
 
   get collision() { return this.level.collision; }
+
+  /**
+   * Below this you have left the dungeon entirely.
+   *
+   * The rooms are a chain of discs floating in nothing, so a gap anywhere
+   * along the run drops you forever. Rather than trying to prove every seam
+   * in fifteen rooms is sealed, anything under the floor is simply out of
+   * the world — see Game._voidGuard.
+   */
+  get voidY() { return this.level.origin.y - CFG.move.voidDepth; }
   get isFinalRoom() { return this.room === CFG.dungeon.rooms - 1; }
 
   /** Where the player starts a room. */

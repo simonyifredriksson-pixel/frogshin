@@ -11,12 +11,12 @@
  * standing, so cover would only make his patterns unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v39';
-import { CFG } from './config.js?v=v39';
-import { clamp, lerp } from './util.js?v=v39';
-import { Terrain, CollisionWorld } from './collision.js?v=v39';
-import { Ascended } from './ascended.js?v=v39';
-import { Audio } from './audio.js?v=v39';
+import * as THREE from '../lib/three.module.js?v=v40';
+import { CFG } from './config.js?v=v40';
+import { clamp, lerp } from './util.js?v=v40';
+import { Terrain, CollisionWorld } from './collision.js?v=v40';
+import { Ascended } from './ascended.js?v=v40';
+import { Audio } from './audio.js?v=v40';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -70,6 +70,9 @@ export class JudgmentRun {
   }
 
   get collision() { return this._collision; }
+
+  /** Below this you have fallen out of the arena — see Game._voidGuard. */
+  get voidY() { return ORIGIN.y - CFG.move.voidDepth; }
   get spawnPoint() {
     return new THREE.Vector3(
       ORIGIN.x - CFG.ascended.arenaRadius * 0.7, ORIGIN.y + 0.6, ORIGIN.z);

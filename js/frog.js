@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v39';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v39';
+import * as THREE from '../lib/three.module.js?v=v40';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v40';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -799,7 +799,24 @@ export class FrogModel {
     this.nameplate = spr;
     this.root.add(spr);
     this._plateHealth = -1;
+    this._xray = false;
     this.drawNameplate(1);
+  }
+
+  /**
+   * Draw the nameplate THROUGH whatever is in front of it.
+   *
+   * Used when a player is hidden by something you are meant to be able to
+   * see past — foliage, water — so a tree is cover, not an invisibility
+   * cloak. Deliberately NOT enabled for solid geometry: seeing names through
+   * walls is a different game.
+   */
+  setNameplateXRay(on) {
+    if (!this.nameplate || on === this._xray) return;
+    this._xray = on;
+    this.nameplate.material.depthTest = !on;
+    this.nameplate.renderOrder = on ? 12 : 0;
+    this.nameplate.material.needsUpdate = true;
   }
 
   /** Redraw the floating name + health bar. `hp01` is health in 0..1. */
@@ -872,7 +889,11 @@ export class FrogModel {
     const hop = moving ? swAbs * 0.13 * run : 0;
 
     // ---- body bob, squash, lean -----------------------------------------
-    const idleBob = Math.sin(t * 1.9) * 0.025;
+    // The idle breath rides ABOVE the origin rather than swinging either side
+    // of it. The origin is the soles of the feet and sits exactly on the
+    // ground, so a bob that goes negative buries the feet in the floor for
+    // half of every cycle — which is precisely what it used to do.
+    const idleBob = (0.5 + Math.sin(t * 1.9) * 0.5) * 0.05;
     let targetY = (moving ? hop : idleBob);
     let targetSquash = 1;
     let targetLean = 0;
@@ -1095,6 +1116,19 @@ export class FrogModel {
       this.tagMarker.position.y = 2.62 + Math.sin(t * 3.2) * 0.12;
     }
 
+    // ---- keep the frog out of the floor ----------------------------------
+    // Last line of defence. The body's origin is the soles of the feet and
+    // sits exactly on the ground, so ANY animation that pushes the body
+    // below zero buries the legs in the terrain. Rather than trusting every
+    // pose to remember that, it is enforced once, here, after all of them.
+    //
+    // Only while upright and on the ground: the death keel-over and the swim
+    // pose both move the body deliberately, and neither is standing on
+    // anything.
+    if (s.grounded && !s.dead && !s.swimming && this.body.position.y < 0) {
+      this.body.position.y = 0;
+    }
+
     // ---- tongue ----------------------------------------------------------
     this._updateTongue(dt, s);
   }
@@ -1133,7 +1167,11 @@ export class FrogModel {
       right.shoulder.rotation.y = 0;
       right.fore.rotation.x = lerp(-1.3, -0.15, smooth(k));
       this.body.rotation.y = 0;
-      this.body.position.y += -sw * 0.12;
+      // The finisher's weight comes from COMPRESSING the body, not from
+      // translating it down. The origin is the soles of the feet, so scaling
+      // Y drops the shoulders by the same amount while the feet stay planted
+      // — translating instead drove the whole frog 0.12 into the floor.
+      this.body.scale.y *= 1 - sw * 0.13;
       this.katana.rotation.set(lerp(-2.6, 1.3, smooth(k)), 0, 0);
     }
 

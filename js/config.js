@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v39';
+export const BUILD = 'v40';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -54,6 +54,23 @@ export const CFG = {
     radius: 0.55,            // collision capsule radius
     height: 1.75,            // collision capsule height
     stepHeight: 0.65,        // auto-step over small ledges
+    /**
+     * Steepest TERRAIN you can walk up, on Terrain.slopeAt's 0..1 scale
+     * (0 flat, 1 vertical; the scale is |gradient| / 3, so this is a little
+     * over 50°). Anything steeper is a cliff face and has to be grappled or
+     * gone around — without this the mountains were walkable if you simply
+     * approached them slowly. Boxes are unaffected: ledges still use
+     * stepHeight, so stairs and crates behave exactly as before.
+     */
+    maxClimbSlope: 0.46,
+    /**
+     * How far below a level's floor counts as having left the world, and how
+     * fast the void takes you. Damage rather than an instant kill so it reads
+     * as a fall you did not survive, and so a death-cam/respawn plays
+     * normally instead of teleporting you.
+     */
+    voidDepth: 40,
+    voidDamage: 90,          // per second
   },
 
   // -------------------------------------------------------------- stamina
@@ -175,6 +192,15 @@ export const CFG = {
       telegraph: 0.62,
       telegraphShrink: 0.955,
       minTelegraph: 0.26,
+      /**
+       * The beat between a teleport landing and the blade moving.
+       *
+       * A blink telegraphs on the spot the guardian LEAVES, so without a
+       * pause on arrival the swing is unreactable no matter how long the
+       * wind-up was. Fixed, never scaled by depth — it is the window that
+       * makes the move answerable at all.
+       */
+      blinkDelay: 0.8,
     },
 
     /** The god at the bottom. */

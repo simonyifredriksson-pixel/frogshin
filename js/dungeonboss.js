@@ -16,11 +16,11 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v39';
-import { CFG } from './config.js?v=v39';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v39';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v39';
-import { Audio } from './audio.js?v=v39';
+import * as THREE from '../lib/three.module.js?v=v40';
+import { CFG } from './config.js?v=v40';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v40';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v40';
+import { Audio } from './audio.js?v=v40';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -36,6 +36,15 @@ const _tmp = new THREE.Vector3();
 const GROUND_MOVES = new Set(['shockwave', 'spin']);
 const WARN_RED = 0xff7a3c;      // move out of it
 const WARN_AMBER = 0xffd24a;    // jump over it
+/**
+ * A teleport is coming — dash or parry it.
+ *
+ * Its own colour because it is the one warning you cannot answer by walking:
+ * the guardian is about to be somewhere else, so moving out of the marked
+ * circle achieves nothing. Violet reads as clearly different from the two
+ * ground colours at a glance, which is the whole job.
+ */
+const WARN_BLINK = 0xb07aff;
 
 const STATE = {
   IDLE: 'idle',
@@ -251,7 +260,8 @@ export class DungeonBoss {
   _drawWarning(player) {
     const jumpable = GROUND_MOVES.has(this.move);
     this.windingGroundWave = jumpable;
-    const col = jumpable ? WARN_AMBER : WARN_RED;
+    const col = this.move === 'blink' ? WARN_BLINK
+      : (jumpable ? WARN_AMBER : WARN_RED);
     const w = Math.max(0.12, this.timer);
     // The marker is the hitbox. Not an approximation of it.
     const R = this._moveRadius(this.move);
@@ -327,11 +337,19 @@ export class DungeonBoss {
     this.state = STATE.STRIKE;
     this.struck = false;
     this.swung = false;
+    this.blinkHold = 0;
     this.swingT = 0.32;
     this.timer = (this.move === 'charge' || this.move === 'leap') ? 0.5 : 0.24;
 
     if (this.move === 'blink') {
-      // Vanish and reappear beside them, then swing immediately.
+      // Vanish and reappear beside them — and then WAIT.
+      //
+      // Arriving and swinging on the same frame is unreactable however well
+      // the wind-up was telegraphed, because the wind-up happened somewhere
+      // else: by the time you can see where he actually is, the blade is
+      // already on you. The pause is what turns the teleport back into an
+      // attack you can answer, and the ring below is drawn at the spot he is
+      // really standing rather than the one he left.
       _tmp.copy(this.pos);
       this.effects.puff(_tmp, this.spec.trim, 18, 8);
       const a = Math.random() * Math.PI * 2;
@@ -339,7 +357,17 @@ export class DungeonBoss {
         player.pos.z + Math.sin(a) * 5);
       _tmp.copy(this.pos);
       this.effects.puff(_tmp, this.spec.trim, 18, 8);
+
+      this.blinkHold = CFG.dungeon.boss.blinkDelay;
+      this.timer += this.blinkHold;          // the strike still gets its time
+      const BR = this._moveRadius('blink');
+      _tmp.set(this.pos.x, this.baseY + 0.1, this.pos.z);
+      this.effects.ring(_tmp, BR * 2, BR * 1.2, this.blinkHold, WARN_BLINK, true);
       Audio.dash(this.pos);
+      Audio.tone({
+        freq: 300, to: 820, dur: this.blinkHold, type: 'sine',
+        volume: 0.14, pos: this.pos,
+      });
     }
     if (this.move === 'leap') {
       this.leapT = 0;
@@ -353,6 +381,15 @@ export class DungeonBoss {
     const dmg = Math.round(this.damage * M.dmg);
     // The same radius the marker was drawn at.
     const R = this._moveRadius(this.move);
+
+    // He has landed, but the blade has not moved yet. Nothing can hurt you
+    // for this beat — it is the window to dash out or set a parry, and it is
+    // the same length every time so it can be learned.
+    if (this.blinkHold > 0) {
+      this.blinkHold -= dt;
+      this.moveSpeed = 0;
+      return;
+    }
 
     switch (this.move) {
       case 'charge':

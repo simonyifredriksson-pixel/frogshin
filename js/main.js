@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v39';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v39';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v39';
-import { Input } from './input.js?v=v39';
-import { Audio } from './audio.js?v=v39';
-import { World } from './world.js?v=v39';
-import { Effects } from './effects.js?v=v39';
-import { Atmosphere } from './atmosphere.js?v=v39';
-import { FollowCamera } from './camera.js?v=v39';
-import { Player } from './player.js?v=v39';
-import { RemotePlayer } from './remote.js?v=v39';
-import { HUD } from './hud.js?v=v39';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v39';
-import { FrogModel } from './frog.js?v=v39';
-import { DummyField } from './dummy.js?v=v39';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v39';
-import { ToadModel } from './npc.js?v=v39';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v39';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v39';
-import { DungeonRun } from './dungeon.js?v=v39';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v39';
-import { JudgmentRun } from './judgment.js?v=v39';
-import { COMBO_NAMES } from './ascended.js?v=v39';
-import { MenuScene } from './menu.js?v=v39';
-import { Economy } from './economy.js?v=v39';
-import { Shop } from './shop.js?v=v39';
-import { Network, NetRole } from './net.js?v=v39';
+import * as THREE from '../lib/three.module.js?v=v40';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v40';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v40';
+import { Input } from './input.js?v=v40';
+import { Audio } from './audio.js?v=v40';
+import { World } from './world.js?v=v40';
+import { Effects } from './effects.js?v=v40';
+import { Atmosphere } from './atmosphere.js?v=v40';
+import { FollowCamera } from './camera.js?v=v40';
+import { Player } from './player.js?v=v40';
+import { RemotePlayer } from './remote.js?v=v40';
+import { HUD } from './hud.js?v=v40';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v40';
+import { FrogModel } from './frog.js?v=v40';
+import { DummyField } from './dummy.js?v=v40';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v40';
+import { ToadModel } from './npc.js?v=v40';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v40';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v40';
+import { DungeonRun } from './dungeon.js?v=v40';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v40';
+import { JudgmentRun } from './judgment.js?v=v40';
+import { COMBO_NAMES } from './ascended.js?v=v40';
+import { MenuScene } from './menu.js?v=v40';
+import { Economy } from './economy.js?v=v40';
+import { Shop } from './shop.js?v=v40';
+import { Network, NetRole } from './net.js?v=v40';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1127,6 +1127,73 @@ class Game {
   }
 
   /** One frame of the judgment fight. */
+  /**
+   * The void.
+   *
+   * Levels that float in nothing — the dungeon, the judgment arena — cannot
+   * be proven watertight seam by seam, and a player who slips through one
+   * falls forever with no way back to the menu but a reload. So anything
+   * below the floor is simply out of the world and dies there.
+   *
+   * Damage rather than an instant kill, so it reads as a fall and the normal
+   * death/respawn flow runs. The one exception is invincibility: a god-mode
+   * player cannot die, so they would fall forever — they get put back on
+   * solid ground instead.
+   */
+  _voidGuard(p, dt, floorY, respawnTo) {
+    if (!p || p.health.dead || p.pos.y > floorY) return false;
+    if (p.health.protected) {
+      if (respawnTo) {
+        p.pos.copy(respawnTo);
+        p.vel.set(0, 0, 0);
+        this.followCam.snapTo(p.pos);
+        this.hud.toast('Pulled back out of the void', 2.0);
+      }
+      return true;
+    }
+    p.health.damage(CFG.move.voidDamage * dt, null);
+    // Falling is silent and featureless, so the HUD has to say what is
+    // happening or it reads as the game having broken.
+    this._voidToast = (this._voidToast || 0) - dt;
+    if (this._voidToast <= 0) { this._voidToast = 1.2; this.hud.toast('The void', 1.0); }
+    return true;
+  }
+
+  /**
+   * Let a name show through foliage and water.
+   *
+   * Trees and ponds were working as invisibility: the nameplate depth-tests
+   * against them like anything else, so a player standing inside a canopy or
+   * sitting on the bottom of a pond had no tell at all. Both are meant to be
+   * concealment you can still be spotted in, not a way to vanish.
+   *
+   * Only foliage and water qualify. The plate stays hidden behind solid
+   * geometry, because seeing names through walls is a different game.
+   *
+   * Costs one raycast per remote, spread over several frames rather than
+   * done for everyone at once.
+   */
+  _updateNameplateXRay(dt) {
+    if (!this.remotes.size || !this.world || !this.world.collision) return;
+    const ids = Array.from(this.remotes.keys());
+    this._xrayCursor = ((this._xrayCursor || 0) + 1) % ids.length;
+    const r = this.remotes.get(ids[this._xrayCursor]);
+    if (!r || !r.model || !r.model.setNameplateXRay) return;
+
+    // Under water is unambiguous and needs no ray.
+    if (r.swimming) { r.model.setNameplateXRay(true); return; }
+
+    const cam = this.camera.position;
+    _v3c.set(r.pos.x, r.pos.y + 1.2, r.pos.z).sub(cam);
+    const dist = _v3c.length();
+    if (dist < 0.5 || dist > 140) { r.model.setNameplateXRay(false); return; }
+    _v3c.multiplyScalar(1 / dist);
+    const hit = this.world.collision.raycast(
+      cam.x, cam.y, cam.z, _v3c.x, _v3c.y, _v3c.z, dist - 0.6);
+    // Nothing in the way, or something solid: ordinary depth rules.
+    r.model.setNameplateXRay(!!hit && hit.tag === 'tree');
+  }
+
   _updateJudgment(dt, t) {
     const p = this.player;
     if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
@@ -1139,6 +1206,7 @@ class Game {
     if (boss) targets.push(boss);
 
     p.update(dt, this.input, this.followCam, targets);
+    this._voidGuard(p, dt, this.judgment.voidY, this.judgment.spawnPoint);
     this.kunaiSystem.update(dt, targets);
     if (p.deathPending) p.deathPending = false;
     // Same as the dungeon: the katana queues its hits as events because the
@@ -1184,6 +1252,7 @@ class Game {
     if (boss) targets.push(boss);
 
     p.update(dt, this.input, this.followCam, targets);
+    this._voidGuard(p, dt, this.dungeon.voidY, this.dungeon.spawnPoint);
     this.kunaiSystem.update(dt, targets);
 
     if (p.deathPending) p.deathPending = false;
@@ -1412,22 +1481,19 @@ class Game {
    * The developer menu answers to two chords, on the rising edge of either
    * being fully held:
    *
-   *     F3 + J + L          the original
-   *     Ctrl + L + J + M    the second
+   *     F3 + J + L      the original
+   *     L + J + M + 3   the second
    *
-   * A word on the Ctrl one. Chrome reserves Ctrl+L for the address bar and
-   * will not let the page cancel it, and focusing the address bar blurs the
-   * window, which clears every held key — so pressing Ctrl FIRST can lose the
-   * chord before it completes. Because this only reads which keys are held
-   * and not the order they arrived in, holding L+J+M and then tapping Ctrl
-   * works everywhere: none of those three is a browser shortcut on its own,
-   * and Ctrl by itself does nothing.
+   * Neither uses a modifier, so neither can be stolen by a browser shortcut —
+   * which the Ctrl-based version it replaced could be, since Chrome keeps
+   * Ctrl+L for the address bar and will not let a page have it.
+   *
+   * Only which keys are HELD matters, never the order they arrived in.
    */
   _updateCheatChord() {
     const k = (code) => this.input.down(code);
-    const ctrl = k('ControlLeft') || k('ControlRight');
     const held = (k('F3') && k('KeyJ') && k('KeyL'))
-      || (ctrl && k('KeyL') && k('KeyJ') && k('KeyM'));
+      || (k('KeyL') && k('KeyJ') && k('KeyM') && k('Digit3'));
     if (held && !this._chordHeld) this._toggleCheats(!this.cheatsOpen);
     this._chordHeld = held;
   }
@@ -1995,6 +2061,14 @@ class Game {
 
       const targets = this._buildTargets();
       p.update(dt, this.input, this.followCam, targets);
+      // The arena has real terrain everywhere, so this should never fire —
+      // it is here so that a hole nobody has found yet costs a life instead
+      // of the whole session. Measured against the ground under you rather
+      // than a fixed height, because the map has real valleys.
+      if (this.world && this.world.collision && this.world.collision.terrain) {
+        const gy = this.world.collision.terrain.heightAt(p.pos.x, p.pos.z);
+        this._voidGuard(p, dt, gy - CFG.move.voidDepth, null);
+      }
       // Locally-owned kunai resolve their own hits against the same list.
       this.kunaiSystem.update(dt, targets);
       this.dummies.update(dt, t);
@@ -2039,6 +2113,7 @@ class Game {
         // still follow you without the enemy having a hope of it.
         r.setViewer(this._isHunting(p.id, r.id), false);
       }
+      this._updateNameplateXRay(dt);
       this._updateLocalClone(dt);
 
       this.world.update(dt, this.camera.position);

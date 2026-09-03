@@ -7,16 +7,14 @@
  */
 
 /**
- * The keys of the Ctrl-based developer chord (Ctrl+L+J+M), plus Ctrl itself.
+ * Keys the developer chord needs to survive the modifier filter.
  *
- * Held keys are normally dropped the moment a modifier is down, so that
- * Ctrl+C, Ctrl+R and friends reach the browser untouched. These five are the
- * only exception: without it a Ctrl chord could never be seen at all, because
- * the keys would never make it into the held set.
+ * The chord itself (L+J+M+3) uses no modifier at all, so this is only here to
+ * stop the chord dying if a stray Ctrl or Alt happens to be held while it is
+ * being pressed. Everything else with a modifier down still goes straight to
+ * the browser.
  */
-const CHORD_KEYS = new Set([
-  'ControlLeft', 'ControlRight', 'KeyL', 'KeyJ', 'KeyM',
-]);
+const CHORD_KEYS = new Set(['KeyL', 'KeyJ', 'KeyM', 'Digit3']);
 
 export class Input {
   constructor(canvas) {
@@ -57,10 +55,8 @@ export class Input {
         'F3'].includes(code)) {
         e.preventDefault();
       }
-      // Ctrl+L / Ctrl+J / Ctrl+M are the other chord. Ask the browser not to
-      // act on them. Chrome reserves some of these (Ctrl+L focuses the
-      // address bar) and will ignore this — which is why the chord is also
-      // designed to work with Ctrl pressed LAST, see _updateCheatChord.
+      // If a modifier happened to be down, do not let the browser act on the
+      // chord's keys as a shortcut.
       if (modified && CHORD_KEYS.has(code)) e.preventDefault();
     });
 

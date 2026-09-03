@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v39';
-import { clamp } from './util.js?v=v39';
+import { CFG } from './config.js?v=v40';
+import { clamp } from './util.js?v=v40';
 
 const EPS = 1e-4;
 
@@ -287,7 +287,21 @@ export class CollisionWorld {
 
     // Terrain acts as a wall wherever it rises faster than we can step.
     const th = this.terrain.heightAt(pos.x, pos.z);
-    if (th > pos.y + step) {
+    // Terrain is walkable up to a real ANGLE, not merely a rise-per-frame.
+    //
+    // Judging it by absolute rise alone made the limit depend on how fast you
+    // were walking: `steps` bottoms out at 1, so a slow walk moves a tiny
+    // horizontal distance, every individual rise lands under stepHeight, and
+    // the check passes. That is how players strolled up sheer mountain faces
+    // — not by finding a gentle route, just by going slowly.
+    //
+    // Only the climb is limited. Walking DOWN a cliff is still allowed; that
+    // is falling, and gravity can have it.
+    const climbing = th > pos.y;
+    const tooSteep = climbing
+      && this.terrain.slopeAt(oldX + dx * 2, oldZ + dz * 2) > CFG.move.maxClimbSlope;
+
+    if (th > pos.y + step || tooSteep) {
       pos.x = oldX; pos.z = oldZ;
       const n = this.terrain.normalAt(oldX + dx * 2, oldZ + dz * 2, this._n);
       const len = Math.hypot(n.x, n.z) || 1;
