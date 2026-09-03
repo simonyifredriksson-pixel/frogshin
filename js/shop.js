@@ -8,11 +8,11 @@
 
 import {
   CATALOG, CRATES, RARITY, DEFAULT_SKIN,
-  rollCrate, crateOdds, findSkin,
-} from './skins.js?v=v41';
-import { Audio } from './audio.js?v=v41';
-import { PX } from './icons.js?v=v41';
-import { CFG } from './config.js?v=v41';
+  rollCrate, cratePool, crateOdds, findSkin,
+} from './skins.js?v=v42';
+import { Audio } from './audio.js?v=v42';
+import { PX } from './icons.js?v=v42';
+import { CFG } from './config.js?v=v42';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -513,7 +513,15 @@ export class Shop {
   _openCrate(crate) {
     this.opening = true;
     const won = rollCrate(crate);
-    const pool = CATALOG[crate.kind];
+    // The REEL must be drawn from the same pool the roll came from.
+    //
+    // It used to spin the full catalog, so Frogath's hide and blade — and the
+    // Ascended's — flew past the marker on every open. You could never
+    // actually win one (rollCrate filters rewards), but a reel that shows
+    // them is a reel that promises them, and the only thing it can teach is
+    // that you got unlucky. They are earned by beating the fight, nowhere
+    // else, and the crate should never suggest otherwise.
+    const pool = cratePool(crate);
 
     $('crate-title').textContent = crate.name.toUpperCase();
     $('crate-result').classList.remove('show');

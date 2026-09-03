@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v41';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v41';
+import * as THREE from '../lib/three.module.js?v=v42';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v42';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
