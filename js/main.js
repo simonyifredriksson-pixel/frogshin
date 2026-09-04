@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v46';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v46';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v46';
-import { Input } from './input.js?v=v46';
-import { Audio } from './audio.js?v=v46';
-import { World } from './world.js?v=v46';
-import { Effects } from './effects.js?v=v46';
-import { Atmosphere } from './atmosphere.js?v=v46';
-import { FollowCamera } from './camera.js?v=v46';
-import { Player } from './player.js?v=v46';
-import { RemotePlayer } from './remote.js?v=v46';
-import { HUD } from './hud.js?v=v46';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v46';
-import { FrogModel } from './frog.js?v=v46';
-import { DummyField } from './dummy.js?v=v46';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v46';
-import { ToadModel } from './npc.js?v=v46';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v46';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v46';
-import { DungeonRun } from './dungeon.js?v=v46';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v46';
-import { JudgmentRun } from './judgment.js?v=v46';
-import { COMBO_NAMES } from './ascended.js?v=v46';
-import { MenuScene } from './menu.js?v=v46';
-import { Economy } from './economy.js?v=v46';
-import { Shop } from './shop.js?v=v46';
-import { Network, NetRole } from './net.js?v=v46';
+import * as THREE from '../lib/three.module.js?v=v47';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v47';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v47';
+import { Input } from './input.js?v=v47';
+import { Audio } from './audio.js?v=v47';
+import { World } from './world.js?v=v47';
+import { Effects } from './effects.js?v=v47';
+import { Atmosphere } from './atmosphere.js?v=v47';
+import { FollowCamera } from './camera.js?v=v47';
+import { Player } from './player.js?v=v47';
+import { RemotePlayer } from './remote.js?v=v47';
+import { HUD } from './hud.js?v=v47';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v47';
+import { FrogModel } from './frog.js?v=v47';
+import { DummyField } from './dummy.js?v=v47';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v47';
+import { ToadModel } from './npc.js?v=v47';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v47';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v47';
+import { DungeonRun } from './dungeon.js?v=v47';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v47';
+import { JudgmentRun } from './judgment.js?v=v47';
+import { COMBO_NAMES } from './ascended.js?v=v47';
+import { MenuScene } from './menu.js?v=v47';
+import { Economy } from './economy.js?v=v47';
+import { Shop } from './shop.js?v=v47';
+import { Network, NetRole } from './net.js?v=v47';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -272,7 +272,10 @@ class Game {
       this._connect('join', code);
     };
     // Quick Play and the two solo buttons are explicit, so they go right in.
-    $('btn-quickplay').onclick = () => { this.pendingMode = 'arena'; this._connect('host', 'FROG'); };
+    $('btn-quickplay').onclick = () => {
+      this.pendingMode = 'arena';
+      this._connect('quick', CFG.net.publicRoom);
+    };
     $('btn-solo').onclick = () => { this.pendingMode = 'arena'; this._connect('solo', null); };
     $('btn-story').onclick = () => {
       this.pendingMode = 'story';
@@ -442,6 +445,7 @@ class Game {
     };
 
     net.onFail = (msg) => {
+      this._connecting = false;
       this._playStatus(msg, true);
       if (this.mode === 'loading') {
         // Connection died during load — fall back to a clearly-labelled solo game.
@@ -451,6 +455,7 @@ class Game {
     };
 
     net.onReady = () => {
+      this._connecting = false;
       if (this.mode !== 'menu' && this.mode !== 'menu-overlay') return;
       // A room made with Create/Join waits in the lobby so the players can
       // agree on Arena or Story. Everything else launches immediately.
@@ -645,6 +650,14 @@ class Game {
 
   _connect(kind, code) {
     Audio.init(); Audio.resume();
+    // A second press while the first attempt is still in flight would tear
+    // down the Peer that was about to succeed and start over — and on a slow
+    // network, pressing again is exactly what people do.
+    if (this._connecting && kind !== 'solo') {
+      this._playStatus('Still connecting — give it a moment…', false);
+      return;
+    }
+    this._connecting = kind !== 'solo';
     this._playStatus('Starting…', false);
     if (kind === 'solo') { this.net.startSolo(this.profile); return; }
     if (!Network.available) {
@@ -652,7 +665,8 @@ class Game {
       this.net.startSolo(this.profile);
       return;
     }
-    if (kind === 'host') this.net.host(this.profile, code || makeRoomCode());
+    if (kind === 'quick') this.net.quickPlay(this.profile, code);
+    else if (kind === 'host') this.net.host(this.profile, code || makeRoomCode());
     else this.net.join(this.profile, code);
   }
 

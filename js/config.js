@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v46';
+export const BUILD = 'v47';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -530,6 +530,18 @@ export const CFG = {
     interpDelay: 0.11,       // render remote players this far in the past
     timeout: 9.0,            // drop a peer after this many seconds of silence
     prefix: 'frogshin-v1-',  // PeerJS id namespace
+    /**
+     * How long to wait for the MATCHMAKING SERVER to answer at all.
+     *
+     * Separate from the 20s allowed for a data channel, and it matters more:
+     * if the signalling socket never opens, PeerJS reports nothing — no
+     * 'open', often no 'error' either — so without this the button simply
+     * hangs forever on "Creating room…" and reads as broken. School and
+     * office firewalls block that socket routinely.
+     */
+    brokerTimeout: 12,
+    /** The room Quick Play tries to claim. */
+    publicRoom: 'FROG',
   },
 
   // -------------------------------------------------------------- quality

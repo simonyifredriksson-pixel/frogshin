@@ -16,8 +16,8 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v46';
-import { roomCode as makeRoomCode } from './util.js?v=v46';
+import { CFG, BUILD } from './config.js?v=v47';
+import { roomCode as makeRoomCode } from './util.js?v=v47';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -113,6 +113,8 @@ export class Network {
     this._destroyed = false;
     this._opened = false;           // 'open' is handled once per Peer, see host()/join()
     this.uid = CLIENT_UID;          // who we are across connections, see above
+    this._brokerTimer = null;       // "the matchmaker never answered" guard
+    this._quick = null;             // in-flight Quick Play attempt, see quickPlay()
   }
 
   get isHost() { return this.role === NetRole.HOST; }
@@ -125,6 +127,55 @@ export class Network {
   }
 
   static get available() { return typeof window !== 'undefined' && !!window.Peer; }
+
+  /**
+   * Fail if the matchmaking server never answers.
+   *
+   * PeerJS gives no callback at all when its signalling socket cannot be
+   * opened: no 'open', and frequently no 'error' either. Without this the
+   * game sits on "Creating room…" or "Connecting…" for ever, which is what
+   * a blocked school or office network looks like from the inside — and to
+   * the player it looks like the button did nothing.
+   */
+  _armBroker(msg) {
+    this._clearBroker();
+    this._brokerTimer = setTimeout(() => {
+      this._brokerTimer = null;
+      if (this._opened || this.connected) return;
+      this._fail(msg);
+    }, CFG.net.brokerTimeout * 1000);
+  }
+
+  _clearBroker() {
+    if (this._brokerTimer) { clearTimeout(this._brokerTimer); this._brokerTimer = null; }
+  }
+
+  /** The advice that actually helps when signalling is blocked. */
+  get _blockedAdvice() {
+    return 'Could not reach the matchmaking server. School and office '
+      + 'networks usually block it. A phone hotspot normally works — or use '
+      + 'ARENA PRACTICE to play offline.';
+  }
+
+  /**
+   * QUICK PLAY.
+   *
+   * One public room that everybody tries to claim, so nobody has to type a
+   * code. Whoever gets there first hosts; everyone else is told the id is
+   * taken and joins them instead.
+   *
+   * The awkward case is a room that EXISTS but is empty — a host who closed
+   * the tab can leave their id registered on the broker for a while. The
+   * claim then fails, the join then fails, and the old code gave up there,
+   * which is a large part of why this button was unreliable. So a failed
+   * join gets one more attempt at hosting: by then the dead registration has
+   * usually expired and the room is ours.
+   */
+  quickPlay(profile, code) {
+    const room = (code || CFG.net.publicRoom).toUpperCase();
+    this._quick = { profile, room, phase: 'host', retried: false };
+    this.host(profile, room);
+  }
 
   // ------------------------------------------------------------------ setup
 
@@ -153,6 +204,7 @@ export class Network {
     this._status(`Creating room ${this.room}…`);
 
     this.peer = new window.Peer(CFG.net.prefix + this.room, peerOptions());
+    this._armBroker(this._blockedAdvice);
 
     this.peer.on('open', (id) => {
       // ONCE. `peer.reconnect()` fires 'open' again, and re-running this
@@ -161,6 +213,8 @@ export class Network {
       // and they build a second copy of us out of them.
       if (this._opened) { this._status(`Room ${this.room} — signalling back`); return; }
       this._opened = true;
+      this._clearBroker();
+      this._quick = null;                  // Quick Play got what it wanted
       this.selfId = id;
       this.connected = true;
       this._status(`Room ${this.room} — waiting for players`);
@@ -180,7 +234,9 @@ export class Network {
         if (this._opened) { this._status(`Room ${this.room} — signalling back`); return; }
         // Somebody already hosts this code — join them instead.
         this._status('Room already exists — joining instead…');
+        this._clearBroker();
         this._cleanupPeer();
+        if (this._quick) this._quick.phase = 'join';
         this.join(profile, this.room);
         return;
       }
@@ -204,6 +260,7 @@ export class Network {
     this._status(`Connecting to room ${this.room}…`);
 
     this.peer = new window.Peer(undefined, peerOptions());
+    this._armBroker(this._blockedAdvice);
 
     this.peer.on('open', (id) => {
       // ONCE — see the matching guard in host(). A signalling drop makes
@@ -215,6 +272,7 @@ export class Network {
       // survives a broker hiccup on its own, so there is nothing to redo.
       if (this._opened) { this._status(`Connected to room ${this.room}`); return; }
       this._opened = true;
+      this._clearBroker();
       this.selfId = id;
       const conn = this.peer.connect(CFG.net.prefix + this.room, {
         reliable: true,
@@ -239,6 +297,7 @@ export class Network {
 
       conn.on('open', () => {
         clearTimeout(timeout);
+        this._quick = null;                // Quick Play landed in a real room
         this.connected = true;
         this._send(conn, { m: 'hello', name: profile.name, color: profile.color, uid: this.uid, v: BUILD });
         this._status(`Connected to room ${this.room}`);
@@ -303,6 +362,27 @@ export class Network {
   }
 
   _fail(msg) {
+    this._clearBroker();
+
+    // Quick Play gets one more go at HOSTING.
+    //
+    // Reaching here from the join leg means the broker said the room was
+    // taken and then nobody answered — which is what an abandoned room looks
+    // like: a host who closed their tab leaves the id registered for a while
+    // after there is anybody behind it. By now it has usually lapsed, so
+    // claiming it ourselves is the right move rather than telling the player
+    // the room is both taken and empty.
+    const q = this._quick;
+    if (q && q.phase === 'join' && !q.retried) {
+      q.retried = true;
+      q.phase = 'host';
+      this._status('That room was empty — starting a new one…');
+      this._cleanupPeer();
+      this.host(q.profile, q.room);
+      return;
+    }
+    this._quick = null;
+
     this.lastError = msg;
     this._status(msg);
     if (this.onFail) this.onFail(msg);
@@ -595,10 +675,12 @@ export class Network {
     }
     this.peer = null;
     this._opened = false;   // the next Peer gets its own single 'open'
+    this._clearBroker();
   }
 
   disconnect() {
     this._destroyed = true;
+    this._quick = null;      // abandon any Quick Play retry in flight
     for (const conn of this.connections.values()) {
       try { conn.close(); } catch (e) { /* noop */ }
     }
