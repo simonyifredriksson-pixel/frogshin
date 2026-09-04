@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v44';
-import { CFG } from './config.js?v=v44';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v44';
-import { FrogModel } from './frog.js?v=v44';
-import { Grapple, GrappleState } from './grapple.js?v=v44';
-import { Combat, Health } from './combat.js?v=v44';
-import { Stamina } from './stamina.js?v=v44';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v44';
-import { Audio } from './audio.js?v=v44';
+import * as THREE from '../lib/three.module.js?v=v45';
+import { CFG } from './config.js?v=v45';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v45';
+import { FrogModel } from './frog.js?v=v45';
+import { Grapple, GrappleState } from './grapple.js?v=v45';
+import { Combat, Health } from './combat.js?v=v45';
+import { Stamina } from './stamina.js?v=v45';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v45';
+import { Audio } from './audio.js?v=v45';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -233,9 +233,11 @@ export class Player {
   }
 
   get mouthPosition() {
+    // Tracks the rig's ground lift, so the tongue leaves the drawn mouth
+    // rather than a point inside the chest.
     return _mouth.set(
       this.pos.x - Math.sin(this.visualYaw) * 0.30,
-      this.pos.y + 1.42,
+      this.pos.y + 1.42 + (this.model._lift || 0),
       this.pos.z - Math.cos(this.visualYaw) * 0.30
     );
   }

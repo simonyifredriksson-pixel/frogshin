@@ -8,8 +8,8 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v44';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v44';
+import * as THREE from '../lib/three.module.js?v=v45';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v45';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -272,13 +272,32 @@ export class FrogModel {
       });
     }
 
-    this.root = new THREE.Group();          // origin at the feet
+    this.root = new THREE.Group();          // sits at the player's ground point
+    /**
+     * Raises the whole animated rig so the SOLES rest on the ground.
+     *
+     * The rig is modelled with its feet hanging below its own origin — hip
+     * +0.36, shin -0.30, foot -0.29, sole -0.08 — which puts the bottom of
+     * the foot about a third of a unit under y=0. Since the root is placed
+     * exactly at the ground point, that difference was the frog standing
+     * buried to the ankles.
+     *
+     * Fixing it here rather than by moving the legs keeps every pose, offset
+     * and animation in the file untouched: they all still work in a space
+     * where 0 is "stood normally". The exact amount is measured from the
+     * geometry in `_groundRig` instead of hard-coded, so it stays correct if
+     * the legs are ever remodelled.
+     */
+    this.lift = new THREE.Group();
+    this.root.add(this.lift);
     this.body = new THREE.Group();          // squash/stretch + bob live here
-    this.root.add(this.body);
+    this.lift.add(this.body);
+    this._lift = 0;
 
     this._buildTorso();
     this._buildHead();
     this._buildLimbs();
+    this._groundRig();
     this._buildGear();
     this._buildTongue();
     this._buildSkinFx();
@@ -425,6 +444,33 @@ export class FrogModel {
       }
       this.legs.push({ hip, shin, foot, side: sx });
     }
+  }
+
+  /**
+   * Measure how far the feet hang below the origin, and lift by exactly that.
+   *
+   * Run once, right after the legs are built and while everything is still in
+   * its rest pose at the world origin — so a local-space box is a world-space
+   * box, and the number needs no correction.
+   */
+  _groundRig() {
+    this.lift.position.y = 0;
+    this.root.updateMatrixWorld(true);
+    const box = new THREE.Box3();
+    let lowest = Infinity;
+    for (const leg of this.legs) {
+      box.setFromObject(leg.foot);
+      if (box.min.y < lowest) lowest = box.min.y;
+    }
+    if (!Number.isFinite(lowest)) return;
+    // The measurement is taken in the REST pose, but the legs move: the idle
+    // cycle alone dips the soles about 0.025 below where they sit here. The
+    // margin covers that, so no pose ends up under the floor. It is small
+    // enough to be invisible — a couple of centimetres on a frog — and errs
+    // upward, which is the harmless direction.
+    const MARGIN = 0.04;
+    this._lift = Math.max(0, -lowest) + MARGIN;
+    this.lift.position.y = this._lift;
   }
 
   _buildGear() {
@@ -795,7 +841,8 @@ export class FrogModel {
       map: this.plateTex, transparent: true, depthTest: true, depthWrite: false,
     }));
     spr.scale.set(2.4, 0.68, 1);
-    spr.position.set(0, 2.25, 0);
+    // Rides above the head, so it moves with the rig's ground lift.
+    spr.position.set(0, 2.25 + this._lift, 0);
     this.nameplate = spr;
     this.root.add(spr);
     this._plateHealth = -1;
@@ -1195,7 +1242,10 @@ export class FrogModel {
       return;
     }
 
-    const from = new THREE.Vector3(0, 1.42, 0.30);      // mouth, root-local
+    // Mouth, root-local. `_lift` is added because the rig it belongs to was
+    // raised to put the soles on the ground — without it the tongue would
+    // still fire from where the mouth used to be.
+    const from = new THREE.Vector3(0, 1.42 + this._lift, 0.30);
     this.root.localToWorld(from);
     const to = s.tongueTo;
 
@@ -1250,7 +1300,7 @@ export class FrogModel {
       ring.rotation.x = Math.PI / 2;
       ring.position.y = 0.42;
       g.add(ring);
-      g.position.set(0, 2.62, 0);
+      g.position.set(0, 2.62 + this._lift, 0);
       this.tagMarker = g;
       this.root.add(g);
       // Built after the fact, so any fade already in effect has not been
