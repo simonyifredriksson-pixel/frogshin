@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v49';
-import { CFG } from './config.js?v=v49';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v49';
-import { findMap } from './maps.js?v=v49';
-import { Terrain, CollisionWorld } from './collision.js?v=v49';
+import * as THREE from '../lib/three.module.js?v=v50';
+import { CFG } from './config.js?v=v50';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v50';
+import { findMap } from './maps.js?v=v50';
+import { Terrain, CollisionWorld } from './collision.js?v=v50';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -128,6 +128,9 @@ export class World {
         this.terrain = new Terrain(size, grid, (x, z) => this.heightAt(x, z));
         this.collision = new CollisionWorld(this.terrain);
         this.collision.climbLimitY = this.map.climbLimitY;
+        if (this.map.climbLimitRadius !== undefined) {
+          this.collision.climbLimitRadius = this.map.climbLimitRadius;
+        }
         this.batches = {
           box:   new Batch(new THREE.BoxGeometry(1, 1, 1), this._mat()),
           roof:  new Batch(new THREE.ConeGeometry(1, 1, 4, 1), this._mat()),

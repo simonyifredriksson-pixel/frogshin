@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v49';
-import { clamp, smoothstep } from './util.js?v=v49';
+import { CFG } from './config.js?v=v50';
+import { clamp, smoothstep } from './util.js?v=v50';
 
 export const MAPS = [
   {
@@ -83,13 +83,17 @@ export const MAPS = [
     blurb: 'A drowned valley under a village that never touches the ground.',
     seed: 8821,
     /**
-     * Almost everything here is unclimbable.
+     * Every spire in the Mire can be climbed. Only the wall around the edge
+     * of the world refuses you.
      *
-     * The spires are meant to be grappled, not walked up, and the whole map
-     * is built around going UP rather than around. Ten is just above the mud,
-     * so the flats stay walkable and the rock does not.
+     * No height limit at all: the towers are meant to be scaled, and stopping
+     * you partway up one on a map whose whole point is going upward would be
+     * backwards. The rim begins to rise at 0.84 of the half-size, so the
+     * radius sits just inside that — the limit engages exactly as the ground
+     * turns into the outer mountain and nowhere else.
      */
-    climbLimitY: 10,
+    climbLimitY: Infinity,
+    climbLimitRadius: CFG.world.size * 0.5 * 0.80,
     palette: {
       sand: 0x6a6a52,          // wet silt at the waterline
       grass: 0x4a6b3a,         // sodden moss

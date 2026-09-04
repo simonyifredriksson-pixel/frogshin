@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v49';
-import { clamp } from './util.js?v=v49';
+import { CFG } from './config.js?v=v50';
+import { clamp } from './util.js?v=v50';
 
 const EPS = 1e-4;
 
@@ -88,14 +88,20 @@ export class CollisionWorld {
   constructor(terrain) {
     this.terrain = terrain;
     /**
-     * Steep terrain ABOVE this height cannot be walked up; below it, the map
-     * is scrambled over freely.
+     * Where steep terrain stops being walkable. Two independent rules, and a
+     * slope is off limits if it breaks EITHER:
      *
-     * Per-level rather than global, because "too high to walk" means the snow
-     * line on one map and just above the mud on another. Levels built out of
-     * boxes leave it at the default, where their flat terrain never reaches.
+     *   climbLimitY       too high  — the valley's snow line
+     *   climbLimitRadius  too far out — the wall around the edge of the map
+     *
+     * Both are per-level because "unclimbable" means different things on
+     * different maps. The Mire wants every spire in it scaled and only the
+     * outer wall refused, so it uses the radius and leaves the height open;
+     * the valley is the other way round. Levels built out of boxes leave both
+     * at their defaults, which their flat terrain never reaches.
      */
     this.climbLimitY = CFG.world.snowLine;
+    this.climbLimitRadius = Infinity;
     this.boxes = [];
     this.anchors = [];          // floating grapple targets (spheres)
     this.cellSize = 14;
@@ -311,8 +317,13 @@ export class CollisionWorld {
     // Only the climb is limited. Walking DOWN a cliff is still allowed; that
     // is falling, and gravity can have it.
     const climbing = th > pos.y;
-    const tooSteep = climbing && th > this.climbLimitY
-      && this.terrain.slopeAt(oldX + dx * 2, oldZ + dz * 2) > CFG.move.maxClimbSlope;
+    // Sampled at the same point as the slope, so the two always agree about
+    // which piece of ground is being judged.
+    const sx = oldX + dx * 2, sz = oldZ + dz * 2;
+    const offLimits = th > this.climbLimitY
+      || Math.hypot(sx, sz) > this.climbLimitRadius;
+    const tooSteep = climbing && offLimits
+      && this.terrain.slopeAt(sx, sz) > CFG.move.maxClimbSlope;
 
     if (th > pos.y + step || tooSteep) {
       pos.x = oldX; pos.z = oldZ;
