@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v47';
+export const BUILD = 'v48';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -465,7 +465,19 @@ export const CFG = {
   dash: {
     speed: 47,
     duration: 0.17,
-    cooldown: 1.5,
+    /**
+     * Seconds of enforced wait AFTER a dash ends, on top of the dash itself.
+     *
+     * Zero: the only thing stopping a second dash is the first one still
+     * running, so you may dash again the instant it finishes and no sooner.
+     * That is the whole gate — `duration` is what stops it being spammed
+     * every tenth of a second, and it is the number to raise if ground
+     * dashing turns out to be too strong.
+     *
+     * Dashing has never cost stamina and still does not; air dashes are
+     * limited by `airCharges` instead, which only refill on landing.
+     */
+    cooldown: 0,
     airCharges: 1,           // air dashes before you must touch ground/grapple
     endSpeedKeep: 0.52,      // fraction of dash speed retained on exit
     invulnerable: 0.14,      // brief i-frames make the dash a real defensive tool

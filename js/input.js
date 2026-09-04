@@ -14,7 +14,13 @@
  * being pressed. Everything else with a modifier down still goes straight to
  * the browser.
  */
-const CHORD_KEYS = new Set(['KeyL', 'KeyJ', 'KeyM', 'Digit3']);
+const CHORD_KEYS = new Set([
+  'KeyL', 'KeyJ', 'KeyM',
+  // Both threes. On a keyboard with a numeric keypad the "3" a player
+  // reaches for is often Numpad3, which is a completely different code —
+  // and the chord silently never completes.
+  'Digit3', 'Numpad3',
+]);
 
 export class Input {
   constructor(canvas) {
@@ -30,6 +36,7 @@ export class Input {
     this._mouseDown = false;
     this._mousePressed = false;
     this.onLockChange = null;
+    this.recent = [];               // recent presses, for sequence chords
 
     this._bind();
   }
@@ -41,12 +48,26 @@ export class Input {
       // Never swallow browser shortcuts — except the developer chord's own
       // keys, which have to be tracked or the chord can never be recognised.
       if (modified && !CHORD_KEYS.has(code)) return;
-      // Never swallow typing in the room-code field either.
-      const tag = document.activeElement && document.activeElement.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-      if (!this.keys.has(code)) this.pressed.add(code);
+      const tag = document.activeElement && document.activeElement.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+      // While a text field has focus only the chord's keys are watched, and
+      // only as HELD state: nothing is consumed as a game action, nothing is
+      // cancelled, and nothing reaches the sequence detector. Four keys at
+      // once is not something typing produces, so the chord still works from
+      // the menu — where the name box usually has focus, which is one reason
+      // it could look like the chord did nothing.
+      if (typing && !CHORD_KEYS.has(code)) return;
+
+      if (!this.keys.has(code) && !typing) {
+        this.pressed.add(code);
+        // Recent presses, for chords entered as a SEQUENCE rather than held
+        // together. See `sequenceDone`.
+        this.recent.push({ code, t: this._now() });
+        if (this.recent.length > 16) this.recent.shift();
+      }
       this.keys.add(code);
+      if (typing) return;
 
       // Stop Space/arrows from scrolling the page mid-fight. F3 is in the
       // list because it opens the browser's find bar, and it is half of the
@@ -101,6 +122,12 @@ export class Input {
     }, { passive: true });
   }
 
+  /** Seconds, from whatever clock this environment has. */
+  _now() {
+    return (typeof performance !== 'undefined' && performance.now)
+      ? performance.now() / 1000 : Date.now() / 1000;
+  }
+
   requestLock() {
     if (this.locked || !this.canvas.requestPointerLock) return;
     // Chrome returns a promise here and rejects it if the request comes too
@@ -117,6 +144,39 @@ export class Input {
   // -------------------------------------------------------------- querying
 
   down(code) { return this.keys.has(code); }
+
+  /** Any of these held? Lets one binding accept Digit3 or Numpad3. */
+  downAny(codes) {
+    for (const c of codes) if (this.keys.has(c)) return true;
+    return false;
+  }
+
+  /**
+   * Were `codes` pressed IN ORDER, all within `window` seconds?
+   *
+   * The alternative to a held chord, and the reason it exists: cheap
+   * keyboards — school machines especially — have a two- or three-key
+   * rollover limit, and simply never report a fourth key held at the same
+   * time. No amount of code makes those four arrive together, so they can be
+   * entered one after another instead.
+   *
+   * An entry may be a single code or an array of alternatives.
+   */
+  sequenceDone(codes, window = 1.6) {
+    const n = codes.length;
+    if (this.recent.length < n) return false;
+    const tail = this.recent.slice(-n);
+    for (let i = 0; i < n; i++) {
+      const want = codes[i];
+      const got = tail[i].code;
+      const ok = Array.isArray(want) ? want.indexOf(got) !== -1 : got === want;
+      if (!ok) return false;
+    }
+    return tail[n - 1].t - tail[0].t <= window;
+  }
+
+  /** Forget the press history — call after acting on a sequence. */
+  clearSequence() { this.recent.length = 0; }
 
   /** True exactly once per physical press. */
   consume(code) {

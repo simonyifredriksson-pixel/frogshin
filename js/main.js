@@ -5,33 +5,33 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v47';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v47';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v47';
-import { Input } from './input.js?v=v47';
-import { Audio } from './audio.js?v=v47';
-import { World } from './world.js?v=v47';
-import { Effects } from './effects.js?v=v47';
-import { Atmosphere } from './atmosphere.js?v=v47';
-import { FollowCamera } from './camera.js?v=v47';
-import { Player } from './player.js?v=v47';
-import { RemotePlayer } from './remote.js?v=v47';
-import { HUD } from './hud.js?v=v47';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v47';
-import { FrogModel } from './frog.js?v=v47';
-import { DummyField } from './dummy.js?v=v47';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v47';
-import { ToadModel } from './npc.js?v=v47';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v47';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v47';
-import { DungeonRun } from './dungeon.js?v=v47';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v47';
-import { JudgmentRun } from './judgment.js?v=v47';
-import { COMBO_NAMES } from './ascended.js?v=v47';
-import { MenuScene } from './menu.js?v=v47';
-import { Economy } from './economy.js?v=v47';
-import { Shop } from './shop.js?v=v47';
-import { Network, NetRole } from './net.js?v=v47';
+import * as THREE from '../lib/three.module.js?v=v48';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v48';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v48';
+import { Input } from './input.js?v=v48';
+import { Audio } from './audio.js?v=v48';
+import { World } from './world.js?v=v48';
+import { Effects } from './effects.js?v=v48';
+import { Atmosphere } from './atmosphere.js?v=v48';
+import { FollowCamera } from './camera.js?v=v48';
+import { Player } from './player.js?v=v48';
+import { RemotePlayer } from './remote.js?v=v48';
+import { HUD } from './hud.js?v=v48';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v48';
+import { FrogModel } from './frog.js?v=v48';
+import { DummyField } from './dummy.js?v=v48';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v48';
+import { ToadModel } from './npc.js?v=v48';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v48';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v48';
+import { DungeonRun } from './dungeon.js?v=v48';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v48';
+import { JudgmentRun } from './judgment.js?v=v48';
+import { COMBO_NAMES } from './ascended.js?v=v48';
+import { MenuScene } from './menu.js?v=v48';
+import { Economy } from './economy.js?v=v48';
+import { Shop } from './shop.js?v=v48';
+import { Network, NetRole } from './net.js?v=v48';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1546,20 +1546,32 @@ class Game {
    * being fully held:
    *
    *     F3 + J + L      the original
-   *     L + J + M + 3   the second
+   *     L + J + M + 3   the second — either three, main row or keypad
    *
    * Neither uses a modifier, so neither can be stolen by a browser shortcut —
    * which the Ctrl-based version it replaced could be, since Chrome keeps
    * Ctrl+L for the address bar and will not let a page have it.
    *
    * Only which keys are HELD matters, never the order they arrived in.
+   *
+   * AND, as a fallback, J then L then M then 3 pressed IN SEQUENCE within a
+   * second and a half. Cheap keyboards — school machines in particular — have
+   * a two- or three-key rollover limit and physically never report a fourth
+   * key held at the same time, so on those the held chord can never complete
+   * however it is written. Typing it out works on anything.
    */
   _updateCheatChord() {
     const k = (code) => this.input.down(code);
+    const three = ['Digit3', 'Numpad3'];
     const held = (k('F3') && k('KeyJ') && k('KeyL'))
-      || (k('KeyL') && k('KeyJ') && k('KeyM') && k('Digit3'));
+      || (k('KeyL') && k('KeyJ') && k('KeyM') && this.input.downAny(three));
     if (held && !this._chordHeld) this._toggleCheats(!this.cheatsOpen);
     this._chordHeld = held;
+
+    if (!held && this.input.sequenceDone(['KeyJ', 'KeyL', 'KeyM', three])) {
+      this.input.clearSequence();
+      this._toggleCheats(!this.cheatsOpen);
+    }
   }
 
   _toggleCheats(open) {

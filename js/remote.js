@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v47';
-import { CFG } from './config.js?v=v47';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v47';
-import { FrogModel } from './frog.js?v=v47';
-import { ToadModel } from './npc.js?v=v47';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v47';
-import { Audio } from './audio.js?v=v47';
+import * as THREE from '../lib/three.module.js?v=v48';
+import { CFG } from './config.js?v=v48';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v48';
+import { FrogModel } from './frog.js?v=v48';
+import { ToadModel } from './npc.js?v=v48';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v48';
+import { Audio } from './audio.js?v=v48';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
