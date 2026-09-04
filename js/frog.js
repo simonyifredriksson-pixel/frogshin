@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v54';
-import { CFG } from './config.js?v=v54';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v54';
+import * as THREE from '../lib/three.module.js?v=v55';
+import { CFG } from './config.js?v=v55';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v55';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -126,13 +126,31 @@ const G = {
   torus: new THREE.TorusGeometry(1, 0.12, 8, 24),
 
   // ---- fitted clothing, each one a shell on the body it is worn over ----
-  hood: cowlGeo(0.95, 0.62, -0.30),      // skull, open at the muzzle
-  gi: cowlGeo(0.72, 0.62, -0.18),        // torso, open at the belly
+  //
+  // The openings are wide on purpose. This frog has always been a GREEN frog
+  // wearing black — a green face under a hood, a big pale belly inside an
+  // open gi — and cloth that closes over those turns the head and the torso
+  // into two dark balls stacked on each other. The openings are what keep the
+  // silhouette the one it has always had; the shells are only there to make
+  // it smooth.
+  // The hood is a cap over the crown plus a panel down the back, which is the
+  // shape it has always been. A single shell with an oval face hole cannot
+  // make this outline: an ellipse's edge always curves down toward the sides,
+  // so it swallowed the cheeks and turned the head into a dark ball, where
+  // the real hood cuts a level line across the brow and leaves the whole face
+  // and jaw green. Both panels are the same shell at the same radius and meet
+  // exactly at theta 1.38, so there is no seam and nothing to misalign.
+  hoodCap: bandGeo(0, 1.38),             // crown, down to the brow
+  hoodBack: bandGeo(1.38, 2.44, 2.70),   // back of the skull, worn turned round
+  gi: cowlGeo(1.05, 1.02, -0.10),        // torso, open over the whole belly
   crease: bandGeo(1.63, 1.71, 1.40),     // the wide frog mouth
   band: bandGeo(1.14, 1.40),             // headband, right around the skull
-  belly: bandGeo(1.02, 2.48, 1.90),      // pale front, behind the gi's opening
+  // Stops short of the gi's opening at the top and bottom on purpose, so the
+  // frog's own green shows as a collar above the belly and at the hips below
+  // — the way it always has. Filling the opening edge to edge is what left
+  // the torso reading as one dark mass.
+  belly: bandGeo(0.95, 2.48, 2.30),      // pale front, inside the gi's opening
   obi: bandGeo(1.70, 2.03),              // sash
-  socket: new THREE.TorusGeometry(1, 0.115, 8, 22),
 };
 
 // Scratch colours for the divine skin's phase blend, so it allocates none.
@@ -464,7 +482,10 @@ export class FrogModel {
     // one underneath pushes through it in a scalloped fringe wherever the two
     // meshes' facets fall out of step. 2.5% clears the sag of every shell
     // here with room to spare.
-    this.bellyBase = [R[0] * 1.03, R[1] * 1.03, R[2] * 1.03];
+    // Proud of the gi rather than sunk behind it. The frog's belly has always
+    // been the biggest single shape on the torso, and recessing it behind the
+    // cloth left the body reading as a dark mass with a small pale window.
+    this.bellyBase = [R[0] * 1.075, R[1] * 1.075, R[2] * 1.075];
     this.bellyM = mesh(G.belly, this.mats.belly, ...this.bellyBase, ...C);
     b.add(this.bellyM);
 
@@ -529,17 +550,24 @@ export class FrogModel {
 
     // --- the ninja hood ---
     //
-    // One shell, drawn on the skull's own surface at a fixed 5% clearance, so
-    // it fits the head everywhere by construction: no gap to open up at the
-    // back, no corner to push out at the sides, nothing to fall out of
-    // alignment. It replaces three overlapping ellipsoids that each had their
-    // own idea of where the head was.
+    // Two panels of ONE shell, both drawn on the skull's own surface at the
+    // same 5% clearance: a cap over the crown to the brow, and a panel down
+    // the back. They share a surface and an edge, so they fit the head
+    // everywhere by construction — no gap to open at the back, no corner to
+    // push out at the sides, nothing to fall out of alignment. It replaces
+    // three overlapping ellipsoids that each had their own idea of where the
+    // head was.
     //
-    // The eyes are the one thing that comes THROUGH it, which is correct for
-    // a frog — they are bulges under the cloth. Each gets a piped rim below,
-    // so the hood is visibly stretched around the socket rather than merely
-    // interpenetrating it.
-    this.head.add(mesh(G.hood, this.mats.cowl, H[0] * 1.05, H[1] * 1.05, H[2] * 1.05));
+    // The eyes come THROUGH the cap, which is correct for a frog: they are
+    // bulges under the cloth, and it is how this face has always read. They
+    // were briefly given piped cloth rims to make that deliberate, but a ring
+    // of black around each eye is a lot of black on a green face and it
+    // stopped looking like this frog.
+    const HR = [H[0] * 1.05, H[1] * 1.05, H[2] * 1.05];
+    this.head.add(mesh(G.hoodCap, this.mats.cowl, ...HR));
+    // Turned to face the back of the head. A half turn maps the ellipsoid
+    // onto itself, so the panel still lies exactly on the same surface.
+    this.head.add(mesh(G.hoodBack, this.mats.cowl, ...HR, 0, 0, 0, 0, Math.PI, 0));
     // The muzzle inside the opening stays bare green, which is how this frog
     // has always looked. The old build did add a cloth face mask here, but at
     // (0.435, 0.20, 0.415) against a head of (0.44, 0.36, 0.42) it was
@@ -550,17 +578,6 @@ export class FrogModel {
     // a flat slab hanging in front of the face.
     this.head.add(mesh(G.crease, this.mats.skinDark,
       H[0] * 1.022, H[1] * 1.022, H[2] * 1.022));
-
-    // Sockets: the hood pulled tight around each eye.
-    for (const e of this.eyes) {
-      const d = e.group.position.clone().normalize();
-      const ring = new THREE.Mesh(G.socket, this.mats.cowl);
-      ring.scale.setScalar(0.238);
-      ring.position.copy(d).multiplyScalar(0.035);
-      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
-      ring.castShadow = true;
-      e.group.add(ring);
-    }
 
     // Headband, wrapped right around the outside of the hood. A band on the
     // head's own surface cannot poke out at the sides the way the old
