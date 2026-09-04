@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v52';
+export const BUILD = 'v53';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -107,6 +107,15 @@ export const CFG = {
     doubleJumpCost: 10,      // the frog flip costs more than a normal hop
     wallJumpCost: 6.5,
     breachCost: 9,           // leaping clear of the water
+    /**
+     * A dash is a fifth of the tank.
+     *
+     * Dashing used to be free, with only the dash's own duration stopping a
+     * second one. That made it spammable in a straight line, which is what
+     * this price is for: four dashes empty you, and emptying you costs the
+     * sprint and the jump too.
+     */
+    dashCost: 20,
     sprintDrain: 10.5,       // per second on land
     swimSprintDrain: 7.5,    // per second underwater — cheaper, you go slower
     regen: 27,               // per second once recovery starts
@@ -470,12 +479,11 @@ export const CFG = {
      *
      * Zero: the only thing stopping a second dash is the first one still
      * running, so you may dash again the instant it finishes and no sooner.
-     * That is the whole gate — `duration` is what stops it being spammed
-     * every tenth of a second, and it is the number to raise if ground
-     * dashing turns out to be too strong.
-     *
-     * Dashing has never cost stamina and still does not; air dashes are
-     * limited by `airCharges` instead, which only refill on landing.
+     * `duration` stops a dash being re-fired every tenth of a second, and
+     * CFG.stamina.dashCost is what stops it being chained across the map;
+     * air dashes are limited by `airCharges` on top, which only refill on
+     * landing. Raise this only if a ground dash still reads as too strong
+     * once the stamina price is accounted for.
      */
     cooldown: 0,
     airCharges: 1,           // air dashes before you must touch ground/grapple

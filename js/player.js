@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v52';
-import { CFG } from './config.js?v=v52';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v52';
-import { FrogModel } from './frog.js?v=v52';
-import { Grapple, GrappleState } from './grapple.js?v=v52';
-import { Combat, Health } from './combat.js?v=v52';
-import { Stamina } from './stamina.js?v=v52';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v52';
-import { Audio } from './audio.js?v=v52';
+import * as THREE from '../lib/three.module.js?v=v53';
+import { CFG } from './config.js?v=v53';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v53';
+import { FrogModel } from './frog.js?v=v53';
+import { Grapple, GrappleState } from './grapple.js?v=v53';
+import { Combat, Health } from './combat.js?v=v53';
+import { Stamina } from './stamina.js?v=v53';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v53';
+import { Audio } from './audio.js?v=v53';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -706,6 +706,18 @@ export class Player {
   _tryDash(wish, hasInput, cam) {
     if (this.dashCooldown > 0 || this.dashTimer > 0) return;
     if (!this.grounded && this.dashCharges <= 0) return;
+
+    // A dash costs stamina, and being exhausted refuses it outright — the
+    // same rule jumping already follows. Charged here, before anything is
+    // committed, so a refused dash consumes nothing but the cue.
+    if (!this.stamina.canAct) {
+      if (this._tiredCue <= 0) {
+        this._tiredCue = 0.55;            // rate-limit the "can't do that" cue
+        Audio.exhausted(this.pos);
+      }
+      return;
+    }
+    this.stamina.spend(CFG.stamina.dashCost);
 
     if (hasInput) this.dashDir.copy(wish);
     else cam.flatForward(this.dashDir);

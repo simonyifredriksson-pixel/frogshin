@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v52';
-import { CFG } from './config.js?v=v52';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v52';
+import * as THREE from '../lib/three.module.js?v=v53';
+import { CFG } from './config.js?v=v53';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v53';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -18,15 +18,121 @@ const SCARF = 0xc0392b;
 const BELLY = 0xdfe6a8;
 const EYE_WHITE = 0xfefbe8;
 
-/** Shared geometries — every frog reuses these, so memory stays flat. */
+/**
+ * A patch of a unit sphere: the latitude band between polar angles t0 and t1,
+ * optionally narrowed to an azimuth wedge of `phiLen` centred on the face
+ * (+Z). SphereGeometry measures theta from the +Y pole and puts phi = PI/2 at
+ * +Z, which is why the wedge is centred there.
+ *
+ * This is the workhorse for every layer of clothing on the frog. A band, a
+ * sash or a belly patch built this way sits ON the surface of whatever
+ * ellipsoid it is scaled onto, so it cannot gap away from the body or push a
+ * corner out through it — which is exactly what a cylinder or a box wrapped
+ * around a sphere does, and what made the old model read as a pile of parts.
+ */
+function bandGeo(t0, t1, phiLen = Math.PI * 2, seg = 30, rings = 8) {
+  return new THREE.SphereGeometry(1, seg, rings,
+    Math.PI / 2 - phiLen / 2, phiLen, t0, t1 - t0);
+}
+
+/**
+ * A hood: ONE continuous shell over a whole ellipsoid with a single oval
+ * opening in the front.
+ *
+ * Built as a sock rather than as a heap of overlapping blobs. Every point is
+ * a slerp from a point on the opening's rim to the pole opposite it, so the
+ * result is a single smooth sheet with an exactly elliptical edge at the
+ * front that closes cleanly at the back — the two properties that make a
+ * hood read as fitted to the head instead of balanced on top of it. There is
+ * no seam to show and no separate piece that can drift out of alignment,
+ * because there is only one piece.
+ *
+ * Returned on the UNIT sphere so the caller can scale it onto whatever
+ * ellipsoid the head or torso is. Normals are the positions, which is exact
+ * on a sphere; Three's normal matrix keeps them correct under that scale.
+ *
+ * @param openW  half-width of the face opening, radians
+ * @param openH  half-height of the face opening, radians
+ * @param tilt   how far above the equator the opening is centred, radians
+ */
+function cowlGeo(openW, openH, tilt, radial = 40, rings = 14) {
+  const pos = [], uv = [], idx = [];
+  // A frame around the opening's centre: C through the middle of the
+  // opening, R across it, U up it.
+  const C = new THREE.Vector3(0, Math.sin(tilt), Math.cos(tilt));
+  const R = new THREE.Vector3(1, 0, 0);
+  const U = new THREE.Vector3(0, Math.cos(tilt), -Math.sin(tilt));
+  const A = C.clone().negate();                 // the far side of the shell
+  const rim = new THREE.Vector3(), n = new THREE.Vector3(), p = new THREE.Vector3();
+
+  for (let i = 0; i <= radial; i++) {
+    const a = (i / radial) * Math.PI * 2;
+    // Where the rim sits: an ellipse in angle-space around C.
+    const du = openW * Math.cos(a), dv = openH * Math.sin(a);
+    const off = Math.hypot(du, dv);
+    n.set(0, 0, 0).addScaledVector(R, du).addScaledVector(U, dv).normalize();
+    rim.copy(C).multiplyScalar(Math.cos(off)).addScaledVector(n, Math.sin(off));
+    const w = Math.PI - off;                    // rim to the far pole
+    const sw = Math.sin(w);
+    for (let j = 0; j <= rings; j++) {
+      const s = j / rings;
+      p.copy(rim).multiplyScalar(Math.sin((1 - s) * w) / sw)
+        .addScaledVector(A, Math.sin(s * w) / sw).normalize();
+      pos.push(p.x, p.y, p.z);
+      uv.push(i / radial, s);
+    }
+  }
+  for (let i = 0; i < radial; i++) {
+    for (let j = 0; j < rings; j++) {
+      const c0 = i * (rings + 1) + j, c1 = (i + 1) * (rings + 1) + j;
+      idx.push(c0, c1, c0 + 1, c1, c1 + 1, c0 + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.slice(), 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+/** The point on an ellipsoid's surface lying in the direction (dx, dy, dz). */
+function onShell(rx, ry, rz, dx, dy, dz) {
+  const l = Math.hypot(dx, dy, dz) || 1;
+  const x = dx / l, y = dy / l, z = dz / l;
+  const k = 1 / Math.sqrt((x / rx) ** 2 + (y / ry) ** 2 + (z / rz) ** 2);
+  return new THREE.Vector3(x * k, y * k, z * k);
+}
+
+/**
+ * Shared geometries — every frog reuses these, so memory stays flat.
+ *
+ * The segment counts are what stop the frog reading as faceted blocks. They
+ * are graded by how big the part is on screen rather than turned up across
+ * the board: a fingertip does not need the same mesh as the torso, and the
+ * geometry is shared but the TRIANGLES ARE NOT — every frog on the map draws
+ * all of them, so a lazy number here costs a frame on the weakest machine
+ * someone plays this on. Rounding everything off to 28x20 came to 71k
+ * triangles a frog, twelve times what it needs.
+ */
 const G = {
-  sphere: new THREE.SphereGeometry(1, 12, 9),
-  lowSphere: new THREE.SphereGeometry(1, 8, 6),
+  sphere: new THREE.SphereGeometry(1, 22, 16),      // torso, head, big masses
+  lowSphere: new THREE.SphereGeometry(1, 14, 10),   // joints, hands, feet, eyes
+  bead: new THREE.SphereGeometry(1, 10, 7),         // fingers, toes, highlights
   box: new THREE.BoxGeometry(1, 1, 1),
-  capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
-  cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
-  cone: new THREE.ConeGeometry(1, 1, 7),
-  torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
+  capsule: new THREE.CapsuleGeometry(1, 1, 5, 14),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 16),
+  cone: new THREE.ConeGeometry(1, 1, 12),
+  torus: new THREE.TorusGeometry(1, 0.12, 8, 24),
+
+  // ---- fitted clothing, each one a shell on the body it is worn over ----
+  hood: cowlGeo(0.95, 0.62, -0.30),      // skull, open at the muzzle
+  gi: cowlGeo(0.72, 0.62, -0.18),        // torso, open at the belly
+  crease: bandGeo(1.63, 1.71, 1.40),     // the wide frog mouth
+  band: bandGeo(1.14, 1.40),             // headband, right around the skull
+  belly: bandGeo(1.02, 2.48, 1.90),      // pale front, behind the gi's opening
+  obi: bandGeo(1.70, 2.03),              // sash
+  socket: new THREE.TorusGeometry(1, 0.115, 8, 22),
 };
 
 // Scratch colours for the divine skin's phase blend, so it allocates none.
@@ -225,6 +331,12 @@ export class FrogModel {
       clothDark: new THREE.MeshLambertMaterial({
         color: new THREE.Color(useCustomFrog ? fs.cloth : CLOTH).multiplyScalar(0.62),
       }),
+      // The hood and the gi are open shells with a real edge, so they are
+      // drawn from both sides: at the rim you see the inside of the garment
+      // rather than straight through a surface with no thickness.
+      cowl: new THREE.MeshLambertMaterial({
+        color: useCustomFrog ? fs.cloth : CLOTH, side: THREE.DoubleSide,
+      }),
       scarf: new THREE.MeshLambertMaterial({ color: useCustomFrog ? fs.scarf : SCARF }),
       eye: new THREE.MeshBasicMaterial({ color: EYE_WHITE }),
       pupil: new THREE.MeshBasicMaterial({ color: 0x101014 }),
@@ -320,20 +432,57 @@ export class FrogModel {
 
   // ----------------------------------------------------------------- build
 
+  /**
+   * The torso, built as concentric layers on ONE body shape.
+   *
+   * The frog underneath is a single pear-shaped mass, and everything worn
+   * over it — belly, gi, sash — is a shell scaled onto that same mass rather
+   * than a separate solid parked next to it. That is what makes the torso
+   * read as one body: the layers cannot gap, cannot intersect at an angle,
+   * and cannot show a cut edge, because they are all the same surface at
+   * slightly different radii.
+   *
+   * The old version stacked a squashed sphere, a cylinder and a box, and the
+   * cylinder's flat rims sliced two hard rings across the frog's middle.
+   */
   _buildTorso() {
     const b = this.body;
-    // Chunky pear-shaped frog torso.
-    this.torso = mesh(G.sphere, this.mats.skin, 0.52, 0.46, 0.46, 0, 0.62, 0);
+    const C = [0, 0.62, 0];                        // the torso's centre
+    const R = [0.52, 0.46, 0.46];                  // and its radii
+
+    // The body mass itself.
+    this.torso = mesh(G.sphere, this.mats.skin, R[0], R[1], R[2], ...C);
     b.add(this.torso);
-    // Pale belly patch, pushed slightly forward.
-    this.bellyM = mesh(G.sphere, this.mats.belly, 0.40, 0.34, 0.33, 0, 0.55, 0.20);
+
+    // Pale belly, lying on the body and showing through the gi's opening.
+    // Scaled about the torso's centre so the throat pulse in update() puffs
+    // it straight out from the body instead of sliding it around.
+    //
+    // The gaps between layers are not arbitrary. Each shell is a POLYGON
+    // approximating its ellipsoid, so it sags inside the true surface between
+    // its own vertices; if the next layer up sits closer than that sag, the
+    // one underneath pushes through it in a scalloped fringe wherever the two
+    // meshes' facets fall out of step. 2.5% clears the sag of every shell
+    // here with room to spare.
+    this.bellyBase = [R[0] * 1.03, R[1] * 1.03, R[2] * 1.03];
+    this.bellyM = mesh(G.belly, this.mats.belly, ...this.bellyBase, ...C);
     b.add(this.bellyM);
-    // Ninja gi wrapped around the middle.
-    b.add(mesh(G.cyl, this.mats.cloth, 0.50, 0.34, 0.46, 0, 0.60, 0));
-    // Obi sash.
-    b.add(mesh(G.cyl, this.mats.scarf, 0.53, 0.10, 0.49, 0, 0.50, 0));
-    // Sash knot.
-    b.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
+
+    // The gi: one piece of cloth over the whole torso, open at the front.
+    b.add(mesh(G.gi, this.mats.cowl, R[0] * 1.055, R[1] * 1.055, R[2] * 1.055, ...C));
+
+    // Obi sash, wrapped right around the outside of the gi.
+    const OR = [R[0] * 1.088, R[1] * 1.088, R[2] * 1.088];
+    b.add(mesh(G.obi, this.mats.scarf, ...OR, ...C));
+    // Its knot, sitting on the sash rather than floating beside it.
+    const k = onShell(...OR, 0.62, -0.30, 0.72);
+    b.add(mesh(G.sphere, this.mats.scarf, 0.085, 0.075, 0.07,
+      C[0] + k.x, C[1] + k.y, C[2] + k.z));
+    for (const s of [-1, 1]) {
+      b.add(mesh(G.capsule, this.mats.scarf, 0.032, 0.055, 0.032,
+        C[0] + k.x * 1.02, C[1] + k.y * 1.02 - 0.10, C[2] + k.z * 1.02,
+        0.25, 0, s * 0.45));
+    }
   }
 
   _buildHead() {
@@ -342,11 +491,13 @@ export class FrogModel {
     this.head.position.set(0, 1.02, 0);
     this.body.add(this.head);
 
-    this.headM = mesh(G.sphere, this.mats.skin, 0.44, 0.36, 0.42, 0, 0, 0);
+    // The skull. Every layer below is a shell scaled onto these radii, so the
+    // hood, the mask and the headband all follow the same surface.
+    const H = [0.44, 0.36, 0.42];
+    this.headR = H;
+    this.headM = mesh(G.sphere, this.mats.skin, ...H, 0, 0, 0);
     this.head.add(this.headM);
 
-    // Wide frog mouth line.
-    this.head.add(mesh(G.box, this.mats.skinDark, 0.52, 0.035, 0.10, 0, -0.13, 0.34));
     // Jaw — opens when the tongue fires.
     this.jaw = new THREE.Group();
     this.jaw.position.set(0, -0.12, 0.16);
@@ -365,59 +516,119 @@ export class FrogModel {
       g.add(white);
       const pupil = mesh(G.lowSphere, this.mats.pupil, 0.105, 0.135, 0.105, 0, 0.02, 0.20);
       g.add(pupil);
-      const shine = mesh(G.lowSphere, this.mats.shine, 0.045, 0.045, 0.045, sx * -0.05, 0.09, 0.24);
+      const shine = mesh(G.bead, this.mats.shine, 0.045, 0.045, 0.045, sx * -0.05, 0.09, 0.24);
       g.add(shine);
-      // Lid used for blinking (scales down over the eye).
-      const lid = mesh(G.lowSphere, this.mats.skin, 0.24, 0.24, 0.24, 0, 0.10, 0.02);
+      // Lid used for blinking: a dome that flattens to a disc when open and
+      // swells back over the eye to close it. Nudged forward of the old
+      // position so a shut lid actually covers the pupil.
+      const lid = mesh(G.lowSphere, this.mats.skin, 0.24, 0.24, 0.24, 0, 0.07, 0.06);
       lid.scale.y = 0.02;
       g.add(lid);
       this.eyes.push({ group: g, white, pupil, lid });
     }
 
-    // --- ninja hood: dark cowl over the back and top of the skull ---
-    const hood = mesh(G.sphere, this.mats.cloth, 0.47, 0.40, 0.45, 0, 0.02, -0.05);
-    // Flatten the front so the face stays open.
-    hood.scale.z = 0.45;
-    hood.position.z = -0.22;
-    this.head.add(hood);
-    this.head.add(mesh(G.sphere, this.mats.cloth, 0.455, 0.30, 0.44, 0, 0.14, 0));
-    // Face mask across the mouth.
-    this.head.add(mesh(G.sphere, this.mats.clothDark, 0.435, 0.20, 0.415, 0, -0.14, 0.02));
+    // --- the ninja hood ---
+    //
+    // One shell, drawn on the skull's own surface at a fixed 5% clearance, so
+    // it fits the head everywhere by construction: no gap to open up at the
+    // back, no corner to push out at the sides, nothing to fall out of
+    // alignment. It replaces three overlapping ellipsoids that each had their
+    // own idea of where the head was.
+    //
+    // The eyes are the one thing that comes THROUGH it, which is correct for
+    // a frog — they are bulges under the cloth. Each gets a piped rim below,
+    // so the hood is visibly stretched around the socket rather than merely
+    // interpenetrating it.
+    this.head.add(mesh(G.hood, this.mats.cowl, H[0] * 1.05, H[1] * 1.05, H[2] * 1.05));
+    // The muzzle inside the opening stays bare green, which is how this frog
+    // has always looked. The old build did add a cloth face mask here, but at
+    // (0.435, 0.20, 0.415) against a head of (0.44, 0.36, 0.42) it was
+    // narrower than the skull in both x and z — sealed inside it, never drawn
+    // a single frame. Making it visible would change the face, so it is gone.
+    //
+    // The frog's wide mouth, creased along the head's own surface instead of
+    // a flat slab hanging in front of the face.
+    this.head.add(mesh(G.crease, this.mats.skinDark,
+      H[0] * 1.022, H[1] * 1.022, H[2] * 1.022));
 
-    // Headband across the brow with two trailing tails.
-    this.head.add(mesh(G.cyl, this.mats.scarf, 0.455, 0.075, 0.44, 0, 0.10, 0));
-    this.head.add(mesh(G.box, this.mats.gold, 0.14, 0.11, 0.03, 0, 0.10, 0.42));
+    // Sockets: the hood pulled tight around each eye.
+    for (const e of this.eyes) {
+      const d = e.group.position.clone().normalize();
+      const ring = new THREE.Mesh(G.socket, this.mats.cowl);
+      ring.scale.setScalar(0.238);
+      ring.position.copy(d).multiplyScalar(0.035);
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
+      ring.castShadow = true;
+      e.group.add(ring);
+    }
+
+    // Headband, wrapped right around the outside of the hood. A band on the
+    // head's own surface cannot poke out at the sides the way the old
+    // cylinder's corners did.
+    const BR = [H[0] * 1.075, H[1] * 1.075, H[2] * 1.075];
+    this.head.add(mesh(G.band, this.mats.scarf, ...BR));
+    // The plate at the front, seated on the band.
+    const p = onShell(...BR, 0, 0.28, 1);
+    this.head.add(mesh(G.lowSphere, this.mats.gold, 0.085, 0.062, 0.05,
+      p.x, p.y, p.z * 1.005));
+
+    // Two trailing tails. They hang down the back of the hood at rest and
+    // stream out behind when running — the old pair sat up above the head
+    // like antennae whatever the frog was doing.
     this.bandTails = [];
     for (const sx of [-1, 1]) {
       const tail = new THREE.Group();
-      tail.position.set(sx * 0.16, 0.10, -0.38);
+      const t = onShell(...BR, sx * 0.55, -0.02, -1);
+      tail.position.set(t.x, t.y, t.z);
       this.head.add(tail);
-      tail.add(mesh(G.box, this.mats.scarf, 0.09, 0.02, 0.55, 0, 0, -0.28));
+      // A flat ribbon trailing back off the knot, tapering and bending a
+      // little so it reads as cloth rather than as a plank. Hanging rounded
+      // segments straight down instead left a row of red beads beside the
+      // neck with nothing joining them to the band.
+      tail.add(mesh(G.box, this.mats.scarf, 0.085, 0.022, 0.30, 0, -0.015, -0.15));
+      tail.add(mesh(G.box, this.mats.scarf, 0.058, 0.018, 0.26,
+        0, -0.055, -0.41, 0.22));
       this.bandTails.push(tail);
     }
   }
 
+  /**
+   * Arms and legs.
+   *
+   * Every joint carries a rounded blend — a deltoid at the shoulder, a ball
+   * at the elbow and knee, an ankle under the shin — sized to bridge the two
+   * limbs it joins. Without them a capsule meeting a capsule at an angle
+   * leaves a visible notch on the outside of the bend, and four of those down
+   * each limb is most of what made the frog look assembled rather than
+   * modelled. The bones themselves are unchanged, so every pose still works.
+   */
   _buildLimbs() {
     this.arms = [];
     for (const sx of [-1, 1]) {
       const shoulder = new THREE.Group();
       shoulder.position.set(sx * 0.46, 0.78, 0);
       this.body.add(shoulder);
+      // Deltoid: fills the corner where the arm leaves the gi.
+      shoulder.add(mesh(G.lowSphere, this.mats.cloth, 0.145, 0.145, 0.145,
+        sx * -0.015, -0.03, 0));
       // Upper arm hangs down from the shoulder pivot.
-      shoulder.add(mesh(G.capsule, this.mats.cloth, 0.11, 0.16, 0.11, 0, -0.20, 0));
+      shoulder.add(mesh(G.capsule, this.mats.cloth, 0.113, 0.16, 0.113, 0, -0.20, 0));
       const fore = new THREE.Group();
       fore.position.set(0, -0.38, 0);
       shoulder.add(fore);
+      fore.add(mesh(G.lowSphere, this.mats.skin, 0.107, 0.107, 0.107, 0, 0.01, 0));
       fore.add(mesh(G.capsule, this.mats.skin, 0.10, 0.13, 0.10, 0, -0.15, 0));
-      // Wrist wrap + three-toed frog hand.
-      fore.add(mesh(G.cyl, this.mats.clothDark, 0.115, 0.06, 0.115, 0, -0.03, 0));
+      // Arm wrap: a rounded band, not a cylinder with two cut rims.
+      fore.add(mesh(G.lowSphere, this.mats.clothDark, 0.117, 0.082, 0.117, 0, -0.03, 0));
       const hand = new THREE.Group();
       hand.position.set(0, -0.32, 0);
       fore.add(hand);
-      hand.add(mesh(G.lowSphere, this.mats.skin, 0.115, 0.10, 0.115, 0, 0, 0));
+      hand.add(mesh(G.lowSphere, this.mats.skin, 0.118, 0.108, 0.122, 0, -0.01, 0.008));
+      // Three fingers, splayed and tapering out of the palm.
       for (let f = 0; f < 3; f++) {
-        hand.add(mesh(G.lowSphere, this.mats.skin, 0.05, 0.05, 0.05,
-          (f - 1) * 0.09, -0.09, 0.03));
+        const a = (f - 1) * 0.5;
+        hand.add(mesh(G.capsule, this.mats.skin, 0.046, 0.042, 0.046,
+          Math.sin(a) * 0.088, -0.088, 0.028, 0, 0, a));
       }
       this.arms.push({ shoulder, fore, hand, side: sx });
     }
@@ -427,21 +638,30 @@ export class FrogModel {
       const hip = new THREE.Group();
       hip.position.set(sx * 0.27, 0.36, 0);
       this.body.add(hip);
+      // Haunch: the mass that carries the thigh into the body.
+      hip.add(mesh(G.lowSphere, this.mats.skin, 0.178, 0.168, 0.182,
+        sx * 0.035, -0.03, -0.01));
       // Powerful frog thigh, angled outward.
       hip.add(mesh(G.capsule, this.mats.skin, 0.155, 0.15, 0.16, sx * 0.05, -0.14, -0.02));
       const shin = new THREE.Group();
       shin.position.set(sx * 0.08, -0.30, 0);
       hip.add(shin);
+      shin.add(mesh(G.lowSphere, this.mats.skin, 0.112, 0.108, 0.112, 0, 0.015, 0));
       shin.add(mesh(G.capsule, this.mats.skin, 0.10, 0.14, 0.10, 0, -0.13, 0.02));
-      shin.add(mesh(G.cyl, this.mats.clothDark, 0.115, 0.07, 0.115, 0, -0.02, 0));
+      shin.add(mesh(G.lowSphere, this.mats.clothDark, 0.119, 0.09, 0.119, 0, -0.02, 0));
       const foot = new THREE.Group();
       foot.position.set(0, -0.29, 0);
       shin.add(foot);
+      // Ankle, so the shin does not simply end above the foot.
+      foot.add(mesh(G.lowSphere, this.mats.skin, 0.098, 0.085, 0.10, 0, 0.055, 0.005));
       // Big webbed foot — reads instantly as "frog".
-      foot.add(mesh(G.lowSphere, this.mats.skin, 0.15, 0.06, 0.26, 0, -0.02, 0.11));
+      foot.add(mesh(G.lowSphere, this.mats.skin, 0.15, 0.062, 0.26, 0, -0.02, 0.11));
+      // Toes, with the web filled in between them rather than three
+      // free-floating beads on the front edge.
+      foot.add(mesh(G.bead, this.mats.skin, 0.152, 0.032, 0.13, 0, -0.021, 0.255));
       for (let t = 0; t < 3; t++) {
-        foot.add(mesh(G.lowSphere, this.mats.skin, 0.055, 0.045, 0.10,
-          (t - 1) * 0.10, -0.02, 0.30));
+        foot.add(mesh(G.capsule, this.mats.skin, 0.05, 0.036, 0.05,
+          (t - 1) * 0.102, -0.021, 0.30, Math.PI / 2, 0, 0));
       }
       this.legs.push({ hip, shin, foot, side: sx });
     }
@@ -501,6 +721,8 @@ export class FrogModel {
       const seg = new THREE.Group();
       seg.position.set(0, i === 0 ? 0.92 : -0.02, i === 0 ? -0.20 : -0.30);
       parent.add(seg);
+      // Flat cloth: a scarf is a ribbon, and a chain of rounded segments
+      // reads as sausage links rather than as fabric.
       const w = 0.20 - i * 0.035;
       seg.add(mesh(G.box, this.mats.scarf, w, 0.05, 0.34, 0, 0, -0.17));
       this.scarf.push(seg);
@@ -1129,7 +1351,8 @@ export class FrogModel {
     // Throat pulse — a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);
     const throat = 1 + Math.sin(t * 3.1) * 0.03 + this.croakPulse * 0.25;
-    this.bellyM.scale.set(0.40 * throat, 0.34 * throat, 0.33 * throat);
+    const bb = this.bellyBase;
+    this.bellyM.scale.set(bb[0] * throat, bb[1] * throat, bb[2] * throat);
 
     // Jaw opens while the tongue is out.
     const jawOpen = s.grappling ? 0.55 : 0;
@@ -1139,21 +1362,31 @@ export class FrogModel {
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) { this.blink = 1; this.blinkTimer = 2.2 + Math.random() * 3.5; }
     if (this.blink > 0) this.blink = Math.max(0, this.blink - dt * 7);
-    const lidY = 0.02 + Math.sin(this.blink * Math.PI) * 0.98;
+    // The lid closes to the size of the eye it covers, 0.235. Driving
+    // scale.y to 1.0 against x/z of 0.24 stretched each lid into a green
+    // ellipsoid four times the size of the head for the few frames a blink
+    // lasts — a glitch that has been in every build so far.
+    const lidY = 0.02 + Math.sin(this.blink * Math.PI) * 0.22;
     for (const e of this.eyes) e.lid.scale.y = lidY;
 
     // ---- cloth: scarf + headband tails trail behind motion ---------------
     const drag = clamp(speed / 20, 0, 1);
     const flutter = Math.sin(t * 11 + this.stride) * 0.16;
+    // The scarf hangs down the back when still and streams out as the frog
+    // gets moving. Resting at +0.5 rad stood it bolt upright behind the head
+    // — a red slab over the hood that read as part of the hat.
     for (let i = 0; i < this.scarf.length; i++) {
       const seg = this.scarf[i];
-      const target = 0.5 + drag * 0.85 + flutter * (i + 1) * 0.55 + (s.grounded ? 0 : 0.25);
+      const target = -0.16 + drag * 1.35 + flutter * (i + 1) * 0.55 + (s.grounded ? 0 : 0.25);
       seg.rotation.x = damp(seg.rotation.x, target, 12 - i * 2, dt);
       seg.rotation.y = damp(seg.rotation.y, Math.sin(t * 4.2 + i) * 0.22 * (0.3 + drag), 9, dt);
     }
+    // The tails hang at rest and lift as the frog picks up speed. Starting
+    // from a positive angle held them up off the back of the head even when
+    // standing still, which is what made them read as antennae.
     for (let i = 0; i < this.bandTails.length; i++) {
       const tl = this.bandTails[i];
-      tl.rotation.x = damp(tl.rotation.x, 0.25 + drag * 0.7 + flutter * 0.6, 11, dt);
+      tl.rotation.x = damp(tl.rotation.x, -0.30 + drag * 1.15 + flutter * 0.5, 11, dt);
       tl.rotation.y = damp(tl.rotation.y, Math.sin(t * 5 + i * 2) * 0.3, 9, dt);
     }
 
