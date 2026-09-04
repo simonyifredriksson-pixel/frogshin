@@ -8,8 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v45';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v45';
+import * as THREE from '../lib/three.module.js?v=v46';
+import { CFG } from './config.js?v=v46';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v46';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -463,13 +464,12 @@ export class FrogModel {
       if (box.min.y < lowest) lowest = box.min.y;
     }
     if (!Number.isFinite(lowest)) return;
-    // The measurement is taken in the REST pose, but the legs move: the idle
-    // cycle alone dips the soles about 0.025 below where they sit here. The
-    // margin covers that, so no pose ends up under the floor. It is small
-    // enough to be invisible — a couple of centimetres on a frog — and errs
-    // upward, which is the harmless direction.
-    const MARGIN = 0.04;
-    this._lift = Math.max(0, -lowest) + MARGIN;
+    // Lift the measured drop, then give a little of it back so the soles
+    // settle INTO the ground rather than balancing exactly on it. Landing
+    // the feet at precisely zero is geometrically right and looks wrong —
+    // the frog reads as hovering, because a shadow under a foot that only
+    // ever grazes the floor is what floating looks like.
+    this._lift = Math.max(0, -lowest - CFG.move.footSink);
     this.lift.position.y = this._lift;
   }
 

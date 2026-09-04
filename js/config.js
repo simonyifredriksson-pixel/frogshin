@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v45';
+export const BUILD = 'v46';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -84,6 +84,19 @@ export const CFG = {
      */
     voidDepth: 40,
     voidDamage: 90,          // per second
+    /**
+     * How far the soles are allowed to settle INTO the ground.
+     *
+     * The rig is lifted so its feet stop at the floor rather than hanging
+     * a third of a unit through it (see FrogModel._groundRig), but stopping
+     * at exactly zero reads as hovering: a foot that only ever touches the
+     * ground at a single point, with a shadow under it, looks like it is
+     * floating. A few centimetres of give makes contact read as contact.
+     *
+     * Raise it if the frog looks like it is standing on the grass rather
+     * than in it; lower it toward 0 if the toes start disappearing.
+     */
+    footSink: 0.05,
   },
 
   // -------------------------------------------------------------- stamina

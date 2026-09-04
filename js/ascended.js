@@ -36,10 +36,10 @@
  * learn is ever invalidated — it only has to be done faster.
  */
 
-import * as THREE from '../lib/three.module.js?v=v45';
-import { CFG } from './config.js?v=v45';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v45';
-import { Audio } from './audio.js?v=v45';
+import * as THREE from '../lib/three.module.js?v=v46';
+import { CFG } from './config.js?v=v46';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v46';
+import { Audio } from './audio.js?v=v46';
 
 const _v = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
