@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v50" />
+<link rel="stylesheet" href="css/style.css?v=v51" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -110,6 +110,9 @@
         </div>
 
         <div class="divider"><span>MAP</span></div>
+        <button class="btn btn-quiet map-toggle" id="play-map-toggle">
+          <span>CHOOSE MAP — <b id="play-map-current">—</b></span>
+        </button>
         <div id="play-maps" class="map-row"></div>
         <p class="note">
           The map you take into a room you create. In a room you join, everyone
@@ -171,6 +174,9 @@
              built before anyone can spawn, so the map cannot be changed later
              without throwing everybody back to a loading screen. -->
         <div class="divider"><span>MAP</span></div>
+        <button class="btn btn-quiet map-toggle" id="lobby-map-toggle">
+          <span>CHOOSE MAP — <b id="lobby-map-current">—</b></span>
+        </button>
         <div id="lobby-maps" class="map-row"></div>
         <p class="note" id="lobby-map-note">
           Everyone votes; the host has the final say. The <b>game mode</b> is
@@ -697,6 +703,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v50"></script>
+<script type="module" src="js/main.js?v=v51"></script>
 </body>
 </html>

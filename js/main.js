@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v50';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v50';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v50';
-import { Input } from './input.js?v=v50';
-import { Audio } from './audio.js?v=v50';
-import { World } from './world.js?v=v50';
-import { Effects } from './effects.js?v=v50';
-import { Atmosphere } from './atmosphere.js?v=v50';
-import { FollowCamera } from './camera.js?v=v50';
-import { Player } from './player.js?v=v50';
-import { RemotePlayer } from './remote.js?v=v50';
-import { HUD } from './hud.js?v=v50';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v50';
-import { FrogModel } from './frog.js?v=v50';
-import { DummyField } from './dummy.js?v=v50';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v50';
-import { ToadModel } from './npc.js?v=v50';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v50';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v50';
-import { DungeonRun } from './dungeon.js?v=v50';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v50';
-import { JudgmentRun } from './judgment.js?v=v50';
-import { COMBO_NAMES } from './ascended.js?v=v50';
-import { MAPS, DEFAULT_MAP, findMap } from './maps.js?v=v50';
-import { MenuScene } from './menu.js?v=v50';
-import { Economy } from './economy.js?v=v50';
-import { Shop } from './shop.js?v=v50';
-import { Network, NetRole } from './net.js?v=v50';
+import * as THREE from '../lib/three.module.js?v=v51';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v51';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v51';
+import { Input } from './input.js?v=v51';
+import { Audio } from './audio.js?v=v51';
+import { World } from './world.js?v=v51';
+import { Effects } from './effects.js?v=v51';
+import { Atmosphere } from './atmosphere.js?v=v51';
+import { FollowCamera } from './camera.js?v=v51';
+import { Player } from './player.js?v=v51';
+import { RemotePlayer } from './remote.js?v=v51';
+import { HUD } from './hud.js?v=v51';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v51';
+import { FrogModel } from './frog.js?v=v51';
+import { DummyField } from './dummy.js?v=v51';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v51';
+import { ToadModel } from './npc.js?v=v51';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v51';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v51';
+import { DungeonRun } from './dungeon.js?v=v51';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v51';
+import { JudgmentRun } from './judgment.js?v=v51';
+import { COMBO_NAMES } from './ascended.js?v=v51';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v51';
+import { MenuScene } from './menu.js?v=v51';
+import { Economy } from './economy.js?v=v51';
+import { Shop } from './shop.js?v=v51';
+import { Network, NetRole } from './net.js?v=v51';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -210,7 +210,17 @@ class Game {
 
     $('btn-play').onclick = () => {
       this._renderMapPicker('play-maps', false);
+      this._toggleMapList('play', false);      // opens shut every time
       this.showPanel('play');
+    };
+    // The two map lists start closed and are opened by their own button.
+    $('play-map-toggle').onclick = () => {
+      Audio.uiClick();
+      this._toggleMapList('play');
+    };
+    $('lobby-map-toggle').onclick = () => {
+      Audio.uiClick();
+      this._toggleMapList('lobby');
     };
     $('btn-shop').onclick = () => { this.shop.render(); this.showPanel('shop'); };
     $('btn-howto').onclick = () => this.showPanel('howto');
@@ -365,6 +375,7 @@ class Game {
   /** Show the pre-match lobby and keep its player count live. */
   _showLobby() {
     this.showPanel('lobby');
+    this._toggleMapList('lobby', false);       // opens shut every time
     this._refreshLobby();
   }
 
@@ -393,10 +404,28 @@ class Game {
    *                 own vote is also the decision — someone has to break a
    *                 tie, and the host is already the one who presses start.
    */
+  /**
+   * Show or hide a map list. Pressing the button again closes it.
+   *
+   * @param force  true/false to set it outright; omitted to flip.
+   */
+  _toggleMapList(which, force) {
+    const row = $(`${which}-maps`);
+    const btn = $(`${which}-map-toggle`);
+    if (!row || !btn) return;
+    const open = force === undefined ? !row.classList.contains('open') : !!force;
+    row.classList.toggle('open', open);
+    btn.classList.toggle('open', open);
+  }
+
   _renderMapPicker(hostId, voting) {
     const host = $(hostId);
     if (!host) return;
     const isHost = !this.net.isOnline || this.net.isHost;
+    // Keep the button's label showing the current pick, so the list can stay
+    // shut and still tell you where you are going.
+    const label = $(hostId.replace('-maps', '-map-current'));
+    if (label) label.textContent = mapName(this.mapId);
     host.innerHTML = '';
     for (const m of MAPS) {
       const card = document.createElement('button');

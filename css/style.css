@@ -1109,7 +1109,15 @@ kbd {
 /* ==========================================================================
    MAP PICKER — the play panel and the lobby share it
    ========================================================================== */
-.map-row { display: grid; gap: 8px; margin-bottom: 10px; }
+/* Collapsed by default — the list only appears when CHOOSE MAP is pressed. */
+.map-row { display: none; grid-template-columns: 1fr; gap: 8px; margin-bottom: 10px; }
+.map-row.open { display: grid; }
+.map-toggle { margin-bottom: 8px; }
+.map-toggle b { color: var(--gold); }
+/* An arrow that turns over when the list is showing. */
+.map-toggle span::after { content: ' \25BC'; opacity: 0.7; font-size: 0.8em; }
+.map-toggle.open span::after { content: ' \25B2'; }
+
 .map-card {
   display: flex;
   align-items: center;
@@ -1117,7 +1125,9 @@ kbd {
   padding: 10px 12px;
   background: rgba(12, 20, 16, 0.55);
   border: 2px solid rgba(255, 207, 92, 0.22);
-  color: var(--ink);
+  /* NOT var(--ink) — that is near-black, and on this dark card the blurb was
+     invisible until the card was picked and the background lifted. */
+  color: var(--parch);
   font-family: var(--font-ui);
   text-align: left;
   cursor: pointer;
@@ -1132,7 +1142,8 @@ kbd {
   display: block;
   margin-bottom: 3px;
 }
-.map-card span { font-size: 14px; opacity: 0.82; line-height: 1.25; }
+.map-card span { font-size: 14px; color: var(--parch-dim); line-height: 1.25; }
+.map-card.picked span { color: var(--parch); }
 /* Vote tally badge. */
 .map-card i {
   margin-left: auto;
