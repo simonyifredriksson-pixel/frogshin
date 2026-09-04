@@ -9,10 +9,10 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v43';
-import { CFG } from './config.js?v=v43';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v43';
-import { Terrain, CollisionWorld } from './collision.js?v=v43';
+import * as THREE from '../lib/three.module.js?v=v44';
+import { CFG } from './config.js?v=v44';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v44';
+import { Terrain, CollisionWorld } from './collision.js?v=v44';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -212,7 +212,11 @@ export class World {
       const varia = this.noise2.fbm(x * 0.03, z * 0.03, 2) * 0.5 + 0.5;
 
       if (h < waterLevel + 1.2) tmp.copy(cSand);
-      else if (h > 74) tmp.copy(cSnow).lerp(cRock, clamp((80 - h) / 22, 0, 1) * 0.5);
+      // Same constant the climb limit uses, so where the snow starts is
+      // exactly where the mountain stops letting you walk up it.
+      else if (h > CFG.world.snowLine) {
+        tmp.copy(cSnow).lerp(cRock, clamp((80 - h) / 22, 0, 1) * 0.5);
+      }
       else {
         tmp.copy(cGrass).lerp(cGrass2, varia);
         if (slope > 0.28) tmp.lerp(cDirt, clamp((slope - 0.28) / 0.22, 0, 1));

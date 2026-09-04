@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v43';
-import { clamp } from './util.js?v=v43';
+import { CFG } from './config.js?v=v44';
+import { clamp } from './util.js?v=v44';
 
 const EPS = 1e-4;
 
@@ -295,10 +295,14 @@ export class CollisionWorld {
     // the check passes. That is how players strolled up sheer mountain faces
     // — not by finding a gentle route, just by going slowly.
     //
+    // The limit applies ONLY above the snow line. Everything green and grey
+    // is scrambled up exactly as before; it is the white peaks that turn you
+    // back, so the boundary is one you can see coming.
+    //
     // Only the climb is limited. Walking DOWN a cliff is still allowed; that
     // is falling, and gravity can have it.
     const climbing = th > pos.y;
-    const tooSteep = climbing
+    const tooSteep = climbing && th > CFG.world.snowLine
       && this.terrain.slopeAt(oldX + dx * 2, oldZ + dz * 2) > CFG.move.maxClimbSlope;
 
     if (th > pos.y + step || tooSteep) {

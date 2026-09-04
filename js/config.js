@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v43';
+export const BUILD = 'v44';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -21,6 +21,14 @@ export const CFG = {
     grid: 145,               // heightfield resolution (grid x grid samples)
     waterLevel: 2.2,
     killPlane: -30,          // fall below this and you respawn
+    /**
+     * Where the snow starts.
+     *
+     * Used for BOTH the terrain colouring and the climb limit, so the rule
+     * and the thing you can see are the same number: green and rock are
+     * scrambled up however you like, and only the white peaks turn you back.
+     */
+    snowLine: 74,
   },
 
   // ------------------------------------------------------------- movement
@@ -61,6 +69,11 @@ export const CFG = {
      * gone around — without this the mountains were walkable if you simply
      * approached them slowly. Boxes are unaffected: ledges still use
      * stepHeight, so stairs and crates behave exactly as before.
+     *
+     * IT ONLY APPLIES ABOVE world.snowLine. The lower slopes are scrambled up
+     * exactly as they always were; it is the white peaks that are off limits,
+     * so the boundary is something you can see rather than something you
+     * discover by walking into it.
      */
     maxClimbSlope: 0.46,
     /**
