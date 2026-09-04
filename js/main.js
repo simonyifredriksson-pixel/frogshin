@@ -5,33 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v48';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v48';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v48';
-import { Input } from './input.js?v=v48';
-import { Audio } from './audio.js?v=v48';
-import { World } from './world.js?v=v48';
-import { Effects } from './effects.js?v=v48';
-import { Atmosphere } from './atmosphere.js?v=v48';
-import { FollowCamera } from './camera.js?v=v48';
-import { Player } from './player.js?v=v48';
-import { RemotePlayer } from './remote.js?v=v48';
-import { HUD } from './hud.js?v=v48';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v48';
-import { FrogModel } from './frog.js?v=v48';
-import { DummyField } from './dummy.js?v=v48';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v48';
-import { ToadModel } from './npc.js?v=v48';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v48';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v48';
-import { DungeonRun } from './dungeon.js?v=v48';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v48';
-import { JudgmentRun } from './judgment.js?v=v48';
-import { COMBO_NAMES } from './ascended.js?v=v48';
-import { MenuScene } from './menu.js?v=v48';
-import { Economy } from './economy.js?v=v48';
-import { Shop } from './shop.js?v=v48';
-import { Network, NetRole } from './net.js?v=v48';
+import * as THREE from '../lib/three.module.js?v=v49';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v49';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v49';
+import { Input } from './input.js?v=v49';
+import { Audio } from './audio.js?v=v49';
+import { World } from './world.js?v=v49';
+import { Effects } from './effects.js?v=v49';
+import { Atmosphere } from './atmosphere.js?v=v49';
+import { FollowCamera } from './camera.js?v=v49';
+import { Player } from './player.js?v=v49';
+import { RemotePlayer } from './remote.js?v=v49';
+import { HUD } from './hud.js?v=v49';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v49';
+import { FrogModel } from './frog.js?v=v49';
+import { DummyField } from './dummy.js?v=v49';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v49';
+import { ToadModel } from './npc.js?v=v49';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v49';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v49';
+import { DungeonRun } from './dungeon.js?v=v49';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v49';
+import { JudgmentRun } from './judgment.js?v=v49';
+import { COMBO_NAMES } from './ascended.js?v=v49';
+import { MAPS, DEFAULT_MAP, findMap } from './maps.js?v=v49';
+import { MenuScene } from './menu.js?v=v49';
+import { Economy } from './economy.js?v=v49';
+import { Shop } from './shop.js?v=v49';
+import { Network, NetRole } from './net.js?v=v49';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -57,6 +58,11 @@ class Game {
     this.lastFrame = this.clock;
     this.remotes = new Map();
     this._lastSweep = 0;
+    // Which map the next arena will be built from, and who voted for what.
+    // The world is generated from this id alone, so agreeing on it is all
+    // the network has to do to put everyone in the same place.
+    this.mapId = DEFAULT_MAP;
+    this.mapVotes = new Map();
     this._pendingJoins = new Map();
     // --- developer menu (F3 + J + L, or Ctrl + L + J + M) ---
     this.cheatsOpen = false;
@@ -202,7 +208,10 @@ class Game {
     this.shop = new Shop(this.economy, () => this._applySkins());
     this._applySkins();
 
-    $('btn-play').onclick = () => this.showPanel('play');
+    $('btn-play').onclick = () => {
+      this._renderMapPicker('play-maps', false);
+      this.showPanel('play');
+    };
     $('btn-shop').onclick = () => { this.shop.render(); this.showPanel('shop'); };
     $('btn-howto').onclick = () => this.showPanel('howto');
     $('btn-settings').onclick = () => this.showPanel('settings');
@@ -369,10 +378,68 @@ class Game {
     $('lobby-host-controls').classList.toggle('show', isHost);
     $('lobby-waiting').classList.toggle('show', !isHost);
     $('lobby-status').textContent = !isHost
-      ? 'You are in — the host picks the mode'
+      ? 'You are in — vote for a map; the host starts it'
       : (n === 1
         ? 'Waiting for friends — they join with the code above'
         : 'Ready when you are');
+    this._renderMapPicker('lobby-maps', true);
+  }
+
+  /**
+   * The map picker, shared by the play panel and the lobby.
+   *
+   * @param hostId   which container to fill
+   * @param voting   true in the lobby, where a click is a VOTE. The host's
+   *                 own vote is also the decision — someone has to break a
+   *                 tie, and the host is already the one who presses start.
+   */
+  _renderMapPicker(hostId, voting) {
+    const host = $(hostId);
+    if (!host) return;
+    const isHost = !this.net.isOnline || this.net.isHost;
+    host.innerHTML = '';
+    for (const m of MAPS) {
+      const card = document.createElement('button');
+      card.className = 'map-card' + (m.id === this.mapId ? ' picked' : '');
+      const votes = voting ? this._mapVoteCount(m.id) : 0;
+      card.innerHTML = `<div><b>${m.name}</b><span>${m.blurb}</span></div>`
+        + `<i>${votes || ''}</i>`;
+      card.onclick = () => {
+        Audio.uiClick && Audio.uiClick();
+        this._voteMap(m.id);
+      };
+      host.appendChild(card);
+    }
+    const note = $('lobby-map-note');
+    if (note && voting) {
+      note.innerHTML = isHost
+        ? 'Everyone votes; <b>your</b> pick is the one that loads. The '
+          + '<b>game mode</b> is voted for once you are all in.'
+        : 'Vote for a map — the host has the final say. The <b>game mode</b> '
+          + 'is voted for once you are all in.';
+    }
+  }
+
+  _mapVoteCount(id) {
+    let n = 0;
+    for (const v of this.mapVotes.values()) if (v === id) n++;
+    return n;
+  }
+
+  /**
+   * Cast a map vote. The host's vote also SETS the map, and is broadcast so
+   * everyone's picker agrees on what is actually going to load.
+   */
+  _voteMap(id) {
+    const me = this.net.selfId || 'local';
+    this.mapVotes.set(me, id);
+    const isHost = !this.net.isOnline || this.net.isHost;
+    if (isHost) this.mapId = id;
+    if (this.net.isOnline) {
+      this.net.sendEvent(isHost ? { t: 'map', id } : { t: 'mapvote', id });
+    }
+    this._renderMapPicker('lobby-maps', true);
+    this._renderMapPicker('play-maps', false);
   }
 
   /**
@@ -535,6 +602,20 @@ class Game {
         }
         return;
       }
+      if (ev.t === 'map') {
+        // The host has settled the map. Everyone must build the same world,
+        // so this is not a vote — it is the answer.
+        this.mapId = findMap(ev.id).id;
+        this.mapVotes.set(id, this.mapId);
+        this._renderMapPicker('lobby-maps', true);
+        this._renderMapPicker('play-maps', false);
+        return;
+      }
+      if (ev.t === 'mapvote') {
+        this.mapVotes.set(id, findMap(ev.id).id);
+        this._renderMapPicker('lobby-maps', true);
+        return;
+      }
       if (ev.t === 'froglets') {
         // A gift from the developer menu. Froglets live in each player's own
         // browser, so the sender cannot credit anyone directly — it asks, and
@@ -591,9 +672,11 @@ class Game {
     // the lobby count.
     if (!id || id === this.net.selfId) return;
     this._refreshLobby();          // keep the lobby's player count honest
-    // Tell a late joiner which mode is already running.
-    if (this.sessionMode && (!this.net.isOnline || this.net.isHost)) {
-      this.net.sendEvent({ t: 'gamemode', m: this.sessionMode });
+    // Tell a late joiner which mode is already running, and which map — they
+    // must build the same world as everybody else or nothing lines up.
+    if (!this.net.isOnline || this.net.isHost) {
+      this.net.sendEvent({ t: 'map', id: this.mapId });
+      if (this.sessionMode) this.net.sendEvent({ t: 'gamemode', m: this.sessionMode });
     }
     if (this.remotes.has(id)) return;
     if (!this.scene || !this.effects) {
@@ -713,7 +796,7 @@ class Game {
       this.camera = new THREE.PerspectiveCamera(
         CFG.camera.fov, window.innerWidth / window.innerHeight, CFG.camera.near, CFG.camera.far);
 
-      const world = new World(this.scene);
+      const world = new World(this.scene, this.mapId);
       const tasks = world.buildTasks();
       for (let i = 0; i < tasks.length; i++) {
         label.textContent = tasks[i][0] + '…';
@@ -734,11 +817,22 @@ class Game {
       for (const [dx, dy, dz, face] of world.dummySpots) {
         this.dummies.add(dx, dy, dz, face);
       }
+      // The map's own sky, fog and light. Quality settings still win, so a
+      // map asking for cloud cannot override someone's low-spec choice.
+      const A = world.map.atmosphere || {};
       this.atmo = new Atmosphere(this.scene, this.renderer, {
-        leafCount: this.quality.leaves,
-        cloudCount: this.quality.clouds,
+        ...A,
+        leafCount: A.leaves === false ? 0 : this.quality.leaves,
+        cloudCount: Math.min(A.cloudCount === undefined ? 26 : A.cloudCount,
+          this.quality.clouds),
         shadows: this.quality.shadows,
       });
+      if (A.sunColor !== undefined) this.atmo.sun.color.setHex(A.sunColor);
+      if (A.sunIntensity !== undefined) this.atmo.sun.intensity = A.sunIntensity;
+      if (A.ambient !== undefined) this.atmo.hemi.color.setHex(A.ambient);
+      if (A.ambientIntensity !== undefined) {
+        this.atmo.hemi.intensity = A.ambientIntensity;
+      }
       this.followCam = new FollowCamera(this.camera, world.collision);
 
       bar.style.width = '100%';

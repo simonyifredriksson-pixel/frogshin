@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v48" />
+<link rel="stylesheet" href="css/style.css?v=v49" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -109,6 +109,13 @@
           <div id="color-picker" class="swatches"></div>
         </div>
 
+        <div class="divider"><span>MAP</span></div>
+        <div id="play-maps" class="map-row"></div>
+        <p class="note">
+          The map you take into a room you create. In a room you join, everyone
+          votes for it in the lobby.
+        </p>
+
         <div class="divider"><span>MULTIPLAYER</span></div>
 
         <div class="btn-row">
@@ -159,9 +166,15 @@
           <b id="lobby-count">1</b> frog<span id="lobby-plural"></span> in the room
         </div>
 
-        <p class="note">
-          Everyone should pick the <b>same</b> mode. Wait for your friends to
-          join, then choose.
+        <!-- Map first, then the mode is voted for in-game once everyone has
+             loaded. Doing it in this order is deliberate: the world has to be
+             built before anyone can spawn, so the map cannot be changed later
+             without throwing everybody back to a loading screen. -->
+        <div class="divider"><span>MAP</span></div>
+        <div id="lobby-maps" class="map-row"></div>
+        <p class="note" id="lobby-map-note">
+          Everyone votes; the host has the final say. The <b>game mode</b> is
+          voted for once you are all in.
         </p>
 
         <div id="lobby-host-controls">
@@ -684,6 +697,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v48"></script>
+<script type="module" src="js/main.js?v=v49"></script>
 </body>
 </html>

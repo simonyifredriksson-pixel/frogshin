@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v48';
-import { clamp } from './util.js?v=v48';
+import { CFG } from './config.js?v=v49';
+import { clamp } from './util.js?v=v49';
 
 const EPS = 1e-4;
 
@@ -87,6 +87,15 @@ class Box {
 export class CollisionWorld {
   constructor(terrain) {
     this.terrain = terrain;
+    /**
+     * Steep terrain ABOVE this height cannot be walked up; below it, the map
+     * is scrambled over freely.
+     *
+     * Per-level rather than global, because "too high to walk" means the snow
+     * line on one map and just above the mud on another. Levels built out of
+     * boxes leave it at the default, where their flat terrain never reaches.
+     */
+    this.climbLimitY = CFG.world.snowLine;
     this.boxes = [];
     this.anchors = [];          // floating grapple targets (spheres)
     this.cellSize = 14;
@@ -302,7 +311,7 @@ export class CollisionWorld {
     // Only the climb is limited. Walking DOWN a cliff is still allowed; that
     // is falling, and gravity can have it.
     const climbing = th > pos.y;
-    const tooSteep = climbing && th > CFG.world.snowLine
+    const tooSteep = climbing && th > this.climbLimitY
       && this.terrain.slopeAt(oldX + dx * 2, oldZ + dz * 2) > CFG.move.maxClimbSlope;
 
     if (th > pos.y + step || tooSteep) {

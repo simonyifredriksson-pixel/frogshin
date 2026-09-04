@@ -1107,6 +1107,47 @@ kbd {
   box-shadow: 0 3px 0 rgba(0,0,0,0.5);
 }
 /* ==========================================================================
+   MAP PICKER — the play panel and the lobby share it
+   ========================================================================== */
+.map-row { display: grid; gap: 8px; margin-bottom: 10px; }
+.map-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(12, 20, 16, 0.55);
+  border: 2px solid rgba(255, 207, 92, 0.22);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.map-card:hover { border-color: rgba(255, 207, 92, 0.6); background: rgba(20, 32, 24, 0.7); }
+.map-card.picked { border-color: var(--gold); background: rgba(46, 66, 40, 0.75); }
+.map-card b {
+  font-family: var(--font-px);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--gold);
+  display: block;
+  margin-bottom: 3px;
+}
+.map-card span { font-size: 14px; opacity: 0.82; line-height: 1.25; }
+/* Vote tally badge. */
+.map-card i {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--font-px);
+  font-size: 9px;
+  padding: 4px 7px;
+  border: 2px solid rgba(255, 207, 92, 0.3);
+  color: var(--gold);
+  min-width: 22px;
+  text-align: center;
+}
+.map-card i:empty { display: none; }
+
+/* ==========================================================================
    DEVELOPER MENU  (F3 + J + L, or L + J + M + 3)
    Deliberately plain — it is a tool, not part of the game's presentation.
    ========================================================================== */

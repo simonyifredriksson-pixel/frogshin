@@ -9,10 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v48';
-import { CFG } from './config.js?v=v48';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v48';
-import { Terrain, CollisionWorld } from './collision.js?v=v48';
+import * as THREE from '../lib/three.module.js?v=v49';
+import { CFG } from './config.js?v=v49';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v49';
+import { findMap } from './maps.js?v=v49';
+import { Terrain, CollisionWorld } from './collision.js?v=v49';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -55,30 +56,36 @@ class Batch {
 }
 
 export class World {
-  constructor(scene) {
+  /**
+   * @param scene
+   * @param mapId  which map from maps.js. Everything — seed, terrain shape,
+   *               palette, contents — comes from that entry, so the id is the
+   *               only thing clients have to agree on to build the same world.
+   */
+  constructor(scene, mapId) {
     this.scene = scene;
-    this.rnd = mulberry32(CFG.world.seed);
-    this.noise = new ValueNoise(CFG.world.seed);
-    this.noise2 = new ValueNoise(CFG.world.seed + 991);
+    this.map = findMap(mapId);
+    this.rnd = mulberry32(this.map.seed);
+    this.noise = new ValueNoise(this.map.seed);
+    this.noise2 = new ValueNoise(this.map.seed + 991);
     this.spawnPoints = [];
     this.lanterns = [];          // { mesh, baseY, phase } — bob animation
     this.grassPatches = [];
     this.waterMesh = null;
     this.time = 0;
+    // Every map must provide these — the game reads them without asking
+    // which map it is on.
+    this.dummySpots = [];
+    this.statue = null;
 
-    // Flat regions carved into the terrain so structures have somewhere to sit.
-    this.flats = [
-      { x: 0,    z: 0,    r: 40, f: 26, h: 4.0 },    // Lotus Arena (centre)
-      { x: 0,    z: -142, r: 27, f: 30, h: 62.0 },   // Sky Shrine plateau
-      { x: -34,  z: 132,  r: 46, f: 30, h: 11.0 },   // Temple village
-      { x: 128,  z: 26,   r: 42, f: 30, h: 8.0 },    // Bamboo grove
-      { x: -132, z: -44,  r: 17, f: 18, h: 40.0 },   // West mesa top
-      { x: -96,  z: -104, r: 13, f: 15, h: 27.0 },   // Stepping mesa
-      { x: 86,   z: -96,  r: 20, f: 22, h: 24.0 },   // East cliff terrace
-    ];
-    // Water basin.
-    this.basins = [{ x: -66, z: 70, r: 32, f: 22, h: -3.0 }];
+    // Flat regions carved into the terrain so structures have somewhere to
+    // sit, and basins scooped out for water. Both come from the map.
+    this.flats = this.map.flats || [];
+    this.basins = this.map.basins || [];
   }
+
+  /** The map's display name, for the HUD and the lobby. */
+  get mapName() { return this.map.name; }
 
   // -------------------------------------------------------- height function
 
@@ -87,23 +94,9 @@ export class World {
    * is safe to evaluate from anywhere (mesh build, collision, prop placement).
    */
   heightAt(x, z) {
-    const S = CFG.world.size;
-    const dCenter = Math.hypot(x, z) / (S * 0.5);
-
-    // Rolling base terrain.
-    let h = this.noise.fbm(x * 0.0062, z * 0.0062, 5) * 15 + 8;
-    h += this.noise2.fbm(x * 0.021, z * 0.021, 3) * 3.2;
-
-    // Mountains rise toward the rim and dominate the northern wall.
-    const rim = smoothstep(clamp((dCenter - 0.40) / 0.42, 0, 1));
-    const north = smoothstep(clamp((-z - 60) / 110, 0, 1));
-    const mountainMask = clamp(rim * 0.85 + north * 0.75, 0, 1.35);
-    const ridge = this.noise.ridged(x * 0.0048 + 11, z * 0.0048 - 7, 4);
-    h += ridge * 96 * mountainMask;
-
-    // Hard rim so players cannot wander off the edge of the heightfield.
-    const edge = smoothstep(clamp((dCenter - 0.86) / 0.14, 0, 1));
-    h += edge * 150;
+    // The map owns its own shape; the flats and basins below are the shared
+    // part, because every map wants somewhere level to build on.
+    let h = this.map.height(this, x, z);
 
     // Carve flats and basins.
     for (let i = 0; i < this.flats.length; i++) {
@@ -134,6 +127,7 @@ export class World {
         const { size, grid } = CFG.world;
         this.terrain = new Terrain(size, grid, (x, z) => this.heightAt(x, z));
         this.collision = new CollisionWorld(this.terrain);
+        this.collision.climbLimitY = this.map.climbLimitY;
         this.batches = {
           box:   new Batch(new THREE.BoxGeometry(1, 1, 1), this._mat()),
           roof:  new Batch(new THREE.ConeGeometry(1, 1, 4, 1), this._mat()),
@@ -144,16 +138,10 @@ export class World {
           post:  new Batch(new THREE.CylinderGeometry(1, 1, 1, 7), this._mat()),
         };
       }],
-      ['Carving the valley', () => this._buildTerrainMesh()],
-      ['Filling the lake', () => this._buildWater()],
-      ['Laying the Lotus Arena', () => this._buildArena()],
-      ['Building the temple village', () => this._buildVillage()],
-      ['Hanging the Sky Shrine', () => this._buildShrine()],
-      ['Planting the bamboo grove', () => this._buildBambooGrove()],
-      ['Stacking the rock spires', () => this._buildSpires()],
-      ['Stringing the rope bridges', () => this._buildBridges()],
-      ['Growing the forests', () => this._buildForests()],
-      ['Scattering stones', () => { this._buildRocks(); this._buildLanterns(); }],
+      ['Carving the land', () => this._buildTerrainMesh()],
+      ['Filling the water', () => this._buildWater()],
+      // Everything specific to this map, in the order it lists them.
+      ...this.map.features.map(([label, fn]) => [label, () => fn(this)]),
       ['Lighting the lanterns', () => {
         this._buildSpawns();
         for (const k in this.batches) {
@@ -195,12 +183,15 @@ export class World {
     const pos = geo.attributes.position;
     const colors = new Float32Array(pos.count * 3);
 
-    const cGrass = new THREE.Color(0x4f9e3a);
-    const cGrass2 = new THREE.Color(0x67b34a);
-    const cDirt = new THREE.Color(0x8a6b3f);
-    const cSand = new THREE.Color(0xd6c48a);
-    const cRock = new THREE.Color(0x6f6a63);
-    const cSnow = new THREE.Color(0xeef2f6);
+    // The map's palette, so ground colour is part of a map's identity rather
+    // than something baked into the renderer.
+    const P = this.map.palette;
+    const cGrass = new THREE.Color(P.grass);
+    const cGrass2 = new THREE.Color(P.grass2);
+    const cDirt = new THREE.Color(P.dirt);
+    const cSand = new THREE.Color(P.sand);
+    const cRock = new THREE.Color(P.rock);
+    const cHigh = new THREE.Color(P.high);
     const tmp = new THREE.Color();
 
     for (let i = 0; i < pos.count; i++) {
@@ -212,16 +203,20 @@ export class World {
       const varia = this.noise2.fbm(x * 0.03, z * 0.03, 2) * 0.5 + 0.5;
 
       if (h < waterLevel + 1.2) tmp.copy(cSand);
-      // Same constant the climb limit uses, so where the snow starts is
+      // The high band. On the valley this is the snow line, and it is the
+      // same number the climb limit uses — so where the white starts is
       // exactly where the mountain stops letting you walk up it.
-      else if (h > CFG.world.snowLine) {
-        tmp.copy(cSnow).lerp(cRock, clamp((80 - h) / 22, 0, 1) * 0.5);
-      }
-      else {
+      else if (h > P.highAt) {
+        tmp.copy(cHigh).lerp(cRock, clamp((P.highAt + 6 - h) / 22, 0, 1) * 0.5);
+      } else {
         tmp.copy(cGrass).lerp(cGrass2, varia);
-        if (slope > 0.28) tmp.lerp(cDirt, clamp((slope - 0.28) / 0.22, 0, 1));
-        if (slope > 0.46) tmp.lerp(cRock, clamp((slope - 0.46) / 0.3, 0, 1));
-        if (h > 52) tmp.lerp(cRock, clamp((h - 52) / 20, 0, 1));
+        if (slope > P.slopeDirt) {
+          tmp.lerp(cDirt, clamp((slope - P.slopeDirt) / 0.22, 0, 1));
+        }
+        if (slope > P.slopeRock) {
+          tmp.lerp(cRock, clamp((slope - P.slopeRock) / 0.3, 0, 1));
+        }
+        if (h > P.rockFromY) tmp.lerp(cRock, clamp((h - P.rockFromY) / 20, 0, 1));
       }
       // Subtle per-vertex value noise breaks up the flat-shaded look.
       const shade = 0.9 + varia * 0.2;
@@ -915,14 +910,337 @@ export class World {
     }
   }
 
-  _buildSpawns() {
+  // ======================================================================
+  // THE HANGING MIRE
+  //
+  // A drowned valley under a village that never touches the ground. The
+  // whole map is built on one idea: the floor is wading depth and slow, and
+  // everything worth having is in the air. You go UP — by grapple, by
+  // walkway, by jumping between huts — and the water is what you fall into.
+  //
+  // Read against the reference: cold grey-green fog, stone columns standing
+  // in still water, huts slung UNDER heavy canopies rather than perched on
+  // top of them, and warm orange light spilling out of every window. The
+  // warm light is the whole trick — it is the only warm colour in the map,
+  // so it reads as inhabited and tells you where the platforms are.
+  // ======================================================================
+
+  /** Silt banks, boardwalks and a few things to hide behind at ground level. */
+  _buildMireGround() {
     const rnd = this.rnd;
-    // Arena-adjacent spawns.
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const d = 22;
+    const S = CFG.world.size * 0.5;
+    const W = CFG.world.waterLevel;
+
+    // Half-sunk logs and stumps in the shallows — cover, and something to
+    // break the water up so it does not read as a flat sheet.
+    for (let i = 0; i < 90; i++) {
+      const x = (rnd() * 2 - 1) * (S - 50);
+      const z = (rnd() * 2 - 1) * (S - 50);
+      const g = this.heightAt(x, z);
+      if (g > W + 2.2 || g < W - 3.0) continue;
+      const len = 3 + rnd() * 7;
+      const a = rnd() * Math.PI * 2;
+      this.solid(x, g + 0.35, z, len * 0.5, 0.42, 0.5, 0x40382c, 'wood');
+      // A stump beside it, more often than not.
+      if (rnd() < 0.55) {
+        this.solid(x + Math.cos(a) * len * 0.6, g + 0.9,
+          z + Math.sin(a) * len * 0.6, 0.55, 0.9, 0.55, 0x453c2e, 'wood');
+      }
+    }
+
+    // Low boardwalks linking the mud islands, so there is a dry route for
+    // anyone who does not want to swim.
+    const islands = this.flats.filter((f) => f.h > W);
+    for (let i = 0; i < islands.length; i++) {
+      const a = islands[i], b = islands[(i + 1) % islands.length];
+      this._mireBoardwalk(a.x, a.z, b.x, b.z);
+    }
+  }
+
+  /** A plank walk just above the waterline, on short piles. */
+  _mireBoardwalk(x0, z0, x1, z1) {
+    const dx = x1 - x0, dz = z1 - z0;
+    const len = Math.hypot(dx, dz);
+    const n = Math.floor(len / 4);
+    if (n < 2) return;
+    const ux = dx / len, uz = dz / len;
+    const yaw = Math.atan2(ux, uz);
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const x = x0 + dx * t, z = z0 + dz * t;
+      const g = this.heightAt(x, z);
+      const y = Math.max(g, CFG.world.waterLevel) + 0.9;
+      this.solid(x, y, z, 2.0, 0.16, 1.5, 0x53472f, 'wood');
+      // Piles down into the water.
+      if (i % 2 === 0) {
+        this.deco(x, (y + g) * 0.5, z, 0.14, (y - g) * 0.5, 0.14, 0x3a3122);
+      }
+      // Handrail on one side, which also reads as a direction marker.
+      if (i % 3 === 0) {
+        this.deco(x - uz * 1.4, y + 0.7, z + ux * 1.4, 0.1, 0.7, 0.1, 0x3a3122, yaw);
+      }
+    }
+  }
+
+  /**
+   * The spires. The terrain already makes the rock; this dresses it.
+   *
+   * Their tops are the anchor points the hanging village is slung from, so
+   * they are found rather than placed: sample the heightfield, keep the
+   * peaks, and hand the list to the village builder.
+   */
+  _buildMireSpires() {
+    const rnd = this.rnd;
+    const S = CFG.world.size * 0.5;
+    this.mireSpires = [];
+
+    // Find genuine local maxima, so a "spire" is really a tower and not a
+    // random point on a slope.
+    // Generous sampling and a modest neighbourhood: asking for a strict
+    // local maximum over a wide radius finds almost nothing, because the
+    // exact top of a noise ridge is a knife edge. A point that beats its
+    // near neighbours is a tower for our purposes.
+    for (let i = 0; i < 4000 && this.mireSpires.length < 20; i++) {
+      const x = (rnd() * 2 - 1) * (S - 70);
+      const z = (rnd() * 2 - 1) * (S - 70);
+      const h = this.heightAt(x, z);
+      if (h < 16) continue;
+      let peak = true;
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        if (this.heightAt(x + Math.cos(a) * 6, z + Math.sin(a) * 6) > h + 0.5) {
+          peak = false; break;
+        }
+      }
+      if (!peak) continue;
+      // Keep them apart, or the village clumps into one corner.
+      if (this.mireSpires.some((s) => Math.hypot(s.x - x, s.z - z) < 30)) continue;
+      this.mireSpires.push({ x, z, y: h });
+    }
+
+    // Dress each one: a broken crown of rock, and dead trunks leaning off it.
+    for (const s of this.mireSpires) {
+      for (let i = 0; i < 5; i++) {
+        const a = rnd() * Math.PI * 2, d = 2 + rnd() * 5;
+        this.batches.rock.add(
+          s.x + Math.cos(a) * d, s.y + 1 + rnd() * 3, s.z + Math.sin(a) * d,
+          2 + rnd() * 3, 2 + rnd() * 4, 2 + rnd() * 3, 0x4c4f55);
+      }
+      for (let i = 0; i < 3; i++) {
+        const a = rnd() * Math.PI * 2;
+        const h = 8 + rnd() * 14;
+        this.batches.post.add(s.x + Math.cos(a) * 3, s.y + h * 0.5,
+          s.z + Math.sin(a) * 3, 0.3, h, 0.3, 0x36302a);
+      }
+    }
+  }
+
+  /**
+   * The village, hung underneath the spires.
+   *
+   * Each hut is a platform on a mast dropped from the rock above, with a
+   * flared roof over it and a lantern under the eaves. They sit at mixed
+   * heights so the map has a vertical middle — somewhere to fight that is
+   * neither the water nor the very top.
+   */
+  _buildMireVillage() {
+    const rnd = this.rnd;
+    this.mireHuts = [];
+    const spires = this.mireSpires || [];
+
+    for (const s of spires) {
+      const count = 2 + Math.floor(rnd() * 3);
+      for (let i = 0; i < count; i++) {
+        const a = rnd() * Math.PI * 2;
+        const d = 9 + rnd() * 16;
+        const x = s.x + Math.cos(a) * d;
+        const z = s.z + Math.sin(a) * d;
+        // Hung well below the rock it is tied to, and always clear of the
+        // water: the point of this village is that it never touches ground.
+        const ground = this.heightAt(x, z);
+        const y = Math.max(ground + 12, s.y - 6 - rnd() * 22);
+        if (y - ground < 8) continue;
+        this._mireHut(x, y, z, 3.0 + rnd() * 2.2, rnd);
+        this.mireHuts.push({ x, y, z });
+      }
+    }
+
+    // A cluster over the middle of the map, so the centre is contested.
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.3;
+      const d = 14 + (i % 3) * 12;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
-      this.spawnPoints.push([x, this.heightAt(x, z) + 1.2, z]);
+      const y = this.heightAt(x, z) + 14 + (i % 4) * 7;
+      this._mireHut(x, y, z, 3.4 + (i % 2), rnd);
+      this.mireHuts.push({ x, y, z });
+    }
+
+    // Training dummies on a few of the decks, facing the middle.
+    for (let i = 0; i < this.mireHuts.length; i += 4) {
+      const h = this.mireHuts[i];
+      this.dummySpots.push([h.x, h.y + 0.3, h.z, Math.atan2(-h.x, -h.z)]);
+    }
+
+    // The practice ring goes on the widest island, and the golden frog with
+    // it — the crystal has to have somewhere to be given up on every map.
+    // The statue goes at the island's CENTRE, where the flat guarantees dry
+    // ground; the ring sits beside it, still well inside the same flat.
+    // Offsetting the statue instead put it off the edge and into the water.
+    // DRY flats only, then the widest of those. Reducing over every flat
+    // starts from the first one — which here is the centre shallows, below
+    // the waterline — and never replaces it, so the altar ended up in a lake.
+    const dry = this.flats.filter((f) => f.h > CFG.world.waterLevel + 0.6);
+    const isle = dry.reduce((a, b) => (b.r > a.r ? b : a), dry[0]);
+    this._buildFrogathStatue(isle.x, this.heightAt(isle.x, isle.z), isle.z);
+    const rx = isle.x + Math.min(12, isle.r * 0.5);
+    this._buildPracticeRing(rx, this.heightAt(rx, isle.z) + 0.1, isle.z, 4.2);
+  }
+
+  /** One hanging hut: mast, deck, walls, flared roof, lantern. */
+  _mireHut(x, y, z, r, rnd) {
+    const wood = 0x4a4030;
+    const woodDark = 0x342c20;
+    const thatch = 0x6a6152;
+    const yaw = rnd() * Math.PI * 2;
+
+    // The mast it hangs from, running up out of sight into the mist.
+    this.deco(x, y + 16, z, 0.22, 16, 0.22, woodDark);
+    // Guy ropes, splayed — they sell the weight hanging off them.
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + yaw;
+      this.deco(x + Math.cos(a) * r * 0.8, y + 5.5, z + Math.sin(a) * r * 0.8,
+        0.06, 5.5, 0.06, woodDark, 0, Math.cos(a) * 0.16, Math.sin(a) * 0.16);
+    }
+
+    // Deck. Solid, so it is a real platform to stand and fight on.
+    this.solid(x, y, z, r, 0.22, r, wood, 'wood');
+    this.deco(x, y + 0.3, z, r * 0.94, 0.06, r * 0.94, 0x5b503c, yaw);
+    // Joists under it.
+    for (let i = -1; i <= 1; i++) {
+      this.deco(x + i * r * 0.6, y - 0.4, z, 0.12, 0.3, r, woodDark, yaw);
+    }
+
+    // Walls: three sides, so there is cover and a way in.
+    const wallH = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 4) * Math.PI * 2 + yaw;
+      this.solid(x + Math.cos(a) * r * 0.92, y + wallH * 0.5 + 0.2,
+        z + Math.sin(a) * r * 0.92, r * 0.72, wallH * 0.5, 0.16, wood, 'wood');
+    }
+    // A window with light behind it — the warm note the whole map needs.
+    this.deco(x + Math.cos(yaw) * r * 0.95, y + 1.1, z + Math.sin(yaw) * r * 0.95,
+      0.5, 0.42, 0.1, 0xffb04a, yaw);
+
+    // The roof: long, drooping, ragged. This is the silhouette that makes the
+    // place look like the reference rather than like a treehouse.
+    this.roof(x, y + wallH + 0.5, z, r * 2.1, 2.6, thatch, yaw + Math.PI / 4);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + yaw + Math.PI / 4;
+      // Torn eaves hanging off the corners.
+      this.deco(x + Math.cos(a) * r * 1.5, y + wallH + 0.1,
+        z + Math.sin(a) * r * 1.5, 0.5, 1.2, 0.5, thatch, a, 0.35, 0);
+    }
+    // Rags and net hanging beneath.
+    for (let i = 0; i < 3; i++) {
+      const a = rnd() * Math.PI * 2, d = r * (0.4 + rnd() * 0.6);
+      this.deco(x + Math.cos(a) * d, y - 1.4 - rnd() * 1.6, z + Math.sin(a) * d,
+        0.35, 1.4, 0.06, 0x5a5142, a);
+    }
+
+    // The lantern under the eaves — light, and a grapple anchor.
+    this.lantern(x, y + 3.4, z, 0xffa347);
+  }
+
+  /** Rope walks between huts that are close enough to be linked. */
+  _buildMireWalks() {
+    const huts = this.mireHuts || [];
+    const done = new Set();
+    for (let i = 0; i < huts.length; i++) {
+      let best = -1, bestD = 34;
+      for (let j = 0; j < huts.length; j++) {
+        if (i === j) continue;
+        const key = i < j ? `${i}:${j}` : `${j}:${i}`;
+        if (done.has(key)) continue;
+        const d = Math.hypot(huts[i].x - huts[j].x, huts[i].z - huts[j].z)
+          + Math.abs(huts[i].y - huts[j].y) * 1.6;
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (best < 0) continue;
+      done.add(i < best ? `${i}:${best}` : `${best}:${i}`);
+      // _bridge takes [x, y, z] triples, and hangs the deck FROM that height.
+      this._bridge(
+        [huts[i].x, huts[i].y + 0.4, huts[i].z],
+        [huts[best].x, huts[best].y + 0.4, huts[best].z]);
+    }
+  }
+
+  /** Reeds and poles standing out of the water. */
+  _buildMireReeds() {
+    const rnd = this.rnd;
+    const S = CFG.world.size * 0.5;
+    const W = CFG.world.waterLevel;
+    for (let i = 0; i < 460; i++) {
+      const x = (rnd() * 2 - 1) * (S - 40);
+      const z = (rnd() * 2 - 1) * (S - 40);
+      const g = this.heightAt(x, z);
+      if (g > W + 1.6 || g < W - 2.6) continue;
+      const h = 1.6 + rnd() * 3.4;
+      this.batches.post.add(x, g + h * 0.5, z, 0.05, h, 0.05,
+        rnd() < 0.5 ? 0x6a6b45 : 0x565c3c);
+    }
+    // Fishing poles leaning out of the shallows, like the figures in the
+    // reference are working from.
+    for (let i = 0; i < 40; i++) {
+      const x = (rnd() * 2 - 1) * (S - 60);
+      const z = (rnd() * 2 - 1) * (S - 60);
+      const g = this.heightAt(x, z);
+      if (g > W + 1.0 || g < W - 2.0) continue;
+      const h = 5 + rnd() * 4;
+      this.batches.post.add(x, g + h * 0.5, z, 0.07, h, 0.07, 0x4a4232,
+        0, (rnd() - 0.5) * 0.5, (rnd() - 0.5) * 0.5);
+    }
+  }
+
+  /** The lanterns that make the mist glow, and the grapple ring above. */
+  _buildMireLights() {
+    const rnd = this.rnd;
+    const S = CFG.world.size * 0.5;
+    // Lamps strung between the spires, high up — the grapple highway.
+    for (const s of (this.mireSpires || [])) {
+      for (let i = 0; i < 3; i++) {
+        const a = rnd() * Math.PI * 2, d = 10 + rnd() * 22;
+        this.lantern(s.x + Math.cos(a) * d, s.y - 4 - rnd() * 16,
+          s.z + Math.sin(a) * d, 0xffb257);
+      }
+    }
+    // A few floating over open water, so crossing it is not pitch dark.
+    for (let i = 0; i < 22; i++) {
+      const x = (rnd() * 2 - 1) * (S - 60);
+      const z = (rnd() * 2 - 1) * (S - 60);
+      const g = this.heightAt(x, z);
+      if (g > CFG.world.waterLevel + 3) continue;
+      this.lantern(x, g + 9 + rnd() * 12, z, 0xff9a3c);
+    }
+  }
+
+  _buildSpawns() {
+    // Spawning in the water on a map that is mostly water would start every
+    // life with a swim, so the Mire puts people on its decks instead.
+    if (this.mireHuts && this.mireHuts.length) {
+      for (const h of this.mireHuts) this.spawnPoints.push([h.x, h.y + 1.2, h.z]);
+      for (const f of this.flats) {
+        if (f.h > CFG.world.waterLevel + 0.5) {
+          this.spawnPoints.push([f.x, this.heightAt(f.x, f.z) + 1.2, f.z]);
+        }
+      }
+    } else {
+      // Arena-adjacent spawns.
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const d = 22;
+        const x = Math.cos(a) * d, z = Math.sin(a) * d;
+        this.spawnPoints.push([x, this.heightAt(x, z) + 1.2, z]);
+      }
     }
     // Filter out anything that ended up underwater.
     this.spawnPoints = this.spawnPoints.filter(p => p[1] > CFG.world.waterLevel + 0.5);
