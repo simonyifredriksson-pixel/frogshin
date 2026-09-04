@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v53';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v53';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v53';
-import { Input } from './input.js?v=v53';
-import { Audio } from './audio.js?v=v53';
-import { World } from './world.js?v=v53';
-import { Effects } from './effects.js?v=v53';
-import { Atmosphere } from './atmosphere.js?v=v53';
-import { FollowCamera } from './camera.js?v=v53';
-import { Player } from './player.js?v=v53';
-import { RemotePlayer } from './remote.js?v=v53';
-import { HUD } from './hud.js?v=v53';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v53';
-import { FrogModel } from './frog.js?v=v53';
-import { DummyField } from './dummy.js?v=v53';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v53';
-import { ToadModel } from './npc.js?v=v53';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v53';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v53';
-import { DungeonRun } from './dungeon.js?v=v53';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v53';
-import { JudgmentRun } from './judgment.js?v=v53';
-import { COMBO_NAMES } from './ascended.js?v=v53';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v53';
-import { MenuScene } from './menu.js?v=v53';
-import { Economy } from './economy.js?v=v53';
-import { Shop } from './shop.js?v=v53';
-import { Network, NetRole } from './net.js?v=v53';
+import * as THREE from '../lib/three.module.js?v=v54';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v54';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v54';
+import { Input } from './input.js?v=v54';
+import { Audio } from './audio.js?v=v54';
+import { World } from './world.js?v=v54';
+import { Effects } from './effects.js?v=v54';
+import { Atmosphere } from './atmosphere.js?v=v54';
+import { FollowCamera } from './camera.js?v=v54';
+import { Player } from './player.js?v=v54';
+import { RemotePlayer } from './remote.js?v=v54';
+import { HUD } from './hud.js?v=v54';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v54';
+import { FrogModel } from './frog.js?v=v54';
+import { DummyField } from './dummy.js?v=v54';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v54';
+import { ToadModel } from './npc.js?v=v54';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v54';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v54';
+import { DungeonRun } from './dungeon.js?v=v54';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v54';
+import { JudgmentRun } from './judgment.js?v=v54';
+import { COMBO_NAMES } from './ascended.js?v=v54';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v54';
+import { MenuScene } from './menu.js?v=v54';
+import { Economy } from './economy.js?v=v54';
+import { Shop } from './shop.js?v=v54';
+import { Network, NetRole } from './net.js?v=v54';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -819,6 +819,14 @@ class Game {
     this.pendingMode = null;
     this.sessionMode = 'arena';
 
+    // The arena world is kept between matches so a rematch loads instantly.
+    // That cache was never keyed on the MAP, so picking a different one in
+    // the lobby left the old world standing and the game reopened the map you
+    // had just switched away from — with only a page refresh to clear it.
+    if (this.world && this.world.map && this.world.map.id !== this.mapId) {
+      this._dropArenaWorld();
+    }
+
     if (!this.world) {
       // --- first-time world build, one step per frame ---
       this.scene = new THREE.Scene();
@@ -928,6 +936,37 @@ class Game {
     Audio.startAmbient();
     Audio.stopMenuMusic();
     this._resize();
+  }
+
+  /**
+   * Throw the cached arena world away so the next entry builds a fresh one.
+   *
+   * Everything dropped here is rebuilt by _enterArena. The systems go with
+   * the world rather than being kept: Effects, the kunai system and the
+   * pickups all hold the scene and the collider, so keeping one would pin the
+   * discarded world in memory and have it drawing into a scene nobody
+   * renders.
+   */
+  _dropArenaWorld() {
+    if (this.player) {
+      if (this.scene) this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+      this.player = null;
+    }
+    for (const r of this.remotes.values()) r.dispose();
+    this.remotes.clear();
+    this._dropClone();                 // needs this.scene, so before the null
+    if (this.atmo && this.atmo.dispose) this.atmo.dispose();
+    if (this.world && this.world.dispose) this.world.dispose();
+    this.world = null;
+    this.scene = null;
+    this.effects = null;
+    this.kunaiSystem = null;
+    this.dummies = null;
+    this.atmo = null;
+    this.pickups = null;
+    this.followCam = null;
+    this.round = null;
   }
 
   /** Build and start the story level. */
@@ -2362,8 +2401,11 @@ class Game {
     const jug = R.isJuggernaut(p.id);
     const spec = R.isSpectating(p.id);
 
-    // Endless kunai for taggers, the juggernaut, and anyone spectating.
-    p.inventory.setUnlimitedKunai((R.isTagMode && isIt) || jug || spec);
+    // Endless kunai for taggers, the juggernaut, anyone spectating — and in
+    // solo practice, where running out of ammo just means walking to a crate
+    // instead of practising the throw.
+    p.inventory.setUnlimitedKunai(
+      R.practice || (R.isTagMode && isIt) || jug || spec);
     p.throwCooldownOverride = (R.isTagMode && isIt) ? CFG.rounds.taggerCooldown : 0;
     p.combatEnabled = R.combatEnabled;
     p.tagMode = R.isTagMode && R.playing;
@@ -2595,6 +2637,15 @@ class Game {
     } else {
       this.round.authority = authority;
     }
+
+    // Offline solo has nothing to vote on and nobody to vote with, so it
+    // skips the mode screen and drops you straight into the map on ffa
+    // rules. Being made to pick a game mode before you can practise alone
+    // was pure ceremony.
+    const practice = !this.net.isOnline;
+    if (practice && !this.round.practice) this.round.enterPractice();
+    else if (!practice && this.round.practice) this.round.leavePractice();
+
     this._onPhaseChange(this.round.phase);
   }
 
@@ -2618,6 +2669,14 @@ class Game {
 
   _onPhaseChange(phase) {
     if (!this.hud || !this.player) return;
+
+    // Practice has no vote, no countdown and no round banner — just the map.
+    if (this.round && this.round.practice) {
+      this.hud.showVote(false);
+      this.hud.hideRound();
+      this.hud.clearAnnounce();
+      return;
+    }
 
     if (phase === PHASE.VOTING) {
       this.myVote = null;
@@ -2995,6 +3054,15 @@ class Game {
     // ---- round HUD (arena only; the story has its own objectives) ----
     const R = this.round;
     if (!R || this.isStory) {
+      this.hud.update(dt);
+      if (this._comboReset > 0) {
+        this._comboReset -= dt;
+        if (this._comboReset <= 0) this._comboCount = 0;
+      }
+      return;
+    }
+    if (R.practice) {
+      // No banner: there is no mode to name and no clock to count down.
       this.hud.update(dt);
       if (this._comboReset > 0) {
         this._comboReset -= dt;

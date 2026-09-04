@@ -17,8 +17,8 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v53';
-import { clamp } from './util.js?v=v53';
+import { CFG } from './config.js?v=v54';
+import { clamp } from './util.js?v=v54';
 
 export const MODES = {
   TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',
@@ -123,6 +123,15 @@ export class RoundManager {
     this.result = '';
     this.roundNumber = 0;
     this._syncAccum = 0;
+    /**
+     * Solo practice: free-for-all rules with none of the ceremony.
+     *
+     * Not a mode of its own — it IS ffa, just with no vote to sit through, no
+     * clock and no round end, because there is one player and nothing to
+     * decide. Combat, kunai and the dummies behave exactly as they do in a
+     * real match, which is the entire point of practising in it.
+     */
+    this.practice = false;
 
     // Set by the game so the manager can react without importing anything.
     this.onPhaseChange = null;
@@ -412,6 +421,32 @@ export class RoundManager {
     this.result = result;
     this.outcome = outcome || '';
     this._setPhase(PHASE.ENDING, CFG.rounds.endTime);
+  }
+
+  /**
+   * Drop straight into practice: ffa, playing, and no clock running.
+   *
+   * The timer is Infinity rather than a big number so nothing can quietly
+   * expire during a long session — `timer -= dt` leaves it Infinity, so the
+   * PLAYING case in update() never reaches its end-of-round branch.
+   */
+  enterPractice() {
+    this.practice = true;
+    this.mode = MODES.FFA;
+    this.votes.clear();
+    this.taggers.clear();
+    this.eliminated.clear();
+    this.juggernaut = null;
+    this.result = '';
+    this.outcome = '';
+    this._setPhase(PHASE.PLAYING, Infinity);
+  }
+
+  /** Back to a normal lobby, for when a solo session becomes a real match. */
+  leavePractice() {
+    this.practice = false;
+    this.votes.clear();
+    this._setPhase(PHASE.VOTING, CFG.rounds.voteTime);
   }
 
   _setPhase(phase, timer) {

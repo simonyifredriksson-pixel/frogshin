@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v53';
-import { CFG } from './config.js?v=v53';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v53';
-import { findMap } from './maps.js?v=v53';
-import { Terrain, CollisionWorld } from './collision.js?v=v53';
+import * as THREE from '../lib/three.module.js?v=v54';
+import { CFG } from './config.js?v=v54';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v54';
+import { findMap } from './maps.js?v=v54';
+import { Terrain, CollisionWorld } from './collision.js?v=v54';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -162,6 +162,57 @@ export class World {
   build() {
     for (const [, fn] of this.buildTasks()) fn();
     return this;
+  }
+
+  /**
+   * Give back everything this world put on the GPU.
+   *
+   * Needed because the arena world is now rebuilt whenever the map changes,
+   * and a heightfield plus seven instanced batches per switch adds up fast on
+   * the kind of machine this gets played on.
+   *
+   * Only touches what World itself created — the batches' geometry, the
+   * terrain, the water, the lanterns, the ring and the statue, all of which
+   * are made fresh per world. It deliberately does NOT sweep the whole scene:
+   * frogs, toads and guardians share module-level geometry that has to
+   * outlive any single world, and freeing that would break the next one.
+   *
+   * Textures are left alone for the same reason — the lantern halo's is
+   * built once and shared by every lantern in the game. Disposing a material
+   * does not touch its texture, so this is already safe.
+   */
+  dispose() {
+    const seen = new Set();
+    const free = (o) => {
+      if (!o || seen.has(o)) return;
+      seen.add(o);
+      if (o.geometry) o.geometry.dispose();
+      const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+      for (const m of mats) m.dispose();
+      if (o.children) for (const c of o.children.slice()) free(c);
+      if (o.parent) o.parent.remove(o);
+    };
+
+    for (const k in (this.batches || {})) {
+      const b = this.batches[k];
+      free(b.mesh);
+      // A batch that never emitted a mesh still holds the geometry and
+      // material it was created with.
+      if (b.geometry) b.geometry.dispose();
+      if (b.material) b.material.dispose();
+    }
+    free(this.terrainMesh);
+    free(this.waterMesh);
+    for (const l of this.lanterns) free(l.mesh);
+    if (this.practiceRing) free(this.practiceRing.group);
+    if (this.statue && this.statue.group) free(this.statue.group);
+
+    this.batches = {};
+    this.lanterns.length = 0;
+    this.terrainMesh = null;
+    this.waterMesh = null;
+    this.practiceRing = null;
+    this.statue = null;
   }
 
   /**
