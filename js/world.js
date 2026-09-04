@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v51';
-import { CFG } from './config.js?v=v51';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v51';
-import { findMap } from './maps.js?v=v51';
-import { Terrain, CollisionWorld } from './collision.js?v=v51';
+import * as THREE from '../lib/three.module.js?v=v52';
+import { CFG } from './config.js?v=v52';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v52';
+import { findMap } from './maps.js?v=v52';
+import { Terrain, CollisionWorld } from './collision.js?v=v52';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -1052,19 +1052,25 @@ export class World {
     const spires = this.mireSpires || [];
 
     for (const s of spires) {
-      const count = 2 + Math.floor(rnd() * 3);
-      for (let i = 0; i < count; i++) {
+      const want = 2 + Math.floor(rnd() * 3);
+      let made = 0;
+      // Try several spots per hut: a spire is a cone, so a good fraction of
+      // the ring around it is solid rock at the height we want to hang from.
+      for (let i = 0; i < want * 4 && made < want; i++) {
         const a = rnd() * Math.PI * 2;
-        const d = 9 + rnd() * 16;
+        const d = 11 + rnd() * 18;
         const x = s.x + Math.cos(a) * d;
         const z = s.z + Math.sin(a) * d;
         // Hung well below the rock it is tied to, and always clear of the
         // water: the point of this village is that it never touches ground.
-        const ground = this.heightAt(x, z);
-        const y = Math.max(ground + 12, s.y - 6 - rnd() * 22);
-        if (y - ground < 8) continue;
-        this._mireHut(x, y, z, 3.0 + rnd() * 2.2, rnd);
-        this.mireHuts.push({ x, y, z });
+        // Clamping the height up to ground + 12 instead of rejecting the spot
+        // made this guard unreachable and buried huts in the flank.
+        const hang = s.y - 6 - rnd() * 22;
+        if (hang - this.heightAt(x, z) < 8) continue;
+        const hr = 3.0 + rnd() * 2.2;
+        this._mireHut(x, hang, z, hr, rnd);
+        this.mireHuts.push({ x, y: hang, z, r: hr });
+        made++;
       }
     }
 
@@ -1074,8 +1080,9 @@ export class World {
       const d = 14 + (i % 3) * 12;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       const y = this.heightAt(x, z) + 14 + (i % 4) * 7;
-      this._mireHut(x, y, z, 3.4 + (i % 2), rnd);
-      this.mireHuts.push({ x, y, z });
+      const hr = 3.4 + (i % 2);
+      this._mireHut(x, y, z, hr, rnd);
+      this.mireHuts.push({ x, y, z, r: hr });
     }
 
     // Training dummies on a few of the decks, facing the middle.
@@ -1106,12 +1113,17 @@ export class World {
     const thatch = 0x6a6152;
     const yaw = rnd() * Math.PI * 2;
 
+    // Everything above the floor is measured from the deck's TOP surface.
+    // Measuring from its centre instead is what pushed the walls and the ropes
+    // down through the planks.
+    const deckTop = y + 0.22;
+
     // The mast it hangs from, running up out of sight into the mist.
     this.deco(x, y + 16, z, 0.22, 16, 0.22, woodDark);
     // Guy ropes, splayed — they sell the weight hanging off them.
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + yaw;
-      this.deco(x + Math.cos(a) * r * 0.8, y + 5.5, z + Math.sin(a) * r * 0.8,
+      this.deco(x + Math.cos(a) * r * 0.8, deckTop + 5.5, z + Math.sin(a) * r * 0.8,
         0.06, 5.5, 0.06, woodDark, 0, Math.cos(a) * 0.16, Math.sin(a) * 0.16);
     }
 
@@ -1123,25 +1135,35 @@ export class World {
       this.deco(x + i * r * 0.6, y - 0.4, z, 0.12, 0.3, r, woodDark, yaw);
     }
 
-    // Walls: three sides, so there is cover and a way in.
-    const wallH = 1.5;
+    // Walls: three sides, so there is cover and a way in. Tall enough to
+    // stand up in — at 1.5 the hut was shorter than the frog in it, which is
+    // half of why the village read as flat.
+    const wallH = 2.4;
     for (let i = 0; i < 3; i++) {
       const a = (i / 4) * Math.PI * 2 + yaw;
-      this.solid(x + Math.cos(a) * r * 0.92, y + wallH * 0.5 + 0.2,
+      this.solid(x + Math.cos(a) * r * 0.92, deckTop + wallH * 0.5,
         z + Math.sin(a) * r * 0.92, r * 0.72, wallH * 0.5, 0.16, wood, 'wood');
     }
     // A window with light behind it — the warm note the whole map needs.
-    this.deco(x + Math.cos(yaw) * r * 0.95, y + 1.1, z + Math.sin(yaw) * r * 0.95,
+    this.deco(x + Math.cos(yaw) * r * 0.95, deckTop + 1.3, z + Math.sin(yaw) * r * 0.95,
       0.5, 0.42, 0.1, 0xffb04a, yaw);
 
-    // The roof: long, drooping, ragged. This is the silhouette that makes the
+    // The roof: steep, drooping, ragged. This is the silhouette that makes the
     // place look like the reference rather than like a treehouse.
-    this.roof(x, y + wallH + 0.5, z, r * 2.1, 2.6, thatch, yaw + Math.PI / 4);
+    //
+    // roof() wants a cone RADIUS, so it draws twice what it is given. Passing
+    // r * 2.1 spread a 16-wide roof — and a 13-wide eave slab — over an
+    // 8-wide deck, 2.6 tall: a pancake with the hut lost underneath it. A
+    // radius just past the deck's own r, over a height that is a real
+    // fraction of the width, gives it a pitch.
+    const eaveY = deckTop + wallH;
+    this.roof(x, eaveY, z, r * 1.15, 3.6, thatch, yaw + Math.PI / 4);
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + yaw + Math.PI / 4;
-      // Torn eaves hanging off the corners.
-      this.deco(x + Math.cos(a) * r * 1.5, y + wallH + 0.1,
-        z + Math.sin(a) * r * 1.5, 0.5, 1.2, 0.5, thatch, a, 0.35, 0);
+      // Torn eaves hanging off the corners — off the eave line, and stopping
+      // well short of the floor.
+      this.deco(x + Math.cos(a) * r * 1.1, eaveY - 0.5,
+        z + Math.sin(a) * r * 1.1, 0.5, 1.0, 0.5, thatch, a, 0.35, 0);
     }
     // Rags and net hanging beneath.
     for (let i = 0; i < 3; i++) {
@@ -1150,30 +1172,90 @@ export class World {
         0.35, 1.4, 0.06, 0x5a5142, a);
     }
 
-    // The lantern under the eaves — light, and a grapple anchor.
-    this.lantern(x, y + 3.4, z, 0xffa347);
+    // The lantern under the eaves — light, and a grapple anchor. Hung off the
+    // porch side rather than buried in the roof cone, so it can be shot.
+    this.lantern(x + Math.cos(yaw) * r * 1.05, eaveY - 0.8,
+      z + Math.sin(yaw) * r * 1.05, 0xffa347);
   }
 
-  /** Rope walks between huts that are close enough to be linked. */
+  /**
+   * Rope walks between huts that are close enough to be linked.
+   *
+   * Built as a network — shortest pairs first, up to three walks per hut —
+   * rather than one walk per hut. Taking only each hut's single nearest
+   * neighbour leaves a village of isolated pairs, and once spans that would
+   * cut through a house are refused there is little left at all.
+   */
   _buildMireWalks() {
     const huts = this.mireHuts || [];
-    const done = new Set();
+
+    /**
+     * Where a walkway between two huts should actually begin and end, or null
+     * if it should not be built.
+     *
+     * _bridge lays decking across the WHOLE span and plants a solid end post
+     * at each endpoint, so a walk run between hut centres drove planking over
+     * both floors, through the walls, with a post in the middle of each room.
+     * That is the geometry that made the houses look sunk into their own
+     * platforms. Every span is therefore trimmed back to the decks' edges and
+     * dropped if it cannot clear them.
+     */
+    const span = (a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      // A deck is a SQUARE of half-extent r, so how far its edge is depends
+      // on the direction you leave by — r straight out, r * 1.41 at a corner.
+      // Trimming by a flat r leaves a diagonal gangway ending inside the room.
+      const reach = Math.max(Math.abs(ux), Math.abs(uz)) || 1;
+      const ai = a.r / reach + 0.2, bi = b.r / reach + 0.2;
+      // Two decks almost touching leave no room for a span between them, and
+      // clamping the trim to the midpoint instead would put the planks back
+      // inside the rooms — the exact thing the trim exists to prevent.
+      if (ai + bi > len - 2) return null;
+
+      const s = {
+        ax: a.x + ux * ai, az: a.z + uz * ai, ay: a.y + 0.28,
+        bx: b.x - ux * bi, bz: b.z - uz * bi, by: b.y + 0.28,
+      };
+      // A span that passes over a THIRD hut plants decking across that one's
+      // floor just as visibly. Planks are 1.5 half-wide, so clear the room by
+      // that much.
+      const sx = s.bx - s.ax, sz = s.bz - s.az;
+      const sl = sx * sx + sz * sz || 1;
+      const sag = Math.min(4.0, Math.hypot(sx, sz) * 0.05);
+      for (const h of huts) {
+        if (h === a || h === b) continue;
+        const t = clamp(((h.x - s.ax) * sx + (h.z - s.az) * sz) / sl, 0, 1);
+        if (Math.hypot(s.ax + sx * t - h.x, s.az + sz * t - h.z) > h.r * 0.8 + 1.5) continue;
+        // _bridge droops the middle of the span; account for it before
+        // deciding the walkway clears the roof or misses the deck.
+        const py = lerp(s.ay, s.by, t) - Math.sin(t * Math.PI) * sag;
+        if (Math.abs(py - (h.y + 0.22)) < 3) return null;
+      }
+      return s;
+    };
+
+    // Every pair worth considering, shortest first. Height counts against a
+    // pair, so the walks read as level rope rather than as ladders.
+    const pairs = [];
     for (let i = 0; i < huts.length; i++) {
-      let best = -1, bestD = 34;
-      for (let j = 0; j < huts.length; j++) {
-        if (i === j) continue;
-        const key = i < j ? `${i}:${j}` : `${j}:${i}`;
-        if (done.has(key)) continue;
+      for (let j = i + 1; j < huts.length; j++) {
         const d = Math.hypot(huts[i].x - huts[j].x, huts[i].z - huts[j].z)
           + Math.abs(huts[i].y - huts[j].y) * 1.6;
-        if (d < bestD) { bestD = d; best = j; }
+        if (d < 42) pairs.push([d, i, j]);
       }
-      if (best < 0) continue;
-      done.add(i < best ? `${i}:${best}` : `${best}:${i}`);
+    }
+    pairs.sort((p, q) => (p[0] - q[0]) || (p[1] - q[1]) || (p[2] - q[2]));
+
+    const links = new Array(huts.length).fill(0);
+    for (const [, i, j] of pairs) {
+      if (links[i] >= 3 || links[j] >= 3) continue;
+      const s = span(huts[i], huts[j]);
+      if (!s) continue;
+      links[i]++; links[j]++;
       // _bridge takes [x, y, z] triples, and hangs the deck FROM that height.
-      this._bridge(
-        [huts[i].x, huts[i].y + 0.4, huts[i].z],
-        [huts[best].x, huts[best].y + 0.4, huts[best].z]);
+      this._bridge([s.ax, s.ay, s.az], [s.bx, s.by, s.bz]);
     }
   }
 

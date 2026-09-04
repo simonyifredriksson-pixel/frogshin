@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v51';
-import { clamp, smoothstep } from './util.js?v=v51';
+import { CFG } from './config.js?v=v52';
+import { clamp, smoothstep } from './util.js?v=v52';
 
 export const MAPS = [
   {
@@ -157,12 +157,25 @@ export const MAPS = [
       // rather than the connected ranges the valley uses — the shapes in the
       // reference are columns standing in water, not a mountainside.
       //
-      // The frequency is what controls how MANY there are, and the exponent
-      // how sharply they pinch in at the base. Too high a threshold and the
-      // map ends up with two big massifs instead of a forest of columns.
-      const r = w.noise.ridged(x * 0.0125 + 41, z * 0.0125 - 19, 3);
-      const tower = Math.max(0, r - 0.46) / 0.54;
-      h += Math.pow(tower, 1.7) * 72;
+      // These numbers are picked to keep the towers WALKABLE, which is a
+      // tighter constraint than it sounds. A flank's gradient is about
+      // amp * expo / flank-length, the flank length scales with 1/frequency,
+      // and moving at full speed you can only rise stepHeight (0.65) per
+      // sub-step of 0.258 — so anything steeper than a gradient of ~2.5 stops
+      // you dead no matter how the climb limits are set. The original
+      // 0.0125/1.7/72 gave a gradient near 11: a forest of unclimbable
+      // needles, which lifting the climb limit did nothing for.
+      //
+      // Widening the towers and straightening their profile puts all of the
+      // raised ground inside the walkable band — the valley, for comparison,
+      // measures 94%. The exponent is 1 on purpose: that makes each tower a
+      // straight cone whose flank has the SAME gradient the whole way up, so
+      // there is no band near the summit that quietly stops you. Keep this in
+      // mind before retuning: frequency sets how MANY towers there are, and
+      // amp/frequency sets whether you can get up them.
+      const r = w.noise.ridged(x * 0.0062 + 41, z * 0.0062 - 19, 3);
+      const tower = Math.max(0, r - 0.40) / 0.60;
+      h += tower * 54;
 
       // The rim, so nobody wanders off the heightfield.
       const edge = smoothstep(clamp((d - 0.84) / 0.16, 0, 1));

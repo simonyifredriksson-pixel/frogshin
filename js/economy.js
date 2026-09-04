@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v51';
+import { CFG } from './config.js?v=v52';
 
 export class Economy {
   constructor() {
