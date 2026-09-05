@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v61';
-import { CFG } from './config.js?v=v61';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v61';
-import { FrogModel } from './frog.js?v=v61';
-import { Grapple, GrappleState } from './grapple.js?v=v61';
-import { Combat, Health } from './combat.js?v=v61';
-import { Stamina } from './stamina.js?v=v61';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v61';
-import { Audio } from './audio.js?v=v61';
+import * as THREE from '../lib/three.module.js?v=v62';
+import { CFG } from './config.js?v=v62';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v62';
+import { FrogModel } from './frog.js?v=v62';
+import { Grapple, GrappleState } from './grapple.js?v=v62';
+import { Combat, Health } from './combat.js?v=v62';
+import { Stamina } from './stamina.js?v=v62';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v62';
+import { Audio } from './audio.js?v=v62';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();

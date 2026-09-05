@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v61';
-import { CFG } from './config.js?v=v61';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v61';
+import * as THREE from '../lib/three.module.js?v=v62';
+import { CFG } from './config.js?v=v62';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v62';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -442,14 +442,17 @@ export class FrogModel {
     //
     // The back reached z -0.67 against a skull that stops at -0.42: a quarter
     // of a unit of cloth hanging off the back of the head, 60% of the head's
-    // own depth again, which read as a huge black lump from behind. Pulled in
-    // to about a third of that overhang — it still covers the skull all the
-    // way round, it just fits it now.
+    // own depth again, which read as a huge black lump from behind. It is now
+    // pulled in so the head reaches back 1.25x less far — 0.33 took it 1.5x
+    // and that was too far the other way, leaving the hood looking shrunken.
+    //
+    // Radius and offset move together so the hood's FRONT edge stays put over
+    // the crown; only the back comes in.
     //
     // (The two lines that used to follow this set scale.z to the 0.45 it had
     // already been given and then moved the blob back to -0.22. The "flatten
     // the front" they claimed to do never happened.)
-    const hood = mesh(G.sphere, this.mats.cloth, 0.47, 0.40, 0.33, 0, 0.02, -0.117);
+    const hood = mesh(G.sphere, this.mats.cloth, 0.47, 0.40, 0.38, 0, 0.02, -0.156);
     this.head.add(hood);
     this.head.add(mesh(G.sphere, this.mats.cloth, 0.455, 0.30, 0.44, 0, 0.14, 0));
     // Face mask across the mouth.
