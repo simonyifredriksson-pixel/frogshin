@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v65';
-import { CFG } from './config.js?v=v65';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v65';
+import * as THREE from '../lib/three.module.js?v=v66';
+import { CFG } from './config.js?v=v66';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v66';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -393,7 +393,8 @@ export class FrogModel {
      * clear the gi for the same reason.
      */
     const gi = TOR.map((r) => r * WRAP_FIT);
-    g.add(mesh(G.wrap, this.mats.cloth, gi[0], 0.34, gi[2], 0, 0.60, 0));
+    this.giM = mesh(G.wrap, this.mats.cloth, gi[0], 0.34, gi[2], 0, 0.60, 0);
+    g.add(this.giM);
 
     /**
      * The obi is tied ON the belly, so it has to reach past it.
@@ -1274,12 +1275,33 @@ export class FrogModel {
     // Breathe the whole midsection, so the gi and the sash swell with the
     // belly instead of the belly pumping through them.
     //
-    // Width only. The group sits at the body's origin, so scaling its Y would
-    // carry every child's HEIGHT as well as its size — the gi and the sash
-    // would ride up the chest on each breath. The belly still rises, just on
-    // its own axis.
+    // Width through the group. Its Y is left alone on purpose: the group sits
+    // at the body's origin, so scaling that would carry every child's HEIGHT
+    // as well as its size and ride the gi up the chest on each breath.
     this.girth.scale.set(throat, 1, throat);
-    this.bellyM.scale.y = 0.34 * throat;
+    // Height on each mesh's OWN scale instead, which grows it about its own
+    // centre and moves nothing. The gi has to grow with the belly here too:
+    // breathing the belly upward against a shirt of fixed height pushed it
+    // out through the top of the gi — 0.04 proud at rest, 0.18 at full croak,
+    // a pale bubble surfacing at the chest for the few frames of the pulse.
+    // The gi's centre sits above the belly's, so growing both by the same
+    // factor keeps its top edge permanently clear of the belly's.
+    //
+    // Note the doubling. The belly is a sphere, so its scale.y is a RADIUS;
+    // the gi is a cylinder, so its scale.y is a full HEIGHT. Feeding both the
+    // same number moves the gi's edges half as far as the belly's, which is
+    // why matching the scales still let the bubble grow. Twice the belly's
+    // change moves both edges together, so the amount of belly showing past
+    // the band stays exactly what it is at rest.
+    //
+    // Three, not two, because the belly's VISIBLE top climbs faster than its
+    // geometric one: inflating also pushes it further out of the green torso,
+    // so it surfaces from the chest higher up than its own crown moves. Two
+    // held the lower edge exactly but still let a pale bubble creep out above
+    // the band. Three holds both, and the test pins it.
+    const bellyR = 0.34 * throat;
+    this.bellyM.scale.y = bellyR;
+    this.giM.scale.y = 0.34 + 3 * (bellyR - 0.34);
 
     // Jaw opens while the tongue is out.
     const jawOpen = s.grappling ? 0.55 : 0;
