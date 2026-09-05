@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v62';
-import { CFG } from './config.js?v=v62';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v62';
+import * as THREE from '../lib/three.module.js?v=v63';
+import { CFG } from './config.js?v=v63';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v63';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -501,6 +501,22 @@ export class FrogModel {
       const hip = new THREE.Group();
       hip.position.set(sx * 0.27, 0.36, 0);
       this.body.add(hip);
+      /**
+       * The haunch, filling the corner between the body and the thigh.
+       *
+       * The torso is a sphere that pinches to a point at its bottom, and the
+       * thigh is a tube standing beside it, so the two run out of each other
+       * on the way down: by y 0.18 the torso's edge has drawn in to x 0.15
+       * while the thigh's inner edge is still at 0.165, and the air between
+       * them widens from there. That is what made the legs read as parked
+       * next to the frog rather than growing out of it.
+       *
+       * It rides in the hip group, close to the pivot, so it follows the leg
+       * a little as it swings — like a haunch — instead of either staying
+       * welded to the body or swinging the whole way with the thigh.
+       */
+      hip.add(mesh(G.sphere, this.mats.skin, 0.20, 0.155, 0.185,
+        sx * -0.05, -0.10, -0.01));
       // Powerful frog thigh, angled outward.
       hip.add(mesh(G.capsule, this.mats.skin, 0.155, 0.15, 0.16, sx * 0.05, -0.14, -0.02));
       const shin = new THREE.Group();
