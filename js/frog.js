@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v57';
-import { CFG } from './config.js?v=v57';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v57';
+import * as THREE from '../lib/three.module.js?v=v58';
+import { CFG } from './config.js?v=v58';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v58';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -325,15 +325,33 @@ export class FrogModel {
     // Chunky pear-shaped frog torso.
     this.torso = mesh(G.sphere, this.mats.skin, 0.52, 0.46, 0.46, 0, 0.62, 0);
     b.add(this.torso);
+
+    /**
+     * The midsection: the belly and everything worn OVER it, in one group.
+     *
+     * The throat pulse in update() breathes this whole group rather than the
+     * belly alone. Clothes on a body that inflates have to inflate with it —
+     * a shirt over a balloon stretches when the balloon does — and scaling
+     * only the belly drove it in and out through a gi and a sash that never
+     * moved, so the pale area grew and shrank against a fixed dark rim.
+     *
+     * Grouping them is what keeps it honest: the belly stays exactly the same
+     * fraction proud of the cloth at every point in the breath, because the
+     * one scale applies to both.
+     */
+    this.girth = new THREE.Group();
+    b.add(this.girth);
+    const g = this.girth;
+
     // Pale belly patch, pushed slightly forward.
     this.bellyM = mesh(G.sphere, this.mats.belly, 0.40, 0.34, 0.33, 0, 0.55, 0.20);
-    b.add(this.bellyM);
+    g.add(this.bellyM);
     // Ninja gi wrapped around the middle.
-    b.add(mesh(G.cyl, this.mats.cloth, 0.50, 0.34, 0.46, 0, 0.60, 0));
+    g.add(mesh(G.cyl, this.mats.cloth, 0.50, 0.34, 0.46, 0, 0.60, 0));
     // Obi sash.
-    b.add(mesh(G.cyl, this.mats.scarf, 0.53, 0.10, 0.49, 0, 0.50, 0));
+    g.add(mesh(G.cyl, this.mats.scarf, 0.53, 0.10, 0.49, 0, 0.50, 0));
     // Sash knot.
-    b.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
+    g.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
   }
 
   _buildHead() {
@@ -1129,7 +1147,15 @@ export class FrogModel {
     // Throat pulse — a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);
     const throat = 1 + Math.sin(t * 3.1) * 0.03 + this.croakPulse * 0.25;
-    this.bellyM.scale.set(0.40 * throat, 0.34 * throat, 0.33 * throat);
+    // Breathe the whole midsection, so the gi and the sash swell with the
+    // belly instead of the belly pumping through them.
+    //
+    // Width only. The group sits at the body's origin, so scaling its Y would
+    // carry every child's HEIGHT as well as its size — the gi and the sash
+    // would ride up the chest on each breath. The belly still rises, just on
+    // its own axis.
+    this.girth.scale.set(throat, 1, throat);
+    this.bellyM.scale.y = 0.34 * throat;
 
     // Jaw opens while the tongue is out.
     const jawOpen = s.grappling ? 0.55 : 0;
