@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v63';
-import { CFG } from './config.js?v=v63';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v63';
+import * as THREE from '../lib/three.module.js?v=v64';
+import { CFG } from './config.js?v=v64';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v64';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -28,6 +28,15 @@ const EYE_WHITE = 0xfefbe8;
  * has to be a little bigger than the frog rather than a lot.
  */
 const WRAP_SIDES = 24;
+
+/**
+ * Radius of a shut eyelid.
+ *
+ * The lid sits in the middle of the eyeball and swells to cover it, so this
+ * is the radius that just swallows the white, the pupil and the highlight —
+ * the highlight's far edge is the furthest, at 0.209.
+ */
+const LID_SHUT = 0.216;
 /** How much bigger a wrap must be than the thing it covers, corners and all. */
 const WRAP_FIT = 1.01 / Math.cos(Math.PI / WRAP_SIDES);
 
@@ -412,10 +421,16 @@ export class FrogModel {
     // Wide frog mouth line.
     this.head.add(mesh(G.box, this.mats.skinDark, 0.52, 0.035, 0.10, 0, -0.13, 0.34));
     // Jaw — opens when the tongue fires.
+    //
+    // Tucked back inside the face mask. It used to reach z 0.52 while the
+    // mask's front is 0.43, so a dark green chin hung out in front of the
+    // black cloth and read as a second chin covering the mask. It still
+    // swings out when the mouth opens; it just is not parked outside the
+    // mask with the mouth shut.
     this.jaw = new THREE.Group();
     this.jaw.position.set(0, -0.12, 0.16);
     this.head.add(this.jaw);
-    this.jaw.add(mesh(G.sphere, this.mats.skinDark, 0.34, 0.12, 0.26, 0, -0.04, 0.10));
+    this.jaw.add(mesh(G.sphere, this.mats.skinDark, 0.34, 0.12, 0.26, 0, -0.04, -0.03));
 
     // --- eyes: big, high on the head, very expressive ---
     this.eyes = [];
@@ -431,9 +446,20 @@ export class FrogModel {
       g.add(pupil);
       const shine = mesh(G.lowSphere, this.mats.shine, 0.045, 0.045, 0.045, sx * -0.05, 0.09, 0.24);
       g.add(shine);
-      // Lid used for blinking (scales down over the eye).
-      const lid = mesh(G.lowSphere, this.mats.skin, 0.24, 0.24, 0.24, 0, 0.10, 0.02);
-      lid.scale.y = 0.02;
+      /**
+       * Lid used for blinking. It swells over the eyeball from inside it,
+       * rather than being a flat plate that drops down the front.
+       *
+       * As a plate it was a disc of radius 0.24 lying at eye height with its
+       * thickness scaled to nothing — and the eyeball spans that height, so
+       * the disc cut a green line straight across the white. Not during a
+       * blink: while the eye was OPEN, which is nearly all the time.
+       *
+       * Centred in the middle of the eyeball, a lid at rest is a speck buried
+       * inside the white where nothing can see it, and 0.21 is the radius
+       * that just swallows the white, the pupil and the highlight.
+       */
+      const lid = mesh(G.lowSphere, this.mats.skin, 0.002, 0.002, 0.002, 0, 0.02, 0.10);
       g.add(lid);
       this.eyes.push({ group: g, white, pupil, lid });
     }
@@ -483,8 +509,9 @@ export class FrogModel {
       fore.position.set(0, -0.38, 0);
       shoulder.add(fore);
       fore.add(mesh(G.capsule, this.mats.skin, 0.10, 0.13, 0.10, 0, -0.15, 0));
-      // Wrist wrap + three-toed frog hand.
-      fore.add(mesh(G.cyl, this.mats.clothDark, 0.115, 0.06, 0.115, 0, -0.03, 0));
+      // Wrist wrap + three-toed frog hand. Rounded like the leg's, so the
+      // pair match rather than one being a visible octagon.
+      fore.add(mesh(G.wrap, this.mats.clothDark, 0.115, 0.06, 0.115, 0, -0.03, 0));
       const hand = new THREE.Group();
       hand.position.set(0, -0.32, 0);
       fore.add(hand);
@@ -523,7 +550,11 @@ export class FrogModel {
       shin.position.set(sx * 0.08, -0.30, 0);
       hip.add(shin);
       shin.add(mesh(G.capsule, this.mats.skin, 0.10, 0.14, 0.10, 0, -0.13, 0.02));
-      shin.add(mesh(G.cyl, this.mats.clothDark, 0.115, 0.07, 0.115, 0, -0.02, 0));
+      // Leg wrap. Two things were wrong with it: an 8-sided cylinder's flat
+      // faces sit at 0.92 of its radius, and it was centred on z 0 while the
+      // shin it wraps sits at z +0.02 — so the green leg came out through the
+      // front of the black binding. Rounder, and lined up with the limb.
+      shin.add(mesh(G.wrap, this.mats.clothDark, 0.115, 0.07, 0.115, 0, -0.02, 0.02));
       const foot = new THREE.Group();
       foot.position.set(0, -0.29, 0);
       shin.add(foot);
@@ -1004,7 +1035,11 @@ export class FrogModel {
     if (s.dead) {
       this.root.rotation.z = damp(this.root.rotation.z, Math.PI * 0.48, 9, dt);
       this.body.position.y = damp(this.body.position.y, -0.25, 8, dt);
-      for (const e of this.eyes) e.lid.scale.y = damp(e.lid.scale.y, 1.0, 12, dt);
+      // Eyes close the same way a blink closes them — uniformly, to the
+      // radius that just swallows the eyeball. Driving scale.y alone left the
+      // lid a needle now that the other two axes are a speck, and it was a
+      // four-times-oversized ellipsoid before that.
+      for (const e of this.eyes) e.lid.scale.setScalar(damp(e.lid.scale.x, LID_SHUT, 12, dt));
       this.tongue.visible = false;
       return;
     }
@@ -1237,8 +1272,10 @@ export class FrogModel {
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) { this.blink = 1; this.blinkTimer = 2.2 + Math.random() * 3.5; }
     if (this.blink > 0) this.blink = Math.max(0, this.blink - dt * 7);
-    const lidY = 0.02 + Math.sin(this.blink * Math.PI) * 0.98;
-    for (const e of this.eyes) e.lid.scale.y = lidY;
+    // The lid grows over the eyeball and shrinks back inside it. Uniform, so
+    // there is never a flat disc lying across the white — see _buildHead.
+    const lidR = 0.002 + Math.sin(this.blink * Math.PI) * (LID_SHUT - 0.002);
+    for (const e of this.eyes) e.lid.scale.setScalar(lidR);
 
     // ---- cloth: scarf + headband tails trail behind motion ---------------
     const drag = clamp(speed / 20, 0, 1);
