@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v56';
-import { CFG } from './config.js?v=v56';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v56';
+import * as THREE from '../lib/three.module.js?v=v57';
+import { CFG } from './config.js?v=v57';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v57';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -18,42 +18,15 @@ const SCARF = 0xc0392b;
 const BELLY = 0xdfe6a8;
 const EYE_WHITE = 0xfefbe8;
 
-/**
- * A latitude band of a unit sphere, for cloth that has to sit ON the head.
- *
- * SphereGeometry measures theta from the +Y pole. Scaled onto the same
- * ellipsoid as the head, a band built this way follows that surface exactly,
- * which a cylinder wrapped around a sphere cannot: the cylinder's flat rims
- * cut hard rings and its corners push out past the skull at the sides.
- */
-function bandGeo(t0, t1, seg = 30, rings = 6) {
-  return new THREE.SphereGeometry(1, seg, rings, 0, Math.PI * 2, t0, t1 - t0);
-}
-
-/**
- * Shared geometries — every frog reuses these, so memory stays flat.
- *
- * The segment counts are the whole reason the frog stopped reading as a heap
- * of faceted blocks. Nothing about any shape, size or position changes with
- * them: a sphere is still a sphere and every offset in this file is untouched,
- * the primitives are simply round now. They are built once for the game, but
- * every frog on the map DRAWS all of them, so the counts are graded by how big
- * the part is on screen rather than turned up across the board.
- */
+/** Shared geometries — every frog reuses these, so memory stays flat. */
 const G = {
-  sphere: new THREE.SphereGeometry(1, 22, 16),
-  lowSphere: new THREE.SphereGeometry(1, 14, 10),
+  sphere: new THREE.SphereGeometry(1, 12, 9),
+  lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
-  capsule: new THREE.CapsuleGeometry(1, 1, 5, 14),
-  cyl: new THREE.CylinderGeometry(1, 1, 1, 16),
-  cone: new THREE.ConeGeometry(1, 1, 12),
-  torus: new THREE.TorusGeometry(1, 0.12, 8, 24),
-
-  /** The hood, cut to the head's own surface. See _buildHead. */
-  hoodCap: bandGeo(0, 1.36),
-  hoodBack: bandGeo(1.36, 2.62, 30, 8),
-  /** The headband, so it cannot corner out past the skull. */
-  band: bandGeo(1.14, 1.50),
+  capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
+  cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
+  cone: new THREE.ConeGeometry(1, 1, 7),
+  torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
 };
 
 // Scratch colours for the divine skin's phase blend, so it allocates none.
@@ -359,9 +332,8 @@ export class FrogModel {
     b.add(mesh(G.cyl, this.mats.cloth, 0.50, 0.34, 0.46, 0, 0.60, 0));
     // Obi sash.
     b.add(mesh(G.cyl, this.mats.scarf, 0.53, 0.10, 0.49, 0, 0.50, 0));
-    // Sash knot — a rounded knot of cloth in place of a literal cube, at the
-    // same size and in the same spot.
-    b.add(mesh(G.sphere, this.mats.scarf, 0.08, 0.08, 0.06, 0.34, 0.50, 0.16));
+    // Sash knot.
+    b.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
   }
 
   _buildHead() {
@@ -403,36 +375,17 @@ export class FrogModel {
     }
 
     // --- ninja hood: dark cowl over the back and top of the skull ---
-    //
-    // Cut to the head's own shape rather than parked around it. It covers the
-    // same crown and back as before, in the same cloth, but as two panels of
-    // the head's own surface at a constant 4% clearance — so it is a hood that
-    // FITS instead of three loose ellipsoids, each a different size from the
-    // skull, overlapping wherever they happened to land. That is what made it
-    // read as a lump balanced on top with gaps at the edges.
-    //
-    // Both panels share the surface and meet exactly at theta 1.36, so there
-    // is no seam between them and nothing that can drift out of alignment.
-    // Face mask across the mouth. Kept exactly as it was: it is narrower than
-    // the skull's radii, but it sits low, and at y -0.14 the head has already
-    // narrowed to 0.405 — so its 0.435 does show, as the dark band along the
-    // jaw. (An earlier pass took it for dead geometry and dropped it, which
-    // changed the face.)
+    const hood = mesh(G.sphere, this.mats.cloth, 0.47, 0.40, 0.45, 0, 0.02, -0.05);
+    // Flatten the front so the face stays open.
+    hood.scale.z = 0.45;
+    hood.position.z = -0.22;
+    this.head.add(hood);
+    this.head.add(mesh(G.sphere, this.mats.cloth, 0.455, 0.30, 0.44, 0, 0.14, 0));
+    // Face mask across the mouth.
     this.head.add(mesh(G.sphere, this.mats.clothDark, 0.435, 0.20, 0.415, 0, -0.14, 0.02));
 
-    const HR = [0.44 * 1.04, 0.36 * 1.04, 0.42 * 1.04];
-    this.head.add(mesh(G.hoodCap, this.mats.cloth, ...HR));
-    // Turned to face backwards. A half turn maps the ellipsoid onto itself,
-    // so the panel still lies exactly on the same surface.
-    this.head.add(mesh(G.hoodBack, this.mats.cloth, ...HR, 0, 0, 0, 0, Math.PI, 0));
-
-    // Headband across the brow with two trailing tails. A band on the skull's
-    // own surface, because the 8-sided cylinder this replaces had corners
-    // standing out past the head at the sides and two flat rims cutting rings
-    // across it.
-    this.head.add(mesh(G.band, this.mats.scarf, 0.44 * 1.07, 0.36 * 1.07, 0.42 * 1.07));
-    // The brow plate stays a plate — it is flat, not a cube, and it is part of
-    // the face.
+    // Headband across the brow with two trailing tails.
+    this.head.add(mesh(G.cyl, this.mats.scarf, 0.455, 0.075, 0.44, 0, 0.10, 0));
     this.head.add(mesh(G.box, this.mats.gold, 0.14, 0.11, 0.03, 0, 0.10, 0.42));
     this.bandTails = [];
     for (const sx of [-1, 1]) {
@@ -554,9 +507,8 @@ export class FrogModel {
       parent = seg;
     }
 
-    // Belt pouch + shuriken detail — rounded, since a 0.13 cube on the hip is
-    // exactly the sort of thing that reads as a block stuck to the frog.
-    this.body.add(mesh(G.sphere, this.mats.clothDark, 0.068, 0.068, 0.042, -0.30, 0.48, 0.14));
+    // Belt pouch + shuriken detail.
+    this.body.add(mesh(G.box, this.mats.clothDark, 0.13, 0.13, 0.08, -0.30, 0.48, 0.14));
     this.sheathPos = this.katana.position.clone();
   }
 
@@ -1187,11 +1139,7 @@ export class FrogModel {
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) { this.blink = 1; this.blinkTimer = 2.2 + Math.random() * 3.5; }
     if (this.blink > 0) this.blink = Math.max(0, this.blink - dt * 7);
-    // The lid closes to the size of the eye it covers, 0.24. Driving scale.y
-    // to 1.0 against x/z of 0.24 stretched each lid into a green ellipsoid
-    // four times the size of the head for the few frames a blink lasts — two
-    // pillars flashing out of the skull every time any frog blinked.
-    const lidY = 0.02 + Math.sin(this.blink * Math.PI) * 0.22;
+    const lidY = 0.02 + Math.sin(this.blink * Math.PI) * 0.98;
     for (const e of this.eyes) e.lid.scale.y = lidY;
 
     // ---- cloth: scarf + headband tails trail behind motion ---------------
