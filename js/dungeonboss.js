@@ -16,11 +16,11 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v60';
-import { CFG } from './config.js?v=v60';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v60';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v60';
-import { Audio } from './audio.js?v=v60';
+import * as THREE from '../lib/three.module.js?v=v61';
+import { CFG } from './config.js?v=v61';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v61';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v61';
+import { Audio } from './audio.js?v=v61';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
