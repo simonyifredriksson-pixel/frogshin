@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v59';
-import { CFG } from './config.js?v=v59';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v59';
+import * as THREE from '../lib/three.module.js?v=v60';
+import { CFG } from './config.js?v=v60';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v60';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -360,7 +360,8 @@ export class FrogModel {
     const g = this.girth;
 
     // Pale belly patch, pushed slightly forward.
-    this.bellyM = mesh(G.sphere, this.mats.belly, 0.40, 0.34, 0.33, 0, 0.55, 0.20);
+    const BEL = [0.40, 0.34, 0.33], BEL_Z = 0.20;
+    this.bellyM = mesh(G.sphere, this.mats.belly, ...BEL, 0, 0.55, BEL_Z);
     g.add(this.bellyM);
     /**
      * Ninja gi wrapped around the middle, and the obi over it.
@@ -374,8 +375,27 @@ export class FrogModel {
      */
     const gi = TOR.map((r) => r * WRAP_FIT);
     g.add(mesh(G.wrap, this.mats.cloth, gi[0], 0.34, gi[2], 0, 0.60, 0));
-    const obi = gi.map((r) => r * WRAP_FIT);
-    g.add(mesh(G.wrap, this.mats.scarf, obi[0], 0.10, obi[2], 0, 0.50, 0));
+
+    /**
+     * The obi is tied ON the belly, so it has to reach past it.
+     *
+     * The frog is not round front-to-back: the belly bulges forward to 0.53
+     * while the gi's back sits at 0.47. A sash centred on the body therefore
+     * cannot reach the belly's nose without ballooning off the spine by the
+     * same amount — and centred, it simply sank behind the belly, leaving the
+     * red showing only as two slivers at the far edges where the belly ran
+     * out.
+     *
+     * So it is an oval, pushed forward far enough to clear the belly's nose
+     * and no further. Both numbers come from the shapes it wraps: the belly's
+     * front and the gi's back.
+     */
+    const nose = BEL_Z + BEL[2];                 // the belly's front
+    const spine = gi[2];                         // the gi's back
+    const obiZ = (nose - spine) / 2;             // shift forward to sit between
+    const obiR = ((nose + spine) / 2) * WRAP_FIT;
+    g.add(mesh(G.wrap, this.mats.scarf,
+      gi[0] * WRAP_FIT, 0.10, obiR, 0, 0.50, obiZ));
     // Sash knot.
     g.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
   }
