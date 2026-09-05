@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v64';
-import { CFG } from './config.js?v=v64';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v64';
+import * as THREE from '../lib/three.module.js?v=v65';
+import { CFG } from './config.js?v=v65';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v65';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -44,6 +44,16 @@ const WRAP_FIT = 1.01 / Math.cos(Math.PI / WRAP_SIDES);
 const G = {
   /** Cylinder for clothing that has to enclose a limb or the torso. */
   wrap: new THREE.CylinderGeometry(1, 1, 1, WRAP_SIDES),
+  /**
+   * The mouth: a crease that lies ON the face mask's own surface.
+   *
+   * A flat box cannot do this job. The mask is a curved dome, so a bar wide
+   * enough to be a frog's mouth is 0.08 further forward at its centre than at
+   * its ends — push it out until the middle shows and the corners hang off
+   * the face; leave it flush and the whole thing is swallowed, which is what
+   * had happened. A band of the mask's own sphere follows the curve exactly.
+   */
+  mouth: new THREE.SphereGeometry(1, 22, 2, Math.PI / 2 - 0.62, 1.24, 1.45, 0.15),
   sphere: new THREE.SphereGeometry(1, 12, 9),
   lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -418,19 +428,26 @@ export class FrogModel {
     this.headM = mesh(G.sphere, this.mats.skin, 0.44, 0.36, 0.42, 0, 0, 0);
     this.head.add(this.headM);
 
-    // Wide frog mouth line.
-    this.head.add(mesh(G.box, this.mats.skinDark, 0.52, 0.035, 0.10, 0, -0.13, 0.34));
+    // Wide frog mouth line, drawn on the mask a hair proud of it. It used to
+    // be a flat bar at z 0.34, which sat inside the mask's 0.43 and was never
+    // visible at all — the jaw hanging out in front was doing the whole job
+    // of looking like a mouth, and once that was tucked away the face had
+    // nothing on it.
+    this.head.add(mesh(G.mouth, this.mats.skinDark,
+      0.435 * 1.02, 0.20 * 1.02, 0.415 * 1.02, 0, -0.14, 0.02));
     // Jaw — opens when the tongue fires.
     //
-    // Tucked back inside the face mask. It used to reach z 0.52 while the
-    // mask's front is 0.43, so a dark green chin hung out in front of the
-    // black cloth and read as a second chin covering the mask. It still
-    // swings out when the mouth opens; it just is not parked outside the
-    // mask with the mouth shut.
+    // Tucked inside the face mask. It used to reach z 0.52 while the mask's
+    // front is 0.43, so a dark green chin hung out in front of the black
+    // cloth and read as a second chin covering it.
+    //
+    // Made SMALLER to fit rather than pushed back behind the hinge: the jaw
+    // has to stay in front of its pivot or opening it swings the chin
+    // backwards into the skull instead of dropping it.
     this.jaw = new THREE.Group();
     this.jaw.position.set(0, -0.12, 0.16);
     this.head.add(this.jaw);
-    this.jaw.add(mesh(G.sphere, this.mats.skinDark, 0.34, 0.12, 0.26, 0, -0.04, -0.03));
+    this.jaw.add(mesh(G.sphere, this.mats.skinDark, 0.31, 0.11, 0.20, 0, -0.04, 0.05));
 
     // --- eyes: big, high on the head, very expressive ---
     this.eyes = [];
