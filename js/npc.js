@@ -8,10 +8,10 @@
  * touch a handful of materials.
  */
 
-import * as THREE from '../lib/three.module.js?v=v55';
-import { damp, dampAngle, lerp, clamp } from './util.js?v=v55';
-import { CFG } from './config.js?v=v55';
-import { buildKatana, FrogModel } from './frog.js?v=v55';
+import * as THREE from '../lib/three.module.js?v=v56';
+import { damp, dampAngle, lerp, clamp } from './util.js?v=v56';
+import { CFG } from './config.js?v=v56';
+import { buildKatana, FrogModel } from './frog.js?v=v56';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 10, 8),
