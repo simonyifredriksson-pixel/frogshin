@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v58';
-import { CFG } from './config.js?v=v58';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v58';
+import * as THREE from '../lib/three.module.js?v=v59';
+import { CFG } from './config.js?v=v59';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v59';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -18,8 +18,23 @@ const SCARF = 0xc0392b;
 const BELLY = 0xdfe6a8;
 const EYE_WHITE = 0xfefbe8;
 
+/**
+ * Sides on the cylinders worn as clothing.
+ *
+ * A cylinder is a prism: its flat faces lie at cos(PI/sides) of its nominal
+ * radius, so a coarse one is much narrower between its corners than it looks.
+ * The gi was an 8-sided cylinder — faces at 0.92 of its radius — and that is
+ * what let the body push out through the shirt. Rounder means the cloth only
+ * has to be a little bigger than the frog rather than a lot.
+ */
+const WRAP_SIDES = 24;
+/** How much bigger a wrap must be than the thing it covers, corners and all. */
+const WRAP_FIT = 1.01 / Math.cos(Math.PI / WRAP_SIDES);
+
 /** Shared geometries — every frog reuses these, so memory stays flat. */
 const G = {
+  /** Cylinder for clothing that has to enclose a limb or the torso. */
+  wrap: new THREE.CylinderGeometry(1, 1, 1, WRAP_SIDES),
   sphere: new THREE.SphereGeometry(1, 12, 9),
   lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -323,7 +338,8 @@ export class FrogModel {
   _buildTorso() {
     const b = this.body;
     // Chunky pear-shaped frog torso.
-    this.torso = mesh(G.sphere, this.mats.skin, 0.52, 0.46, 0.46, 0, 0.62, 0);
+    const TOR = [0.52, 0.46, 0.46];
+    this.torso = mesh(G.sphere, this.mats.skin, ...TOR, 0, 0.62, 0);
     b.add(this.torso);
 
     /**
@@ -346,10 +362,20 @@ export class FrogModel {
     // Pale belly patch, pushed slightly forward.
     this.bellyM = mesh(G.sphere, this.mats.belly, 0.40, 0.34, 0.33, 0, 0.55, 0.20);
     g.add(this.bellyM);
-    // Ninja gi wrapped around the middle.
-    g.add(mesh(G.cyl, this.mats.cloth, 0.50, 0.34, 0.46, 0, 0.60, 0));
-    // Obi sash.
-    g.add(mesh(G.cyl, this.mats.scarf, 0.53, 0.10, 0.49, 0, 0.50, 0));
+    /**
+     * Ninja gi wrapped around the middle, and the obi over it.
+     *
+     * Each is sized off what it has to COVER rather than by eye. The gi was a
+     * 0.50-wide 8-sided cylinder around a 0.52-wide torso: its flat faces sat
+     * at 0.46, inside the body, so the green frog pushed out through the
+     * shirt everywhere except the eight corners — over half of every
+     * horizontal slice was flesh showing through cloth. The obi then has to
+     * clear the gi for the same reason.
+     */
+    const gi = TOR.map((r) => r * WRAP_FIT);
+    g.add(mesh(G.wrap, this.mats.cloth, gi[0], 0.34, gi[2], 0, 0.60, 0));
+    const obi = gi.map((r) => r * WRAP_FIT);
+    g.add(mesh(G.wrap, this.mats.scarf, obi[0], 0.10, obi[2], 0, 0.50, 0));
     // Sash knot.
     g.add(mesh(G.box, this.mats.scarf, 0.16, 0.16, 0.12, 0.34, 0.50, 0.16));
   }
