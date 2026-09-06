@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG } from './config.js?v=v72';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v72';
-import { findMap } from './maps.js?v=v72';
-import { Terrain, CollisionWorld } from './collision.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG } from './config.js?v=v73';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v73';
+import { findMap } from './maps.js?v=v73';
+import { Terrain, CollisionWorld } from './collision.js?v=v73';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -360,6 +360,67 @@ export class World {
     return true;
   }
 
+  /**
+   * A flight of steps from `groundY` up to `topY`, running away from
+   * (sx, sz) along the unit direction (dx, dz).
+   *
+   * Exists because the map was full of ledges taller than the game's own
+   * step height: the Sky Shrine terrace is a single 1.40 lip, the arena dais
+   * starts with 0.85, and the rope bridges' decks stand six to nine units up
+   * with nothing whatever underneath them. `stepHeight` is 0.65, so all of
+   * those are things you can see and cannot get onto.
+   *
+   * Every riser here is well under that limit rather than just inside it.
+   * A step you can only just make is one you fail at the bottom of a slope,
+   * or when the ground under you is a little higher than the builder assumed.
+   *
+   * The boxes run all the way down to the ground rather than floating at
+   * tread height, so there is no space under the stair to fall into — the
+   * same mistake the village storeys had.
+   */
+  _stairs(sx, sz, topY, groundY, dx, dz, width = 3.0, color = 0x8d8a80, tag = 'stone') {
+    const rise = topY - groundY;
+    if (rise <= 0) return;
+    const RISER = 0.40, TREAD = 0.95;
+    const n = Math.max(1, Math.ceil(rise / RISER));
+    const riser = rise / n;
+    const hw = width / 2;
+
+    /**
+     * The run is snapped to whichever axis it is closest to, and this is not
+     * cosmetic — a diagonal flight of AABB steps does not work at all.
+     *
+     * Collision boxes are axis-aligned, so covering a diagonal tread means
+     * making each step wide in BOTH axes. Do that and consecutive steps
+     * overlap three deep: standing at the foot of the stair you are inside
+     * the first step, the second AND the third, and the tallest of those is
+     * 1.2 above you. `_moveAxis` sees a rise it cannot step and calls it a
+     * wall, so the stair stops you dead about halfway up. It was measured
+     * doing exactly that on four of the five bridge approaches.
+     *
+     * Axis-aligned, each step is one tread deep and adjacent steps overlap by
+     * 0.30 — enough that there is no seam, little enough that no third step
+     * is ever in reach.
+     */
+    if (Math.abs(dx) >= Math.abs(dz)) { dx = Math.sign(dx) || 1; dz = 0; }
+    else { dz = Math.sign(dz); dx = 0; }
+
+    for (let i = 0; i < n; i++) {
+      // Step 0 is the highest, right against the platform; the flight
+      // descends outward from there.
+      const top = topY - i * riser;
+      const cx = sx + dx * (i + 0.5) * TREAD;
+      const cz2 = sz + dz * (i + 0.5) * TREAD;
+      const bottom = groundY - 1.5;                  // buried, never floating
+      const hx = dx ? TREAD / 2 + 0.15 : hw;
+      const hz = dz ? TREAD / 2 + 0.15 : hw;
+      this.solid(cx, (top + bottom) / 2, cz2, hx, (top - bottom) / 2, hz, color, tag);
+    }
+    // Nothing grows on a staircase.
+    this._clear(sx + dx * n * TREAD * 0.5, sz + dz * n * TREAD * 0.5,
+      n * TREAD * 0.5 + Math.max(hw, 2.5));
+  }
+
   /** Visual-only box (no collision) — trim, banners, decoration. */
   deco(cx, cy, cz, hx, hy, hz, color, rotY = 0, rotX = 0, rotZ = 0) {
     this.batches.box.add(cx, cy, cz, hx * 2, hy * 2, hz * 2, color, rotY, rotX, rotZ);
@@ -482,7 +543,10 @@ export class World {
     // right inside the band the reeds are planted in.
     this._clear(x, z, 6);
 
-    // ---- plinth: three stone steps, so it reads as approachable ----
+    // ---- plinth: four stone steps, so it reads as approachable ----
+    // Four because three started with a 0.70 riser against a step height of
+    // 0.65 — "approachable" that you could not actually walk up.
+    this.solid(x, y + 0.18, z, 5.4, 0.18, 5.4, stoneLit, 'stone');
     this.solid(x, y + 0.35, z, 4.8, 0.35, 4.8, stone, 'stone');
     this.solid(x, y + 0.95, z, 4.0, 0.30, 4.0, stoneLit, 'stone');
     this.solid(x, y + 1.45, z, 3.3, 0.25, 3.3, stone, 'stone');
@@ -584,7 +648,15 @@ export class World {
     // so the arena floor ends at 34.4. The gateway torii at 34 add their own.
     this._clear(0, 0, 36);
 
-    // Stone dais with steps.
+    /**
+     * Stone dais. Three tiers, not two — the bottom one is new.
+     *
+     * The dais used to start with a 0.85 lip off ground at 4.0, against a
+     * stepHeight of 0.65, so the arena floor could not be walked onto at all:
+     * you had to jump onto the centre of your own map. This tier brings the
+     * first rise down to 0.42 and the next to 0.43.
+     */
+    this.solid(0, baseY + 0.11, 0, 14.4, 0.31, 14.4, 0x84817a, 'stone');
     this.solid(0, baseY + 0.35, 0, 13, 0.5, 13, 0x8d8a80, 'stone');
     this.solid(0, baseY + 0.95, 0, 10, 0.5, 10, 0x9a978c, 'stone');
     this.deco(0, baseY + 1.47, 0, 8, 0.05, 8, 0xb5a98d);
@@ -731,6 +803,15 @@ export class World {
     // Wide stone terrace on the plateau.
     this.solid(cx, y + 0.6, cz, 20, 0.8, 16, 0x8e8b81, 'stone');
     this.deco(cx, y + 1.42, cz, 20.2, 0.06, 16.2, 0xa39a86);
+    /**
+     * The great stair, on the southern approach.
+     *
+     * The terrace is a single 1.40 lip out of the plateau — more than twice
+     * the step height — so the Sky Shrine could be looked at and not entered.
+     * It goes on the south side because that is where the torii stands, and a
+     * gate in front of a wall you cannot climb is a strange thing to build.
+     */
+    this._stairs(cx, cz + 16, y + 1.4, y, 0, 1, 9.0, 0x8e8b81, 'stone');
 
     /**
      * The colonnade, sized off the roof it holds up.
@@ -965,7 +1046,16 @@ export class World {
     this._bridge([96, this.heightAt(96, 26) + 9, 26], [40, this.heightAt(40, 8) + 7, 8]);
   }
 
-  _bridge(a, b) {
+  /**
+   * @param approach build a stair up to each low end. OFF for the Mire.
+   *
+   * The Mire is a map whose whole idea is that nothing touches the ground:
+   * the floor is wading depth, the village hangs in the air, and you go up by
+   * grapple or by jumping hut to hut. Its walkways run between hut decks, so
+   * a ground approach there is not an improvement — it descends out of
+   * somebody's house into the water, and it argues with the map.
+   */
+  _bridge(a, b, approach = true) {
     const [x1, y1, z1] = a, [x2, y2, z2] = b;
     const dx = x2 - x1, dz = z2 - z1;
     const len = Math.hypot(dx, dz);
@@ -980,6 +1070,16 @@ export class World {
       const y = lerp(y1, y2, t) - Math.sin(t * Math.PI) * sag;
       this.batches.box.add(x, y, z, 3.0, 0.16, 1.7, i % 2 ? 0x8a6a45 : 0x7b5c3b, rotY);
       this.collision.addBox(x, y, z, 1.5, 0.22, 1.5, 'wood');
+      /**
+       * Keep the deck clear of trees — but only where one could reach it.
+       *
+       * A conifer tops out around 22 units above its own ground, so a bridge
+       * strung between two spires 30 up has nothing growing through it and
+       * wants the forest left alone underneath. The low spans are the ones
+       * with trunks coming up through the planks, which is what makes them
+       * impassable: you cannot walk through a tree.
+       */
+      if (y - this.heightAt(x, z) < 24) this._clear(x, z, 4.0);
       // Rope rails.
       const s = Math.sin(rotY), c = Math.cos(rotY);
       for (const side of [-1.45, 1.45]) {
@@ -990,6 +1090,36 @@ export class World {
     // End posts.
     for (const [px, py, pz] of [a, b]) {
       this.solid(px, py + 1.6, pz, 0.45, 1.8, 0.45, 0x5a442e, 'wood');
+    }
+
+    /**
+     * A stair up to each abutment that is close enough to the ground to have
+     * one, so the bridge is something you can walk onto.
+     *
+     * The decks stood six to nine units above bare grass with no approach at
+     * all — a staircase in the air, which is exactly what it looked like.
+     *
+     * MAX_APPROACH stops this sprouting a seventy-step ladder up the side of
+     * a rock spire. Those spans are meant to be grappled to, and they have
+     * spawn points on top; the ones that needed fixing are the low crossings
+     * between the village, the grove and the arena.
+     */
+    const MAX_APPROACH = 14;
+    const ends = approach ? [[a, b], [b, a]] : [];
+    for (const [end, other] of ends) {
+      const [px, py, pz] = end;
+      const g = this.heightAt(px, pz);
+      const rise = py - g;
+      if (rise <= CFG.move.stepHeight || rise > MAX_APPROACH) continue;
+      // A stair into a lake is not an approach.
+      if (g < CFG.world.waterLevel + 0.5) continue;
+      // Run the flight straight out along the bridge's own axis, away from
+      // the span, so it never crosses the deck it serves.
+      const ax = px - other[0], az = pz - other[2];
+      const m = Math.hypot(ax, az) || 1;
+      // +0.22 so the top step is flush with the plank collider's own top
+      // rather than a hand's width under it.
+      this._stairs(px, pz, py + 0.22, g, ax / m, az / m, 3.4, 0x6f5a3c, 'wood');
     }
   }
 
@@ -1434,7 +1564,8 @@ export class World {
       if (!s) continue;
       links[i]++; links[j]++;
       // _bridge takes [x, y, z] triples, and hangs the deck FROM that height.
-      this._bridge([s.ax, s.ay, s.az], [s.bx, s.by, s.bz]);
+      // No ground approach: see _bridge. The Mire has no ground worth the name.
+      this._bridge([s.ax, s.ay, s.az], [s.bx, s.by, s.bz], false);
     }
   }
 

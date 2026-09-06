@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v72';
-import { clamp } from './util.js?v=v72';
+import { CFG } from './config.js?v=v73';
+import { clamp } from './util.js?v=v73';
 
 const EPS = 1e-4;
 
@@ -196,6 +196,21 @@ export class CollisionWorld {
     state.bounce = false;
     state.wallNormal.set(0, 0, 0);
     state.groundTag = 'terrain';
+    /**
+     * How far this frame lifted the character onto a ledge.
+     *
+     * Auto-stepping teleports: it sets pos.y to the top of the box in one
+     * assignment, because the physics needs the character on the ledge before
+     * the next axis is resolved. That is correct and has to stay — but drawn
+     * literally it is a snap, and on a rope bridge, whose deck is a chain of
+     * planks at slightly different heights, it is a snap every stride. That
+     * is the juddering "teleport and jump" going over one.
+     *
+     * Reported rather than smoothed here, so the fix stays where it belongs:
+     * the simulation keeps its exact position and the renderer eases toward
+     * it. Nothing about collision, hit registration or the network changes.
+     */
+    state.stepUp = 0;
 
     const cand = this._cand || (this._cand = []);
 
@@ -278,6 +293,7 @@ export class CollisionWorld {
       const rise = b.maxY - pos.y;
       if (rise > 0 && rise <= step && this._headroom(b.maxY, pos, r, h, cand)) {
         pos.y = b.maxY;
+        state.stepUp += rise;
         state.grounded = true;
         state.groundTag = b.tag;
         continue;

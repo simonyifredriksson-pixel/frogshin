@@ -11,12 +11,12 @@
  * standing, so cover would only make his patterns unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG } from './config.js?v=v72';
-import { clamp, lerp } from './util.js?v=v72';
-import { Terrain, CollisionWorld } from './collision.js?v=v72';
-import { Ascended } from './ascended.js?v=v72';
-import { Audio } from './audio.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG } from './config.js?v=v73';
+import { clamp, lerp } from './util.js?v=v73';
+import { Terrain, CollisionWorld } from './collision.js?v=v73';
+import { Ascended } from './ascended.js?v=v73';
+import { Audio } from './audio.js?v=v73';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

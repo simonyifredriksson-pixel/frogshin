@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG } from './config.js?v=v72';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v72';
-import { FrogModel } from './frog.js?v=v72';
-import { Grapple, GrappleState } from './grapple.js?v=v72';
-import { Combat, Health } from './combat.js?v=v72';
-import { Stamina } from './stamina.js?v=v72';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v72';
-import { Audio } from './audio.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG } from './config.js?v=v73';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v73';
+import { FrogModel } from './frog.js?v=v73';
+import { Grapple, GrappleState } from './grapple.js?v=v73';
+import { Combat, Health } from './combat.js?v=v73';
+import { Stamina } from './stamina.js?v=v73';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v73';
+import { Audio } from './audio.js?v=v73';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -25,6 +25,7 @@ const _mouth = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
 const _swimWish = new THREE.Vector3();
 const _throwOrigin = new THREE.Vector3();
+const _render = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _throwDir = new THREE.Vector3();
 const _assist = new THREE.Vector3();
@@ -108,6 +109,10 @@ export class Player {
     this.wallNormal = new THREE.Vector3();
     this.hitCeiling = false;
     this.landedThisFrame = false;
+    /** Render-only lag behind `pos` while climbing a ledge. See _absorbStep. */
+    this.stepSmooth = 0;
+    /** 1 the frame a ledge is stepped onto, decaying — drives the climb pose. */
+    this.climbing = 0;
     this.yaw = 0;
     this.visualYaw = 0;
     this.inWater = false;
@@ -180,6 +185,9 @@ export class Player {
     // Frogath the Divine goes back to his first form on every respawn: the
     // ascended look is a kill streak you are wearing, so dying costs it.
     this.setDivinePhase(1, true);
+    // No leftover climb: a respawn must not draw the frog under the floor.
+    this.stepSmooth = 0;
+    this.climbing = 0;
     this.model.root.position.copy(this.pos);
     this.model.root.rotation.z = 0;
     this.model.body.position.y = 0;
@@ -488,6 +496,7 @@ export class Player {
     const cs = this._cstate;
     cs.pos = this.pos; cs.vel = this.vel;
     this.collision.moveCharacter(cs, dt);
+    this._absorbStep(cs.stepUp, dt);
     this.wasGrounded = this.grounded;
     this.grounded = cs.grounded;
     this.groundTag = cs.groundTag;
@@ -1516,6 +1525,9 @@ export class Player {
     const cs = this._cstate;
     cs.pos = this.pos; cs.vel = this.vel;
     this.collision.moveCharacter(cs, dt);
+    // Keep the climb offset decaying here too, or a cutscene entered
+    // mid-stair leaves the camera parked half a step underground.
+    this._absorbStep(cs.stepUp, dt);
     this.grounded = cs.grounded;
     this.model.root.position.copy(this.pos);
     this.model.setFacing(this.visualYaw);
@@ -1537,6 +1549,9 @@ export class Player {
     const cs = this._cstate;
     cs.pos = this.pos; cs.vel = this.vel;
     this.collision.moveCharacter(cs, dt);
+    // Keep the climb offset decaying here too, or a cutscene entered
+    // mid-stair leaves the camera parked half a step underground.
+    this._absorbStep(cs.stepUp, dt);
     this.grounded = cs.grounded;
     this.model.root.position.copy(this.pos);
     this.model.update(dt, { dead: true, speed: 0, grounded: true });
@@ -1683,7 +1698,9 @@ export class Player {
   }
 
   _updateModel(dt, hasInput) {
-    this.model.root.position.copy(this.pos);
+    // Drawn a step BEHIND the simulation while a ledge is being climbed, so
+    // the snap up becomes a rise. See `stepSmooth`.
+    this.model.root.position.set(this.pos.x, this.pos.y - this.stepSmooth, this.pos.z);
     this.model.setFacing(this.visualYaw);
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
@@ -1706,7 +1723,51 @@ export class Player {
       swimPitch: this.inWater ? clamp(this.vel.y / 10, -1, 1) : 0,
       parrying: this.parrying,
       dead: this.health.dead,
+      // Drives the climb: the rig reaches for the step it is walking onto.
+      climbing: this.climbing,
     });
+  }
+
+  /**
+   * Turn this frame's ledge snap into something that can be drawn.
+   *
+   * `stepSmooth` is how far BEHIND its true position the frog is drawn. A
+   * step up adds to it and it decays to nothing, so the simulation's
+   * instant lift becomes a quick rise on screen. Purely visual: collision,
+   * hit registration and the position on the wire all use `pos` untouched.
+   *
+   * Capped at one step height. Without a cap, a flight of stairs taken at a
+   * run adds a rise every frame faster than the decay removes it, and the
+   * frog sinks steadily into the staircase — the offset has to be able to
+   * describe one step, never a whole flight.
+   *
+   * `climbing` is the same event on a slower fuse, for the animation. It is
+   * separate because the pose wants to persist across the gap between one
+   * step and the next, while the position offset must not.
+   */
+  _absorbStep(stepUp, dt) {
+    const cap = CFG.move.stepHeight;
+    if (stepUp > 0) {
+      this.stepSmooth = Math.min(this.stepSmooth + stepUp, cap);
+      this.climbing = 1;
+    }
+    // Fast enough to stay under the feet, slow enough to read as a rise.
+    this.stepSmooth = damp(this.stepSmooth, 0, 17, dt);
+    if (this.stepSmooth < 1e-4) this.stepSmooth = 0;
+    this.climbing = Math.max(0, this.climbing - dt / 0.22);
+  }
+
+  /**
+   * Where the frog is DRAWN: `pos` with the ledge-climb lag taken off.
+   *
+   * The camera follows this rather than `pos`, because smoothing the model
+   * and not the camera would leave the whole world jolting under a frog that
+   * rose calmly — which is the same judder seen from the other side.
+   *
+   * A shared scratch vector: read it, do not keep it.
+   */
+  get renderPos() {
+    return _render.set(this.pos.x, this.pos.y - this.stepSmooth, this.pos.z);
   }
 
   /** Hide the local frog's own head when the camera is very close. */

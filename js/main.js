@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v72';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v72';
-import { Input } from './input.js?v=v72';
-import { Audio } from './audio.js?v=v72';
-import { World } from './world.js?v=v72';
-import { Effects } from './effects.js?v=v72';
-import { Atmosphere } from './atmosphere.js?v=v72';
-import { FollowCamera } from './camera.js?v=v72';
-import { Player } from './player.js?v=v72';
-import { RemotePlayer } from './remote.js?v=v72';
-import { HUD } from './hud.js?v=v72';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v72';
-import { FrogModel } from './frog.js?v=v72';
-import { DummyField } from './dummy.js?v=v72';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v72';
-import { ToadModel } from './npc.js?v=v72';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v72';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v72';
-import { DungeonRun } from './dungeon.js?v=v72';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v72';
-import { JudgmentRun } from './judgment.js?v=v72';
-import { COMBO_NAMES } from './ascended.js?v=v72';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v72';
-import { MenuScene } from './menu.js?v=v72';
-import { Economy } from './economy.js?v=v72';
-import { Shop } from './shop.js?v=v72';
-import { Network, NetRole } from './net.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v73';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v73';
+import { Input } from './input.js?v=v73';
+import { Audio } from './audio.js?v=v73';
+import { World } from './world.js?v=v73';
+import { Effects } from './effects.js?v=v73';
+import { Atmosphere } from './atmosphere.js?v=v73';
+import { FollowCamera } from './camera.js?v=v73';
+import { Player } from './player.js?v=v73';
+import { RemotePlayer } from './remote.js?v=v73';
+import { HUD } from './hud.js?v=v73';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v73';
+import { FrogModel } from './frog.js?v=v73';
+import { DummyField } from './dummy.js?v=v73';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v73';
+import { ToadModel } from './npc.js?v=v73';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v73';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v73';
+import { DungeonRun } from './dungeon.js?v=v73';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v73';
+import { JudgmentRun } from './judgment.js?v=v73';
+import { COMBO_NAMES } from './ascended.js?v=v73';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v73';
+import { MenuScene } from './menu.js?v=v73';
+import { Economy } from './economy.js?v=v73';
+import { Shop } from './shop.js?v=v73';
+import { Network, NetRole } from './net.js?v=v73';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1418,7 +1418,7 @@ class Game {
     this.effects.update(dt);
     const speed = Math.hypot(p.vel.x, p.vel.z);
     if (!p.cinematic) {
-      this.followCam.update(p.pos, speed, dt, {
+      this.followCam.update(p.renderPos, speed, dt, {
         dashing: p.dashTimer > 0, grappling: p.grapple.attached,
         sprinting: p.sprinting,
       });
@@ -1470,7 +1470,7 @@ class Game {
 
     const speed = Math.hypot(p.vel.x, p.vel.z);
     if (!p.cinematic) {
-      this.followCam.update(p.pos, speed, dt, {
+      this.followCam.update(p.renderPos, speed, dt, {
         dashing: p.dashTimer > 0, grappling: p.grapple.attached,
         sprinting: p.sprinting,
       });
@@ -2055,7 +2055,7 @@ class Game {
 
       const speed = Math.hypot(p.vel.x, p.vel.z);
       if (!p.cinematic) {
-        this.followCam.update(p.pos, speed, dt, {
+        this.followCam.update(p.renderPos, speed, dt, {
           dashing: p.dashTimer > 0, grappling: p.grapple.attached,
         });
       }
@@ -2361,7 +2361,7 @@ class Game {
       this.world.update(dt, this.camera.position);
 
       const speed = Math.hypot(p.vel.x, p.vel.z);
-      this.followCam.update(p.pos, speed, dt, {
+      this.followCam.update(p.renderPos, speed, dt, {
         dashing: p.dashTimer > 0,
         grappling: p.grapple.attached,
         sprinting: p.sprinting,

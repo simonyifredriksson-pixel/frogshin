@@ -17,8 +17,8 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v72';
-import { clamp } from './util.js?v=v72';
+import { CFG } from './config.js?v=v73';
+import { clamp } from './util.js?v=v73';
 
 export const MODES = {
   TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',

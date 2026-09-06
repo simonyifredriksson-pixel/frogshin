@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG } from './config.js?v=v72';
-import { clamp } from './util.js?v=v72';
-import { DungeonLevel } from './dungeonlevel.js?v=v72';
-import { DungeonBoss } from './dungeonboss.js?v=v72';
-import { Frogath } from './frogath.js?v=v72';
-import { Audio } from './audio.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG } from './config.js?v=v73';
+import { clamp } from './util.js?v=v73';
+import { DungeonLevel } from './dungeonlevel.js?v=v73';
+import { DungeonBoss } from './dungeonboss.js?v=v73';
+import { Frogath } from './frogath.js?v=v73';
+import { Audio } from './audio.js?v=v73';
 
 const _v = new THREE.Vector3();
 

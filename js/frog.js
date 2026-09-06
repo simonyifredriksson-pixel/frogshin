@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v72';
-import { CFG } from './config.js?v=v72';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v72';
+import * as THREE from '../lib/three.module.js?v=v73';
+import { CFG } from './config.js?v=v73';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v73';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -1244,6 +1244,31 @@ export class FrogModel {
     }
 
     /**
+     * Stepping up onto something.
+     *
+     * `climbing` comes from the collision: it is 1 on the frame a ledge was
+     * walked onto and fades over about a fifth of a second, so a staircase
+     * taken at a run holds it near 1 the whole way up and a single kerb gets
+     * one pulse of it.
+     *
+     * The pose is additive on whatever the run cycle is already doing rather
+     * than a branch of its own, because you climb WHILE running and the
+     * stride has to keep going underneath. The frog leans into the step, the
+     * body rises, and the lead knee comes up further down in the leg pass —
+     * a reach, which is what makes the climb read as effort rather than the
+     * frog being teleported upward.
+     */
+    const climb = clamp(s.climbing || 0, 0, 1);
+    if (climb > 0 && s.grounded && !s.swimming && !s.dashT) {
+      // Sine rather than the raw value: full at the moment of the step, and
+      // easing out instead of falling off a cliff at the end of the fuse.
+      const c = Math.sin(climb * Math.PI * 0.5);
+      targetLean += 0.26 * c;
+      targetY += 0.09 * c;
+      targetSquash += 0.05 * c;
+    }
+
+    /**
      * The ninja stance. Weight low and forward, and never quite still.
      *
      * The idle motion is several slow sines at frequencies that do not divide
@@ -1330,6 +1355,19 @@ export class FrogModel {
       } else {
         hipX = -0.42;              // resting frog crouch
         shinX = 0.85;
+      }
+      /**
+       * The reach for the step. See the `climb` block above.
+       *
+       * Only the LEADING leg — whichever is swinging forward this instant —
+       * so it looks like one foot being placed on the tread rather than both
+       * knees rising together, which reads as a crouch. Off the same phase
+       * the stride uses, so it stays in time with the walk.
+       */
+      if (climb > 0 && s.grounded && !s.swimming) {
+        const lead = clamp(-phase, 0, 1) * Math.sin(climb * Math.PI * 0.5);
+        hipX -= 0.42 * lead;
+        shinX += 0.55 * lead;
       }
       leg.hip.rotation.x = damp(leg.hip.rotation.x, hipX, 20, dt);
       leg.shin.rotation.x = damp(leg.shin.rotation.x, shinX, 20, dt);

@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v72';
-import { clamp, smoothstep } from './util.js?v=v72';
+import { CFG } from './config.js?v=v73';
+import { clamp, smoothstep } from './util.js?v=v73';
 
 export const MAPS = [
   {
@@ -40,13 +40,26 @@ export const MAPS = [
       rockFromY: 52,
     },
     atmosphere: {},            // the bright default sky
+    /**
+     * Order matters, and it is one rule: BUILD everything, then PLANT.
+     *
+     * Structures declare the ground they stand on (World._clear) and the
+     * planting steps read that. A planting step that runs early cannot know
+     * about a structure that comes later, and the ground it was told to leave
+     * alone is ground that did not exist yet.
+     *
+     * The bamboo grove is why this is written down. It both builds a shrine
+     * and plants 190 stalks, and it used to run before the bridges — so the
+     * stair up to the grove's own bridge came up through a bamboo thicket
+     * that had been sown across it, and stopped you ten steps from the top.
+     */
     features: [
       ['Laying the Lotus Arena', (w) => w._buildArena()],
       ['Building the temple village', (w) => w._buildVillage()],
       ['Hanging the Sky Shrine', (w) => w._buildShrine()],
-      ['Planting the bamboo grove', (w) => w._buildBambooGrove()],
       ['Stacking the rock spires', (w) => w._buildSpires()],
       ['Stringing the rope bridges', (w) => w._buildBridges()],
+      ['Planting the bamboo grove', (w) => w._buildBambooGrove()],
       ['Growing the forests', (w) => w._buildForests()],
       ['Scattering stones', (w) => { w._buildRocks(); w._buildLanterns(); }],
     ],
