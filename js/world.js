@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v71';
-import { CFG } from './config.js?v=v71';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v71';
-import { findMap } from './maps.js?v=v71';
-import { Terrain, CollisionWorld } from './collision.js?v=v71';
+import * as THREE from '../lib/three.module.js?v=v72';
+import { CFG } from './config.js?v=v72';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v72';
+import { findMap } from './maps.js?v=v72';
+import { Terrain, CollisionWorld } from './collision.js?v=v72';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -21,6 +21,15 @@ const _e = new THREE.Euler();
 const _v = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _c = new THREE.Color();
+
+/**
+ * How far a pagoda roof's eave slab reaches, as a fraction of its radius.
+ *
+ * Named because the Sky Shrine's colonnade has to stand under it. Its pillars
+ * were placed by eye at 15 against an eave that stops at 13.26, so the outer
+ * pair held up nothing at all and the rest poked through the roof.
+ */
+const ROOF_EAVE = 0.78;
 
 /** Collects transforms + colours, then emits one InstancedMesh. */
 class Batch {
@@ -77,6 +86,15 @@ export class World {
     // which map it is on.
     this.dummySpots = [];
     this.statue = null;
+    /**
+     * Ground that nothing may be planted on. See `_clear`.
+     *
+     * Filled by the structure builders and read by the ones that scatter
+     * foliage, so it only works because every map lists its structures before
+     * its planting. If a map ever stops doing that, its trees come back
+     * inside its temples.
+     */
+    this.keepOut = [];
 
     // Flat regions carved into the terrain so structures have somewhere to
     // sit, and basins scooped out for water. Both come from the map.
@@ -316,6 +334,32 @@ export class World {
     this.collision.addBox(cx, cy, cz, hx, hy, hz, tag);
   }
 
+  /**
+   * Register ground a structure stands on, so nothing gets planted in it.
+   *
+   * Foliage used to be kept out of the districts by three circles written by
+   * hand inside `_buildForests`, and a hand-written list of somebody else's
+   * dimensions cannot stay right. It had the arena at 30 when the arena
+   * reaches 34, the village at 26 when the village's outermost house stands
+   * at 39, and the Sky Shrine at nothing at all — twenty-four trees grew up
+   * through the shrine, four rocks with them. `_buildRocks` was never given a
+   * list in the first place.
+   *
+   * So a builder declares its own footprint, in the same method that decides
+   * how big the thing is. A structure that moves or grows takes its clearing
+   * with it.
+   */
+  _clear(x, z, r) { this.keepOut.push({ x, z, r }); }
+
+  /** True if (x, z) is clear of every structure, plus `pad` of margin. */
+  _isClear(x, z, pad = 0) {
+    for (let i = 0; i < this.keepOut.length; i++) {
+      const k = this.keepOut[i];
+      if (Math.hypot(x - k.x, z - k.z) < k.r + pad) return false;
+    }
+    return true;
+  }
+
   /** Visual-only box (no collision) — trim, banners, decoration. */
   deco(cx, cy, cz, hx, hy, hz, color, rotY = 0, rotX = 0, rotZ = 0) {
     this.batches.box.add(cx, cy, cz, hx * 2, hy * 2, hz * 2, color, rotY, rotX, rotZ);
@@ -324,7 +368,7 @@ export class World {
   /** Pagoda-style flared roof: a 4-sided pyramid plus an overhanging slab. */
   roof(cx, cy, cz, radius, height, color, rotY = Math.PI / 4) {
     this.batches.roof.add(cx, cy + height * 0.5, cz, radius, height, radius, color, rotY);
-    this.deco(cx, cy - 0.12, cz, radius * 0.78, 0.16, radius * 0.78, 0x3a2a22);
+    this.deco(cx, cy - 0.12, cz, radius * ROOF_EAVE, 0.16, radius * ROOF_EAVE, 0x3a2a22);
     // The roof slab is walkable — great for rooftop chases.
     this.collision.addBox(cx, cy - 0.1, cz, radius * 0.72, 0.22, radius * 0.72, 'roof');
   }
@@ -358,6 +402,8 @@ export class World {
    * as scenery, and stay equally visible in shadow.
    */
   _buildPracticeRing(x, y, z, radius) {
+    // You have to be able to see the ring to stand in it.
+    this._clear(x, z, radius + 1);
     const group = new THREE.Group();
     group.position.set(x, y, z);
 
@@ -431,6 +477,10 @@ export class World {
     const stone = 0x6f6a5e;        // the plinth stays stone: it is the pedestal
     const stoneLit = 0x8a8478;
     const moss = 0x5a6b45;
+
+    // Nothing grows on the plinth. It stands on a mud island in the Mire,
+    // right inside the band the reeds are planted in.
+    this._clear(x, z, 6);
 
     // ---- plinth: three stone steps, so it reads as approachable ----
     this.solid(x, y + 0.35, z, 4.8, 0.35, 4.8, stone, 'stone');
@@ -521,6 +571,8 @@ export class World {
     this.deco(x, y + h, z, w * 1.35, 0.34 * scale, 0.5 * scale, dark, rotY);
     this.deco(x, y + h - 1.1 * scale, z, w * 1.1, 0.24 * scale, 0.4 * scale, c, rotY);
     this.collision.addAnchor(x, y + h, z, 2.0);
+    // A gate is a thing you walk through, so the approach stays clear too.
+    this._clear(x, z, w * 1.35 + 2);
   }
 
   // ------------------------------------------------------------ arena (0,0)
@@ -528,6 +580,9 @@ export class World {
   _buildArena() {
     const rnd = this.rnd;
     const baseY = 4.0;
+    // The outer combat platforms reach 31 from the centre and are 3.4 wide,
+    // so the arena floor ends at 34.4. The gateway torii at 34 add their own.
+    this._clear(0, 0, 36);
 
     // Stone dais with steps.
     this.solid(0, baseY + 0.35, 0, 13, 0.5, 13, 0x8d8a80, 'stone');
@@ -599,6 +654,11 @@ export class World {
       const dpt = 3.4 + rnd() * 2.6;
       const levels = 1 + (rnd() < 0.4 ? 1 : 0) + (rnd() < 0.16 ? 1 : 0);
 
+      // Its own clearing. Houses sit anywhere from 9 to 39 out, so one circle
+      // round the village either swallows the whole district or misses the
+      // outer houses — which is what it did, at 26.
+      this._clear(x, z, Math.max(w, dpt) * 1.5 + 2.5);
+
       let ly = y;
       for (let l = 0; l < levels; l++) {
         const sw = w * (1 - l * 0.13), sd = dpt * (1 - l * 0.13);
@@ -608,6 +668,20 @@ export class World {
         this.deco(x, ly + hgt - 0.15, z, sw + 0.06, 0.18, sd + 0.06, 0x4a382a);
         this.deco(x, ly + 0.2, z, sw + 0.06, 0.2, sd + 0.06, 0x4a382a);
         this.roof(x, ly + hgt + 0.3, z, Math.max(sw, sd) * 1.5, 1.9, 0x8c3f36);
+        /**
+         * The neck between this storey and the next.
+         *
+         * Storeys step up by hgt + 1.0 but are only hgt tall, so every house
+         * had a one-unit band of nothing between its floors: solid wall, open
+         * air, solid wall. You could get in there off the eave and stand
+         * inside the building. This is the wall that was missing — it takes
+         * the upper storey's footprint, which is what a real upper floor
+         * sits on.
+         */
+        if (l < levels - 1) {
+          const nw = w * (1 - (l + 1) * 0.13), nd = dpt * (1 - (l + 1) * 0.13);
+          this.solid(x, ly + hgt + 0.5, z, nw, 0.5, nd, 0xcdc3ab, 'wood');
+        }
         ly += hgt + 1.0;
       }
       houses.push({ x, z, top: ly, w, d: dpt });
@@ -617,6 +691,7 @@ export class World {
 
     // Central great pagoda — the tallest thing in the village.
     const px = cx, pz = cz, py = this.heightAt(px, pz);
+    this._clear(px, pz, 6.5 * 1.62 + 3);
     let ly = py;
     for (let l = 0; l < 4; l++) {
       const s = 6.5 - l * 1.1;
@@ -627,6 +702,13 @@ export class World {
       for (let k = 0; k < 4; k++) {
         const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
         this.lantern(px + Math.cos(a) * s * 1.45, ly + 3.2, pz + Math.sin(a) * s * 1.45, 0xffc46b);
+      }
+      // The neck each tier stands on. Tiers are 3.6 tall and step up by 5.6,
+      // so the pagoda had two metres of open air between every floor — four
+      // storey-high holes you could walk into off the eaves.
+      if (l < 3) {
+        const ns = 6.5 - (l + 1) * 1.1;
+        this.solid(px, ly + 4.6, pz, ns, 1.0, ns, 0xd8cfb8, 'wood');
       }
       ly += 5.6;
     }
@@ -643,30 +725,62 @@ export class World {
   _buildShrine() {
     const cx = 0, cz = -142;
     const y = this.heightAt(cx, cz);
+    // The terrace is 40 x 32, so its corner stands 25.6 out.
+    this._clear(cx, cz, 27);
 
     // Wide stone terrace on the plateau.
     this.solid(cx, y + 0.6, cz, 20, 0.8, 16, 0x8e8b81, 'stone');
     this.deco(cx, y + 1.42, cz, 20.2, 0.06, 16.2, 0xa39a86);
 
-    // Colonnade.
+    /**
+     * The colonnade, sized off the roof it holds up.
+     *
+     * It used to be six pillars at x -15..15 by z ±13, running from the
+     * terrace at y+1.4 to y+9.4 — placed by eye, and wrong in both
+     * directions. The roof's eave slab reaches ROOF_EAVE * 17 = 13.26 and
+     * sits at y+8.62..y+8.94, so the outer pair at 15 stood entirely beyond
+     * it holding up nothing, every pillar overhung the eave in z by half its
+     * own width, and all twelve ran 0.46 straight up through the roof.
+     *
+     * Everything below is derived from the roof instead. The pillars stand
+     * far enough in that their full width is under the eave, and stop far
+     * enough down that their tops are buried in it rather than out the far
+     * side — which is what makes them read as carrying it.
+     */
+    const ROOF_R = 17;
+    const HW = 0.75;                                   // pillar half-width
+    const reach = ROOF_R * ROOF_EAVE - HW - 0.15;      // 12.36
+    const base = y + 1.4;                              // the terrace top
+    const top = y + 8.85;                              // inside the eave slab
     for (let i = 0; i < 6; i++) {
-      const ox = -15 + i * 6;
-      for (const oz of [-13, 13]) {
-        this.solid(cx + ox, y + 5.4, cz + oz, 0.75, 4, 0.75, 0xb0a894, 'stone');
+      const ox = -reach + (i / 5) * reach * 2;
+      for (const oz of [-reach, reach]) {
+        this.solid(cx + ox, (base + top) / 2, cz + oz,
+          HW, (top - base) / 2, HW, 0xb0a894, 'stone');
       }
     }
 
     // Main hall.
     this.solid(cx, y + 5, cz, 11, 3.6, 8, 0xdcd3bc, 'wood');
     this.deco(cx, y + 8.5, cz, 11.2, 0.3, 8.2, 0x4a382a);
-    this.roof(cx, y + 8.9, cz, 17, 4.4, 0x2f5d7c);
+    this.roof(cx, y + 8.9, cz, ROOF_R, 4.4, 0x2f5d7c);
     this.roof(cx, y + 13.2, cz, 11, 3.4, 0x2f5d7c);
     this.solid(cx, y + 17.6, cz, 0.5, 1.6, 0.5, 0xc9a227, 'stone');
     this.lantern(cx, y + 21, cz, 0x8fe3ff);
 
-    // Great bell.
-    this.batches.post.add(cx + 15, y + 4.2, cz + 4, 1.5, 3.0, 1.5, 0x6b5a2a);
-    this.collision.addBox(cx + 15, y + 4.2, cz + 4, 1.5, 1.5, 1.5, 'stone');
+    /**
+     * Great bell, standing ON the terrace.
+     *
+     * It was centred at y+4.2 with a half-height of 1.5 while the terrace it
+     * belongs to tops out at y+1.4, so it hung 1.3 clear of the floor. Its
+     * collider was worse: half-extents of 1.5 around a cylinder scaled to
+     * 1.5 ACROSS, so the invisible wall was twice the width of the bell and
+     * you bounced off nothing, a stride short of it.
+     */
+    const bellR = 0.75, bellH = 3.0;
+    const bellY = y + 1.4 + bellH / 2;
+    this.batches.post.add(cx + 15, bellY, cz + 4, bellR * 2, bellH, bellR * 2, 0x6b5a2a);
+    this.collision.addBox(cx + 15, bellY, cz + 4, bellR, bellH / 2, bellR, 'stone');
 
     this.torii(cx, cz + 24, 0, 1.9);
     this.spawnPoints.push([cx + 8, y + 2.5, cz + 10]);
@@ -691,6 +805,7 @@ export class World {
     // so the planting below can be told to keep out of it.
     const sx = cx, sz = cz;
     const CLEARING = 9.5;
+    this._clear(sx, sz, CLEARING);
 
     // Dense bamboo — thin tall posts, cheap and very readable.
     for (let i = 0; i < 190; i++) {
@@ -698,7 +813,7 @@ export class World {
       const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
       // Nothing grows in the clearing. Without this the shrine ends up with
       // stalks through its skull, which reads as a bug rather than a shrine.
-      if (Math.hypot(x - sx, z - sz) < CLEARING) continue;
+      if (!this._isClear(x, z)) continue;
       const y = this.heightAt(x, z);
       if (y < CFG.world.waterLevel + 0.5) continue;
       const h = 11 + rnd() * 10;
@@ -892,9 +1007,19 @@ export class World {
       const y = this.heightAt(x, z);
       if (y < CFG.world.waterLevel + 1.0 || y > 66) continue;
       if (this.terrain.slopeAt(x, z) > 0.42) continue;
-      // Keep the arena and village interiors clear for combat.
-      if (Math.hypot(x, z) < 30) continue;
-      if (Math.hypot(x + 34, z - 132) < 26) continue;
+      /**
+       * Nothing grows where something is built.
+       *
+       * The pad is for the canopy: the trunk is what the test measures and
+       * what you collide with, but a conifer's skirt reaches 2.5 past it, and
+       * branches through a temple wall look as wrong as a trunk through one.
+       *
+       * The bamboo grove keeps its old blanket radius on top of the registry.
+       * It is not a structure with a footprint, it is a whole district with
+       * its own planting, and pines coming up through it would read as two
+       * forests fighting.
+       */
+      if (!this._isClear(x, z, 2.5)) continue;
       if (Math.hypot(x - 128, z - 26) < 44) continue;
 
       // Density mask: clumps rather than an even scatter.
@@ -941,6 +1066,9 @@ export class World {
       const z = (rnd() * 2 - 1) * (S - 10);
       const y = this.heightAt(x, z);
       if (y < CFG.world.waterLevel - 1) continue;
+      // Boulders were never checked against anything, so they turned up on
+      // the shrine terrace and inside the village.
+      if (!this._isClear(x, z)) continue;
       const s = 0.6 + rnd() * 2.6;
       this.batches.rock.add(x, y + s * 0.45, z, s, s * 0.75, s * 0.9,
         rnd() < 0.5 ? 0x6f6a61 : 0x7d776c, rnd() * 3, rnd() * 0.4, rnd() * 0.4);
@@ -1320,6 +1448,9 @@ export class World {
       const z = (rnd() * 2 - 1) * (S - 40);
       const g = this.heightAt(x, z);
       if (g > W + 1.6 || g < W - 2.6) continue;
+      // The mud islands carry the statue and the try-out ring, and they sit
+      // squarely inside the band reeds are planted in.
+      if (!this._isClear(x, z)) continue;
       const h = 1.6 + rnd() * 3.4;
       this.batches.post.add(x, g + h * 0.5, z, 0.05, h, 0.05,
         rnd() < 0.5 ? 0x6a6b45 : 0x565c3c);
@@ -1403,13 +1534,46 @@ export class World {
     return { x: 0, y: this.heightAt(0, 0), z: 0 };
   }
 
-  randomSpawn() {
-    const p = this.spawnPoints[Math.floor(Math.random() * this.spawnPoints.length)];
-    return new THREE.Vector3(
+  /**
+   * A spawn point, optionally kept away from people you must not land next to.
+   *
+   * `avoid` is a list of anything with .x/.z — the taggers in Tag and
+   * Infection, the juggernaut in Juggernaut. Landing a runner inside the
+   * chaser's reach is not a fresh start, it is an instant tag, and it is the
+   * one thing a respawn must not do.
+   *
+   * Distance is measured HORIZONTALLY on purpose. The map is 60 units tall
+   * between the arena and the Sky Shrine, and 3D distance would call a spawn
+   * "far" from a tagger standing directly below it.
+   *
+   * When several points qualify it picks among them at random, so spawns stay
+   * unpredictable. When none do — a small map, or every point covered — it
+   * falls back to whichever point is FURTHEST from trouble rather than
+   * failing or spawning blind. That is why this cannot return nothing.
+   */
+  randomSpawn(avoid = null, minDist = 0) {
+    const pts = this.spawnPoints;
+    if (!pts.length) return new THREE.Vector3(0, this.heightAt(0, 0), 0);
+    const pick = (p) => new THREE.Vector3(
       p[0] + (Math.random() - 0.5) * 3,
       p[1] + 0.5,
       p[2] + (Math.random() - 0.5) * 3
     );
+    if (!avoid || !avoid.length || minDist <= 0) {
+      return pick(pts[Math.floor(Math.random() * pts.length)]);
+    }
+
+    const safe = [];
+    let best = pts[0], bestGap = -Infinity;
+    for (const p of pts) {
+      let gap = Infinity;
+      for (const a of avoid) {
+        gap = Math.min(gap, Math.hypot(p[0] - a.x, p[2] - a.z));
+      }
+      if (gap >= minDist) safe.push(p);
+      if (gap > bestGap) { bestGap = gap; best = p; }
+    }
+    return pick(safe.length ? safe[Math.floor(Math.random() * safe.length)] : best);
   }
 
   // ----------------------------------------------------------------- update

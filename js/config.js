@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v71';
+export const BUILD = 'v72';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -339,6 +339,19 @@ export const CFG = {
     defaultMode: 'ffa',      // used if nobody votes
     tagImmunity: 2.5,        // stops instant tag-backs
     taggerCooldown: 0.2,     // taggers throw faster (they have infinite kunai)
+    /**
+     * How far a runner must spawn from the nearest chaser, in the modes that
+     * have one: Tag, Infection and Juggernaut.
+     *
+     * 45 rather than a bigger number because it has to be SATISFIABLE. The
+     * valley has 16 spawn points; measured against every one of them, a
+     * chaser standing on the worst of them still leaves 10 legal points at
+     * 45, and 10 at 60 — but pushing further only narrows the choice without
+     * buying distance, and predictable spawns are their own problem. Below
+     * about 40 the nearest pair of points (22 apart) starts letting a tagger
+     * cover you from next door.
+     */
+    spawnSafeDist: 45,
     syncInterval: 1.0,       // authority state rebroadcast
   },
 

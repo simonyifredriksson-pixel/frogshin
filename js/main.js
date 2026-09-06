@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v71';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v71';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v71';
-import { Input } from './input.js?v=v71';
-import { Audio } from './audio.js?v=v71';
-import { World } from './world.js?v=v71';
-import { Effects } from './effects.js?v=v71';
-import { Atmosphere } from './atmosphere.js?v=v71';
-import { FollowCamera } from './camera.js?v=v71';
-import { Player } from './player.js?v=v71';
-import { RemotePlayer } from './remote.js?v=v71';
-import { HUD } from './hud.js?v=v71';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v71';
-import { FrogModel } from './frog.js?v=v71';
-import { DummyField } from './dummy.js?v=v71';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v71';
-import { ToadModel } from './npc.js?v=v71';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v71';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v71';
-import { DungeonRun } from './dungeon.js?v=v71';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v71';
-import { JudgmentRun } from './judgment.js?v=v71';
-import { COMBO_NAMES } from './ascended.js?v=v71';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v71';
-import { MenuScene } from './menu.js?v=v71';
-import { Economy } from './economy.js?v=v71';
-import { Shop } from './shop.js?v=v71';
-import { Network, NetRole } from './net.js?v=v71';
+import * as THREE from '../lib/three.module.js?v=v72';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v72';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v72';
+import { Input } from './input.js?v=v72';
+import { Audio } from './audio.js?v=v72';
+import { World } from './world.js?v=v72';
+import { Effects } from './effects.js?v=v72';
+import { Atmosphere } from './atmosphere.js?v=v72';
+import { FollowCamera } from './camera.js?v=v72';
+import { Player } from './player.js?v=v72';
+import { RemotePlayer } from './remote.js?v=v72';
+import { HUD } from './hud.js?v=v72';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v72';
+import { FrogModel } from './frog.js?v=v72';
+import { DummyField } from './dummy.js?v=v72';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v72';
+import { ToadModel } from './npc.js?v=v72';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v72';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v72';
+import { DungeonRun } from './dungeon.js?v=v72';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v72';
+import { JudgmentRun } from './judgment.js?v=v72';
+import { COMBO_NAMES } from './ascended.js?v=v72';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v72';
+import { MenuScene } from './menu.js?v=v72';
+import { Economy } from './economy.js?v=v72';
+import { Shop } from './shop.js?v=v72';
+import { Network, NetRole } from './net.js?v=v72';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -923,7 +923,7 @@ class Game {
     };
 
     this._setupRounds(authority);
-    this.player.spawn(this.world.randomSpawn());
+    this.player.spawn(this._safeSpawn());
     this.followCam.snapTo(this.player.pos);
     this._flushPendingJoins();
 
@@ -2335,7 +2335,7 @@ class Game {
         } else {
           this.hud.showRespawn(p.health.respawnTimer, this._killerName);
           if (p.health.respawnTimer <= 0) {
-            p.spawn(this.world.randomSpawn());
+            p.spawn(this._safeSpawn());
             this.followCam.snapTo(p.pos);
             this.hud.hideRespawn();
             this._killerName = null;
@@ -2699,7 +2699,7 @@ class Game {
       this._elimAsked = false;
       this.hud.setSpectating(false);
       // Fresh spawn for everyone, so no one starts a chase cornered.
-      this.player.spawn(this.world.randomSpawn());
+      this.player.spawn(this._safeSpawn());
       this.followCam.snapTo(this.player.pos);
       const info = this.round.modeInfo;
       this.hud.announce(info.name, '', true);
@@ -2856,6 +2856,38 @@ class Game {
    * thrown kunai share one code path while doing very different things —
    * a player hit goes on the wire, a dummy hit stays entirely local.
    */
+  /**
+   * A spawn position that is not on top of whoever is hunting you.
+   *
+   * Tag, Infection and Juggernaut all have a side that chases and a side that
+   * runs, and a runner dropped inside a chaser's reach is tagged before the
+   * respawn text has faded. FFA and Team have no chaser — everyone is equally
+   * dangerous to everyone — so nothing is avoided there and the spawn stays
+   * uniformly random, which is what those modes want.
+   *
+   * Only the people it can SEE are avoided: remotes that have spawned, are
+   * alive, and are not spectating. That covers the case this exists for — the
+   * mid-round respawn, with the tagger standing where they tagged you. At the
+   * start of a round everyone respawns in the same instant, so the chasers'
+   * positions are still last round's and there is nothing better to go on;
+   * the rule is honest about that rather than pretending otherwise.
+   */
+  _safeSpawn() {
+    const R = this.round;
+    const hunted = R && (R.isTagMode ? !R.isTagger(this.player.id)
+      : R.isJuggernautMode ? !R.isJuggernaut(this.player.id) : false);
+    if (!hunted) return this.world.randomSpawn();
+
+    const avoid = [];
+    for (const r of this.remotes.values()) {
+      if (!r.spawned || r.dead || r.spectating) continue;
+      if (R.isSpectating(r.id)) continue;
+      const chaser = R.isTagMode ? R.isTagger(r.id) : R.isJuggernaut(r.id);
+      if (chaser) avoid.push(r.pos);
+    }
+    return this.world.randomSpawn(avoid, CFG.rounds.spawnSafeDist);
+  }
+
   _buildTargets() {
     const list = [];
     const K = CFG.kunai;
