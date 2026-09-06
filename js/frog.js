@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v66';
-import { CFG } from './config.js?v=v66';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v66';
+import * as THREE from '../lib/three.module.js?v=v67';
+import { CFG } from './config.js?v=v67';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v67';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -37,6 +37,43 @@ const WRAP_SIDES = 24;
  * the highlight's far edge is the furthest, at 0.209.
  */
 const LID_SHUT = 0.216;
+
+/**
+ * The ninja idle stance: a low guard held whenever the frog is standing
+ * still with nothing else to do.
+ *
+ * `stagger` puts one foot in front of the other and `shinSplit` bends the
+ * back knee harder, so the rear heel lifts the way a real fighting stance
+ * does. Everything else about the pose is a continuous function of time
+ * rather than keyframes, which is why it loops with nothing to snap.
+ */
+const STANCE = {
+  hip: -1.00, stagger: 0.20,
+  /**
+   * The two knees are given separately rather than as a symmetric split.
+   *
+   * The hip carries a sideways splay as well as its pitch, and the splay sits
+   * BETWEEN the X-rotations in the chain, so the pitches do not simply add:
+   * the same splay lands differently on a leg swung forward than on one swung
+   * back. A shared angle put the rear sole 0.075 above the lead's. These are
+   * the values that measure level.
+   */
+  leadShin: 1.70,
+  rearShin: 1.64,
+  /**
+   * How far the body drops into the crouch.
+   *
+   * MEASURED off the rig, not derived. Bending the knees shortens a leg's
+   * reach to the ground and the body has to come down by exactly that much or
+   * the frog floats — but the reach depends on the ankle angle and the LENGTH
+   * OF THE FOOT as much as on the knee, and a hip-and-knee formula gets it
+   * wrong by more than the whole crouch. Retune the angles above and this has
+   * to be re-measured with them; the test asserts the soles land where the
+   * resting pose's do, so it will say so.
+   */
+  drop: 0.130,
+};
+const STANCE_DROP = STANCE.drop;
 /** How much bigger a wrap must be than the thing it covers, corners and all. */
 const WRAP_FIT = 1.01 / Math.cos(Math.PI / WRAP_SIDES);
 
@@ -333,6 +370,20 @@ export class FrogModel {
     this._buildHead();
     this._buildLimbs();
     this._groundRig();
+    /**
+     * Start standing, not with the legs straight down.
+     *
+     * The rig is BUILT straight because _groundRig has to measure it that way,
+     * but a frog that appears is already on its feet. Left at zero the legs
+     * spent their first frames folding from straight into whatever pose was
+     * asked for, and the soles swung below the floor on the way — which is
+     * worse the deeper the pose, and the ninja stance is deep.
+     */
+    for (const leg of this.legs) {
+      leg.hip.rotation.x = -0.42;
+      leg.shin.rotation.x = 0.85;
+      leg.foot.rotation.x = -0.51;
+    }
     this._buildGear();
     this._buildTongue();
     this._buildSkinFx();
@@ -1065,6 +1116,21 @@ export class FrogModel {
 
     const speed = s.speed || 0;
     const moving = s.moving && s.grounded;
+
+    /**
+     * Is the frog standing still with nothing else going on?
+     *
+     * Every other state is listed here rather than relying on the pose chain
+     * below, because the stance also moves the BODY — and the body is posed
+     * before any of those branches get a say. Anything that is its own
+     * animation wins: attacking, dashing, jumping, falling, grappling,
+     * throwing, parrying, swimming, sliding a wall. When one ends this goes
+     * true again on its own and the frog settles back into guard, damped like
+     * everything else, so there is nothing to schedule or cancel.
+     */
+    const stance = s.grounded && !moving && !s.swimming
+      && !(s.dashT > 0) && !(s.attackT > 0) && !(s.throwT > 0)
+      && !s.grappling && !s.parrying && !s.wallSliding && this.flip <= 0;
     // Sprinting lifts the ceiling so the legs actually cycle faster rather
     // than saturating at the walk-run cap.
     const run = clamp(speed / 15, 0, s.sprinting ? 2.3 : 1.4);
@@ -1128,6 +1194,44 @@ export class FrogModel {
       targetLean = lerp(targetLean, 0.16 * run, 0.8);
     }
 
+    /**
+     * The ninja stance. Weight low and forward, and never quite still.
+     *
+     * The idle motion is several slow sines at frequencies that do not divide
+     * into each other — breath, a weight shift, a settle — so the pose keeps
+     * drifting instead of ticking round a loop. There are no keyframes to
+     * wrap, so there is no seam to hide.
+     *
+     * `_stanceDrop` is handed to the floor clamp at the end of update: it is
+     * how far the body is ALLOWED below its origin, being exactly what the
+     * bent knees gave up.
+     */
+    this._stanceDrop = 0;
+    let stanceBend = 0;
+    if (stance) {
+      const settle = Math.sin(t * 0.83) * 0.018;
+      targetLean = 0.26 + settle;
+      targetSquash = 1.02;
+      /**
+       * The crouch follows how far the knees have ACTUALLY folded, not the
+       * pose being aimed at.
+       *
+       * Bending a knee lifts that foot toward the hip and the body comes down
+       * to meet it — but the body reaches its target sooner than the legs
+       * reach theirs, so committing to the full drop the moment the frog
+       * stops walking pushes the soles through the floor for the length of
+       * the transition. That is the feet-in-the-ground bug this rig has had
+       * before, and this is what stops it coming back: the drop can never run
+       * ahead of the legs that earned it.
+       */
+      stanceBend = clamp(
+        (this.legs[0].shin.rotation.x - 0.85) / (STANCE.leadShin - 0.85), 0, 1);
+      // Breath rides on top of the crouch rather than either side of it.
+      targetY = idleBob * 0.55 - STANCE_DROP * stanceBend;
+      targetRoll = Math.sin(t * 0.61) * 0.020;
+      this._stanceDrop = STANCE_DROP * stanceBend;
+    }
+
     this.squash = damp(this.squash, targetSquash, 14, dt);
     this.lean = damp(this.lean, targetLean, 12, dt);
     this.body.position.y = damp(this.body.position.y, targetY, 16, dt);
@@ -1166,6 +1270,14 @@ export class FrogModel {
       } else if (moving) {
         hipX = phase * 0.85 * run;
         shinX = clamp(-phase, 0, 1) * 1.25 * run + 0.15;
+      } else if (stance) {
+        // Guard: knees deep, left foot forward, right heel back and light.
+        // The weight rocks slowly between them, which is most of what makes
+        // a held pose look like a person rather than a statue.
+        const shift = Math.sin(t * 0.62) * 0.055;
+        const fwd = leg.side < 0 ? 1 : -1;        // left leg leads
+        hipX = STANCE.hip - fwd * (STANCE.stagger + shift);
+        shinX = fwd > 0 ? STANCE.leadShin : STANCE.rearShin;
       } else {
         hipX = -0.42;              // resting frog crouch
         shinX = 0.85;
@@ -1173,10 +1285,20 @@ export class FrogModel {
       leg.hip.rotation.x = damp(leg.hip.rotation.x, hipX, 20, dt);
       leg.shin.rotation.x = damp(leg.shin.rotation.x, shinX, 20, dt);
       // Legs splay wide on the power stroke — the classic frog kick shape.
-      const splay = s.swimming ? 0.30 + Math.max(0, kick) * 0.62 : 0.22;
+      const splay = s.swimming ? 0.30 + Math.max(0, kick) * 0.62
+        : (stance ? 0.30 : 0.22);
       leg.hip.rotation.z = damp(leg.hip.rotation.z, leg.side * splay, 10, dt);
-      leg.foot.rotation.x = damp(leg.foot.rotation.x,
-        s.grounded ? -leg.shin.rotation.x * 0.6 : -0.6, 16, dt);
+      // Feet flat to the ground in the stance. The default ankle follows the
+      // shin at 0.6, which in a deep crouch drives the toe down hard and digs
+      // it into the floor — the toe, not the knee, is what limits how low the
+      // frog can get. Cancelling the whole chain (lean + hip + knee) lands the
+      // sole flat instead, and the rear heel is allowed to lift the way a back
+      // foot does in a real stance.
+      let footX = s.grounded ? -leg.shin.rotation.x * 0.6 : -0.6;
+      if (stance) {
+        footX = -(this.lean + leg.hip.rotation.x + leg.shin.rotation.x);
+      }
+      leg.foot.rotation.x = damp(leg.foot.rotation.x, footX, 16, dt);
     }
 
     // ---- arms ------------------------------------------------------------
@@ -1232,6 +1354,25 @@ export class FrogModel {
           sx = 1.9; sz = arm.side * 0.2; fx = -0.3;
         } else if (moving) {
           sx = phase * 0.95 * run; sz = arm.side * 0.24; fx = -0.5 - swAbs * 0.3;
+        } else if (stance) {
+          // Both elbows folded, hands up. The rig's arms hang along -Y and a
+          // negative x-rotation swings them FORWARD, so the lead arm carries
+          // the larger angle.
+          //
+          // The sword hand is the right one (see _poseAttack), so that is the
+          // one held back by the hip with the katana on the back behind it —
+          // cocked to draw rather than waving about in front.
+          const breath = Math.sin(t * 1.9) * 0.025;
+          const sway = Math.sin(t * 0.74) * 0.045;
+          if (arm.side < 0) {
+            sx = -1.04 + breath + sway;          // lead hand, up and forward
+            sz = arm.side * 0.15;
+            fx = -1.22 - breath;
+          } else {
+            sx = -0.28 + breath - sway;          // sword hand, back at the hip
+            sz = arm.side * 0.32;
+            fx = -1.52 + breath;
+          }
         } else {
           sx = 0.06 + Math.sin(t * 1.9) * 0.05; sz = arm.side * 0.30; fx = -0.35;
         }
@@ -1246,6 +1387,13 @@ export class FrogModel {
     // eyes on where it is going instead of staring at the ground.
     let headTiltX = ninjaRun ? -0.86 : (moving ? -0.10 * run : 0.05);
     let headTiltY = 0;
+    if (stance) {
+      // Cancel most of the stance's forward pitch so the frog is watching
+      // you rather than the floor, and let the head drift a hair — a fighter
+      // reading the room, not scanning it.
+      headTiltX = -this.lean * 0.82 + Math.sin(t * 0.80) * 0.022;
+      headTiltY = Math.sin(t * 0.43) * 0.065;
+    }
     if (s.grappling && s.tongueTo) {
       // Look along the tongue.
       const dx = s.tongueTo.x - this.root.position.x;
@@ -1346,8 +1494,15 @@ export class FrogModel {
     // Only while upright and on the ground: the death keel-over and the swim
     // pose both move the body deliberately, and neither is standing on
     // anything.
-    if (s.grounded && !s.dead && !s.swimming && this.body.position.y < 0) {
-      this.body.position.y = 0;
+    //
+    // The floor is the CROUCH, not zero. A stance that bends the knees pulls
+    // the feet up toward the hips, so the body must come down by exactly that
+    // much or the frog stands on air; clamping at zero would throw the ninja
+    // guard away every frame. `_stanceDrop` is that much and nothing more, so
+    // this still refuses any pose that would sink the legs into the ground.
+    const floor = -(this._stanceDrop || 0);
+    if (s.grounded && !s.dead && !s.swimming && this.body.position.y < floor) {
+      this.body.position.y = floor;
     }
 
     // ---- tongue ----------------------------------------------------------
