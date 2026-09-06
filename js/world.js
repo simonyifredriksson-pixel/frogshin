@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v73';
-import { CFG } from './config.js?v=v73';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v73';
-import { findMap } from './maps.js?v=v73';
-import { Terrain, CollisionWorld } from './collision.js?v=v73';
+import * as THREE from '../lib/three.module.js?v=v74';
+import { CFG } from './config.js?v=v74';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v74';
+import { findMap } from './maps.js?v=v74';
+import { Terrain, CollisionWorld } from './collision.js?v=v74';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -95,6 +95,16 @@ export class World {
      * inside its temples.
      */
     this.keepOut = [];
+    /**
+     * Corridors cut down through the terrain. See `_carve`.
+     *
+     * Applied by `heightAt`, so the analytic height and the sampled
+     * heightfield agree about them, and so anything placed later sees the
+     * cutting rather than the hillside that used to be there.
+     */
+    this.cuts = [];
+    /** Sprite halos on the tunnel crystals — freed in dispose(). */
+    this.glows = [];
 
     // Flat regions carved into the terrain so structures have somewhere to
     // sit, and basins scooped out for water. Both come from the map.
@@ -130,7 +140,56 @@ export class World {
       h = lerp(h, b.h, t);
     }
 
+    /**
+     * Cuttings, last, and they only ever go DOWN.
+     *
+     * A tunnel through a hillside is a corridor taken out of the heightfield
+     * with a roof put back over it. Lowering is the whole operation — a cut
+     * that could raise ground would be able to close the passage it just
+     * opened, depending on which order two of them happened to be in.
+     */
+    for (let i = 0; i < this.cuts.length; i++) {
+      const c = this.cuts[i];
+      const vx = c.x1 - c.x0, vz = c.z1 - c.z0;
+      const L2 = vx * vx + vz * vz;
+      const t = L2 > 0
+        ? clamp(((x - c.x0) * vx + (z - c.z0) * vz) / L2, 0, 1) : 0;
+      const d = Math.hypot(x - (c.x0 + vx * t), z - (c.z0 + vz * t));
+      const k = 1 - smoothstep(clamp((d - c.r) / c.f, 0, 1));
+      if (k <= 0) continue;
+      const floor = lerp(c.y0, c.y1, t);
+      if (h > floor) h = lerp(h, floor, k);
+    }
+
     return h;
+  }
+
+  /**
+   * Cut a corridor down through the terrain, from (x0,z0) at y0 to (x1,z1)
+   * at y1, `r` wide with `f` of feathering.
+   *
+   * The heightfield is sampled once, up front, long before anything knows
+   * where the bridges ended up — so a cut also has to patch the samples it
+   * invalidates. Only the cells the cut can actually reach are re-evaluated:
+   * a tunnel is a few metres across on a 2.9-metre grid, which is a couple of
+   * dozen cells against the heightfield's twenty-one thousand.
+   */
+  _carve(x0, z0, y0, x1, z1, y1, r, f) {
+    this.cuts.push({ x0, z0, y0, x1, z1, y1, r, f });
+    const t = this.terrain;
+    if (!t) return;
+    const pad = r + f + t.cell * 2;
+    const cell = (v) => (v + t.half) / t.cell;
+    const i0 = Math.max(0, Math.floor(cell(Math.min(x0, x1) - pad)));
+    const i1 = Math.min(t.grid - 1, Math.ceil(cell(Math.max(x0, x1) + pad)));
+    const j0 = Math.max(0, Math.floor(cell(Math.min(z0, z1) - pad)));
+    const j1 = Math.min(t.grid - 1, Math.ceil(cell(Math.max(z0, z1) + pad)));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const x = -t.half + i * t.cell, z = -t.half + j * t.cell;
+        t.heights[j * t.grid + i] = this.heightAt(x, z);
+      }
+    }
   }
 
   // ------------------------------------------------------------------ build
@@ -157,18 +216,37 @@ export class World {
           blob:  new Batch(new THREE.IcosahedronGeometry(1, 0), this._mat()),
           rock:  new Batch(new THREE.DodecahedronGeometry(1, 0), this._mat()),
           post:  new Batch(new THREE.CylinderGeometry(1, 1, 1, 7), this._mat()),
+          // Tunnel crystals. Unlit on purpose — they are the light source in
+          // a passage the sun does not reach, so a lit material would render
+          // them as dark grey cones.
+          crystal: new Batch(new THREE.ConeGeometry(1, 1, 6),
+            new THREE.MeshBasicMaterial({})),
         };
       }],
-      ['Carving the land', () => this._buildTerrainMesh()],
       ['Filling the water', () => this._buildWater()],
       // Everything specific to this map, in the order it lists them.
       ...this.map.features.map(([label, fn]) => [label, () => fn(this)]),
+      /**
+       * The ground is drawn AFTER the map is built, not before it.
+       *
+       * A tunnel is a corridor cut down out of the heightfield (see `_carve`)
+       * and nothing knows where one goes until the bridges have been strung —
+       * they are cut where a span would otherwise run through a mountain.
+       * Building the mesh first meant drawing a hillside that the collision
+       * then quietly removed, so you walked into a solid-looking slope and
+       * through it.
+       *
+       * Only the mesh moved. The heightfield itself is still sampled up front,
+       * because everything placed on the map needs it; `_carve` patches the
+       * cells it invalidates.
+       */
+      ['Carving the land', () => this._buildTerrainMesh()],
       ['Lighting the lanterns', () => {
         this._buildSpawns();
         for (const k in this.batches) {
           // Foliage skips shadow casting — it is the most expensive caster
           // and contributes the least to readability.
-          const cast = k !== 'blob' && k !== 'pine';
+          const cast = k !== 'blob' && k !== 'pine' && k !== 'crystal';
           this.batches[k].mesh = this.batches[k].build(this.scene, cast, true);
         }
         this.collision.bake();
@@ -222,6 +300,8 @@ export class World {
     free(this.terrainMesh);
     free(this.waterMesh);
     for (const l of this.lanterns) free(l.mesh);
+    for (const g of this.glows) free(g);
+    this.glows.length = 0;
     if (this.practiceRing) free(this.practiceRing.group);
     if (this.statue && this.statue.group) free(this.statue.group);
 
@@ -405,16 +485,43 @@ export class World {
     if (Math.abs(dx) >= Math.abs(dz)) { dx = Math.sign(dx) || 1; dz = 0; }
     else { dz = Math.sign(dz); dx = 0; }
 
+    /**
+     * Hung, not poured.
+     *
+     * The first version was a solid ramp: every step a box running from its
+     * tread all the way down to the ground, which is easy to collide with and
+     * looks like a concrete slipway bolted to a rope bridge. These are planks
+     * on posts, in the bridge's own timber, so the approach and the span read
+     * as one structure.
+     *
+     * The treads carry their own thin colliders rather than a buried block.
+     * Adjacent planks overlap by 0.30 horizontally and are only a riser
+     * apart vertically, so there is no gap to fall between — and stepping off
+     * the SIDE of a hanging staircase drops you, which is the point of one.
+     */
+    const PLANK = 0.14;                     // half-thickness of a tread
+    const across = dz ? [hw, 0.16] : [0.16, hw];
     for (let i = 0; i < n; i++) {
       // Step 0 is the highest, right against the platform; the flight
       // descends outward from there.
       const top = topY - i * riser;
       const cx = sx + dx * (i + 0.5) * TREAD;
       const cz2 = sz + dz * (i + 0.5) * TREAD;
-      const bottom = groundY - 1.5;                  // buried, never floating
       const hx = dx ? TREAD / 2 + 0.15 : hw;
       const hz = dz ? TREAD / 2 + 0.15 : hw;
-      this.solid(cx, (top + bottom) / 2, cz2, hx, (top - bottom) / 2, hz, color, tag);
+      this.solid(cx, top - PLANK, cz2, hx, PLANK, hz,
+        i % 2 ? color : 0x7b5c3b, tag);
+      // Rail posts either side, and the stringer they are pegged to.
+      if (i % 2 === 0) {
+        for (const side of [-hw, hw]) {
+          this.batches.post.add(cx + (dz ? side : 0), top + 0.8, cz2 + (dx ? side : 0),
+            0.09, 1.7, 0.09, 0x4a3a2a);
+        }
+      }
+      for (const side of [-hw, hw]) {
+        this.batches.box.add(cx + (dz ? side : 0), top - 0.34, cz2 + (dx ? side : 0),
+          across[0] * 2, 0.28, across[1] * 2, 0x4a3a2a);
+      }
     }
     // Nothing grows on a staircase.
     this._clear(sx + dx * n * TREAD * 0.5, sz + dz * n * TREAD * 0.5,
@@ -432,6 +539,170 @@ export class World {
     this.deco(cx, cy - 0.12, cz, radius * ROOF_EAVE, 0.16, radius * ROOF_EAVE, 0x3a2a22);
     // The roof slab is walkable — great for rooftop chases.
     this.collision.addBox(cx, cy - 0.1, cz, radius * 0.72, 0.22, radius * 0.72, 'roof');
+  }
+
+  /**
+   * A cluster of glowing crystals, growing out of whatever it is put on.
+   *
+   * One tall spike with smaller ones crowding its base, which is the shape
+   * that reads as a crystal rather than as a traffic cone. Unlit material, so
+   * they hold their colour in a tunnel the sun cannot reach, plus one halo
+   * per cluster — the halo is what actually lights the rock around it, and
+   * one per spike would be six times the sprites for no more glow.
+   */
+  _crystals(x, y, z, color, scale, rnd) {
+    const B = this.batches.crystal;
+    B.add(x, y + scale * 0.9, z, scale * 0.42, scale * 1.8, scale * 0.42, color,
+      rnd() * 3, (rnd() - 0.5) * 0.22, (rnd() - 0.5) * 0.22);
+    const n = 3 + Math.floor(rnd() * 3);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rnd();
+      const d = scale * (0.3 + rnd() * 0.32);
+      const s = scale * (0.34 + rnd() * 0.42);
+      B.add(x + Math.cos(a) * d, y + s * 0.9, z + Math.sin(a) * d,
+        s * 0.42, s * 1.8, s * 0.42, color,
+        rnd() * 3, Math.cos(a) * 0.34, Math.sin(a) * 0.34);
+    }
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: lanternGlowTexture(), color, transparent: true, opacity: 0.55,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    halo.position.set(x, y + scale * 0.85, z);
+    halo.scale.set(scale * 8, scale * 8, 1);
+    this.scene.add(halo);
+    this.glows.push(halo);
+  }
+
+  /**
+   * A tunnel carrying a bridge through the hillside it would otherwise run
+   * inside, over deck samples i0..i1.
+   *
+   * A span between two spire tops is a straight line and the ground is not,
+   * so two of them dive through a ridge on the way. From inside you saw the
+   * terrain's back faces — which are culled — so the mountain read as a hole
+   * in the world, and the walkway vanished into it.
+   *
+   * The alternative was to move the bridges or flatten the ridge. This keeps
+   * both: the corridor is cut out of the heightfield, and the rock that was
+   * taken out is put straight back as a roof over it, so the mountain is
+   * unchanged from outside and is a passage from within.
+   *
+   * The roof is sampled BEFORE the cut, because afterwards the hillside it
+   * has to match no longer exists.
+   */
+  _tunnel(deck, i0, i1, rotY) {
+    /**
+     * Kept deliberately tight.
+     *
+     * The corridor only has to carry a bridge 3 wide and a frog 1.75 tall.
+     * Every centimetre wider is a centimetre more mountain taken out, and the
+     * rock put back over it has to cover the hole — a generous 5.8-wide cut
+     * left a notch the roof could not fill and the whole thing read as a slab
+     * dropped on the hillside.
+     */
+    const HALF = 2.6;        // clear half-width of the passage
+    const FEATHER = 1.4;
+    const HEAD = 3.0;        // ceiling above the deck — 1.75 of frog plus room
+    const DROP = 1.6;        // floor below the deck
+    const ROCK = 0x4a4640, ROCK_LIT = 0x565149;
+    const rnd = this.rnd;
+    const s = Math.sin(rotY), c = Math.cos(rotY);
+
+    const roofAt = [];
+    for (let i = i0; i <= i1; i++) {
+      roofAt.push(Math.max(this.heightAt(deck[i].x, deck[i].z),
+                           deck[i].y + HEAD + 0.9));
+    }
+
+    // Cut the corridor, one short segment per plank, so the floor follows the
+    // deck's sag instead of chording across it.
+    for (let i = i0; i < i1; i++) {
+      this._carve(deck[i].x, deck[i].z, deck[i].y - DROP,
+                  deck[i + 1].x, deck[i + 1].z, deck[i + 1].y - DROP,
+                  HALF, FEATHER);
+    }
+
+    let colour = 0;
+    const HUES = [0xb44ae8, 0x46e86e, 0xe8465a];   // purple, green, red
+    for (let i = i0; i <= i1; i++) {
+      const d = deck[i];
+      const roof = roofAt[i - i0];
+      /**
+       * Roof it only where there is a mountain to roof.
+       *
+       * One of these spans clips the shoulder of a hill by a metre and a
+       * half. Given a ceiling with standing room under it, the roof came out
+       * three metres ABOVE the grass it was supposed to be buried in — a
+       * concrete flyover sitting on a meadow. Where the rock is too thin to
+       * hide a passage, the cut is left open and the bridge runs through a
+       * notch in the hillside, which is what a metre and a half of rock
+       * honestly is. The crystals go in either way: an open cutting through a
+       * seam of them is the reason there is a seam to walk through.
+       */
+      const roofed = roof >= d.y + HEAD + 1.2;
+      const run = 1.35;      // half-extent along the span
+      const W = HALF + 1.2;  // half-extent across it
+      const top = d.y + HEAD;
+
+      if (roofed) {
+        /**
+         * Drawn ROTATED, collided as one coarse box.
+         *
+         * A collision box is axis-aligned, and a span between two spires runs
+         * at forty degrees to both axes — so an axis-aligned box wide enough
+         * to cover the corridor is nearly as wide again in the other
+         * direction. Built that way the tunnel came out as a pile of nine-
+         * metre cubes sitting on the mountainside.
+         *
+         * The batch takes a rotation, so the rock people SEE is a thin lintel
+         * lying along the span. The collider stays axis-aligned and oversized,
+         * which costs nothing: everything it covers beyond the corridor is
+         * inside the mountain, where there is nothing to bump into it.
+         */
+        const bot = d.y - DROP - 1.2;
+        for (const side of [-(HALF + 0.45), HALF + 0.45]) {
+          this.deco(d.x + c * side, (top + bot) / 2, d.z - s * side,
+            0.5, (top - bot) / 2, run, i % 2 ? ROCK : ROCK_LIT, rotY);
+        }
+        this.deco(d.x, top + 0.35, d.z, W, 0.35, run, ROCK, rotY);
+        /**
+         * The rock that was cut away, put back on top of the lintel.
+         *
+         * In two courses that narrow as they rise, rather than one block to
+         * the old surface. A single slab standing in a trench is a slab
+         * standing in a trench from every angle; stepping it in gives the
+         * spine a profile, so it reads as the hillside closing over the
+         * passage rather than as a lid laid across it.
+         */
+        const fillLo = top + 0.7;
+        if (roof > fillLo + 0.2) {
+          const mid = fillLo + (roof - fillLo) * 0.55;
+          this.deco(d.x, (fillLo + mid) / 2, d.z, W, (mid - fillLo) / 2, run,
+            i % 2 ? ROCK : ROCK_LIT, rotY);
+          this.deco(d.x, (mid + roof) / 2, d.z, W * 0.62, (roof - mid) / 2, run,
+            i % 2 ? ROCK_LIT : ROCK, rotY);
+        }
+        // One coarse ceiling collider, so nothing walks out through the roof.
+        this.collision.addBox(d.x, top + 0.35,  d.z,
+          Math.abs(s) * run + Math.abs(c) * W + 0.2, 0.35,
+          Math.abs(c) * run + Math.abs(s) * W + 0.2, 'stone');
+      }
+
+      // Crystals along the walls, alternating sides and cycling the colours.
+      if ((i - i0) % 2 === 1) {
+        const side = ((i - i0) % 4 === 1 ? -1 : 1) * (HALF - 0.5);
+        this._crystals(d.x + c * side, d.y - DROP - 0.2, d.z - s * side,
+          HUES[colour++ % 3], 0.9 + rnd() * 0.7, rnd);
+      }
+      this._clear(d.x, d.z, HALF + FEATHER);
+    }
+
+    // A cluster over each roofed mouth, so the way in is visible from outside.
+    for (const i of [i0, i1]) {
+      const d = deck[i];
+      if (roofAt[i - i0] < d.y + HEAD + 1.2) continue;
+      this._crystals(d.x, d.y + HEAD - 0.4, d.z, HUES[colour++ % 3], 0.8, rnd);
+    }
   }
 
   /** Floating grapple lantern. Always a valid grapple target. */
@@ -1063,11 +1334,13 @@ export class World {
     const rotY = Math.atan2(dx, dz);
     const sag = Math.min(4.0, len * 0.05);
 
+    const deck = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const x = lerp(x1, x2, t), z = lerp(z1, z2, t);
       // Catenary-ish droop makes the bridge read as rope, not a girder.
       const y = lerp(y1, y2, t) - Math.sin(t * Math.PI) * sag;
+      deck.push({ x, y, z, under: this.heightAt(x, z) - (y + 0.22) });
       this.batches.box.add(x, y, z, 3.0, 0.16, 1.7, i % 2 ? 0x8a6a45 : 0x7b5c3b, rotY);
       this.collision.addBox(x, y, z, 1.5, 0.22, 1.5, 'wood');
       /**
@@ -1087,9 +1360,41 @@ export class World {
       }
       if (i % 6 === 0) this.lantern(x, y + 5.5, z, 0xffd08a);
     }
-    // End posts.
-    for (const [px, py, pz] of [a, b]) {
-      this.solid(px, py + 1.6, pz, 0.45, 1.8, 0.45, 0x5a442e, 'wood');
+    /**
+     * End posts, at the SIDES of the deck.
+     *
+     * They used to stand dead centre on the last plank: a 0.9-wide, 3.6-tall
+     * solid post planted in the middle of a walkway 3 wide, with a frog 1.1
+     * across. That is not a newel, it is a turnstile — it blocked the way onto
+     * every bridge in the map. Moved out to the rails, where a bridge post
+     * belongs, and slimmed to match them.
+     */
+    {
+      const s2 = Math.sin(rotY), c2 = Math.cos(rotY);
+      for (const [px, py, pz] of [a, b]) {
+        for (const side of [-1.35, 1.35]) {
+          this.solid(px + c2 * side, py + 1.5, pz - s2 * side,
+            0.22, 1.7, 0.22, 0x5a442e, 'wood');
+        }
+      }
+    }
+
+    /**
+     * Tunnel every stretch that runs inside a hillside.
+     *
+     * A span is a straight line between two fixed points and the ground is
+     * not, so two of the six dive through a ridge — one of them by eleven and
+     * a half metres. A plank a hand's width inside the terrain is not worth
+     * excavating for, hence the 0.2; one padding sample either side of the run
+     * puts the mouths out in daylight rather than flush with the rock face.
+     */
+    let i = 0;
+    while (i < deck.length) {
+      if (deck[i].under <= 0.2) { i++; continue; }
+      let j = i;
+      while (j + 1 < deck.length && deck[j + 1].under > 0.2) j++;
+      this._tunnel(deck, Math.max(0, i - 1), Math.min(deck.length - 1, j + 1), rotY);
+      i = j + 1;
     }
 
     /**
