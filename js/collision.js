@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v75';
-import { clamp } from './util.js?v=v75';
+import { CFG } from './config.js?v=v76';
+import { clamp } from './util.js?v=v76';
 
 const EPS = 1e-4;
 
@@ -104,6 +104,7 @@ export class CollisionWorld {
     this.climbLimitRadius = Infinity;
     this.boxes = [];
     this.anchors = [];          // floating grapple targets (spheres)
+    this.tunnels = [];          // bores where the heightfield is switched off
     this.cellSize = 14;
     this.hash = new Map();
     this._n = { x: 0, y: 0, z: 0 };
@@ -124,6 +125,51 @@ export class CollisionWorld {
   /** A floating, always-grappleable point (lanterns, rings, banners). */
   addAnchor(x, y, z, radius = 1.6) {
     this.anchors.push({ x, y, z, r: radius });
+  }
+
+  /**
+   * A cylinder bored through the terrain: inside it, the heightfield is not
+   * there.
+   *
+   * The world's ground is a heightfield, which has no inside — it is a skin
+   * with one height per column, so there is no way to express a hole through
+   * a mountain by editing it. Cutting the column down instead opens a trench
+   * from the sky, which is a canyon and not a tunnel.
+   *
+   * So the mountain is left exactly as it was and the terrain is simply
+   * switched OFF along this cylinder. The rock you can see is the terrain
+   * mesh, untouched; the rock you would walk into is still there everywhere
+   * outside the bore, which is what gives the passage its round walls for
+   * free — step off the axis and the hillside stops you, at the radius.
+   */
+  addTunnel(x0, y0, z0, x1, y1, z1, radius) {
+    this.tunnels.push({
+      x0, y0, z0, x1, y1, z1, r2: radius * radius,
+      // Cheap reject, so the per-frame test is a box compare almost always.
+      minX: Math.min(x0, x1) - radius, maxX: Math.max(x0, x1) + radius,
+      minY: Math.min(y0, y1) - radius, maxY: Math.max(y0, y1) + radius,
+      minZ: Math.min(z0, z1) - radius, maxZ: Math.max(z0, z1) + radius,
+    });
+  }
+
+  /** Is this point inside a bore, where the ground has been dug away? */
+  inTunnel(x, y, z) {
+    const T = this.tunnels;
+    for (let i = 0; i < T.length; i++) {
+      const t = T[i];
+      if (x < t.minX || x > t.maxX || y < t.minY || y > t.maxY
+        || z < t.minZ || z > t.maxZ) continue;
+      const vx = t.x1 - t.x0, vy = t.y1 - t.y0, vz = t.z1 - t.z0;
+      const L2 = vx * vx + vy * vy + vz * vz;
+      let s = L2 > 0
+        ? ((x - t.x0) * vx + (y - t.y0) * vy + (z - t.z0) * vz) / L2 : 0;
+      if (s < 0) s = 0; else if (s > 1) s = 1;
+      const dx = x - (t.x0 + vx * s);
+      const dy = y - (t.y0 + vy * s);
+      const dz = z - (t.z0 + vz * s);
+      if (dx * dx + dy * dy + dz * dz < t.r2) return true;
+    }
+    return false;
   }
 
   _key(ix, iz) { return ix * 73856093 ^ iz * 19349663; }
@@ -253,9 +299,9 @@ export class CollisionWorld {
       }
     }
 
-    // Terrain floor.
+    // Terrain floor — unless we are inside a bore, where there is no ground.
     const th = this.terrain.heightAt(pos.x, pos.z);
-    if (pos.y <= th) {
+    if (pos.y <= th && !this.inTunnel(pos.x, pos.y, pos.z)) {
       pos.y = th;
       if (vel.y < 0) vel.y = 0;
       state.grounded = true;
@@ -331,6 +377,16 @@ export class CollisionWorld {
       state.wallTag = b.tag;
       return;
     }
+
+    /**
+     * Inside a bore there is no terrain at all — that is what a bore is.
+     *
+     * Tested at the position we have just moved TO, so the hillside stops
+     * being a wall exactly at the mouth and starts again exactly at the
+     * radius. The round walls of the passage are the mountain the bore did
+     * not remove; nothing has to be built for them.
+     */
+    if (this.tunnels.length && this.inTunnel(pos.x, pos.y, pos.z)) return;
 
     // Terrain acts as a wall wherever it rises faster than we can step.
     const th = this.terrain.heightAt(pos.x, pos.z);

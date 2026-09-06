@@ -10,11 +10,11 @@
  * Layout runs along +Z: spawn at z=0, gate at z=PATH_LENGTH.
  */
 
-import * as THREE from '../lib/three.module.js?v=v75';
-import { CFG } from './config.js?v=v75';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v75';
-import { Terrain, CollisionWorld } from './collision.js?v=v75';
-import { lanternGlowTexture } from './world.js?v=v75';
+import * as THREE from '../lib/three.module.js?v=v76';
+import { CFG } from './config.js?v=v76';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v76';
+import { Terrain, CollisionWorld } from './collision.js?v=v76';
+import { lanternGlowTexture } from './world.js?v=v76';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v75';
-import { CFG } from './config.js?v=v75';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v75';
-import { findMap } from './maps.js?v=v75';
-import { Terrain, CollisionWorld } from './collision.js?v=v75';
+import * as THREE from '../lib/three.module.js?v=v76';
+import { CFG } from './config.js?v=v76';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v76';
+import { findMap } from './maps.js?v=v76';
+import { Terrain, CollisionWorld } from './collision.js?v=v76';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -105,6 +105,10 @@ export class World {
     this.cuts = [];
     /** Sprite halos on the tunnel crystals — freed in dispose(). */
     this.glows = [];
+    /** Cylinders bored through the terrain: { axis, r }. See `_tunnel`. */
+    this.bores = [];
+    /** The inward-facing rock sleeves inside them — freed in dispose(). */
+    this.sleeves = [];
 
     // Flat regions carved into the terrain so structures have somewhere to
     // sit, and basins scooped out for water. Both come from the map.
@@ -302,6 +306,9 @@ export class World {
     for (const l of this.lanterns) free(l.mesh);
     for (const g of this.glows) free(g);
     this.glows.length = 0;
+    for (const s of this.sleeves) free(s);
+    this.sleeves.length = 0;
+    this.bores.length = 0;
     if (this.practiceRing) free(this.practiceRing.group);
     if (this.statue && this.statue.group) free(this.statue.group);
 
@@ -377,6 +384,35 @@ export class World {
       colors[i * 3 + 2] = tmp.b * shade;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    /**
+     * Open the mouths.
+     *
+     * A bore is a horizontal cylinder inside the mountain, and the terrain is
+     * the mountain's SKIN — so the two only meet where the tunnel breaks out
+     * of the slope, at its two ends. Dropping the triangles the cylinder
+     * actually passes through therefore takes nothing off the hillside except
+     * a round opening at each mouth, which is the whole point: the mountain
+     * is otherwise untouched.
+     *
+     * By centroid. A triangle here is about 2.9 across against a bore 7.2
+     * wide, so a centroid test cuts the hole to within half a triangle, and
+     * testing all three corners instead would nibble a ragged extra ring off
+     * the rim for no gain.
+     */
+    if (this.bores.length) {
+      const src = geo.index.array;
+      const keep = [];
+      const cx = new THREE.Vector3();
+      for (let t = 0; t < src.length; t += 3) {
+        const a = src[t], b = src[t + 1], c = src[t + 2];
+        cx.set((pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3,
+               (pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3,
+               (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3);
+        if (this.collision.inTunnel(cx.x, cx.y, cx.z)) continue;
+        keep.push(a, b, c);
+      }
+      geo.setIndex(keep);
+    }
     geo.computeVertexNormals();
 
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -589,173 +625,227 @@ export class World {
   }
 
   /**
-   * A tunnel carrying a bridge through the hillside it would otherwise run
-   * inside, over deck samples i0..i1.
+   * Bore a cylinder through the hillside a bridge would otherwise run inside,
+   * over deck samples i0..i1.
    *
    * A span between two spire tops is a straight line and the ground is not,
-   * so two of them dive through a ridge on the way. From inside you saw the
-   * terrain's back faces — which are culled — so the mountain read as a hole
-   * in the world, and the walkway vanished into it.
+   * so two of the six dive through a ridge on the way. From inside you saw
+   * the terrain's back faces — which are culled — so the mountain read as a
+   * hole in the world and the walkway vanished into it.
    *
-   * The alternative was to move the bridges or flatten the ridge. This keeps
-   * both: the corridor is cut out of the heightfield, and the rock that was
-   * taken out is put straight back as a roof over it, so the mountain is
-   * unchanged from outside and is a passage from within.
+   * This is a hole dug through the rock, and nothing else. The mountain is
+   * NOT edited: its heightfield keeps every sample it had, its mesh keeps
+   * every triangle except the ones the cylinder actually passes through, and
+   * from outside the only change is a round opening at each end.
    *
-   * The roof is sampled BEFORE the cut, because afterwards the hillside it
-   * has to match no longer exists.
+   * Two earlier attempts got this wrong in the same way. Both cut the
+   * heightfield down along the span and then tried to put the missing rock
+   * back on top — first as a flat lintel, then as an arch of stone staves.
+   * But a heightfield is a skin with one height per column; cutting it opens a
+   * trench to the sky, and a trench with a lid on it is a lid on a trench from
+   * every angle you look at it. That is what read, fairly, as a black box on
+   * the mountainside.
+   *
+   * What makes the round walls here is the mountain itself: collision simply
+   * switches the terrain off inside the cylinder (CollisionWorld.addTunnel),
+   * so the rock stops you exactly at the radius and nowhere sooner. The only
+   * thing built is a sleeve to look at, because the terrain mesh has no
+   * inside face to show you.
    */
   _tunnel(deck, i0, i1, rotY) {
     /**
-     * Kept deliberately tight.
-     *
-     * The corridor only has to carry a bridge 3 wide and a frog 1.75 tall.
-     * Every centimetre wider is a centimetre more mountain taken out, and the
-     * rock put back over it has to cover the hole — a generous 5.8-wide cut
-     * left a notch the roof could not fill and the whole thing read as a slab
-     * dropped on the hillside.
+     * The bore has to clear a bridge 3 wide and a frog 1.75 tall standing on
+     * it, with the deck a little above the axis so more of the cylinder is
+     * headroom than is floor.
      */
-    const HALF = 2.6;        // clear half-width of the passage
-    const FEATHER = 1.4;
-    const HEAD = 3.0;        // ceiling above the deck — 1.75 of frog plus room
-    const DROP = 1.6;        // floor below the deck
-    /**
-     * The mountain's own stone, taken from the map's palette.
-     *
-     * It was a dark grey of its own choosing, which is why it read as a black
-     * box stuck on the hillside rather than as a hole in it. A tunnel bored
-     * through rock is made of that rock; the two shades are the palette's
-     * colour lifted and dropped a little, the same trick the terrain shading
-     * uses to keep flat faces from merging.
-     */
-    const P = this.map.palette;
-    const shade = (hex, k) => {
-      const r = Math.min(255, Math.round(((hex >> 16) & 255) * k));
-      const g = Math.min(255, Math.round(((hex >> 8) & 255) * k));
-      const b = Math.min(255, Math.round((hex & 255) * k));
-      return (r << 16) | (g << 8) | b;
-    };
-    const ROCK = shade(P.rock, 0.86), ROCK_LIT = shade(P.rock, 1.04);
+    const R = 3.6;
+    const AXIS_DROP = 1.1;            // how far under the deck the axis runs
     const rnd = this.rnd;
-    const s = Math.sin(rotY), c = Math.cos(rotY);
 
-    const roofAt = [];
+    /**
+     * Only bore where there is a mountain to bore THROUGH.
+     *
+     * One of these spans clips the shoulder of a hill by a metre and a half.
+     * A 3.6 cylinder there is not a tunnel, it is a pipe lying in a meadow
+     * with its top half in the open air. Below the threshold the ground is
+     * simply cut down out of the way and the bridge crosses an open notch,
+     * which is what a metre and a half of rock honestly is.
+     */
+    let thickest = 0;
     for (let i = i0; i <= i1; i++) {
-      roofAt.push(Math.max(this.heightAt(deck[i].x, deck[i].z),
-                           deck[i].y + HEAD + 0.9));
+      thickest = Math.max(thickest, this.heightAt(deck[i].x, deck[i].z) - deck[i].y);
     }
-
-    // Cut the corridor, one short segment per plank, so the floor follows the
-    // deck's sag instead of chording across it.
-    for (let i = i0; i < i1; i++) {
-      this._carve(deck[i].x, deck[i].z, deck[i].y - DROP,
-                  deck[i + 1].x, deck[i + 1].z, deck[i + 1].y - DROP,
-                  HALF, FEATHER);
-    }
-
-    let colour = 0;
     const HUES = [0xb44ae8, 0x46e86e, 0xe8465a];   // purple, green, red
+    let colour = 0;
+
+    if (thickest < R + 0.8) {
+      // Too thin for a passage: take the obstruction out and leave it open.
+      for (let i = i0; i < i1; i++) {
+        this._carve(deck[i].x, deck[i].z, deck[i].y - 1.6,
+                    deck[i + 1].x, deck[i + 1].z, deck[i + 1].y - 1.6, 2.6, 1.4);
+      }
+      for (let i = i0; i <= i1; i++) {
+        if ((i - i0) % 2 === 1) {
+          const s = Math.sin(rotY), c = Math.cos(rotY);
+          const side = ((i - i0) % 4 === 1 ? -1 : 1) * 2.1;
+          this._crystals(deck[i].x + c * side, deck[i].y - 1.8, deck[i].z - s * side,
+            HUES[colour++ % 3], 0.9 + rnd() * 0.6, rnd);
+        }
+        this._clear(deck[i].x, deck[i].z, 4.0);
+      }
+      return;
+    }
+
+    // ---- the bore ------------------------------------------------------
+    const axis = [];
     for (let i = i0; i <= i1; i++) {
-      const d = deck[i];
-      const roof = roofAt[i - i0];
-      /**
-       * Roof it only where there is a mountain to roof.
-       *
-       * One of these spans clips the shoulder of a hill by a metre and a
-       * half. Given a ceiling with standing room under it, the roof came out
-       * three metres ABOVE the grass it was supposed to be buried in — a
-       * concrete flyover sitting on a meadow. Where the rock is too thin to
-       * hide a passage, the cut is left open and the bridge runs through a
-       * notch in the hillside, which is what a metre and a half of rock
-       * honestly is. The crystals go in either way: an open cutting through a
-       * seam of them is the reason there is a seam to walk through.
-       */
-      const roofed = roof >= d.y + HEAD + 1.2;
-      const run = 1.35;      // half-extent along the span
-      const W = HALF + 1.2;  // half-extent across it
-      const top = d.y + HEAD;
-
-      if (roofed) {
-        /**
-         * A bore: a pipe with its floor left out.
-         *
-         * Built as staves around an arch rather than as a lintel with slabs
-         * stacked on it. A flat lid over a slot is a lid over a slot from
-         * every angle — it was described, fairly, as a black box. An arch of
-         * the mountain's own stone reads as rock the passage was cut through.
-         *
-         * Each stave is DRAWN rotated: rolled about the run to sit tangent to
-         * the arch, then yawed along it. Euler XYZ applies the roll first and
-         * the yaw second, so the roll happens about the stave's own length,
-         * which is what puts it on the curve instead of skewing it.
-         *
-         * Collision stays one coarse axis-aligned box across the top. A box
-         * cannot be rotated, and a span between two spires runs at forty
-         * degrees to both axes, so an axis-aligned box wide enough for the
-         * corridor is nearly as wide again sideways — which is what made the
-         * first attempt a pile of nine-metre cubes. Oversizing costs nothing
-         * here: everything it covers beyond the corridor is inside the
-         * mountain, where nothing can reach it.
-         */
-        /**
-         * Sized so the crown clears a standing frog, not by eye — and sized
-         * against the HIGHEST plank it covers, not this one.
-         *
-         * Two separate ways this was too low. First the radius: the arch
-         * springs from the corridor floor, DROP below the deck, so it has to
-         * carry the ceiling HEAD above the deck from down there. At HALF+0.55
-         * the underside came out 1.95 over the planks against a frog 1.75
-         * tall standing on 0.22 of plank — two centimetres of overlap, which
-         * is a roof pressed onto your head.
-         *
-         * Then `hi`. The collider is one axis-aligned box on a diagonal run,
-         * so it reaches two or three planks either side — and this span
-         * climbs 1.27 a plank. Set from the local plank, the ceiling for one
-         * plank sat below the head of a frog standing on the next, and the
-         * tunnel stopped you halfway through. It clears the highest deck in
-         * its own reach instead.
-         */
-        let hi = d.y;
-        for (let k = Math.max(i0, i - 3); k <= Math.min(i1, i + 3); k++) {
-          hi = Math.max(hi, deck[k].y);
-        }
-        const R = (hi - d.y) + HEAD + DROP - 0.4;   // radius to the stave centres
-        const STAVES = 9;                      // over a half turn
-        const half = Math.PI / (STAVES - 1);   // angular half-width of a stave
-        const cy = d.y - DROP + 0.4;           // the arch springs from the floor
-        for (let k = 0; k < STAVES; k++) {
-          const th = -Math.PI / 2 + k * (Math.PI / (STAVES - 1));
-          const ux = Math.sin(th), uy = Math.cos(th);   // outward from the axis
-          this.deco(d.x + c * (ux * R), cy + uy * R, d.z - s * (ux * R),
-            R * Math.sin(half) + 0.18, 0.45, run,
-            k % 2 ? ROCK : ROCK_LIT, rotY, 0, -th);
-        }
-        // The rock above the bore, back up to the hillside that was there.
-        const crown = cy + R + 0.45;
-        if (roof > crown + 0.3) {
-          this.deco(d.x, (crown + roof) / 2, d.z, W * 0.8, (roof - crown) / 2, run,
-            i % 2 ? ROCK : ROCK_LIT, rotY);
-        }
-        this.collision.addBox(d.x, crown, d.z,
-          Math.abs(s) * run + Math.abs(c) * W + 0.2, 0.45,
-          Math.abs(c) * run + Math.abs(s) * W + 0.2, 'stone');
-      }
-
-      // Crystals along the walls, alternating sides and cycling the colours.
-      if ((i - i0) % 2 === 1) {
-        const side = ((i - i0) % 4 === 1 ? -1 : 1) * (HALF - 0.5);
-        this._crystals(d.x + c * side, d.y - DROP - 0.2, d.z - s * side,
-          HUES[colour++ % 3], 0.9 + rnd() * 0.7, rnd);
-      }
-      this._clear(d.x, d.z, HALF + FEATHER);
+      axis.push({ x: deck[i].x, y: deck[i].y - AXIS_DROP, z: deck[i].z });
+      this._clear(deck[i].x, deck[i].z, R + 1.0);
     }
-
-    // A cluster over each roofed mouth, so the way in is visible from outside.
-    for (const i of [i0, i1]) {
-      const d = deck[i];
-      if (roofAt[i - i0] < d.y + HEAD + 1.2) continue;
-      this._crystals(d.x, d.y + HEAD - 0.4, d.z, HUES[colour++ % 3], 0.8, rnd);
+    /**
+     * Switch the ground off only where there IS ground over the deck.
+     *
+     * The sleeve runs a few planks past the rock at each end so the mouth is
+     * lined all the way out, but the COLLISION bore must not: outside the
+     * mountain the terrain under the bridge is real ground, and disabling it
+     * there means stepping off the planks near a mouth drops you through the
+     * hillside instead of onto it.
+     */
+    for (let k = 0; k + 1 < axis.length; k++) {
+      const a = axis[k], b = axis[k + 1];
+      const buried = this.heightAt(a.x, a.z) > deck[i0 + k].y - 0.5
+        || this.heightAt(b.x, b.z) > deck[i0 + k + 1].y - 0.5;
+      if (!buried) continue;
+      this.collision.addTunnel(a.x, a.y, a.z, b.x, b.y, b.z, R);
+      // A floor, because the rock under the bore no longer collides and
+      // stepping off the planks inside would otherwise drop you through the
+      // mountain to the kill plane.
+      this.collision.addBox((a.x + b.x) / 2, (a.y + b.y) / 2 - R - 0.5,
+        (a.z + b.z) / 2, R * 0.85, 0.6, R * 0.85, 'stone');
     }
+    this.bores.push({ axis, r: R });
+
+    /**
+     * The sleeve is cut WIDER than the bore, and that is not a rounding
+     * allowance.
+     *
+     * The hole in the terrain is the set of triangles inside the cylinder, so
+     * its rim lies exactly on the cylinder — and a sleeve of the same radius
+     * meets the rim edge to edge, with nothing behind the join. Standing in
+     * the tunnel you could see daylight through a ring of hairline gaps all
+     * the way round both mouths. Half a metre of overlap puts the sleeve
+     * behind the rock rather than flush against it.
+     */
+    /**
+     * And it stops where the rock stops.
+     *
+     * The bore is padded a few planks past the hillside so the mouth is fully
+     * lined, but the sleeve must not follow it out there: past the rock it is
+     * a tube of stone hanging in mid-air over the valley, and since it is
+     * only drawn from within, what you see from outside is its far wall — a
+     * grey curved shape floating against the sky. One ring of margin past the
+     * last buried ring is enough to line the mouth and no more.
+     */
+    let lo = axis.length, hiRing = -1;
+    for (let k = 0; k < axis.length; k++) {
+      if (this.heightAt(axis[k].x, axis[k].z) > axis[k].y - R * 0.5) {
+        if (k < lo) lo = k;
+        hiRing = k;
+      }
+    }
+    if (hiRing < 0) return;
+    lo = Math.max(0, lo - 1);
+    hiRing = Math.min(axis.length - 1, hiRing + 1);
+    this._boreSleeve(axis.slice(lo, hiRing + 1), R + 0.5);
+
+    // Crystals growing out of the tunnel floor, alternating sides.
+    const s = Math.sin(rotY), c = Math.cos(rotY);
+    for (let i = i0; i <= i1; i++) {
+      if ((i - i0) % 2 !== 1) continue;
+      const a = axis[i - i0];
+      const side = ((i - i0) % 4 === 1 ? -1 : 1) * (R * 0.62);
+      const drop = Math.sqrt(Math.max(0, R * R - side * side)) - 0.15;
+      this._crystals(a.x + c * side, a.y - drop, a.z - s * side,
+        HUES[colour++ % 3], 0.8 + rnd() * 0.7, rnd);
+    }
+  }
+
+  /**
+   * The rock you see inside a bore.
+   *
+   * The terrain mesh is a single-sided skin, so from within the mountain
+   * there is nothing to draw — its faces point the other way and are culled,
+   * which is why an uncovered tunnel showed the sky. This is a sleeve of
+   * inward-facing quads along the bore's axis, in the map's own rock colour
+   * with the same per-vertex noise the ground uses, so where it meets the
+   * open air at a mouth the two match.
+   *
+   * One mesh for the whole bore rather than a cylinder per segment: a dozen
+   * short cylinders is a dozen draw calls and a seam at every joint.
+   */
+  _boreSleeve(axis, R) {
+    const SIDES = 14;
+    const rings = axis.length;
+    const verts = [], norms = [], cols = [], idx = [];
+    const P = this.map.palette;
+    const rock = new THREE.Color(P.rock);
+    const up = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3(), right = new THREE.Vector3(), upv = new THREE.Vector3();
+
+    for (let k = 0; k < rings; k++) {
+      const a = axis[k];
+      const b = axis[Math.min(rings - 1, k + 1)];
+      const p = axis[Math.max(0, k - 1)];
+      dir.set(b.x - p.x, b.y - p.y, b.z - p.z);
+      if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+      dir.normalize();
+      right.crossVectors(dir, up).normalize();
+      upv.crossVectors(right, dir).normalize();
+      for (let j = 0; j < SIDES; j++) {
+        const th = (j / SIDES) * Math.PI * 2;
+        const ct = Math.cos(th), st = Math.sin(th);
+        const nx = right.x * ct + upv.x * st;
+        const ny = right.y * ct + upv.y * st;
+        const nz = right.z * ct + upv.z * st;
+        verts.push(a.x + nx * R, a.y + ny * R, a.z + nz * R);
+        // Facing INWARD: the viewer is on the axis, not outside the rock.
+        norms.push(-nx, -ny, -nz);
+        // The ground's own trick: a little value noise so flat faces do not
+        // merge into one silhouette in a scene lit by a single sun.
+        const v = this.noise2.fbm(a.x * 0.06 + ct, a.z * 0.06 + st, 2) * 0.5 + 0.5;
+        const sh = 0.72 + v * 0.34;
+        cols.push(rock.r * sh, rock.g * sh, rock.b * sh);
+      }
+    }
+    for (let k = 0; k + 1 < rings; k++) {
+      for (let j = 0; j < SIDES; j++) {
+        const j2 = (j + 1) % SIDES;
+        const a0 = k * SIDES + j, a1 = k * SIDES + j2;
+        const b0 = (k + 1) * SIDES + j, b1 = (k + 1) * SIDES + j2;
+        // Wound so the front face is the one on the axis side.
+        idx.push(a0, b0, a1, a1, b0, b1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    geo.setIndex(idx);
+    /**
+     * Visible only from INSIDE.
+     *
+     * Drawn double-sided it is a grey pipe lying on the mountainside — the
+     * exact thing this was supposed to stop being. Single-sided with the
+     * faces turned in, the sleeve has no outside at all: from the hillside
+     * you see the mountain, with a round hole where the terrain's own
+     * triangles were dropped, and through that hole the lit inner wall.
+     */
+    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+      vertexColors: true, side: THREE.FrontSide,
+    }));
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+    this.sleeves.push(mesh);
   }
 
   /** Floating grapple lantern. Always a valid grapple target. */
