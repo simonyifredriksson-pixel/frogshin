@@ -8,11 +8,11 @@
  * full world generation.
  */
 
-import * as THREE from '../lib/three.module.js?v=v68';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v68';
-import { Atmosphere } from './atmosphere.js?v=v68';
-import { FrogModel } from './frog.js?v=v68';
-import { lanternGlowTexture } from './world.js?v=v68';
+import * as THREE from '../lib/three.module.js?v=v69';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep, lookYaw } from './util.js?v=v69';
+import { Atmosphere } from './atmosphere.js?v=v69';
+import { FrogModel } from './frog.js?v=v69';
+import { lanternGlowTexture } from './world.js?v=v69';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -20,6 +20,14 @@ const _e = new THREE.Euler();
 const _v = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _c = new THREE.Color();
+
+/**
+ * How far the menu camera stays above the ground beneath it.
+ *
+ * Enough to clear the pines it drifts past as well as the hillside itself —
+ * skimming a treetop reads as a mistake almost as much as sinking into a hill.
+ */
+const MENU_CAM_CLEARANCE = 11;
 
 class MiniBatch {
   constructor(geo, mat) { this.geo = geo; this.mat = mat; this.items = []; }
@@ -60,6 +68,7 @@ export class MenuScene {
     this._buildTerrain();
     this._buildProps();
     this._buildHero();
+    this._buildDuel();
     this.atmo = new Atmosphere(this.scene, renderer, {
       cloudCount: 22,
       leafCount: 180,
@@ -289,6 +298,86 @@ export class MenuScene {
     this.heroAttack = 0;
   }
 
+  /**
+   * Two frogs sparring in the clearing below the shrine.
+   *
+   * They circle, rush in, trade a blow and drift apart again, so the title
+   * screen has a fight going on in it rather than one frog standing on a
+   * ledge. Driven by the same FrogModel the game uses, so they run, swing and
+   * land with the real animation rather than a bespoke one.
+   */
+  _buildDuel() {
+    // In the clearing between the terrace and the lake, which is where the
+    // look-at spline spends most of its time — off to one side and they are
+    // only ever caught at the edge of frame.
+    this.duelCentre = new THREE.Vector2(-16, 4);
+    this.duel = [];
+    for (let i = 0; i < 2; i++) {
+      const m = new FrogModel(i ? 0xd9743a : 0x53b7e8, '', true);
+      m.root.scale.setScalar(1.35);
+      this.scene.add(m.root);
+      this.duel.push({
+        model: m, pos: new THREE.Vector3(), attack: 0, cooldown: i * 0.9,
+        atkIndex: i, started: false,
+      });
+    }
+    this.duelT = 0;
+  }
+
+  _updateDuel(dt) {
+    if (!this.duel) return;
+    this.duelT += dt;
+    const t = this.duelT;
+    /**
+     * One pass every seven seconds: circle wide, rush in, trade, drift out.
+     *
+     * A curve rather than a state machine — it cannot get stuck between
+     * states, and it loops with nothing to reset. The sixth power is what
+     * makes the approach a sharp lunge instead of a slow drift: they spend
+     * most of the cycle circling and only a moment inside each other's reach.
+     */
+    const close = Math.pow(Math.sin(((t % 7) / 7) * Math.PI), 6);
+    const r = lerp(5.2, 1.7, close);
+    const spin = t * 0.5 + Math.sin(t * 0.27) * 0.6;
+    const C = this.duelCentre;
+
+    for (let i = 0; i < 2; i++) {
+      const d = this.duel[i];
+      const a = spin + i * Math.PI;
+      const x = C.x + Math.cos(a) * r, z = C.y + Math.sin(a) * r;
+      _v.set(x, this.height(x, z), z);
+
+      // Speed is taken from how far it ACTUALLY moved, so the legs cycle at
+      // the rate the frog is travelling instead of a number picked to match.
+      const step = _v.distanceTo(d.pos) / Math.max(dt, 1e-4);
+      const speed = d.started ? Math.min(step, 20) : 0;
+      d.pos.copy(_v);
+      d.started = true;
+      d.model.root.position.copy(_v);
+
+      // Face the other one. lookYaw exists because subtracting these the
+      // intuitive way turns the model around and points it away.
+      const o = this.duel[1 - i];
+      d.model.setFacing(lookYaw(d.pos.x, d.pos.z, o.pos.x, o.pos.z));
+
+      if (close > 0.7 && d.attack <= 0 && d.cooldown <= 0) {
+        d.attack = 1;
+        d.cooldown = 2.4;
+        d.atkIndex = (d.atkIndex + 1) % 3;
+      }
+      if (d.attack > 0) d.attack = Math.max(0, d.attack - dt / 0.34);
+      if (d.cooldown > 0) d.cooldown -= dt;
+
+      d.model.update(dt, {
+        speed, moving: speed > 1.2, grounded: true, vy: 0, dashT: 0,
+        attackT: d.attack, attackIndex: d.atkIndex,
+        sprinting: speed > 11, throwT: 0, parrying: false,
+        grappling: false, tongueTo: null, wallSliding: false,
+        swimming: false, dead: false,
+      });
+    }
+  }
+
   // ------------------------------------------------------------ camera path
 
   _buildCameraPath() {
@@ -329,6 +418,26 @@ export class MenuScene {
 
     // A gentle float on top of the spline.
     this._camPos.y += Math.sin(this.time * 0.35) * 1.4;
+
+    /**
+     * Never fly through the scenery.
+     *
+     * Several points on the spline sit BELOW the ground it is supposed to be
+     * circling — the one at (46, 26, 52) is thirteen units inside a hillside,
+     * and the camera spends about a third of the loop underground. From in
+     * there the back faces of the terrain are culled, so the camera looks out
+     * through the ground and sees sky: that pale slab with a hard edge along
+     * the bottom of the title screen is not a hole in the world, it is the
+     * view from inside one.
+     *
+     * Clamped here rather than by moving the spline, so the framing is
+     * untouched everywhere it was already flying clear, and so a later edit
+     * to the path cannot put the camera back inside a hill.
+     */
+    const ground = this.height(this._camPos.x, this._camPos.z);
+    if (this._camPos.y < ground + MENU_CAM_CLEARANCE) {
+      this._camPos.y = ground + MENU_CAM_CLEARANCE;
+    }
     this.camera.position.copy(this._camPos);
     this.camera.lookAt(this._camLook);
     this.camera.rotateZ(Math.sin(this.time * 0.21) * 0.012);
@@ -361,7 +470,12 @@ export class MenuScene {
       pos.needsUpdate = true;
     }
 
+    this._updateDuel(dt);
+
     // Hero frog: idles, and now and then hops or does a little flourish.
+    // Guarded because dispose() drops it, and update can still be called once
+    // more after the menu is torn down.
+    if (!this.hero) return;
     this.heroTimer -= dt;
     if (this.heroTimer <= 0) {
       this.heroTimer = 4 + Math.random() * 5;
@@ -386,6 +500,22 @@ export class MenuScene {
 
   dispose() {
     this.atmo.dispose();
+    /**
+     * The frogs dispose themselves, and go before the sweep below.
+     *
+     * Their geometry is SHARED with every frog in the game — FrogModel.dispose
+     * knows to skip it, and the blanket traverse here does not, so leaving
+     * them in it frees buffers the gameplay models are still using. It was
+     * already doing that to the hero; the two duellists would have made it
+     * three times over.
+     */
+    for (const f of [this.hero, ...(this.duel || []).map((d) => d.model)]) {
+      if (!f) continue;
+      this.scene.remove(f.root);
+      f.dispose();
+    }
+    this.hero = null;
+    this.duel = null;
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
