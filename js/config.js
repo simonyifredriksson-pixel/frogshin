@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v74';
+export const BUILD = 'v75';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -62,6 +62,27 @@ export const CFG = {
     radius: 0.55,            // collision capsule radius
     height: 1.75,            // collision capsule height
     stepHeight: 0.65,        // auto-step over small ledges
+    /**
+     * The same, for a walkway you are meant to walk along.
+     *
+     * A rope bridge is a continuous sloping surface, but collision is boxes,
+     * so it is built as a chain of overlapping planks. Standing on one you
+     * are inside the next as well, and the step check measures against the
+     * higher of them — which on a climbing span is the plank spacing times
+     * the gradient, not the height of anything you could see. The mountain
+     * spans came out asking for a metre a stride and simply stopped you.
+     *
+     * stepHeight is the rule for LEDGES: a crate, a kerb, a dais. A deck is
+     * not a ledge, and only surfaces tagged 'deck' get this — bridge planks
+     * and the ramps up to them, nothing else in the map.
+     *
+     * 2.0 covers the steepest span the valley builds: 2.0 of plank spacing
+     * at a gradient of 0.50, plus the sag reversing at the far end, measured
+     * at 1.27 per plank with a margin for where two planks overlap at once.
+     * It can be this generous BECAUSE of the gate above — it is a stride
+     * along a walkway, never a leap onto one.
+     */
+    deckStep: 2.0,
     /**
      * Steepest TERRAIN you can walk up, on Terrain.slopeAt's 0..1 scale
      * (0 flat, 1 vertical; the scale is |gradient| / 3, so this is a little

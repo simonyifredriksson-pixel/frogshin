@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v74';
-import { clamp } from './util.js?v=v74';
+import { CFG } from './config.js?v=v75';
+import { clamp } from './util.js?v=v75';
 
 const EPS = 1e-4;
 
@@ -195,6 +195,11 @@ export class CollisionWorld {
     state.landedThisFrame = false;
     state.bounce = false;
     state.wallNormal.set(0, 0, 0);
+    // What was underfoot when the frame began. `groundTag` is about to be
+    // cleared and rediscovered, so the walkway stride has to ask this one:
+    // by the time a plank is being stepped onto, the plank you are standing
+    // on has not been found again yet.
+    state.prevGroundTag = state.groundTag;
     state.groundTag = 'terrain';
     /**
      * How far this frame lifted the character onto a ledge.
@@ -289,9 +294,20 @@ export class CollisionWorld {
       if (pos.z + r <= b.minZ || pos.z - r >= b.maxZ) continue;
       if (pos.y >= b.maxY - EPS || pos.y + h <= b.minY) continue;
 
-      // Small ledge we can just walk up onto.
+      // Small ledge we can just walk up onto — or a walkway, which gets a
+      // longer stride because its planks overlap. See CFG.move.deckStep.
       const rise = b.maxY - pos.y;
-      if (rise > 0 && rise <= step && this._headroom(b.maxY, pos, r, h, cand)) {
+      /**
+       * The longer stride applies only along a walkway, never onto one.
+       *
+       * Gated on already standing on a deck, so it cannot be used to hop up
+       * onto a bridge from the grass underneath it and skip the ramp — the
+       * ramp is decking too, so walking up it carries the allowance with you
+       * from its lowest plank, which sits a hand's width off the ground.
+       */
+      const onDeck = state.groundTag === 'deck' || state.prevGroundTag === 'deck';
+      const limit = (b.tag === 'deck' && onDeck) ? CFG.move.deckStep : step;
+      if (rise > 0 && rise <= limit && this._headroom(b.maxY, pos, r, h, cand)) {
         pos.y = b.maxY;
         state.stepUp += rise;
         state.grounded = true;

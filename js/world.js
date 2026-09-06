@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v74';
-import { CFG } from './config.js?v=v74';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v74';
-import { findMap } from './maps.js?v=v74';
-import { Terrain, CollisionWorld } from './collision.js?v=v74';
+import * as THREE from '../lib/three.module.js?v=v75';
+import { CFG } from './config.js?v=v75';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v75';
+import { findMap } from './maps.js?v=v75';
+import { Terrain, CollisionWorld } from './collision.js?v=v75';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -441,91 +441,106 @@ export class World {
   }
 
   /**
-   * A flight of steps from `groundY` up to `topY`, running away from
-   * (sx, sz) along the unit direction (dx, dz).
+   * A flight of stone steps from `groundY` up to `topY`, running away from
+   * (sx, sz) along (dx, dz).
    *
-   * Exists because the map was full of ledges taller than the game's own
-   * step height: the Sky Shrine terrace is a single 1.40 lip, the arena dais
-   * starts with 0.85, and the rope bridges' decks stand six to nine units up
-   * with nothing whatever underneath them. `stepHeight` is 0.65, so all of
-   * those are things you can see and cannot get onto.
+   * For masonry — the Sky Shrine's terrace is a single 1.40 lip against a
+   * step height of 0.65, so the shrine could be looked at and not entered.
+   * Bridges do NOT use this; they get `_ramp`, which is made of their own
+   * planks.
    *
-   * Every riser here is well under that limit rather than just inside it.
-   * A step you can only just make is one you fail at the bottom of a slope,
-   * or when the ground under you is a little higher than the builder assumed.
+   * Axis-snapped for the same reason `_ramp` is: a diagonal flight of
+   * axis-aligned steps has three treads overlapping you at once, the highest
+   * of them out of reach, and stops you dead halfway up.
    *
-   * The boxes run all the way down to the ground rather than floating at
-   * tread height, so there is no space under the stair to fall into — the
-   * same mistake the village storeys had.
+   * The boxes run down to the ground rather than floating at tread height,
+   * so there is no space underneath to fall into.
    */
-  _stairs(sx, sz, topY, groundY, dx, dz, width = 3.0, color = 0x8d8a80, tag = 'stone') {
+  _steps(sx, sz, topY, groundY, dx, dz, width = 3.0, color = 0x8d8a80) {
     const rise = topY - groundY;
     if (rise <= 0) return;
     const RISER = 0.40, TREAD = 0.95;
     const n = Math.max(1, Math.ceil(rise / RISER));
     const riser = rise / n;
     const hw = width / 2;
-
-    /**
-     * The run is snapped to whichever axis it is closest to, and this is not
-     * cosmetic — a diagonal flight of AABB steps does not work at all.
-     *
-     * Collision boxes are axis-aligned, so covering a diagonal tread means
-     * making each step wide in BOTH axes. Do that and consecutive steps
-     * overlap three deep: standing at the foot of the stair you are inside
-     * the first step, the second AND the third, and the tallest of those is
-     * 1.2 above you. `_moveAxis` sees a rise it cannot step and calls it a
-     * wall, so the stair stops you dead about halfway up. It was measured
-     * doing exactly that on four of the five bridge approaches.
-     *
-     * Axis-aligned, each step is one tread deep and adjacent steps overlap by
-     * 0.30 — enough that there is no seam, little enough that no third step
-     * is ever in reach.
-     */
     if (Math.abs(dx) >= Math.abs(dz)) { dx = Math.sign(dx) || 1; dz = 0; }
     else { dz = Math.sign(dz); dx = 0; }
-
-    /**
-     * Hung, not poured.
-     *
-     * The first version was a solid ramp: every step a box running from its
-     * tread all the way down to the ground, which is easy to collide with and
-     * looks like a concrete slipway bolted to a rope bridge. These are planks
-     * on posts, in the bridge's own timber, so the approach and the span read
-     * as one structure.
-     *
-     * The treads carry their own thin colliders rather than a buried block.
-     * Adjacent planks overlap by 0.30 horizontally and are only a riser
-     * apart vertically, so there is no gap to fall between — and stepping off
-     * the SIDE of a hanging staircase drops you, which is the point of one.
-     */
-    const PLANK = 0.14;                     // half-thickness of a tread
-    const across = dz ? [hw, 0.16] : [0.16, hw];
     for (let i = 0; i < n; i++) {
-      // Step 0 is the highest, right against the platform; the flight
-      // descends outward from there.
       const top = topY - i * riser;
-      const cx = sx + dx * (i + 0.5) * TREAD;
-      const cz2 = sz + dz * (i + 0.5) * TREAD;
-      const hx = dx ? TREAD / 2 + 0.15 : hw;
-      const hz = dz ? TREAD / 2 + 0.15 : hw;
-      this.solid(cx, top - PLANK, cz2, hx, PLANK, hz,
-        i % 2 ? color : 0x7b5c3b, tag);
-      // Rail posts either side, and the stringer they are pegged to.
-      if (i % 2 === 0) {
-        for (const side of [-hw, hw]) {
-          this.batches.post.add(cx + (dz ? side : 0), top + 0.8, cz2 + (dx ? side : 0),
-            0.09, 1.7, 0.09, 0x4a3a2a);
-        }
-      }
-      for (const side of [-hw, hw]) {
-        this.batches.box.add(cx + (dz ? side : 0), top - 0.34, cz2 + (dx ? side : 0),
-          across[0] * 2, 0.28, across[1] * 2, 0x4a3a2a);
-      }
+      const bottom = groundY - 1.5;
+      this.solid(sx + dx * (i + 0.5) * TREAD, (top + bottom) / 2,
+        sz + dz * (i + 0.5) * TREAD,
+        dx ? TREAD / 2 + 0.15 : hw, (top - bottom) / 2, dz ? TREAD / 2 + 0.15 : hw,
+        i % 2 ? color : 0x84817a, 'stone');
     }
-    // Nothing grows on a staircase.
     this._clear(sx + dx * n * TREAD * 0.5, sz + dz * n * TREAD * 0.5,
       n * TREAD * 0.5 + Math.max(hw, 2.5));
+  }
+
+  /**
+   * The ramp down from a bridge abutment to the ground.
+   *
+   * Not a staircase — the same planks, rails and spacing as the span it
+   * serves, carrying straight on past the last post and down to the grass.
+   * It replaced a stone-and-timber flight of its own design, which read as
+   * somebody else's building bolted onto the end of a rope bridge.
+   *
+   * The run is snapped to an axis. That is not cosmetic: collision boxes are
+   * axis-aligned, so a diagonal run has to be covered by planks wide in BOTH
+   * directions, and then three of them overlap you at once instead of one.
+   * Snapped, the ramp turns a corner at the abutment, which reads as a
+   * landing — and it is what makes the thing walkable.
+   */
+  _ramp(sx, sz, topY, groundY, dx, dz) {
+    if (topY - groundY <= 0) return;
+    const SPACING = 1.9;                            // as tight as planks sit
+    const DROP = CFG.move.deckStep * 0.55;          // fall per plank
+    if (Math.abs(dx) >= Math.abs(dz)) { dx = Math.sign(dx) || 1; dz = 0; }
+    else { dz = Math.sign(dz); dx = 0; }
+    // Planks are laid across the run, so the rotation is the run's bearing.
+    const rotY = Math.atan2(dx, dz);
+
+    /**
+     * Descends until it reaches the ground UNDER ITS OWN FOOT.
+     *
+     * It used to interpolate down to the height of the ground at the
+     * abutment, which is not the ground the ramp ends on: eleven metres out
+     * along a falling hillside, the last plank sat 0.81 over the grass. That
+     * is under a stride for a walkway but over one for a LEDGE, and the step
+     * onto a plank from bare terrain is a ledge — so the ramp was climbable
+     * from the top and unreachable from the bottom.
+     *
+     * 0.43 is what makes the last step legal: plus the plank's own 0.22 it
+     * comes to 0.65, which is stepHeight exactly.
+     */
+    let y = topY, i = 0;
+    for (; i < 60; i++) {
+      const x = sx + dx * i * SPACING, z = sz + dz * i * SPACING;
+      this._plank(x, y, z, rotY, i);
+      const g = this.heightAt(x, z);
+      if (y - g <= 0.43) break;
+      y = Math.max(g + 0.21, y - DROP);
+    }
+    this._clear(sx + dx * i * SPACING * 0.5, sz + dz * i * SPACING * 0.5,
+      i * SPACING * 0.5 + 3.0);
+  }
+
+  /**
+   * One deck plank, with its two rail posts.
+   *
+   * The bridges and the ramps up to them both go through here, so an
+   * approach is not "like" the span it serves — it is the same board, the
+   * same rails, the same spacing and the same collider tag. The approaches
+   * used to be stone-and-timber staircases of their own design and they read
+   * as somebody else's building bolted onto the end of a rope bridge.
+   */
+  _plank(x, y, z, rotY, i) {
+    this.batches.box.add(x, y, z, 3.0, 0.16, 1.7, i % 2 ? 0x8a6a45 : 0x7b5c3b, rotY);
+    this.collision.addBox(x, y, z, 1.5, 0.22, 1.5, 'deck');
+    const s = Math.sin(rotY), c = Math.cos(rotY);
+    for (const side of [-1.45, 1.45]) {
+      this.batches.post.add(x + c * side, y + 0.9, z - s * side, 0.07, 1.8, 0.07, 0x4a3a2a);
+    }
   }
 
   /** Visual-only box (no collision) — trim, banners, decoration. */
@@ -604,7 +619,23 @@ export class World {
     const FEATHER = 1.4;
     const HEAD = 3.0;        // ceiling above the deck — 1.75 of frog plus room
     const DROP = 1.6;        // floor below the deck
-    const ROCK = 0x4a4640, ROCK_LIT = 0x565149;
+    /**
+     * The mountain's own stone, taken from the map's palette.
+     *
+     * It was a dark grey of its own choosing, which is why it read as a black
+     * box stuck on the hillside rather than as a hole in it. A tunnel bored
+     * through rock is made of that rock; the two shades are the palette's
+     * colour lifted and dropped a little, the same trick the terrain shading
+     * uses to keep flat faces from merging.
+     */
+    const P = this.map.palette;
+    const shade = (hex, k) => {
+      const r = Math.min(255, Math.round(((hex >> 16) & 255) * k));
+      const g = Math.min(255, Math.round(((hex >> 8) & 255) * k));
+      const b = Math.min(255, Math.round((hex & 255) * k));
+      return (r << 16) | (g << 8) | b;
+    };
+    const ROCK = shade(P.rock, 0.86), ROCK_LIT = shade(P.rock, 1.04);
     const rnd = this.rnd;
     const s = Math.sin(rotY), c = Math.cos(rotY);
 
@@ -646,45 +677,67 @@ export class World {
 
       if (roofed) {
         /**
-         * Drawn ROTATED, collided as one coarse box.
+         * A bore: a pipe with its floor left out.
          *
-         * A collision box is axis-aligned, and a span between two spires runs
-         * at forty degrees to both axes — so an axis-aligned box wide enough
-         * to cover the corridor is nearly as wide again in the other
-         * direction. Built that way the tunnel came out as a pile of nine-
-         * metre cubes sitting on the mountainside.
+         * Built as staves around an arch rather than as a lintel with slabs
+         * stacked on it. A flat lid over a slot is a lid over a slot from
+         * every angle — it was described, fairly, as a black box. An arch of
+         * the mountain's own stone reads as rock the passage was cut through.
          *
-         * The batch takes a rotation, so the rock people SEE is a thin lintel
-         * lying along the span. The collider stays axis-aligned and oversized,
-         * which costs nothing: everything it covers beyond the corridor is
-         * inside the mountain, where there is nothing to bump into it.
+         * Each stave is DRAWN rotated: rolled about the run to sit tangent to
+         * the arch, then yawed along it. Euler XYZ applies the roll first and
+         * the yaw second, so the roll happens about the stave's own length,
+         * which is what puts it on the curve instead of skewing it.
+         *
+         * Collision stays one coarse axis-aligned box across the top. A box
+         * cannot be rotated, and a span between two spires runs at forty
+         * degrees to both axes, so an axis-aligned box wide enough for the
+         * corridor is nearly as wide again sideways — which is what made the
+         * first attempt a pile of nine-metre cubes. Oversizing costs nothing
+         * here: everything it covers beyond the corridor is inside the
+         * mountain, where nothing can reach it.
          */
-        const bot = d.y - DROP - 1.2;
-        for (const side of [-(HALF + 0.45), HALF + 0.45]) {
-          this.deco(d.x + c * side, (top + bot) / 2, d.z - s * side,
-            0.5, (top - bot) / 2, run, i % 2 ? ROCK : ROCK_LIT, rotY);
-        }
-        this.deco(d.x, top + 0.35, d.z, W, 0.35, run, ROCK, rotY);
         /**
-         * The rock that was cut away, put back on top of the lintel.
+         * Sized so the crown clears a standing frog, not by eye — and sized
+         * against the HIGHEST plank it covers, not this one.
          *
-         * In two courses that narrow as they rise, rather than one block to
-         * the old surface. A single slab standing in a trench is a slab
-         * standing in a trench from every angle; stepping it in gives the
-         * spine a profile, so it reads as the hillside closing over the
-         * passage rather than as a lid laid across it.
+         * Two separate ways this was too low. First the radius: the arch
+         * springs from the corridor floor, DROP below the deck, so it has to
+         * carry the ceiling HEAD above the deck from down there. At HALF+0.55
+         * the underside came out 1.95 over the planks against a frog 1.75
+         * tall standing on 0.22 of plank — two centimetres of overlap, which
+         * is a roof pressed onto your head.
+         *
+         * Then `hi`. The collider is one axis-aligned box on a diagonal run,
+         * so it reaches two or three planks either side — and this span
+         * climbs 1.27 a plank. Set from the local plank, the ceiling for one
+         * plank sat below the head of a frog standing on the next, and the
+         * tunnel stopped you halfway through. It clears the highest deck in
+         * its own reach instead.
          */
-        const fillLo = top + 0.7;
-        if (roof > fillLo + 0.2) {
-          const mid = fillLo + (roof - fillLo) * 0.55;
-          this.deco(d.x, (fillLo + mid) / 2, d.z, W, (mid - fillLo) / 2, run,
-            i % 2 ? ROCK : ROCK_LIT, rotY);
-          this.deco(d.x, (mid + roof) / 2, d.z, W * 0.62, (roof - mid) / 2, run,
-            i % 2 ? ROCK_LIT : ROCK, rotY);
+        let hi = d.y;
+        for (let k = Math.max(i0, i - 3); k <= Math.min(i1, i + 3); k++) {
+          hi = Math.max(hi, deck[k].y);
         }
-        // One coarse ceiling collider, so nothing walks out through the roof.
-        this.collision.addBox(d.x, top + 0.35,  d.z,
-          Math.abs(s) * run + Math.abs(c) * W + 0.2, 0.35,
+        const R = (hi - d.y) + HEAD + DROP - 0.4;   // radius to the stave centres
+        const STAVES = 9;                      // over a half turn
+        const half = Math.PI / (STAVES - 1);   // angular half-width of a stave
+        const cy = d.y - DROP + 0.4;           // the arch springs from the floor
+        for (let k = 0; k < STAVES; k++) {
+          const th = -Math.PI / 2 + k * (Math.PI / (STAVES - 1));
+          const ux = Math.sin(th), uy = Math.cos(th);   // outward from the axis
+          this.deco(d.x + c * (ux * R), cy + uy * R, d.z - s * (ux * R),
+            R * Math.sin(half) + 0.18, 0.45, run,
+            k % 2 ? ROCK : ROCK_LIT, rotY, 0, -th);
+        }
+        // The rock above the bore, back up to the hillside that was there.
+        const crown = cy + R + 0.45;
+        if (roof > crown + 0.3) {
+          this.deco(d.x, (crown + roof) / 2, d.z, W * 0.8, (roof - crown) / 2, run,
+            i % 2 ? ROCK : ROCK_LIT, rotY);
+        }
+        this.collision.addBox(d.x, crown, d.z,
+          Math.abs(s) * run + Math.abs(c) * W + 0.2, 0.45,
           Math.abs(c) * run + Math.abs(s) * W + 0.2, 'stone');
       }
 
@@ -1082,7 +1135,7 @@ export class World {
      * It goes on the south side because that is where the torii stands, and a
      * gate in front of a wall you cannot climb is a strange thing to build.
      */
-    this._stairs(cx, cz + 16, y + 1.4, y, 0, 1, 9.0, 0x8e8b81, 'stone');
+    this._steps(cx, cz + 16, y + 1.4, y, 0, 1, 9.0, 0x8e8b81);
 
     /**
      * The colonnade, sized off the roof it holds up.
@@ -1293,7 +1346,9 @@ export class World {
       // Flat cap you can actually stand and fight on.
       this.solid(x, y + 0.4, z, r * 0.85, 0.5, r * 0.85, 0x7a7369, 'stone');
       this.lantern(x, y + 7 + rnd() * 4, z, 0xffb0d0);
-      spires.push([x, y + 0.9, z]);
+      // The cap's half-width travels with the anchor: a bridge landing here
+      // has to start at the rim, not at the middle. See _bridge.
+      spires.push([x, y + 0.9, z, r * 0.85]);
       this.spawnPoints.push([x, y + 2, z]);
     }
     this.spires = spires;
@@ -1327,7 +1382,29 @@ export class World {
    * somebody's house into the water, and it argues with the map.
    */
   _bridge(a, b, approach = true) {
-    const [x1, y1, z1] = a, [x2, y2, z2] = b;
+    /**
+     * Start the deck at the EDGE of whatever it lands on, not the middle.
+     *
+     * A spire's cap is a platform up to 14 across whose top is exactly the
+     * height the bridge is anchored at — and the deck sags. Anchored at the
+     * centre, the first few planks hang below a platform they are standing
+     * inside, so walking up the span you meet the CAP's side: a 3.58 wall of
+     * plain stone. `_moveAxis` takes the first box it cannot step and stops
+     * there, without ever looking at the plank one stride further on that it
+     * could have stepped onto. That is what made all four mountain spans
+     * climbable to exactly two planks from the top and no further.
+     *
+     * A fourth element on an anchor is the half-width of the thing it stands
+     * on; trimming by 1.25 of it clears the corner of a square cap taken at
+     * an angle. Anchors without one — the valley ends, the Mire's huts —
+     * trim by nothing and are unchanged.
+     */
+    const ux0 = b[0] - a[0], uz0 = b[2] - a[2];
+    const m0 = Math.hypot(ux0, uz0) || 1;
+    const trimA = a[3] ? a[3] * 1.25 + 0.3 : 0;
+    const trimB = b[3] ? b[3] * 1.25 + 0.3 : 0;
+    const x1 = a[0] + (ux0 / m0) * trimA, z1 = a[2] + (uz0 / m0) * trimA, y1 = a[1];
+    const x2 = b[0] - (ux0 / m0) * trimB, z2 = b[2] - (uz0 / m0) * trimB, y2 = b[1];
     const dx = x2 - x1, dz = z2 - z1;
     const len = Math.hypot(dx, dz);
     const n = Math.max(2, Math.round(len / 2.0));
@@ -1340,9 +1417,19 @@ export class World {
       const x = lerp(x1, x2, t), z = lerp(z1, z2, t);
       // Catenary-ish droop makes the bridge read as rope, not a girder.
       const y = lerp(y1, y2, t) - Math.sin(t * Math.PI) * sag;
-      deck.push({ x, y, z, under: this.heightAt(x, z) - (y + 0.22) });
-      this.batches.box.add(x, y, z, 3.0, 0.16, 1.7, i % 2 ? 0x8a6a45 : 0x7b5c3b, rotY);
-      this.collision.addBox(x, y, z, 1.5, 0.22, 1.5, 'wood');
+      /**
+       * How far the ground intrudes into the corridor the deck needs.
+       *
+       * Measured against the FLOOR of that corridor, 1.6 below the planks,
+       * not against the planks themselves. Ground that stops just short of
+       * the deck still stops you: the planks are 2 apart and 3 long, so
+       * between one and the next there is a moment when no plank is under
+       * you, and a hillside a half-metre below the deck is a wall at that
+       * moment. Four spans were doing exactly that — the walker got to two
+       * planks from the end and was held by terrain it was standing above.
+       */
+      deck.push({ x, y, z, under: this.heightAt(x, z) - (y - 1.6) });
+      this._plank(x, y, z, rotY, i);
       /**
        * Keep the deck clear of trees — but only where one could reach it.
        *
@@ -1353,25 +1440,42 @@ export class World {
        * impassable: you cannot walk through a tree.
        */
       if (y - this.heightAt(x, z) < 24) this._clear(x, z, 4.0);
-      // Rope rails.
-      const s = Math.sin(rotY), c = Math.cos(rotY);
-      for (const side of [-1.45, 1.45]) {
-        this.batches.post.add(x + c * side, y + 0.9, z - s * side, 0.07, 1.8, 0.07, 0x4a3a2a);
-      }
       if (i % 6 === 0) this.lantern(x, y + 5.5, z, 0xffd08a);
     }
     /**
-     * End posts, at the SIDES of the deck.
+     * Where a ramp continues down to the ground. Decided before the end posts
+     * are placed, because an end that carries on walking does not get one.
+     */
+    const MAX_APPROACH = 14;
+    const ramped = [[x1, y1, z1], [x2, y2, z2]].map(([px, py, pz]) => {
+      if (!approach) return false;
+      const g = this.heightAt(px, pz);
+      const rise = py - g;
+      return rise > CFG.move.stepHeight && rise <= MAX_APPROACH
+        && g >= CFG.world.waterLevel + 0.5;
+    });
+
+    /**
+     * End posts, at the SIDES of the deck — and not at all where a ramp
+     * carries on.
      *
      * They used to stand dead centre on the last plank: a 0.9-wide, 3.6-tall
      * solid post planted in the middle of a walkway 3 wide, with a frog 1.1
      * across. That is not a newel, it is a turnstile — it blocked the way onto
-     * every bridge in the map. Moved out to the rails, where a bridge post
-     * belongs, and slimmed to match them.
+     * every bridge in the map.
+     *
+     * Moving them to the rails was not enough. The rails run across the SPAN,
+     * and a ramp is snapped to an axis, so the two do not line up: at a
+     * diagonal abutment a post ends up square in the ramp's path, and the
+     * turnstile is back a plank further out. An end that keeps walking has
+     * nothing to newel, so it gets no post.
      */
     {
       const s2 = Math.sin(rotY), c2 = Math.cos(rotY);
-      for (const [px, py, pz] of [a, b]) {
+      const anchors = [[x1, y1, z1], [x2, y2, z2]];
+      for (let e = 0; e < 2; e++) {
+        if (ramped[e]) continue;
+        const [px, py, pz] = anchors[e];
         for (const side of [-1.35, 1.35]) {
           this.solid(px + c2 * side, py + 1.5, pz - s2 * side,
             0.22, 1.7, 0.22, 0x5a442e, 'wood');
@@ -1385,15 +1489,20 @@ export class World {
      * A span is a straight line between two fixed points and the ground is
      * not, so two of the six dive through a ridge — one of them by eleven and
      * a half metres. A plank a hand's width inside the terrain is not worth
-     * excavating for, hence the 0.2; one padding sample either side of the run
-     * puts the mouths out in daylight rather than flush with the rock face.
+     * excavating for, hence the 0.2.
+     *
+     * PAD carries the bore three planks past the rock at each end instead of
+     * one. A mouth flush with the hillside is a hole you fall into; run out
+     * past it and the tunnel has a portal you can see coming, and reads as a
+     * passage rather than as the point where the bridge disappears.
      */
+    const PAD = 3;
     let i = 0;
     while (i < deck.length) {
       if (deck[i].under <= 0.2) { i++; continue; }
       let j = i;
       while (j + 1 < deck.length && deck[j + 1].under > 0.2) j++;
-      this._tunnel(deck, Math.max(0, i - 1), Math.min(deck.length - 1, j + 1), rotY);
+      this._tunnel(deck, Math.max(0, i - PAD), Math.min(deck.length - 1, j + PAD), rotY);
       i = j + 1;
     }
 
@@ -1409,22 +1518,20 @@ export class World {
      * spawn points on top; the ones that needed fixing are the low crossings
      * between the village, the grove and the arena.
      */
-    const MAX_APPROACH = 14;
-    const ends = approach ? [[a, b], [b, a]] : [];
-    for (const [end, other] of ends) {
+    const ends = [[[x1, y1, z1], [x2, y2, z2]], [[x2, y2, z2], [x1, y1, z1]]];
+    for (let e = 0; e < 2; e++) {
+      if (!ramped[e]) continue;
+      const [end, other] = ends[e];
       const [px, py, pz] = end;
       const g = this.heightAt(px, pz);
-      const rise = py - g;
-      if (rise <= CFG.move.stepHeight || rise > MAX_APPROACH) continue;
       // A stair into a lake is not an approach.
       if (g < CFG.world.waterLevel + 0.5) continue;
       // Run the flight straight out along the bridge's own axis, away from
       // the span, so it never crosses the deck it serves.
       const ax = px - other[0], az = pz - other[2];
       const m = Math.hypot(ax, az) || 1;
-      // +0.22 so the top step is flush with the plank collider's own top
-      // rather than a hand's width under it.
-      this._stairs(px, pz, py + 0.22, g, ax / m, az / m, 3.4, 0x6f5a3c, 'wood');
+      // Level with the deck's own planks, because it IS the deck's planks.
+      this._ramp(px, pz, py, g, ax / m, az / m);
     }
   }
 
