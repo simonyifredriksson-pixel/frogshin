@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v76';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v76';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v76';
-import { Input } from './input.js?v=v76';
-import { Audio } from './audio.js?v=v76';
-import { World } from './world.js?v=v76';
-import { Effects } from './effects.js?v=v76';
-import { Atmosphere } from './atmosphere.js?v=v76';
-import { FollowCamera } from './camera.js?v=v76';
-import { Player } from './player.js?v=v76';
-import { RemotePlayer } from './remote.js?v=v76';
-import { HUD } from './hud.js?v=v76';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v76';
-import { FrogModel } from './frog.js?v=v76';
-import { DummyField } from './dummy.js?v=v76';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v76';
-import { ToadModel } from './npc.js?v=v76';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v76';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v76';
-import { DungeonRun } from './dungeon.js?v=v76';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v76';
-import { JudgmentRun } from './judgment.js?v=v76';
-import { COMBO_NAMES } from './ascended.js?v=v76';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v76';
-import { MenuScene } from './menu.js?v=v76';
-import { Economy } from './economy.js?v=v76';
-import { Shop } from './shop.js?v=v76';
-import { Network, NetRole } from './net.js?v=v76';
+import * as THREE from '../lib/three.module.js?v=v77';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v77';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v77';
+import { Input } from './input.js?v=v77';
+import { Audio } from './audio.js?v=v77';
+import { World } from './world.js?v=v77';
+import { Effects } from './effects.js?v=v77';
+import { Atmosphere } from './atmosphere.js?v=v77';
+import { FollowCamera } from './camera.js?v=v77';
+import { Player } from './player.js?v=v77';
+import { RemotePlayer } from './remote.js?v=v77';
+import { HUD } from './hud.js?v=v77';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v77';
+import { FrogModel } from './frog.js?v=v77';
+import { DummyField } from './dummy.js?v=v77';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v77';
+import { ToadModel } from './npc.js?v=v77';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v77';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v77';
+import { DungeonRun } from './dungeon.js?v=v77';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v77';
+import { JudgmentRun } from './judgment.js?v=v77';
+import { COMBO_NAMES } from './ascended.js?v=v77';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v77';
+import { MenuScene } from './menu.js?v=v77';
+import { Economy } from './economy.js?v=v77';
+import { Shop } from './shop.js?v=v77';
+import { Network, NetRole } from './net.js?v=v77';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1200,13 +1200,34 @@ class Game {
       : 'Dungeon — no checkpoints', false);
 
     // Beating the god unlocks his appearance — a cosmetic, permanently.
-    this.dungeon.onVictory = () => this._awardFrogathSkin();
+    this.dungeon.onVictory = () => {
+      // The run is over: there is nothing left to come back to.
+      this.economy.dungeonRun = null;
+      this.economy.save();
+      this._awardFrogathSkin();
+    };
     this.dungeon.onCrystal = () => {
       this.economy.crystal = true;
       this.economy.save();
     };
+    this.dungeon.onProgress = (run) => {
+      this.economy.dungeonRun = run;
+      this.economy.save();
+    };
 
-    this.dungeon.start(this.player, 0);
+    /**
+     * Offer to pick the run up where it was left, before it starts.
+     *
+     * A saved run is only worth offering from room two on: "continue" at the
+     * first room is the same thing as starting over, and a question with two
+     * identical answers is just a click in the way.
+     */
+    const saved = this.economy.dungeonRun;
+    const room = saved && saved.checkpoint > 0
+      ? Math.min(saved.checkpoint, CFG.dungeon.rooms - 1) : 0;
+    const at = room > 0 ? await this._askResume(room) : 0;
+
+    this.dungeon.start(this.player, at);
     this.followCam.snapTo(this.player.pos);
 
     loading.classList.remove('show');
@@ -1215,6 +1236,53 @@ class Game {
     this.input.requestLock();
     Audio.stopMenuMusic();
     this._resize();
+  }
+
+  /**
+   * Ask whether to resume a saved dungeon run, and wait for the answer.
+   *
+   * Resolves to the room to start in: the saved one, or zero.
+   *
+   * Both buttons are unbound and the panel hidden the moment either is
+   * pressed — so the question can be answered exactly once, and cannot be
+   * left on screen over a run that has already begun. It resolves rather
+   * than calling back so the caller reads as a straight line: ask, then
+   * start the dungeon at whatever came back.
+   *
+   * Continuing does NOT restore the fight you were in. You arrive at the
+   * start of that room with your health full and the boss's full, which is
+   * what walking into a room does anyway — the save is a bookmark, not a
+   * snapshot.
+   */
+  _askResume(room) {
+    const panel = $('resume-run');
+    const where = $('resume-where');
+    const go = $('resume-continue');
+    const again = $('resume-restart');
+    if (!panel || !go || !again) return Promise.resolve(room);
+    if (where) {
+      where.textContent = room === CFG.dungeon.rooms - 1
+        ? 'You left off at the throne.'
+        : `You left off in room ${room + 1} of ${CFG.dungeon.rooms}.`;
+    }
+    panel.classList.remove('hidden');
+    return new Promise((resolve) => {
+      const done = (value) => {
+        panel.classList.add('hidden');
+        go.onclick = null;
+        again.onclick = null;
+        Audio.uiClick();
+        resolve(value);
+      };
+      go.onclick = () => done(room);
+      again.onclick = () => {
+        // Starting over throws the bookmark away immediately, so quitting
+        // before the first room is cleared cannot resurrect it.
+        this.economy.dungeonRun = null;
+        this.economy.save();
+        done(0);
+      };
+    });
   }
 
   /**
@@ -2076,18 +2144,33 @@ class Game {
    * to the Ascended. The prompt is driven off the same proximity test the
    * sacrifice uses, so it can never say you can and then do nothing.
    */
+  /**
+   * @see _updateStatue — the crystal is spent once; the door stays open.
+   */
   _updateStatue(p) {
     const s = this.world && this.world.statue;
     if (!s) return;
     const near = p.pos.distanceTo(s.stand) < 5.0;
-    const armed = near && this.economy.crystal;
+    /**
+     * The stone answers to a crystal, or to having already had one.
+     *
+     * `statueOpened` is set by the first sacrifice and saved, so the way to
+     * the Ascended is a door you open once rather than a toll you pay every
+     * time. Without it, beating him meant another clean run of the dungeon
+     * for another crystal, which is a re-run of content you have finished.
+     */
+    const opened = this.economy.statueOpened;
+    const armed = near && (this.economy.crystal || opened);
     this._statuePrompt = armed;
-    if (armed) this.hud.setPickupPrompt(true, 'Sacrifice the crystal');
+    if (armed) {
+      this.hud.setPickupPrompt(true,
+        this.economy.crystal ? 'Sacrifice the crystal' : 'Wake the stone');
+    }
 
     if (!p.interactPressed) return;
     p.interactPressed = false;
     if (!near) return;
-    if (!this.economy.crystal) {
+    if (!this.economy.crystal && !opened) {
       this.hud.toast(
         'The stone is cold. Something is missing from its hands.', 3);
       return;
@@ -2099,7 +2182,10 @@ class Game {
   _sacrificeCrystal(p, s) {
     if (this._sacrificing) return;
     this._sacrificing = true;
+    // The crystal is consumed; what it bought is not. Both are saved here,
+    // so closing the game between the sacrifice and the fight costs nothing.
     this.economy.crystal = false;
+    this.economy.statueOpened = true;
     this.economy.save();
     this.hud.setPickupPrompt(false);
 

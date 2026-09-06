@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v76';
-import { CFG } from './config.js?v=v76';
-import { clamp } from './util.js?v=v76';
-import { DungeonLevel } from './dungeonlevel.js?v=v76';
-import { DungeonBoss } from './dungeonboss.js?v=v76';
-import { Frogath } from './frogath.js?v=v76';
-import { Audio } from './audio.js?v=v76';
+import * as THREE from '../lib/three.module.js?v=v77';
+import { CFG } from './config.js?v=v77';
+import { clamp } from './util.js?v=v77';
+import { DungeonLevel } from './dungeonlevel.js?v=v77';
+import { DungeonBoss } from './dungeonboss.js?v=v77';
+import { Frogath } from './frogath.js?v=v77';
+import { Audio } from './audio.js?v=v77';
 
 const _v = new THREE.Vector3();
 
@@ -54,6 +54,8 @@ export class DungeonRun {
     this.onVictory = null;
     // Fired when the crystal is picked up (no-checkpoint runs only).
     this.onCrystal = null;
+    // Fired whenever the run advances, so it can be saved. See _remember.
+    this.onProgress = null;
     this.crystal = null;
     this._exploded = false;
     this.timer = 0;
@@ -97,6 +99,26 @@ export class DungeonRun {
     this.room = room;
     this.deepest = Math.max(this.deepest, room);
     this._enterRoom(player);
+    this._remember();
+  }
+
+  /**
+   * Write where the run has got to, so closing the game does not lose it.
+   *
+   * Only the room number and whether the run is still a no-checkpoint one.
+   * Nothing about the fight in progress is kept on purpose: coming back puts
+   * you at the start of the room you were in, with your health and the
+   * boss's both full, which is what `_enterRoom` already does for every
+   * other way of arriving in a room.
+   *
+   * `clean` survives a resume. Dying is what ends a no-checkpoint run, and
+   * closing the game is not dying — a player who shuts the lid mid-run and
+   * comes back has not used a checkpoint, so the crystal is still theirs to
+   * earn.
+   */
+  _remember() {
+    if (!this.onProgress) return;
+    this.onProgress({ checkpoint: this.room, clean: !this.checkpoints });
   }
 
   /**
@@ -433,6 +455,7 @@ export class DungeonRun {
       this.deepest = Math.max(this.deepest, this.room);
       this._announcedOpen = false;
       this._enterRoom(player);
+      this._remember();
     }
   }
 

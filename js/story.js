@@ -15,16 +15,16 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v76';
-import { CFG } from './config.js?v=v76';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v76';
+import * as THREE from '../lib/three.module.js?v=v77';
+import { CFG } from './config.js?v=v77';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v77';
 import {
   ToadModel, VillageScene, PatrolGuard, VillagerToad, GuideFrog,
-} from './npc.js?v=v76';
-import { FrogModel } from './frog.js?v=v76';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v76';
-import { Audio } from './audio.js?v=v76';
-import { ITEMS } from './items.js?v=v76';
+} from './npc.js?v=v77';
+import { FrogModel } from './frog.js?v=v77';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v77';
+import { Audio } from './audio.js?v=v77';
+import { ITEMS } from './items.js?v=v77';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',

@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v76';
-import { CFG } from './config.js?v=v76';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v76';
-import { findMap } from './maps.js?v=v76';
-import { Terrain, CollisionWorld } from './collision.js?v=v76';
+import * as THREE from '../lib/three.module.js?v=v77';
+import { CFG } from './config.js?v=v77';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v77';
+import { findMap } from './maps.js?v=v77';
+import { Terrain, CollisionWorld } from './collision.js?v=v77';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -95,20 +95,7 @@ export class World {
      * inside its temples.
      */
     this.keepOut = [];
-    /**
-     * Corridors cut down through the terrain. See `_carve`.
-     *
-     * Applied by `heightAt`, so the analytic height and the sampled
-     * heightfield agree about them, and so anything placed later sees the
-     * cutting rather than the hillside that used to be there.
-     */
-    this.cuts = [];
-    /** Sprite halos on the tunnel crystals — freed in dispose(). */
-    this.glows = [];
-    /** Cylinders bored through the terrain: { axis, r }. See `_tunnel`. */
-    this.bores = [];
-    /** The inward-facing rock sleeves inside them — freed in dispose(). */
-    this.sleeves = [];
+
 
     // Flat regions carved into the terrain so structures have somewhere to
     // sit, and basins scooped out for water. Both come from the map.
@@ -144,59 +131,8 @@ export class World {
       h = lerp(h, b.h, t);
     }
 
-    /**
-     * Cuttings, last, and they only ever go DOWN.
-     *
-     * A tunnel through a hillside is a corridor taken out of the heightfield
-     * with a roof put back over it. Lowering is the whole operation — a cut
-     * that could raise ground would be able to close the passage it just
-     * opened, depending on which order two of them happened to be in.
-     */
-    for (let i = 0; i < this.cuts.length; i++) {
-      const c = this.cuts[i];
-      const vx = c.x1 - c.x0, vz = c.z1 - c.z0;
-      const L2 = vx * vx + vz * vz;
-      const t = L2 > 0
-        ? clamp(((x - c.x0) * vx + (z - c.z0) * vz) / L2, 0, 1) : 0;
-      const d = Math.hypot(x - (c.x0 + vx * t), z - (c.z0 + vz * t));
-      const k = 1 - smoothstep(clamp((d - c.r) / c.f, 0, 1));
-      if (k <= 0) continue;
-      const floor = lerp(c.y0, c.y1, t);
-      if (h > floor) h = lerp(h, floor, k);
-    }
-
     return h;
   }
-
-  /**
-   * Cut a corridor down through the terrain, from (x0,z0) at y0 to (x1,z1)
-   * at y1, `r` wide with `f` of feathering.
-   *
-   * The heightfield is sampled once, up front, long before anything knows
-   * where the bridges ended up — so a cut also has to patch the samples it
-   * invalidates. Only the cells the cut can actually reach are re-evaluated:
-   * a tunnel is a few metres across on a 2.9-metre grid, which is a couple of
-   * dozen cells against the heightfield's twenty-one thousand.
-   */
-  _carve(x0, z0, y0, x1, z1, y1, r, f) {
-    this.cuts.push({ x0, z0, y0, x1, z1, y1, r, f });
-    const t = this.terrain;
-    if (!t) return;
-    const pad = r + f + t.cell * 2;
-    const cell = (v) => (v + t.half) / t.cell;
-    const i0 = Math.max(0, Math.floor(cell(Math.min(x0, x1) - pad)));
-    const i1 = Math.min(t.grid - 1, Math.ceil(cell(Math.max(x0, x1) + pad)));
-    const j0 = Math.max(0, Math.floor(cell(Math.min(z0, z1) - pad)));
-    const j1 = Math.min(t.grid - 1, Math.ceil(cell(Math.max(z0, z1) + pad)));
-    for (let j = j0; j <= j1; j++) {
-      for (let i = i0; i <= i1; i++) {
-        const x = -t.half + i * t.cell, z = -t.half + j * t.cell;
-        t.heights[j * t.grid + i] = this.heightAt(x, z);
-      }
-    }
-  }
-
-  // ------------------------------------------------------------------ build
 
   /**
    * The build split into labelled steps. The loader runs them one per frame
@@ -220,37 +156,19 @@ export class World {
           blob:  new Batch(new THREE.IcosahedronGeometry(1, 0), this._mat()),
           rock:  new Batch(new THREE.DodecahedronGeometry(1, 0), this._mat()),
           post:  new Batch(new THREE.CylinderGeometry(1, 1, 1, 7), this._mat()),
-          // Tunnel crystals. Unlit on purpose — they are the light source in
-          // a passage the sun does not reach, so a lit material would render
-          // them as dark grey cones.
-          crystal: new Batch(new THREE.ConeGeometry(1, 1, 6),
-            new THREE.MeshBasicMaterial({})),
+
         };
       }],
+      ['Carving the land', () => this._buildTerrainMesh()],
       ['Filling the water', () => this._buildWater()],
       // Everything specific to this map, in the order it lists them.
       ...this.map.features.map(([label, fn]) => [label, () => fn(this)]),
-      /**
-       * The ground is drawn AFTER the map is built, not before it.
-       *
-       * A tunnel is a corridor cut down out of the heightfield (see `_carve`)
-       * and nothing knows where one goes until the bridges have been strung —
-       * they are cut where a span would otherwise run through a mountain.
-       * Building the mesh first meant drawing a hillside that the collision
-       * then quietly removed, so you walked into a solid-looking slope and
-       * through it.
-       *
-       * Only the mesh moved. The heightfield itself is still sampled up front,
-       * because everything placed on the map needs it; `_carve` patches the
-       * cells it invalidates.
-       */
-      ['Carving the land', () => this._buildTerrainMesh()],
       ['Lighting the lanterns', () => {
         this._buildSpawns();
         for (const k in this.batches) {
           // Foliage skips shadow casting — it is the most expensive caster
           // and contributes the least to readability.
-          const cast = k !== 'blob' && k !== 'pine' && k !== 'crystal';
+          const cast = k !== 'blob' && k !== 'pine';
           this.batches[k].mesh = this.batches[k].build(this.scene, cast, true);
         }
         this.collision.bake();
@@ -304,11 +222,7 @@ export class World {
     free(this.terrainMesh);
     free(this.waterMesh);
     for (const l of this.lanterns) free(l.mesh);
-    for (const g of this.glows) free(g);
-    this.glows.length = 0;
-    for (const s of this.sleeves) free(s);
-    this.sleeves.length = 0;
-    this.bores.length = 0;
+
     if (this.practiceRing) free(this.practiceRing.group);
     if (this.statue && this.statue.group) free(this.statue.group);
 
@@ -384,35 +298,6 @@ export class World {
       colors[i * 3 + 2] = tmp.b * shade;
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    /**
-     * Open the mouths.
-     *
-     * A bore is a horizontal cylinder inside the mountain, and the terrain is
-     * the mountain's SKIN — so the two only meet where the tunnel breaks out
-     * of the slope, at its two ends. Dropping the triangles the cylinder
-     * actually passes through therefore takes nothing off the hillside except
-     * a round opening at each mouth, which is the whole point: the mountain
-     * is otherwise untouched.
-     *
-     * By centroid. A triangle here is about 2.9 across against a bore 7.2
-     * wide, so a centroid test cuts the hole to within half a triangle, and
-     * testing all three corners instead would nibble a ragged extra ring off
-     * the rim for no gain.
-     */
-    if (this.bores.length) {
-      const src = geo.index.array;
-      const keep = [];
-      const cx = new THREE.Vector3();
-      for (let t = 0; t < src.length; t += 3) {
-        const a = src[t], b = src[t + 1], c = src[t + 2];
-        cx.set((pos.getX(a) + pos.getX(b) + pos.getX(c)) / 3,
-               (pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3,
-               (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3);
-        if (this.collision.inTunnel(cx.x, cx.y, cx.z)) continue;
-        keep.push(a, b, c);
-      }
-      geo.setIndex(keep);
-    }
     geo.computeVertexNormals();
 
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -590,262 +475,6 @@ export class World {
     this.deco(cx, cy - 0.12, cz, radius * ROOF_EAVE, 0.16, radius * ROOF_EAVE, 0x3a2a22);
     // The roof slab is walkable — great for rooftop chases.
     this.collision.addBox(cx, cy - 0.1, cz, radius * 0.72, 0.22, radius * 0.72, 'roof');
-  }
-
-  /**
-   * A cluster of glowing crystals, growing out of whatever it is put on.
-   *
-   * One tall spike with smaller ones crowding its base, which is the shape
-   * that reads as a crystal rather than as a traffic cone. Unlit material, so
-   * they hold their colour in a tunnel the sun cannot reach, plus one halo
-   * per cluster — the halo is what actually lights the rock around it, and
-   * one per spike would be six times the sprites for no more glow.
-   */
-  _crystals(x, y, z, color, scale, rnd) {
-    const B = this.batches.crystal;
-    B.add(x, y + scale * 0.9, z, scale * 0.42, scale * 1.8, scale * 0.42, color,
-      rnd() * 3, (rnd() - 0.5) * 0.22, (rnd() - 0.5) * 0.22);
-    const n = 3 + Math.floor(rnd() * 3);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + rnd();
-      const d = scale * (0.3 + rnd() * 0.32);
-      const s = scale * (0.34 + rnd() * 0.42);
-      B.add(x + Math.cos(a) * d, y + s * 0.9, z + Math.sin(a) * d,
-        s * 0.42, s * 1.8, s * 0.42, color,
-        rnd() * 3, Math.cos(a) * 0.34, Math.sin(a) * 0.34);
-    }
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: lanternGlowTexture(), color, transparent: true, opacity: 0.55,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    }));
-    halo.position.set(x, y + scale * 0.85, z);
-    halo.scale.set(scale * 8, scale * 8, 1);
-    this.scene.add(halo);
-    this.glows.push(halo);
-  }
-
-  /**
-   * Bore a cylinder through the hillside a bridge would otherwise run inside,
-   * over deck samples i0..i1.
-   *
-   * A span between two spire tops is a straight line and the ground is not,
-   * so two of the six dive through a ridge on the way. From inside you saw
-   * the terrain's back faces — which are culled — so the mountain read as a
-   * hole in the world and the walkway vanished into it.
-   *
-   * This is a hole dug through the rock, and nothing else. The mountain is
-   * NOT edited: its heightfield keeps every sample it had, its mesh keeps
-   * every triangle except the ones the cylinder actually passes through, and
-   * from outside the only change is a round opening at each end.
-   *
-   * Two earlier attempts got this wrong in the same way. Both cut the
-   * heightfield down along the span and then tried to put the missing rock
-   * back on top — first as a flat lintel, then as an arch of stone staves.
-   * But a heightfield is a skin with one height per column; cutting it opens a
-   * trench to the sky, and a trench with a lid on it is a lid on a trench from
-   * every angle you look at it. That is what read, fairly, as a black box on
-   * the mountainside.
-   *
-   * What makes the round walls here is the mountain itself: collision simply
-   * switches the terrain off inside the cylinder (CollisionWorld.addTunnel),
-   * so the rock stops you exactly at the radius and nowhere sooner. The only
-   * thing built is a sleeve to look at, because the terrain mesh has no
-   * inside face to show you.
-   */
-  _tunnel(deck, i0, i1, rotY) {
-    /**
-     * The bore has to clear a bridge 3 wide and a frog 1.75 tall standing on
-     * it, with the deck a little above the axis so more of the cylinder is
-     * headroom than is floor.
-     */
-    const R = 3.6;
-    const AXIS_DROP = 1.1;            // how far under the deck the axis runs
-    const rnd = this.rnd;
-
-    /**
-     * Only bore where there is a mountain to bore THROUGH.
-     *
-     * One of these spans clips the shoulder of a hill by a metre and a half.
-     * A 3.6 cylinder there is not a tunnel, it is a pipe lying in a meadow
-     * with its top half in the open air. Below the threshold the ground is
-     * simply cut down out of the way and the bridge crosses an open notch,
-     * which is what a metre and a half of rock honestly is.
-     */
-    let thickest = 0;
-    for (let i = i0; i <= i1; i++) {
-      thickest = Math.max(thickest, this.heightAt(deck[i].x, deck[i].z) - deck[i].y);
-    }
-    const HUES = [0xb44ae8, 0x46e86e, 0xe8465a];   // purple, green, red
-    let colour = 0;
-
-    if (thickest < R + 0.8) {
-      // Too thin for a passage: take the obstruction out and leave it open.
-      for (let i = i0; i < i1; i++) {
-        this._carve(deck[i].x, deck[i].z, deck[i].y - 1.6,
-                    deck[i + 1].x, deck[i + 1].z, deck[i + 1].y - 1.6, 2.6, 1.4);
-      }
-      for (let i = i0; i <= i1; i++) {
-        if ((i - i0) % 2 === 1) {
-          const s = Math.sin(rotY), c = Math.cos(rotY);
-          const side = ((i - i0) % 4 === 1 ? -1 : 1) * 2.1;
-          this._crystals(deck[i].x + c * side, deck[i].y - 1.8, deck[i].z - s * side,
-            HUES[colour++ % 3], 0.9 + rnd() * 0.6, rnd);
-        }
-        this._clear(deck[i].x, deck[i].z, 4.0);
-      }
-      return;
-    }
-
-    // ---- the bore ------------------------------------------------------
-    const axis = [];
-    for (let i = i0; i <= i1; i++) {
-      axis.push({ x: deck[i].x, y: deck[i].y - AXIS_DROP, z: deck[i].z });
-      this._clear(deck[i].x, deck[i].z, R + 1.0);
-    }
-    /**
-     * Switch the ground off only where there IS ground over the deck.
-     *
-     * The sleeve runs a few planks past the rock at each end so the mouth is
-     * lined all the way out, but the COLLISION bore must not: outside the
-     * mountain the terrain under the bridge is real ground, and disabling it
-     * there means stepping off the planks near a mouth drops you through the
-     * hillside instead of onto it.
-     */
-    for (let k = 0; k + 1 < axis.length; k++) {
-      const a = axis[k], b = axis[k + 1];
-      const buried = this.heightAt(a.x, a.z) > deck[i0 + k].y - 0.5
-        || this.heightAt(b.x, b.z) > deck[i0 + k + 1].y - 0.5;
-      if (!buried) continue;
-      this.collision.addTunnel(a.x, a.y, a.z, b.x, b.y, b.z, R);
-      // A floor, because the rock under the bore no longer collides and
-      // stepping off the planks inside would otherwise drop you through the
-      // mountain to the kill plane.
-      this.collision.addBox((a.x + b.x) / 2, (a.y + b.y) / 2 - R - 0.5,
-        (a.z + b.z) / 2, R * 0.85, 0.6, R * 0.85, 'stone');
-    }
-    this.bores.push({ axis, r: R });
-
-    /**
-     * The sleeve is cut WIDER than the bore, and that is not a rounding
-     * allowance.
-     *
-     * The hole in the terrain is the set of triangles inside the cylinder, so
-     * its rim lies exactly on the cylinder — and a sleeve of the same radius
-     * meets the rim edge to edge, with nothing behind the join. Standing in
-     * the tunnel you could see daylight through a ring of hairline gaps all
-     * the way round both mouths. Half a metre of overlap puts the sleeve
-     * behind the rock rather than flush against it.
-     */
-    /**
-     * And it stops where the rock stops.
-     *
-     * The bore is padded a few planks past the hillside so the mouth is fully
-     * lined, but the sleeve must not follow it out there: past the rock it is
-     * a tube of stone hanging in mid-air over the valley, and since it is
-     * only drawn from within, what you see from outside is its far wall — a
-     * grey curved shape floating against the sky. One ring of margin past the
-     * last buried ring is enough to line the mouth and no more.
-     */
-    let lo = axis.length, hiRing = -1;
-    for (let k = 0; k < axis.length; k++) {
-      if (this.heightAt(axis[k].x, axis[k].z) > axis[k].y - R * 0.5) {
-        if (k < lo) lo = k;
-        hiRing = k;
-      }
-    }
-    if (hiRing < 0) return;
-    lo = Math.max(0, lo - 1);
-    hiRing = Math.min(axis.length - 1, hiRing + 1);
-    this._boreSleeve(axis.slice(lo, hiRing + 1), R + 0.5);
-
-    // Crystals growing out of the tunnel floor, alternating sides.
-    const s = Math.sin(rotY), c = Math.cos(rotY);
-    for (let i = i0; i <= i1; i++) {
-      if ((i - i0) % 2 !== 1) continue;
-      const a = axis[i - i0];
-      const side = ((i - i0) % 4 === 1 ? -1 : 1) * (R * 0.62);
-      const drop = Math.sqrt(Math.max(0, R * R - side * side)) - 0.15;
-      this._crystals(a.x + c * side, a.y - drop, a.z - s * side,
-        HUES[colour++ % 3], 0.8 + rnd() * 0.7, rnd);
-    }
-  }
-
-  /**
-   * The rock you see inside a bore.
-   *
-   * The terrain mesh is a single-sided skin, so from within the mountain
-   * there is nothing to draw — its faces point the other way and are culled,
-   * which is why an uncovered tunnel showed the sky. This is a sleeve of
-   * inward-facing quads along the bore's axis, in the map's own rock colour
-   * with the same per-vertex noise the ground uses, so where it meets the
-   * open air at a mouth the two match.
-   *
-   * One mesh for the whole bore rather than a cylinder per segment: a dozen
-   * short cylinders is a dozen draw calls and a seam at every joint.
-   */
-  _boreSleeve(axis, R) {
-    const SIDES = 14;
-    const rings = axis.length;
-    const verts = [], norms = [], cols = [], idx = [];
-    const P = this.map.palette;
-    const rock = new THREE.Color(P.rock);
-    const up = new THREE.Vector3(0, 1, 0);
-    const dir = new THREE.Vector3(), right = new THREE.Vector3(), upv = new THREE.Vector3();
-
-    for (let k = 0; k < rings; k++) {
-      const a = axis[k];
-      const b = axis[Math.min(rings - 1, k + 1)];
-      const p = axis[Math.max(0, k - 1)];
-      dir.set(b.x - p.x, b.y - p.y, b.z - p.z);
-      if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
-      dir.normalize();
-      right.crossVectors(dir, up).normalize();
-      upv.crossVectors(right, dir).normalize();
-      for (let j = 0; j < SIDES; j++) {
-        const th = (j / SIDES) * Math.PI * 2;
-        const ct = Math.cos(th), st = Math.sin(th);
-        const nx = right.x * ct + upv.x * st;
-        const ny = right.y * ct + upv.y * st;
-        const nz = right.z * ct + upv.z * st;
-        verts.push(a.x + nx * R, a.y + ny * R, a.z + nz * R);
-        // Facing INWARD: the viewer is on the axis, not outside the rock.
-        norms.push(-nx, -ny, -nz);
-        // The ground's own trick: a little value noise so flat faces do not
-        // merge into one silhouette in a scene lit by a single sun.
-        const v = this.noise2.fbm(a.x * 0.06 + ct, a.z * 0.06 + st, 2) * 0.5 + 0.5;
-        const sh = 0.72 + v * 0.34;
-        cols.push(rock.r * sh, rock.g * sh, rock.b * sh);
-      }
-    }
-    for (let k = 0; k + 1 < rings; k++) {
-      for (let j = 0; j < SIDES; j++) {
-        const j2 = (j + 1) % SIDES;
-        const a0 = k * SIDES + j, a1 = k * SIDES + j2;
-        const b0 = (k + 1) * SIDES + j, b1 = (k + 1) * SIDES + j2;
-        // Wound so the front face is the one on the axis side.
-        idx.push(a0, b0, a1, a1, b0, b1);
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-    geo.setIndex(idx);
-    /**
-     * Visible only from INSIDE.
-     *
-     * Drawn double-sided it is a grey pipe lying on the mountainside — the
-     * exact thing this was supposed to stop being. Single-sided with the
-     * faces turned in, the sleeve has no outside at all: from the hillside
-     * you see the mountain, with a round hole where the terrain's own
-     * triangles were dropped, and through that hole the lit inner wall.
-     */
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
-      vertexColors: true, side: THREE.FrontSide,
-    }));
-    mesh.receiveShadow = true;
-    this.scene.add(mesh);
-    this.sleeves.push(mesh);
   }
 
   /** Floating grapple lantern. Always a valid grapple target. */
@@ -1501,24 +1130,11 @@ export class World {
     const rotY = Math.atan2(dx, dz);
     const sag = Math.min(4.0, len * 0.05);
 
-    const deck = [];
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const x = lerp(x1, x2, t), z = lerp(z1, z2, t);
       // Catenary-ish droop makes the bridge read as rope, not a girder.
       const y = lerp(y1, y2, t) - Math.sin(t * Math.PI) * sag;
-      /**
-       * How far the ground intrudes into the corridor the deck needs.
-       *
-       * Measured against the FLOOR of that corridor, 1.6 below the planks,
-       * not against the planks themselves. Ground that stops just short of
-       * the deck still stops you: the planks are 2 apart and 3 long, so
-       * between one and the next there is a moment when no plank is under
-       * you, and a hillside a half-metre below the deck is a wall at that
-       * moment. Four spans were doing exactly that — the walker got to two
-       * planks from the end and was held by terrain it was standing above.
-       */
-      deck.push({ x, y, z, under: this.heightAt(x, z) - (y - 1.6) });
       this._plank(x, y, z, rotY, i);
       /**
        * Keep the deck clear of trees — but only where one could reach it.
@@ -1571,29 +1187,6 @@ export class World {
             0.22, 1.7, 0.22, 0x5a442e, 'wood');
         }
       }
-    }
-
-    /**
-     * Tunnel every stretch that runs inside a hillside.
-     *
-     * A span is a straight line between two fixed points and the ground is
-     * not, so two of the six dive through a ridge — one of them by eleven and
-     * a half metres. A plank a hand's width inside the terrain is not worth
-     * excavating for, hence the 0.2.
-     *
-     * PAD carries the bore three planks past the rock at each end instead of
-     * one. A mouth flush with the hillside is a hole you fall into; run out
-     * past it and the tunnel has a portal you can see coming, and reads as a
-     * passage rather than as the point where the bridge disappears.
-     */
-    const PAD = 3;
-    let i = 0;
-    while (i < deck.length) {
-      if (deck[i].under <= 0.2) { i++; continue; }
-      let j = i;
-      while (j + 1 < deck.length && deck[j + 1].under > 0.2) j++;
-      this._tunnel(deck, Math.max(0, i - PAD), Math.min(deck.length - 1, j + PAD), rotY);
-      i = j + 1;
     }
 
     /**

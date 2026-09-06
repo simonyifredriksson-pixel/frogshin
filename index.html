@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v76" />
+<link rel="stylesheet" href="css/style.css?v=v77" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -381,6 +381,21 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════ RESUME THE DUNGEON ══
+     Shown over the loading screen when a saved run exists. Two buttons and
+     nothing else: the choice has to be made before the dungeon starts, and
+     it goes away the instant one is pressed. -->
+<div id="resume-run" class="hidden">
+  <div class="resume-card">
+    <div class="resume-title">THE DUNGEON REMEMBERS YOU</div>
+    <div class="resume-sub" id="resume-where">You left off in room 1.</div>
+    <div class="resume-buttons">
+      <button id="resume-continue" class="btn">CONTINUE</button>
+      <button id="resume-restart" class="btn btn-ghost">START OVER</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════════════════════════════════════════════ LOADING ══ -->
 <div id="loading">
   <div class="load-frog" id="icon-load-frog"></div>
@@ -703,6 +718,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v76"></script>
+<script type="module" src="js/main.js?v=v77"></script>
 </body>
 </html>

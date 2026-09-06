@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v76';
+import { CFG } from './config.js?v=v77';
 
 export class Economy {
   constructor() {
@@ -22,10 +22,33 @@ export class Economy {
     this.equipped = { sword: null, frog: null, kunai: null };
     this.abilities = [];        // purchased ability ids
     this.loadout = [];          // the (at most two) carried into a match
-    // Dropped by the First Croak on a no-checkpoint run. Carried to the
-    // statue in the arena, and consumed there.
+    /**
+     * Dropped by the First Croak on a no-checkpoint run. Carried to the
+     * statue in the arena, and consumed there.
+     *
+     * Saved, so it is yours until you give it up: closing the game, the tab
+     * or the machine does not take it off you.
+     */
     this.crystal = false;
+    /**
+     * Whether the statue has ever been given the crystal.
+     *
+     * The crystal is spent on the sacrifice, but the DOOR it opens stays
+     * open. Once the stone has had its due you walk up and press it — no
+     * second crystal, no second run through the dungeon.
+     */
+    this.statueOpened = false;
     this.ascendedBeaten = false;
+    /**
+     * Where you had got to in the dungeon when you last left it, or null.
+     *
+     * `{ checkpoint, clean }` — the checkpoint index to resume from, and
+     * whether the run is still a no-checkpoint one (which is what the crystal
+     * is for). Written whenever the dungeon advances and cleared when it is
+     * finished or restarted, so shutting the machine mid-run leaves something
+     * to come back to.
+     */
+    this.dungeonRun = null;
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -54,7 +77,11 @@ export class Economy {
       if (Array.isArray(d.abilities)) this.abilities = d.abilities;
       if (Array.isArray(d.loadout)) this.loadout = d.loadout;
       this.crystal = !!d.crystal;
+      this.statueOpened = !!d.statueOpened;
       this.ascendedBeaten = !!d.ascendedBeaten;
+      // Only a well-formed run is restored; anything else means no offer.
+      this.dungeonRun = (d.dungeonRun && typeof d.dungeonRun.checkpoint === 'number')
+        ? { checkpoint: d.dungeonRun.checkpoint, clean: !!d.dungeonRun.clean } : null;
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -73,7 +100,9 @@ export class Economy {
         abilities: this.abilities,
         loadout: this.loadout,
         crystal: this.crystal,
+        statueOpened: this.statueOpened,
         ascendedBeaten: this.ascendedBeaten,
+        dungeonRun: this.dungeonRun,
       }));
     } catch (e) {
       console.warn('[frogshin] could not save progress:', e);
