@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v69';
+export const BUILD = 'v70';
 
 export const CFG = {
   // ---------------------------------------------------------------- world

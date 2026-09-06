@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v69';
-import { CFG } from './config.js?v=v69';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v69';
+import * as THREE from '../lib/three.module.js?v=v70';
+import { CFG } from './config.js?v=v70';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v70';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -77,6 +77,49 @@ const STANCE_DROP = STANCE.drop;
 /** How much bigger a wrap must be than the thing it covers, corners and all. */
 const WRAP_FIT = 1.01 / Math.cos(Math.PI / WRAP_SIDES);
 
+/**
+ * The torso ellipsoid, shared out of _buildTorso: the clothes are sized off
+ * it rather than by eye, and the lower panel below is a band of it.
+ */
+const TOR = [0.52, 0.46, 0.46];
+const TOR_Y = 0.62;
+
+/**
+ * The gi band — how tall it is at rest, and where it is centred.
+ *
+ * The two move together so the TOP stays exactly where it was, at 0.77: the
+ * shirt was only ever short at the BOTTOM, where it stopped a hair under the
+ * obi and left the whole lower back bare. Raising the height and dropping the
+ * centre by half of it lengthens the hem and touches nothing else — the croak
+ * that swells the gi still tops out at the same 0.8975 it always did.
+ */
+const GI_H = 0.40, GI_Y = 0.57;
+
+/**
+ * The gi's lower panel: the shirt carried on down the flanks and the back.
+ *
+ * The gi proper is a cylinder, so it can only end in a flat rim, and simply
+ * lengthening it further would barrel the frog out at the hips — the torso
+ * has drawn in from 0.52 to 0.34 by the time it reaches the legs, while a
+ * cylinder stays 0.53 the whole way down. This panel is instead a band of the
+ * torso's OWN ellipsoid, a fiftieth proud of it, so it adds cloth without
+ * adding bulk: the silhouette stays the frog's and only the colour changes.
+ *
+ * It ends at 0.27 because that is where the haunches take over and there is
+ * nothing left to cover but leg. At the FRONT the belly stands further out
+ * than the torso at every height in the band, so the panel is hidden there
+ * and the pale belly still reads — the cloth appears at the flanks and runs
+ * unbroken around the back, which is the line it ends on.
+ *
+ * It hangs off the body rather than the girth group: it wraps the hips, which
+ * do not breathe. When a croak swells the gi it engulfs this panel entirely
+ * (radius 0.66 against 0.48, hem down to 0.24), so the seam cannot part.
+ */
+const SKIRT_FIT = 1.02;
+const SKIRT_TOP = 0.42, SKIRT_BOT = 0.27;
+const skirtTheta = (y) =>
+  Math.acos(clamp((y - TOR_Y) / (TOR[1] * SKIRT_FIT), -1, 1));
+
 /** Shared geometries — every frog reuses these, so memory stays flat. */
 const G = {
   /** Cylinder for clothing that has to enclose a limb or the torso. */
@@ -91,6 +134,9 @@ const G = {
    * had happened. A band of the mask's own sphere follows the curve exactly.
    */
   mouth: new THREE.SphereGeometry(1, 22, 2, Math.PI / 2 - 0.62, 1.24, 1.45, 0.15),
+  /** The gi's lower panel: a band of the torso's own sphere. See SKIRT_TOP. */
+  skirt: new THREE.SphereGeometry(1, 30, 4, 0, Math.PI * 2,
+    skirtTheta(SKIRT_TOP), skirtTheta(SKIRT_BOT) - skirtTheta(SKIRT_TOP)),
   sphere: new THREE.SphereGeometry(1, 12, 9),
   lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -408,9 +454,12 @@ export class FrogModel {
   _buildTorso() {
     const b = this.body;
     // Chunky pear-shaped frog torso.
-    const TOR = [0.52, 0.46, 0.46];
-    this.torso = mesh(G.sphere, this.mats.skin, ...TOR, 0, 0.62, 0);
+    this.torso = mesh(G.sphere, this.mats.skin, ...TOR, 0, TOR_Y, 0);
     b.add(this.torso);
+    // The gi's hem, carried down the flanks and the back. See SKIRT_FIT.
+    this.skirtM = mesh(G.skirt, this.mats.cloth,
+      TOR[0] * SKIRT_FIT, TOR[1] * SKIRT_FIT, TOR[2] * SKIRT_FIT, 0, TOR_Y, 0);
+    b.add(this.skirtM);
 
     /**
      * The midsection: the belly and everything worn OVER it, in one group.
@@ -444,7 +493,7 @@ export class FrogModel {
      * clear the gi for the same reason.
      */
     const gi = TOR.map((r) => r * WRAP_FIT);
-    this.giM = mesh(G.wrap, this.mats.cloth, gi[0], 0.34, gi[2], 0, 0.60, 0);
+    this.giM = mesh(G.wrap, this.mats.cloth, gi[0], GI_H, gi[2], 0, GI_Y, 0);
     g.add(this.giM);
 
     /**
@@ -1449,7 +1498,7 @@ export class FrogModel {
     // the band. Three holds both, and the test pins it.
     const bellyR = 0.34 * throat;
     this.bellyM.scale.y = bellyR;
-    this.giM.scale.y = 0.34 + 3 * (bellyR - 0.34);
+    this.giM.scale.y = GI_H + 3 * (bellyR - 0.34);
 
     // Jaw opens while the tongue is out.
     const jawOpen = s.grappling ? 0.55 : 0;
