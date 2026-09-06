@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v67';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v67';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v67';
-import { Input } from './input.js?v=v67';
-import { Audio } from './audio.js?v=v67';
-import { World } from './world.js?v=v67';
-import { Effects } from './effects.js?v=v67';
-import { Atmosphere } from './atmosphere.js?v=v67';
-import { FollowCamera } from './camera.js?v=v67';
-import { Player } from './player.js?v=v67';
-import { RemotePlayer } from './remote.js?v=v67';
-import { HUD } from './hud.js?v=v67';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v67';
-import { FrogModel } from './frog.js?v=v67';
-import { DummyField } from './dummy.js?v=v67';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v67';
-import { ToadModel } from './npc.js?v=v67';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v67';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v67';
-import { DungeonRun } from './dungeon.js?v=v67';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v67';
-import { JudgmentRun } from './judgment.js?v=v67';
-import { COMBO_NAMES } from './ascended.js?v=v67';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v67';
-import { MenuScene } from './menu.js?v=v67';
-import { Economy } from './economy.js?v=v67';
-import { Shop } from './shop.js?v=v67';
-import { Network, NetRole } from './net.js?v=v67';
+import * as THREE from '../lib/three.module.js?v=v68';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v68';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v68';
+import { Input } from './input.js?v=v68';
+import { Audio } from './audio.js?v=v68';
+import { World } from './world.js?v=v68';
+import { Effects } from './effects.js?v=v68';
+import { Atmosphere } from './atmosphere.js?v=v68';
+import { FollowCamera } from './camera.js?v=v68';
+import { Player } from './player.js?v=v68';
+import { RemotePlayer } from './remote.js?v=v68';
+import { HUD } from './hud.js?v=v68';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v68';
+import { FrogModel } from './frog.js?v=v68';
+import { DummyField } from './dummy.js?v=v68';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v68';
+import { ToadModel } from './npc.js?v=v68';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v68';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v68';
+import { DungeonRun } from './dungeon.js?v=v68';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v68';
+import { JudgmentRun } from './judgment.js?v=v68';
+import { COMBO_NAMES } from './ascended.js?v=v68';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v68';
+import { MenuScene } from './menu.js?v=v68';
+import { Economy } from './economy.js?v=v68';
+import { Shop } from './shop.js?v=v68';
+import { Network, NetRole } from './net.js?v=v68';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -786,6 +786,11 @@ class Game {
 
   async _enterGame() {
     if (this.mode === 'loading' || this.mode === 'playing') return;
+    // Start dry. Only the arena has water at all, so the dungeon, the story
+    // and the judgment arena have no way of ever clearing this themselves —
+    // whatever they inherit, they keep. Doing it on the way in as well as on
+    // the way out means neither direction can carry the blue across.
+    this._clearUnderwater();
     this.mode = 'loading';
     $('menu').classList.remove('show');
     const loading = $('loading');
@@ -1797,6 +1802,10 @@ class Game {
   }
 
   _quitToMenu() {
+    // Dry off first, and for EVERY mode. This used to be done inside the
+    // three branches below, so quitting an ordinary arena match while
+    // swimming left the whole game tinted blue.
+    this._clearUnderwater();
     // The judgment arena owns its own scene as well.
     if (this.isJudgment) {
       if (this.judgment) this.judgment.dispose();
@@ -1807,8 +1816,6 @@ class Game {
       this.atmo = null;
       this.player = null;
       this.pickups = null;
-      this.renderer.setClearColor(0x8ec9e8);
-      this._underwater = false;
     }
     // The dungeon owns its own scene too — drop the whole thing.
     if (this.isDungeon) {
@@ -1820,8 +1827,6 @@ class Game {
       this.atmo = null;
       this.player = null;
       this.pickups = null;
-      this.renderer.setClearColor(0x8ec9e8);
-      this._underwater = false;
     }
     // Story keeps a whole separate scene; drop it so a later arena match
     // does not inherit the swamp.
@@ -1834,8 +1839,6 @@ class Game {
       this.atmo = null;
       this.player = null;
       this.pickups = null;
-      this.renderer.setClearColor(0x8ec9e8);
-      this._underwater = false;
     }
     this.net.disconnect();
     for (const r of this.remotes.values()) r.dispose();
@@ -2967,11 +2970,34 @@ class Game {
   _setUnderwater(v) {
     if (v === this._underwater) return;
     this._underwater = v;
-    this.atmo.setUnderwater(v);
+    if (this.atmo) this.atmo.setUnderwater(v);
     // Clear colour shows through wherever nothing is drawn.
     this.renderer.setClearColor(v ? 0x0a6ec4 : 0x8ec9e8);
     $('underwater').classList.toggle('show', v);
     Audio.setUnderwater(v);
+  }
+
+  /**
+   * Force the above-water presentation back, whatever the flag currently says.
+   *
+   * The underwater look is spread across four places — the scene fog, the
+   * renderer's clear colour, a full-screen tint in the DOM and a filter on the
+   * audio — and only the FOG belongs to the level. Leaving a level used to
+   * clear the flag by assigning it directly, which put the flag and the screen
+   * out of step: the tint and the audio filter stayed on, and _setUnderwater's
+   * early-out then saw the flag already false and refused to take them off.
+   * That is why the blue stuck until you found some water to swim through.
+   *
+   * So this sets all four unconditionally rather than going through the
+   * early-out, and it runs on the way INTO a level as well as out — whatever
+   * state the last one left behind, the next one starts dry.
+   */
+  _clearUnderwater() {
+    this._underwater = false;
+    if (this.atmo) this.atmo.setUnderwater(false);
+    this.renderer.setClearColor(0x8ec9e8);
+    $('underwater').classList.remove('show');
+    Audio.setUnderwater(false);
   }
 
   _updateHud(dt, speed) {
