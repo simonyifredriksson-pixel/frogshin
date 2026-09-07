@@ -5,34 +5,34 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v77';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v77';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v77';
-import { Input } from './input.js?v=v77';
-import { Audio } from './audio.js?v=v77';
-import { World } from './world.js?v=v77';
-import { Effects } from './effects.js?v=v77';
-import { Atmosphere } from './atmosphere.js?v=v77';
-import { FollowCamera } from './camera.js?v=v77';
-import { Player } from './player.js?v=v77';
-import { RemotePlayer } from './remote.js?v=v77';
-import { HUD } from './hud.js?v=v77';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v77';
-import { FrogModel } from './frog.js?v=v77';
-import { DummyField } from './dummy.js?v=v77';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v77';
-import { ToadModel } from './npc.js?v=v77';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v77';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v77';
-import { DungeonRun } from './dungeon.js?v=v77';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v77';
-import { JudgmentRun } from './judgment.js?v=v77';
-import { COMBO_NAMES } from './ascended.js?v=v77';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v77';
-import { MenuScene } from './menu.js?v=v77';
-import { Economy } from './economy.js?v=v77';
-import { Shop } from './shop.js?v=v77';
-import { Network, NetRole } from './net.js?v=v77';
+import * as THREE from '../lib/three.module.js?v=v78';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v78';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v78';
+import { Input } from './input.js?v=v78';
+import { Audio } from './audio.js?v=v78';
+import { World } from './world.js?v=v78';
+import { Effects } from './effects.js?v=v78';
+import { Atmosphere } from './atmosphere.js?v=v78';
+import { FollowCamera } from './camera.js?v=v78';
+import { Player } from './player.js?v=v78';
+import { RemotePlayer } from './remote.js?v=v78';
+import { HUD } from './hud.js?v=v78';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v78';
+import { FrogModel } from './frog.js?v=v78';
+import { DummyField } from './dummy.js?v=v78';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v78';
+import { ToadModel } from './npc.js?v=v78';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v78';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v78';
+import { DungeonRun } from './dungeon.js?v=v78';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v78';
+import { JudgmentRun } from './judgment.js?v=v78';
+import { COMBO_NAMES } from './ascended.js?v=v78';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v78';
+import { MenuScene } from './menu.js?v=v78';
+import { Economy } from './economy.js?v=v78';
+import { Shop } from './shop.js?v=v78';
+import { Network, NetRole } from './net.js?v=v78';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1202,30 +1202,32 @@ class Game {
     // Beating the god unlocks his appearance — a cosmetic, permanently.
     this.dungeon.onVictory = () => {
       // The run is over: there is nothing left to come back to.
-      this.economy.dungeonRun = null;
-      this.economy.save();
+      this.economy.clearDungeonRun(checkpoints);
       this._awardFrogathSkin();
     };
     this.dungeon.onCrystal = () => {
       this.economy.crystal = true;
       this.economy.save();
     };
-    this.dungeon.onProgress = (run) => {
-      this.economy.dungeonRun = run;
-      this.economy.save();
-    };
+    this.dungeon.onProgress = (room, mode) =>
+      this.economy.setDungeonRun(mode, room);
 
     /**
      * Offer to pick the run up where it was left, before it starts.
      *
-     * A saved run is only worth offering from room two on: "continue" at the
-     * first room is the same thing as starting over, and a question with two
-     * identical answers is just a click in the way.
+     * Only THIS mode's bookmark is looked at. Dying at room seven with
+     * checkpoints on and then choosing no-checkpoints used to drop you at
+     * room seven, which hands the harder mode the easier one's progress and
+     * skips the entire thing it is for.
+     *
+     * And only from room two on: "continue" at the first room is the same
+     * thing as starting over, and a question with two identical answers is
+     * just a click in the way.
      */
-    const saved = this.economy.dungeonRun;
+    const saved = this.economy.dungeonRunFor(checkpoints);
     const room = saved && saved.checkpoint > 0
       ? Math.min(saved.checkpoint, CFG.dungeon.rooms - 1) : 0;
-    const at = room > 0 ? await this._askResume(room) : 0;
+    const at = room > 0 ? await this._askResume(room, checkpoints) : 0;
 
     this.dungeon.start(this.player, at);
     this.followCam.snapTo(this.player.pos);
@@ -1254,7 +1256,7 @@ class Game {
    * what walking into a room does anyway — the save is a bookmark, not a
    * snapshot.
    */
-  _askResume(room) {
+  _askResume(room, checkpoints) {
     const panel = $('resume-run');
     const where = $('resume-where');
     const go = $('resume-continue');
@@ -1276,10 +1278,10 @@ class Game {
       };
       go.onclick = () => done(room);
       again.onclick = () => {
-        // Starting over throws the bookmark away immediately, so quitting
-        // before the first room is cleared cannot resurrect it.
-        this.economy.dungeonRun = null;
-        this.economy.save();
+        // Starting over throws THIS mode's bookmark away immediately, so
+        // quitting before the first room is cleared cannot resurrect it.
+        // The other mode's run is left alone; it is a different run.
+        this.economy.clearDungeonRun(checkpoints);
         done(0);
       };
     });

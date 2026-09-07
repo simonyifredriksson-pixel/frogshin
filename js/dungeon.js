@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v77';
-import { CFG } from './config.js?v=v77';
-import { clamp } from './util.js?v=v77';
-import { DungeonLevel } from './dungeonlevel.js?v=v77';
-import { DungeonBoss } from './dungeonboss.js?v=v77';
-import { Frogath } from './frogath.js?v=v77';
-import { Audio } from './audio.js?v=v77';
+import * as THREE from '../lib/three.module.js?v=v78';
+import { CFG } from './config.js?v=v78';
+import { clamp } from './util.js?v=v78';
+import { DungeonLevel } from './dungeonlevel.js?v=v78';
+import { DungeonBoss } from './dungeonboss.js?v=v78';
+import { Frogath } from './frogath.js?v=v78';
+import { Audio } from './audio.js?v=v78';
 
 const _v = new THREE.Vector3();
 
@@ -111,14 +111,18 @@ export class DungeonRun {
    * boss's both full, which is what `_enterRoom` already does for every
    * other way of arriving in a room.
    *
-   * `clean` survives a resume. Dying is what ends a no-checkpoint run, and
-   * closing the game is not dying — a player who shuts the lid mid-run and
-   * comes back has not used a checkpoint, so the crystal is still theirs to
-   * earn.
+   * The MODE goes with it. A run with checkpoints on and a run with them off
+   * are different runs at different difficulties, and a bookmark that does
+   * not say which one it came from will be offered to the other — which is
+   * how a room-seven practice run turned into a room-seven no-checkpoint run.
+   *
+   * Resuming does not end a no-checkpoint run. Dying is what ends one, and
+   * closing the game is not dying: a player who shuts the lid mid-run and
+   * comes back has not used a checkpoint, so the crystal is still theirs.
    */
   _remember() {
     if (!this.onProgress) return;
-    this.onProgress({ checkpoint: this.room, clean: !this.checkpoints });
+    this.onProgress(this.room, this.checkpoints);
   }
 
   /**

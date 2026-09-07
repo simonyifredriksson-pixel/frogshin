@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v77';
+import { CFG } from './config.js?v=v78';
 
 export class Economy {
   constructor() {
@@ -40,15 +40,19 @@ export class Economy {
     this.statueOpened = false;
     this.ascendedBeaten = false;
     /**
-     * Where you had got to in the dungeon when you last left it, or null.
+     * Where each dungeon MODE was left off, or null. Room index, 0-based.
      *
-     * `{ checkpoint, clean }` — the checkpoint index to resume from, and
-     * whether the run is still a no-checkpoint one (which is what the crystal
-     * is for). Written whenever the dungeon advances and cleared when it is
-     * finished or restarted, so shutting the machine mid-run leaves something
-     * to come back to.
+     * Keyed by mode, and that is the whole point of the shape. A run with
+     * checkpoints on and a run with them off are different runs at different
+     * difficulties, and a single shared bookmark let one hand its progress to
+     * the other: die at room seven with checkpoints on, start a no-checkpoint
+     * run, and it offered to drop you at room seven — which is precisely the
+     * thing no-checkpoints exists to refuse.
+     *
+     * Two slots rather than one tagged slot, so starting a run in one mode
+     * does not quietly throw away the other mode's progress either.
      */
-    this.dungeonRun = null;
+    this.dungeonRuns = { checkpoints: null, hard: null };
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -80,8 +84,22 @@ export class Economy {
       this.statueOpened = !!d.statueOpened;
       this.ascendedBeaten = !!d.ascendedBeaten;
       // Only a well-formed run is restored; anything else means no offer.
-      this.dungeonRun = (d.dungeonRun && typeof d.dungeonRun.checkpoint === 'number')
-        ? { checkpoint: d.dungeonRun.checkpoint, clean: !!d.dungeonRun.clean } : null;
+      const slot = (v) => (v && typeof v.checkpoint === 'number'
+        ? { checkpoint: v.checkpoint } : null);
+      if (d.dungeonRuns) {
+        this.dungeonRuns.checkpoints = slot(d.dungeonRuns.checkpoints);
+        this.dungeonRuns.hard = slot(d.dungeonRuns.hard);
+      } else if (d.dungeonRun) {
+        /**
+         * A save from the build that kept one bookmark for both modes.
+         *
+         * It carried a `clean` flag saying which mode wrote it, so it can be
+         * filed correctly rather than thrown away — and filing it is what
+         * stops it being offered to the mode it did not come from.
+         */
+        this.dungeonRuns[d.dungeonRun.clean ? 'hard' : 'checkpoints']
+          = slot(d.dungeonRun);
+      }
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -102,11 +120,36 @@ export class Economy {
         crystal: this.crystal,
         statueOpened: this.statueOpened,
         ascendedBeaten: this.ascendedBeaten,
-        dungeonRun: this.dungeonRun,
+        dungeonRuns: this.dungeonRuns,
       }));
     } catch (e) {
       console.warn('[frogshin] could not save progress:', e);
     }
+  }
+
+  // ---------------------------------------------------------- dungeon runs
+
+  /**
+   * The bookmark slot for a mode.
+   *
+   * A named pair rather than a boolean index so a caller that forgets which
+   * way round the flag goes gets an obvious mistake instead of the other
+   * mode's progress. `checkpoints` is the practice mode; `hard` is the one
+   * that sends you back to room one when you die.
+   */
+  _slot(checkpoints) { return checkpoints ? 'checkpoints' : 'hard'; }
+
+  /** Where this MODE was left off, or null. Never the other mode's run. */
+  dungeonRunFor(checkpoints) { return this.dungeonRuns[this._slot(checkpoints)]; }
+
+  setDungeonRun(checkpoints, room) {
+    this.dungeonRuns[this._slot(checkpoints)] = { checkpoint: room };
+    this.save();
+  }
+
+  clearDungeonRun(checkpoints) {
+    this.dungeonRuns[this._slot(checkpoints)] = null;
+    this.save();
   }
 
   // ---------------------------------------------------------------- balance
