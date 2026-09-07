@@ -54,7 +54,7 @@
  * the sea you woke up in.
  */
 
-import { clamp, smoothstep } from './util.js?v=v82';
+import { clamp, smoothstep } from './util.js?v=v83';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 5120;
@@ -1064,6 +1064,22 @@ export const REGIONS = [
       const gap = clamp(1 - Math.abs(z) / 140, 0, 1);
       return plateau - smoothstep(gap) * 220;
     },
+    /**
+     * Fall off the causeway and you are fished out.
+     *
+     * The chasm floor is under the waterline and its walls are seventeen
+     * units of rise per metre. It is not a dead end — the chasm tapers out at
+     * both ends where this region stops dominating the blend, so a player CAN
+     * swim four hundred units east or west and walk up out of it, and the
+     * reachability test proves that. But four hundred units of swimming after
+     * a misstep is a punishment nobody enjoys, so `pit` says: below this
+     * height, in this region, you are in the hole, and after a moment
+     * somebody puts you back at the near side.
+     *
+     * Death would do it too, but being killed by scenery you were told to
+     * cross is a worse answer than being rescued from it.
+     */
+    pit: { below: 70, to: [420, -1640] },
     landmark: {
       kind: 'bigbridge', at: [420, -1780],
       name: 'THE SUNDERWAY',

@@ -24,15 +24,15 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v82';
-import { FrogModel } from './frog.js?v=v82';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v82';
+import * as THREE from '../lib/three.module.js?v=v83';
+import { FrogModel } from './frog.js?v=v83';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v83';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v82';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v82';
-import { ROADS, RIVERS } from './roads.js?v=v82';
-import { GEAR_BY_ID } from './gear.js?v=v82';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v82';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v83';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v83';
+import { ROADS, RIVERS } from './roads.js?v=v83';
+import { GEAR_BY_ID } from './gear.js?v=v83';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v83';
 
 const $ = (id) => document.getElementById(id);
 

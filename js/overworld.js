@@ -32,26 +32,26 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v82';
-import { CFG } from './config.js?v=v82';
-import { clamp, damp } from './util.js?v=v82';
-import { Realm } from './realm.js?v=v82';
-import { Scatter } from './scatter.js?v=v82';
-import { Sites } from './realmsites.js?v=v82';
-import { Camp } from './mobs.js?v=v82';
-import { DungeonBoss } from './dungeonboss.js?v=v82';
-import { Frogath } from './frogath.js?v=v82';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v82';
-import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v82';
-import { Progress, HEART, BASE } from './progression.js?v=v82';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v82';
+import * as THREE from '../lib/three.module.js?v=v83';
+import { CFG } from './config.js?v=v83';
+import { clamp, damp } from './util.js?v=v83';
+import { Realm } from './realm.js?v=v83';
+import { Scatter } from './scatter.js?v=v83';
+import { Sites } from './realmsites.js?v=v83';
+import { Camp } from './mobs.js?v=v83';
+import { DungeonBoss } from './dungeonboss.js?v=v83';
+import { Frogath } from './frogath.js?v=v83';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v83';
+import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v83';
+import { Progress, HEART, BASE } from './progression.js?v=v83';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v83';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress,
-  mainObjective } from './quests.js?v=v82';
+  mainObjective } from './quests.js?v=v83';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v82';
-import { disposeLandmarkMats } from './landmarks.js?v=v82';
-import { Weather } from './weather.js?v=v82';
-import { Audio } from './audio.js?v=v82';
+  disposeVillagerMats } from './realmquests.js?v=v83';
+import { disposeLandmarkMats } from './landmarks.js?v=v83';
+import { Weather } from './weather.js?v=v83';
+import { Audio } from './audio.js?v=v83';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -328,6 +328,7 @@ export class Overworld {
     this._encounters(dt, player, onHit);
     this._camps(dt, player, onHit);
     this._interact(player, input);
+    this._pit(dt, player);
     this._death(dt, player);
     if (this.atmo) this._sky(dt, player);
     this.weather.update(dt, this.camera.position,
@@ -1085,6 +1086,35 @@ export class Overworld {
     this.applyStats();
     this._paintObjectives();
     this.save();
+  }
+
+  /**
+   * Fished out of a hole that is a long swim out of.
+   *
+   * Exactly one region declares a `pit` — the Sunderway, whose chasm is two
+   * hundred units deep, flooded at the bottom and walled at seventeen units
+   * of rise per metre. You can get out of it on your own, at both ends, and
+   * the reachability test proves that; the rescue exists so that stepping off
+   * the bridge costs a moment rather than four hundred units of swimming.
+   *
+   * A named exception rather than a general safety net, deliberately: a
+   * general one would eventually teleport somebody out of a valley they were
+   * perfectly happy exploring.
+   */
+  _pit(dt, player) {
+    const P = this.region && this.region.pit;
+    if (!P || player.pos.y > P.below) { this.pitT = 0; return; }
+    this.pitT = (this.pitT || 0) + dt;
+    if (this.pitT < 2.6) return;
+    this.pitT = 0;
+    const [x, z] = P.to;
+    player.pos.set(x, this.realm.heightAt(x, z) + 1.4, z);
+    player.vel.set(0, 0, 0);
+    if (this.followCam) this.followCam.snapTo(player.pos);
+    this.hud.toast('Somebody fished you out. Use the bridge.', 5);
+    _v.copy(player.pos);
+    _v.y += 1;
+    this.effects.ring(_v, 1, 6, 0.6, 0x8fd8ff, true);
   }
 
   // ------------------------------------------------------------------ death
