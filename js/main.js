@@ -5,36 +5,35 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v84';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v84';
-import { Input } from './input.js?v=v84';
-import { Audio } from './audio.js?v=v84';
-import { World } from './world.js?v=v84';
-import { Effects } from './effects.js?v=v84';
-import { Atmosphere } from './atmosphere.js?v=v84';
-import { FollowCamera } from './camera.js?v=v84';
-import { Player } from './player.js?v=v84';
-import { RemotePlayer } from './remote.js?v=v84';
-import { HUD } from './hud.js?v=v84';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v84';
-import { FrogModel } from './frog.js?v=v84';
-import { DummyField } from './dummy.js?v=v84';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v84';
-import { ToadModel } from './npc.js?v=v84';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v84';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v84';
-import { DungeonRun } from './dungeon.js?v=v84';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v84';
-import { JudgmentRun } from './judgment.js?v=v84';
-import { COMBO_NAMES } from './ascended.js?v=v84';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v84';
-import { MenuScene } from './menu.js?v=v84';
-import { Economy } from './economy.js?v=v84';
-import { Shop } from './shop.js?v=v84';
-import { Network, NetRole } from './net.js?v=v84';
-import { Overworld } from './overworld.js?v=v84';
-import { InventoryScreen } from './inventoryui.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v85';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v85';
+import { Input } from './input.js?v=v85';
+import { Audio } from './audio.js?v=v85';
+import { World } from './world.js?v=v85';
+import { Effects } from './effects.js?v=v85';
+import { Atmosphere } from './atmosphere.js?v=v85';
+import { FollowCamera } from './camera.js?v=v85';
+import { Player } from './player.js?v=v85';
+import { RemotePlayer } from './remote.js?v=v85';
+import { HUD } from './hud.js?v=v85';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v85';
+import { FrogModel } from './frog.js?v=v85';
+import { DummyField } from './dummy.js?v=v85';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v85';
+import { ToadModel } from './npc.js?v=v85';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v85';
+import { DungeonRun } from './dungeon.js?v=v85';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v85';
+import { JudgmentRun } from './judgment.js?v=v85';
+import { COMBO_NAMES } from './ascended.js?v=v85';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v85';
+import { MenuScene } from './menu.js?v=v85';
+import { Economy } from './economy.js?v=v85';
+import { Shop } from './shop.js?v=v85';
+import { Network, NetRole } from './net.js?v=v85';
+import { Overworld } from './overworld.js?v=v85';
+import { InventoryScreen } from './inventoryui.js?v=v85';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -158,6 +157,11 @@ class Game {
       this.camera.updateProjectionMatrix();
     }
     if (this.menuScene) this.menuScene.resize(w, h);
+    // The fireflies are drawn as points, and a point's size is in PIXELS —
+    // so without this they are twice as big on a half-resolution buffer.
+    if (this.overworld && this.overworld.ambience) {
+      this.overworld.ambience.setPixelHeight(h * ratio);
+    }
   }
 
   // -------------------------------------------------------------- settings
@@ -288,9 +292,8 @@ class Game {
       roomInput.value = roomInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     });
 
-    // Creating or joining a room now lands in a LOBBY instead of launching
-    // straight into a match — otherwise there was no moment at which you
-    // could choose Story, because the arena started the instant you hosted.
+    // Creating or joining a room lands in a LOBBY rather than launching
+    // straight into a match, so the host has a moment to choose.
     $('btn-host').onclick = () => { this.pendingMode = null; this._connect('host', null); };
     $('btn-join').onclick = () => {
       const code = roomInput.value.trim();
@@ -304,13 +307,16 @@ class Game {
       this._connect('quick', CFG.net.publicRoom);
     };
     $('btn-solo').onclick = () => { this.pendingMode = 'arena'; this._connect('solo', null); };
-    $('btn-story').onclick = () => {
-      this.pendingMode = 'story';
-      if (this.net.isOnline && this.net.connected) this._enterGame();
-      else this._connect('solo', null);
-    };
 
-    // --- the open world: solo, offline, and it remembers everything ---
+    /**
+     * --- THE CROAKLANDS: the main game ---
+     *
+     * This replaced the old Story Mode, which was one scripted level in its
+     * own scene — a burning village, a walk down a path, one boss. Everything
+     * it was trying to be is here instead, twenty-four regions of it, and
+     * there is no reason to keep two answers to the same question in the
+     * menu. Solo, offline, and it remembers everything.
+     */
     $('btn-realm').onclick = () => {
       Audio.uiClick();
       Audio.init(); Audio.resume();
@@ -325,10 +331,9 @@ class Game {
     $('btn-dungeon-nocp').onclick = () => this._startDungeon(false);
 
     // --- lobby ---
-    // Only the host chooses, and the choice is broadcast — otherwise two
-    // players could pick different modes and end up in different worlds.
+    // The arena is the only thing there is to play together: the Croaklands
+    // is a single-player country with one save, and the dungeon is a run.
     $('lobby-arena').onclick = () => this._hostStart('arena');
-    $('lobby-story').onclick = () => this._hostStart('story');
     $('lobby-leave').onclick = () => {
       Audio.uiBack();
       this.net.disconnect();
@@ -570,8 +575,8 @@ class Game {
     net.onReady = () => {
       this._connecting = false;
       if (this.mode !== 'menu' && this.mode !== 'menu-overlay') return;
-      // A room made with Create/Join waits in the lobby so the players can
-      // agree on Arena or Story. Everything else launches immediately.
+      // A room made with Create/Join waits in the lobby for the host to
+      // start it. Everything else launches immediately.
       if (this.pendingMode) this._enterGame();
       else this._showLobby();
     };
@@ -803,8 +808,8 @@ class Game {
 
   async _enterGame() {
     if (this.mode === 'loading' || this.mode === 'playing') return;
-    // Start dry. Only the arena has water at all, so the dungeon, the story
-    // and the judgment arena have no way of ever clearing this themselves —
+    // Start dry. Only the arena has water at all, so the dungeon and the
+    // judgment arena have no way of ever clearing this themselves —
     // whatever they inherit, they keep. Doing it on the way in as well as on
     // the way out means neither direction can carry the blue across.
     this._clearUnderwater();
@@ -817,14 +822,7 @@ class Game {
 
     const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
 
-    // Story mode builds its own level in its own scene.
-    if (this.pendingMode === 'story') {
-      this.pendingMode = null;
-      this.sessionMode = 'story';
-      await this._enterStory(loading, bar, label, frame);
-      return;
-    }
-    // So does the dungeon.
+    // The dungeon builds its own level in its own scene.
     if (this.pendingMode === 'dungeon') {
       this.pendingMode = null;
       this.sessionMode = 'dungeon';
@@ -996,123 +994,6 @@ class Game {
     this.pickups = null;
     this.followCam = null;
     this.round = null;
-  }
-
-  /** Build and start the story level. */
-  async _enterStory(loading, bar, label, frame) {
-    this.isStory = true;
-    this.storyScene = new THREE.Scene();
-    this.scene = this.storyScene;
-    this.camera = new THREE.PerspectiveCamera(
-      CFG.camera.fov, window.innerWidth / window.innerHeight, CFG.camera.near, CFG.camera.far);
-
-    this.effects = new Effects(this.scene, this.camera);
-
-    const authority = !this.net.isOnline || this.net.isHost;
-    this.story = new StoryMode({
-      scene: this.scene,
-      effects: this.effects,
-      hud: this.hud,
-      camera: this.camera,
-      followCam: null,          // assigned once the camera rig exists
-      authority,
-      onBroadcast: (msg) => this.net.sendEvent(msg),
-    });
-
-    const tasks = this.story.buildTasks();
-    const timings = [];
-    for (let i = 0; i < tasks.length; i++) {
-      label.textContent = tasks[i][0] + '…';
-      bar.style.width = ((i / tasks.length) * 92) + '%';
-      await frame();
-      const t0 = performance.now();
-      tasks[i][1]();
-      timings.push([tasks[i][0], Math.round(performance.now() - t0)]);
-    }
-    // Logged so a slow load can be diagnosed from the console instead of guessed at.
-    const total = timings.reduce((a, b) => a + b[1], 0);
-    console.log(`[frogshin] story level built in ${total}ms`);
-    console.table(timings.map(([name, ms]) => ({ step: name, ms })));
-
-    label.textContent = 'Setting the village alight…';
-    bar.style.width = '96%';
-    await frame();
-
-    this.world = this.story.level;          // shared interface: collision, etc.
-    this.followCam = new FollowCamera(this.camera, this.story.collision);
-    this.story.followCam = this.followCam;
-
-    // Dusk, heavy smoke, firelight — nothing like the bright arena sky.
-    this.atmo = new Atmosphere(this.scene, this.renderer, {
-      leafCount: 0,
-      cloudCount: 0,
-      shadows: this.quality.shadows,
-      fogNear: 22,
-      fogFar: 165,
-      fogColor: 0x6b4630,
-      skyTop: 0x2a2233,
-      skyMid: 0x6b4732,
-      skyBottom: 0xb2704a,
-    });
-    this.atmo.sun.color.setHex(0xffb070);
-    this.atmo.sun.intensity = 0.85;
-    this.atmo.hemi.color.setHex(0x8a6a52);
-    this.atmo.hemi.groundColor.setHex(0x2a2418);
-    this.atmo.hemi.intensity = 0.6;
-    this.renderer.setClearColor(0x6b4630);
-
-    // No dummies, no crates, no rounds in the story.
-    this.dummies = new DummyField(this.scene);
-    this.kunaiSystem = new KunaiSystem(this.scene, this.story.collision, this.effects);
-    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
-    this.pickups = null;
-
-    bar.style.width = '100%';
-    await frame();
-
-    const prof = this.profile;
-    if (this.player) { this.scene.remove(this.player.model.root); this.player.model.dispose(); }
-    this.player = new Player({
-      id: this.net.selfId || 'local',
-      name: prof.name,
-      color: prof.color,
-      world: this.story.level,
-      effects: this.effects,
-      scene: this.scene,
-      kunai: this.kunaiSystem,
-      pickups: null,
-      skins: this.equippedSkins,
-    });
-    // A villager, not a ninja: dash and tongue remain, weapons do not.
-    this.player.spawn(this.story.spawnPoint);
-    this.player.inventory.slots[0] = null;
-    this.player.inventory.slots[1] = null;
-    this.player.inventory.dirty = true;
-    // No weapons during the village — the broken sword is handed over when
-    // the duel starts, which is also what unlocks the parry.
-    this.player.combatEnabled = false;
-    this.followCam.snapTo(this.player.pos);
-
-    // Anyone who joined while the level was still building gets created now.
-    this._flushPendingJoins();
-
-    this.hud.buildHotbar(this.player.inventory);
-    this.hud.setObjectives(this.story.objectives);
-    // The HUD is shared with the arena, so anything left over from a match
-    // (round timer, "YOU ARE IT", a boss bar, the vote screen) is cleared —
-    // otherwise it bleeds straight into the story.
-    this.hud.resetOverlays();
-    this.hud.show(true);
-    this.hud.setRoom(this.net.room, 'Story — the burning village', this.net.isOnline);
-    this.hud.toast('Follow the boardwalk — get out of the village', 5);
-
-    loading.classList.remove('show');
-    this.mode = 'playing';
-    this.input.flush();
-    this.input.requestLock();
-    Audio.startAmbient();
-    Audio.stopMenuMusic();
-    this._resize();
   }
 
   /**
@@ -1392,10 +1273,18 @@ class Game {
       kunai: this.kunaiSystem, pickups: null, skins: this.equippedSkins,
     });
     this.player.combatEnabled = true;
-    // Kunai are the realm's ranged option and there are no supply crates in
-    // three thousand units of wilderness to refill them from.
-    this.player.inventory.setUnlimitedKunai(true);
+    /**
+     * Kunai are FINITE in the Croaklands.
+     *
+     * They used to be unlimited out here, which quietly made every fight in
+     * the game a matter of standing at range and holding the button. Twenty
+     * to start (see START_KUNAI), and every blade after those twenty is one
+     * you found. `Overworld.start` sets the real count from the save.
+     */
+    this.player.inventory.setUnlimitedKunai(false);
     this.player.inventory.setAbilities(this.shop.equippedAbilities());
+    // The guardians' wide attacks sweep thrown blades out of the air.
+    this.overworld.kunai = this.kunaiSystem;
 
     this.hud.buildHotbar(this.player.inventory);
     this.hud.onSlotClick = (i) => {
@@ -1453,11 +1342,12 @@ class Game {
 
     // The katana reports hits as queued events because in the arena they have
     // to reach the victim's machine. Nothing out here is networked, so this is
-    // where they land.
-    for (const ev of p.events) {
-      if (ev.t === 'hit') this.hud.hitmarker(ev.c === 2);
-    }
-    p.events.length = 0;
+    // where they land — and they have to be APPLIED here, not merely counted.
+    // Showing the hitmarker and dropping `ev.dmg` on the floor is exactly why
+    // the sword did no damage in the Croaklands while thrown kunai (which call
+    // `target.onHit` directly) did. `combat.hitThisSwing` already guarantees
+    // one event per target per swing, so this cannot double-hit.
+    this._applyRealmHits(p, targets);
 
     ow.update(dt, p, this.input, (dmg, from) => this._realmHit(dmg, from));
 
@@ -1474,6 +1364,27 @@ class Game {
     this._updateAudioListener();
     Audio.updateAmbient(dt);
     this._renderRealm();
+  }
+
+  /**
+   * Drain the player's queued katana hits into the live targets they name.
+   *
+   * `targets` is the very array the swing was resolved against this frame, so
+   * `ev.id` always has an owner unless that owner died mid-frame (a mob can be
+   * killed by the first hit of a two-target swing). A dead target is skipped
+   * rather than resurrected for one more blow.
+   */
+  _applyRealmHits(p, targets) {
+    if (!p.events.length) return;
+    for (const ev of p.events) {
+      if (ev.t !== 'hit') continue;
+      const t = targets.find((x) => x && x.id === ev.id);
+      if (!t || t.dead || !t.onHit) continue;
+      // 'melee' is what lets a guardian's guard tell a katana from a kunai.
+      t.onHit(ev.dmg, ev.kx, ev.kz, false, t.pos, 'melee');
+      this.hud.hitmarker(ev.c === 2);
+    }
+    p.events.length = 0;
   }
 
   /** The world, then the inventory's frog on top of it. */
@@ -2062,7 +1973,7 @@ class Game {
   _onLockChange(locked) {
     // Voting deliberately releases the mouse so the cards can be clicked —
     // pausing there would drop the pause menu on top of the vote screen.
-    const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
+    const voting = this.round && this.round.phase === PHASE.VOTING;
     // The practice ring's try-out panel and the dev menu also release the
     // mouse on purpose, and neither should drop the pause screen on top.
     // Nor should the realm's own panels — the bag is meant to be clicked.
@@ -2155,18 +2066,6 @@ class Game {
       this.kunaiSystem = null;
       this.effects = null;
       this.followCam = null;
-    }
-    // Story keeps a whole separate scene; drop it so a later arena match
-    // does not inherit the swamp.
-    if (this.isStory) {
-      if (this.story) this.story.dispose();
-      this.story = null;
-      this.isStory = false;
-      this.world = null;
-      this.scene = null;
-      this.atmo = null;
-      this.player = null;
-      this.pickups = null;
     }
     this.net.disconnect();
     for (const r of this.remotes.values()) r.dispose();
@@ -2285,15 +2184,13 @@ class Game {
     if (this.mode === 'playing' || this.mode === 'paused') {
       // Players who connected before the world existed were parked in a
       // queue. Draining it here — rather than only on one entry path — means
-      // no game mode can forget to do it. Story mode used to, which left
-      // joining clients unable to see the host at all.
+      // no game mode can forget to do it.
       this._flushPendingJoins();
 
       // Each mode is its own loop; they share the renderer and nothing else.
       if (this.isJudgment) this._updateJudgment(dt, t);
       else if (this.isRealm) this._updateRealm(dt, t);
       else if (this.isDungeon) this._updateDungeon(dt, t);
-      else if (this.isStory) this._updateStory(dt, t);
       else this._updateGame(dt, t);
     } else {
       this._updateMenu(dt);
@@ -2311,7 +2208,7 @@ class Game {
     // Not during voting: the mouse is meant to be free there. Nor while the
     // dev menu is open — it needs the cursor, and the prompt would sit on
     // top of it and grab the very click meant for a cheat button.
-    const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
+    const voting = this.round && this.round.phase === PHASE.VOTING;
     const panel = !!(this.overworld && this.overworld.frozen);
     const want = this.mode === 'playing' && !this.input.locked
       && !voting && !panel && !this._tryPanelOpen && !this.cheatsOpen;
@@ -2323,80 +2220,6 @@ class Game {
   _updateMenu(dt) {
     this.menuScene.update(dt);
     this.renderer.render(this.menuScene.scene, this.menuScene.camera);
-  }
-
-  /** Story-mode frame: no rounds, no crates, no scoreboard. */
-  _updateStory(dt, t) {
-    const p = this.player;
-    if (!this.frozen) {
-      const look = this.input.takeLook();
-      // The cutscene owns the camera, so mouse look is ignored during it.
-      if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
-
-      // Slow motion for the tutorial beats. The UI keeps real time so
-      // prompts, fades and the HUD never crawl along with the action.
-      const gdt = dt * this.story.timeScale;
-
-      // Toadel is the only thing the broken sword can meaningfully hit.
-      const targets = this._storyTargets();
-      p.update(gdt, this.input, this.followCam, targets);
-
-      if (p.deathPending) {
-        p.deathPending = false;
-        this.hud.announce('YOU DIED', 'danger', true);
-        this._storyDeathTimer = 3.0;
-      }
-      if (this._storyDeathTimer > 0) {
-        this._storyDeathTimer -= dt;
-        if (this._storyDeathTimer <= 0 && p.health.dead) {
-          // Straight back into the fight — the story does not move on.
-          const arena = this.story.level.arenaCenter;
-          const spawn = this.story.phase === STORY_PHASE.BOSS
-            ? new THREE.Vector3(arena.x, arena.y + 1, arena.z - 14)
-            : this.story.spawnPoint;
-          p.spawn(spawn);
-          p.damageMultiplier = this.story.phase === STORY_PHASE.BOSS
-            ? CFG.story.brokenSwordMult : 1;
-          this.followCam.snapTo(p.pos);
-          this.hud.clearAnnounce();
-        }
-      }
-
-      this._updateFruitStalls(p);
-
-      this._drainEvents(p);
-      // Everyone plays the village and the duel alone, even in a shared
-      // session. Two players only become visible to each other once BOTH
-      // have been beaten by Toadel and woken in the cells — so this checks
-      // the other player's broadcast progress, not just our own.
-      const myCode = STORY_PHASE_CODE[this.story.phase] || 0;
-      p.storyPhaseCode = myCode;
-      const iAmInCastle = myCode >= PRISON_CODE;
-      for (const r of this.remotes.values()) {
-        r.update(dt, t);
-        r.setViewer(false, !(iAmInCastle && (r.storyPhase || 0) >= PRISON_CODE));
-      }
-
-      // The story itself runs on real time so its scripted timers (fades,
-      // the black hold, the wake-up) are not stretched by slow motion.
-      this.story.update(dt, p, this.remotes.values());
-      this.kunaiSystem.update(gdt, targets);
-      this.effects.update(gdt);
-
-      const speed = Math.hypot(p.vel.x, p.vel.z);
-      if (!p.cinematic) {
-        this.followCam.update(p.renderPos, speed, dt, {
-          dashing: p.dashTimer > 0, grappling: p.grapple.attached,
-        });
-      }
-      this.atmo.update(dt, this.camera.position);
-
-      this._updateHud(dt, speed);
-      this._updateAudioListener();
-      Audio.updateAmbient(dt);
-      this.net.tickState(dt, () => p.netState());
-    }
-    this.renderer.render(this.scene, this.camera);
   }
 
   /**
@@ -2486,29 +2309,6 @@ class Game {
   }
 
   /**
-   * The village market: stand at a stall and press E to buy fruit.
-   *
-   * The prompt is driven off the same proximity test the purchase uses, so
-   * there is never a moment where it says you can buy and the key does
-   * nothing.
-   */
-  _updateFruitStalls(p) {
-    const stand = this.story.nearestStand(p.pos);
-    const F = CFG.story.fruit;
-    this.hud.setPickupPrompt(!!stand,
-      stand ? `Buy fruit — ${F.price} froglets, +${F.heal} health` : '');
-
-    if (!p.interactPressed) return;
-    p.interactPressed = false;
-    if (!stand) return;
-    const res = this.story.buyFruit(p, this.economy);
-    if (res) {
-      this.hud.toast(res.text, 2.2);
-      if (res.bad) Audio.uiBack();
-    }
-  }
-
-  /**
    * The blue ring on the dummy platform.
    *
    * Solo practice only — being able to equip unowned skins would obviously
@@ -2525,7 +2325,7 @@ class Game {
    */
   get isSoloPractice() {
     return (this.mode === 'playing' || this.mode === 'paused')
-      && !this.net.isOnline && !this.isStory && !this.isDungeon;
+      && !this.net.isOnline && !this.isDungeon;
   }
 
   _updatePracticeRing(p) {
@@ -2593,27 +2393,6 @@ class Game {
     $('menu').classList.add('show');
     this.showPanel('shop');
     this.hud.setRingPrompt(false);
-  }
-
-  /** Toadel as a katana target, so the broken sword can chip at him. */
-  _storyTargets() {
-    const list = [];
-    const boss = this.story && this.story.boss;
-    if (boss && boss.active) {
-      list.push({
-        id: 'toadel', pos: boss.pos, dead: false, isDummy: true, // local-only
-        hitbox: { headOffset: 4.2, headRadius: 0.9, bodyOffset: 2.2, bodyRadius: 1.3 },
-        onHit: (dmg, dx, dz) => {
-          boss.model.flinch();
-          this.effects.damageNumber(
-            _hitPos.set(boss.pos.x, boss.pos.y + 3.4, boss.pos.z), dmg, false, 0.35);
-          Audio.hit(boss.pos, false);
-          // Your Toadel is yours alone, so damage applies straight away.
-          this.story.damageBoss(dmg);
-        },
-      });
-    }
-    return list;
   }
 
   _updateGame(dt, t) {
@@ -3430,14 +3209,11 @@ class Game {
     } else if (p._abilityCue <= 0) {
       this._cueShown = false;
     }
-    // No supply crates in the story level — there the prompt belongs to the
-    // village's fruit stalls, and _updateFruitStalls owns it. Setting it here
-    // too would blank their prompt on the same frame it appeared.
     // The statue's prompt takes precedence when it is up, or the two would
     // fight over the same element every frame. The realm owns the prompt
     // outright — it is how you talk to people and examine places, and there
     // are no supply crates out there to compete for it.
-    if (!this.isStory && !this.isRealm && !this._statuePrompt) {
+    if (!this.isRealm && !this._statuePrompt) {
       this.hud.setPickupPrompt(
         !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
     }
@@ -3475,9 +3251,9 @@ class Game {
     );
     this.hud.setSpeed(speed, p.sprinting);
 
-    // ---- round HUD (arena only; the story has its own objectives) ----
+    // ---- round HUD (arena only; every other mode has its own) ----
     const R = this.round;
-    if (!R || this.isStory) {
+    if (!R) {
       this.hud.update(dt);
       if (this._comboReset > 0) {
         this._comboReset -= dt;

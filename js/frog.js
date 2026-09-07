@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG } from './config.js?v=v84';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG } from './config.js?v=v85';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v85';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -1413,6 +1413,20 @@ export class FrogModel {
         if (s.parrying) {
           // Blade brought up across the body in a guard.
           sx = -1.15; sz = arm.side * (arm.side > 0 ? 0.55 : 0.85); fx = -1.25;
+        } else if (s.reachT > 0 && arm.side > 0) {
+          /**
+           * Reaching out and back — a hand on the lid, the lever, the hilt.
+           *
+           * Out and in over the same gesture, so the arm is extended on the
+           * beat the thing it is touching starts to move and back by its
+           * side once the animation has taken over. Right arm only; the left
+           * keeps whatever it was doing.
+           */
+          const k = 1 - s.reachT;                  // 0 -> 1 over the reach
+          const e = Math.sin(k * Math.PI);         // out, then back
+          sx = lerp(0.08, -1.42, e);
+          sz = arm.side * lerp(0.24, 0.06, e);
+          fx = lerp(-0.5, -0.16, e);
         } else if (s.throwT > 0 && arm.side > 0) {
           // Right arm snaps from cocked-behind-the-ear to fully extended.
           const k = 1 - s.throwT;                 // 0 -> 1 over the throw

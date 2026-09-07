@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { mulberry32, clamp } from './util.js?v=v84';
-import { SEA } from './regions.js?v=v84';
-import { buildLandmark } from './landmarks.js?v=v84';
-import { ROADS } from './roads.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { mulberry32, clamp } from './util.js?v=v85';
+import { SEA } from './regions.js?v=v85';
+import { buildLandmark } from './landmarks.js?v=v85';
+import { ROADS } from './roads.js?v=v85';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -106,6 +106,116 @@ const SETTLE = {
   city: { houses: 28, ring: 0.74, well: true, market: 9, wall: true, big: 3 },
 };
 
+/**
+ * FLATTENING — the single biggest thing in the world's draw-call budget.
+ *
+ * A village is built as two hundred little meshes: a wall, a wall, a roof, a
+ * post, a plank, a lamp. That is exactly the right way to AUTHOR one — the
+ * builders read as descriptions of buildings — and completely the wrong way
+ * to draw one. Measured, the Hollow Market and Anurath were nine hundred draw
+ * calls each of nothing but buildings, which was two thirds of the entire
+ * frame and by far the worst place in the country.
+ *
+ * Nothing in a site moves. So once it is built, every mesh in it that shares
+ * a material is merged into ONE mesh, in the group's own local space. A city
+ * goes from nine hundred draw calls to about ten, the silhouette is identical
+ * to the pixel, and the colliders are untouched because they were registered
+ * separately in world space when the site was built.
+ *
+ * Two things are deliberately NOT merged:
+ *   - a subgroup marked `userData.keep`, because `setFreed` toggles the
+ *     boarded-up and rebuilding versions of a settlement independently, and
+ *   - a subgroup marked `userData.spin`, because the mill turns.
+ * Both are flattened INTERNALLY, so they cost one draw call per material each
+ * rather than one per plank.
+ *
+ * `castShadow` and `receiveShadow` are taken from the first mesh of each
+ * material group. Every site part sets them the same way, so that is exact
+ * rather than an approximation.
+ */
+const _fm = new THREE.Matrix4();
+
+function mergeParts(parts) {
+  let verts = 0;
+  const geos = [];
+  for (const p of parts) {
+    const g = p.geo.index ? p.geo.toNonIndexed() : p.geo.clone();
+    g.applyMatrix4(p.m);
+    geos.push(g);
+    verts += g.attributes.position.count;
+  }
+  const pos = new Float32Array(verts * 3);
+  const nrm = new Float32Array(verts * 3);
+  let o = 0;
+  for (const g of geos) {
+    pos.set(g.attributes.position.array, o);
+    if (g.attributes.normal) nrm.set(g.attributes.normal.array, o);
+    o += g.attributes.position.count * 3;
+    g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  out.computeBoundingSphere();
+  return out;
+}
+
+/**
+ * Collapse a group's meshes into one per material, in place.
+ *
+ * @param owned every merged geometry is pushed here so the caller can free
+ *              it — these are the only geometries Sites actually owns, since
+ *              the parts they were built from are module-level singletons.
+ * @returns how many draw calls were removed
+ */
+function flatten(group, owned) {
+  let saved = 0;
+  // Recurse into the ones that have to stay independent, then leave them be.
+  const holdouts = [];
+  for (const child of group.children) {
+    if (child.isGroup && (child.userData.keep || child.userData.spin)) {
+      saved += flatten(child, owned);
+      holdouts.push(child);
+    }
+  }
+  group.updateMatrixWorld(true);
+  _fm.copy(group.matrixWorld).invert();
+  const byMat = new Map();
+  const drop = [];
+  const skip = new Set(holdouts);
+  const walk = (node) => {
+    for (const child of node.children) {
+      if (skip.has(child)) continue;
+      if (child.isMesh && child.geometry && child.material
+          && !child.isInstancedMesh) {
+        let list = byMat.get(child.material);
+        if (!list) { list = []; byMat.set(child.material, list); }
+        const m = new THREE.Matrix4().multiplyMatrices(_fm, child.matrixWorld);
+        list.push({ geo: child.geometry, m, cast: child.castShadow,
+          recv: child.receiveShadow });
+        drop.push(child);
+      }
+      if (child.children.length) walk(child);
+    }
+  };
+  walk(group);
+  if (byMat.size === 0) return saved;
+  for (const c of drop) if (c.parent) c.parent.remove(c);
+  // Any now-empty subgroups are left in place: they cost nothing to traverse
+  // and removing them would invalidate references the builders kept.
+  for (const [mat, parts] of byMat) {
+    const geo = mergeParts(parts);
+    owned.push(geo);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = parts[0].cast;
+    mesh.receiveShadow = parts[0].recv;
+    // The contents move as a unit or not at all, so the bounds are honest.
+    group.add(mesh);
+    saved += parts.length - 1;
+  }
+  return saved;
+}
+
 export class Sites {
   /**
    * @param scene   where the structures go
@@ -124,6 +234,17 @@ export class Sites {
     this.arenas = new Map();
     /** The huge things, keyed by region id. */
     this.landmarks = new Map();
+    /**
+     * The merged geometries, which are the only ones this class owns.
+     *
+     * Every part a site is built from comes out of the module-level `G`, so
+     * disposing those would knock the buffers out from under everything else
+     * in the world. The flattened results are ours, and there are a few
+     * hundred kilobytes of them.
+     */
+    this.owned = [];
+    /** How many draw calls flattening removed. Read by the cost checks. */
+    this.merged = 0;
     this.root = new THREE.Group();
     this.root.name = 'sites';
     scene.add(this.root);
@@ -189,6 +310,11 @@ export class Sites {
         s.hx, s.hy, s.hz, s.tag);
     }
     group.visible = false;
+    // Flattened like everything else. A landmark is the biggest thing in the
+    // region and is drawn from twelve hundred units, so it is the single
+    // best-value merge in the world — and the one part of one landmark that
+    // moves, the mill's sail hub, is marked `spin` and survives it.
+    this.merged += flatten(group, this.owned);
     this.root.add(group);
     this.landmarks.set(R.id, {
       region: R.id, kind: L.kind, name: L.name, blurb: L.blurb || '',
@@ -222,6 +348,8 @@ export class Sites {
         spots = this._settlement(g, spec, R, rnd, style, SETTLE[spec.kind]);
         break;
       case 'treevillage': spots = this._treeVillage(g, spec, R, rnd, style); break;
+      // A village that has been burned. Nobody lives here, so no spots.
+      case 'burnt': this._burnt(g, spec, rnd, style); break;
       case 'shrine': this._shrine(g, spec, rnd, style); break;
       case 'temple': this._temple(g, spec, rnd, style); break;
       case 'ruin': this._ruin(g, spec, rnd, style); break;
@@ -240,6 +368,8 @@ export class Sites {
     }
 
     g.visible = false;
+    // Two hundred meshes of buildings become one per material. See `flatten`.
+    this.merged += flatten(g, this.owned);
     this.root.add(g);
     /**
      * Which guardian's death this settlement is waiting on.
@@ -408,6 +538,10 @@ export class Sites {
      */
     const wreck = new THREE.Group();
     const mend = new THREE.Group();
+    // `keep` tells `flatten` these two must survive as separate groups: their
+    // whole job is to be shown one at a time. See the note above `flatten`.
+    wreck.userData.keep = true;
+    mend.userData.keep = true;
     g.add(wreck, mend);
     g.userData.wreck = wreck;
     g.userData.mend = mend;
@@ -513,6 +647,38 @@ export class Sites {
       // A scorch where something came through the fence.
       this._put(wreck, G.disc, 'obsidian', 4.4, 0.12, 4.4, ring * 0.1, 0.1, -ring2);
 
+      /**
+       * FROGATH'S BANNERS.
+       *
+       * The thing that says who is in charge here, without a word of
+       * dialogue. Four black poles round the square, each with a long dark
+       * banner and a pale eye on it, and a garrison brazier under them. They
+       * are in the `wreck` group, so putting the region's guardian down takes
+       * them down — the same beat that unboards the doors — and the village's
+       * own coloured bunting goes up in their place.
+       *
+       * This is why the banners are here rather than in a separate system:
+       * "the enemy's flags come down when you win" has to be one flag toggle
+       * or it will eventually get out of step with the boards.
+       */
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.45;
+        const bx = Math.cos(a) * ring * 0.66, bz = Math.sin(a) * ring * 0.66;
+        const gy = this.realm.heightAt(g.position.x + bx, g.position.z + bz)
+          - g.position.y;
+        this._put(wreck, G.cyl, 'ironDark', 0.14, 8.2, 0.14, bx, gy + 4.1, bz);
+        this._put(wreck, G.box, 'obsidian', 1.7, 4.4, 0.10,
+          bx, gy + 5.6, bz, a);
+        // The eye. Two marks, and everybody in the country knows them.
+        this._put(wreck, G.low, 'pale', 0.34, 0.20, 0.06, bx, gy + 6.4, bz, a);
+        this._put(wreck, G.box, 'obsidian', 0.10, 0.34, 0.08, bx, gy + 6.4, bz, a);
+        this._put(wreck, G.box, 'obsidian', 1.9, 0.16, 0.14, bx, gy + 7.9, bz, a);
+      }
+      // The garrison's fire, which is the only warm thing in an occupied
+      // village — and it is not for the villagers.
+      this._put(wreck, G.cyl, 'ironDark', 0.9, 1.4, 0.9, ring * 0.2, 0.7, ring * 0.5);
+      this._put(wreck, G.low, 'ember', 0.7, 0.5, 0.7, ring * 0.2, 1.5, ring * 0.5);
+
       // Banners, bunting, a lit brazier and scaffolding on the hall roof.
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2 + 0.3;
@@ -598,6 +764,114 @@ export class Sites {
     }
     this._fire(g, 0, 36, rnd);
     return spots;
+  }
+
+  /**
+   * A village that has been burned.
+   *
+   * Mirefoot, where the game starts, and it has to do a specific job: say
+   * what happened here without a line of text. So it is built as a village
+   * FIRST — the same ring, the same well, the same doorways — and then taken
+   * apart: roofs gone, wall stumps standing, every timber charred, the well
+   * rope cut, a cart on its side with everything spilled out of it, and one
+   * of Frogath's banners planted in the middle of the square where the fire
+   * pit used to be.
+   *
+   * The shape of a village with no roofs on it is the whole point. A pile of
+   * rubble reads as scenery; eight house-shaped outlines with their windows
+   * still in them reads as somewhere people lived last week.
+   */
+  _burnt(g, spec, rnd, style) {
+    const ring = spec.r * 0.6;
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rnd() * 0.2;
+      const rad = ring * (0.86 + rnd() * 0.26);
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      const gy = this.realm.heightAt(g.position.x + x, g.position.z + z)
+        - g.position.y;
+      const w = 3.0 + rnd() * 1.5, d = 3.0 + rnd() * 1.5;
+      // Wall stumps: three sides up, one side down, so you can see inside.
+      const h = 1.0 + rnd() * 1.4;
+      const face = a + Math.PI;
+      const c = Math.cos(face), s = Math.sin(face);
+      const wall = (ox, oz, ww, dd) => {
+        this._put(g, G.box, 'woodDark', ww, h, dd,
+          x + ox * c - oz * s, gy + h / 2, z + ox * s + oz * c, face);
+      };
+      wall(0, -d / 2, w, 0.3);
+      wall(-w / 2, 0, 0.3, d);
+      wall(w / 2, 0, 0.3, d);
+      // The doorway, still standing, with its frame burned black.
+      this._put(g, G.box, 'obsidian', 0.34, 2.4, 0.34,
+        x + (-0.9) * c - (d / 2) * s, gy + 1.2, z + (-0.9) * s + (d / 2) * c);
+      this._put(g, G.box, 'obsidian', 0.34, 2.4, 0.34,
+        x + (0.9) * c - (d / 2) * s, gy + 1.2, z + (0.9) * s + (d / 2) * c);
+      this._put(g, G.box, 'obsidian', 2.4, 0.3, 0.34,
+        x + 0 * c - (d / 2) * s, gy + 2.4, z + 0 * s + (d / 2) * c, face);
+      // A chimney, because a chimney is the only thing that survives a fire.
+      this._put(g, G.box, 'stoneDark', 1.0, 3.4 + rnd() * 1.6, 1.0,
+        x + (w / 2 - 0.4) * c, gy + 1.7, z + (w / 2 - 0.4) * s);
+      // Fallen roof timbers, leaning where the roof went.
+      for (let k = 0; k < 3; k++) {
+        const m = this._put(g, G.cyl, 'obsidian', 0.14, 3.6, 0.14,
+          x + (rnd() - 0.5) * w, gy + 0.7, z + (rnd() - 0.5) * d, rnd() * 3);
+        m.rotation.z = 0.9 + rnd() * 0.5;
+      }
+      this._put(g, G.disc, 'ash', w * 0.7, 0.08, d * 0.7, x, gy + 0.04, z);
+      this._solid(g, w * 0.5, h * 0.5, 0.2,
+        x + 0 * c - (d / 2) * s, gy + h / 2, z + 0 * s + (d / 2) * c, 'wall');
+    }
+
+    /**
+     * The well, with the rope cut.
+     *
+     * A small thing that people notice: whoever came through did not just
+     * burn the place, they made sure nobody could come back to it.
+     */
+    this._put(g, G.cyl, 'stone', 2.0, 1.4, 2.0, 0, 0.7, 0);
+    this._put(g, G.cyl, 'obsidian', 1.7, 0.2, 1.7, 0, 1.4, 0);
+    for (const sx of [-1, 1]) {
+      this._put(g, G.cyl, 'obsidian', 0.14, 3.0, 0.14, sx * 1.6, 2.2, 0);
+    }
+    this._put(g, G.cyl, 'rope', 0.06, 1.1, 0.06, -1.6, 2.9, 0);
+    this._solid(g, 2.0, 0.7, 2.0, 0, 0.7, 0, 'solid');
+
+    /**
+     * Frogath's banner, in the middle of the square.
+     *
+     * Planted where the village fire used to be, and it is still standing
+     * because nobody has come back to pull it down. This is the first time
+     * the player sees the eye, and every occupied village in the country has
+     * four more of them.
+     */
+    this._put(g, G.cyl, 'ironDark', 0.16, 9.0, 0.16, 0, 4.5, ring * 0.42);
+    this._put(g, G.box, 'obsidian', 2.0, 5.0, 0.12, 0, 6.0, ring * 0.42);
+    this._put(g, G.low, 'pale', 0.40, 0.24, 0.07, 0, 7.0, ring * 0.42);
+    this._put(g, G.box, 'obsidian', 0.12, 0.40, 0.09, 0, 7.0, ring * 0.42);
+    this._put(g, G.box, 'obsidian', 2.2, 0.18, 0.16, 0, 8.6, ring * 0.42);
+
+    // The cart everybody was loading when the soldiers arrived, on its side.
+    const cart = this._put(g, G.box, 'woodDark', 3.2, 0.35, 2.0,
+      -ring * 0.36, 0.7, -ring * 0.3, 0.6);
+    cart.rotation.z = 1.4;
+    for (const sx of [-1, 1]) {
+      this._put(g, G.disc, 'woodDark', 1.2, 0.28, 1.2,
+        -ring * 0.36 + sx * 0.9, 0.4, -ring * 0.3 - 1.2).rotation.x = Math.PI / 2;
+    }
+    for (let i = 0; i < 7; i++) {
+      this._put(g, G.low, i % 3 ? 'thatch' : 'plank',
+        0.28, 0.22, 0.28, -ring * 0.36 + (rnd() - 0.5) * 5,
+        0.18, -ring * 0.3 + (rnd() - 0.5) * 5);
+    }
+    // Scorch on the ground, spreading out from the square.
+    for (let i = 0; i < 5; i++) {
+      const a = rnd() * Math.PI * 2, d = rnd() * ring;
+      this._put(g, G.disc, 'ash', 3 + rnd() * 5, 0.06, 3 + rnd() * 5,
+        Math.cos(a) * d, 0.03, Math.sin(a) * d);
+    }
+    void style;
+    return null;
   }
 
   /** A camp: a fire, two lean-tos and somebody's kit. */
@@ -1196,6 +1470,7 @@ export class Sites {
       this._put(g, G.low, 'boneDark', 0.4, 0.7, 0.4, -2 + i * 2, 2.6, -6);
     }
     g.visible = false;
+    this.merged += flatten(g, this.owned);
     this.root.add(g);
     this.sites.push({
       id: `camp:${R.id}:${Math.round(spot.x)}`, kind: 'enemycamp',
@@ -1232,6 +1507,7 @@ export class Sites {
     this._solid(g, 1.2, 2.5, 1.2, 0, 2.5, 0, 'stone');
     this._anchor(g, 0, 5.4, 0, 2.0);
     g.visible = false;
+    this.merged += flatten(g, this.owned);
     this.root.add(g);
     this.arenas.set(spec.id, {
       id: spec.id, region: R.id, at: spot, r: spec.arena,
@@ -1321,33 +1597,39 @@ export class Sites {
   // ----------------------------------------------------------------- runtime
 
   /**
-   * Draw only what is near.
+   * Draw only what is near, and scale "near" to how big the thing is.
    *
-   * Two radii, because a landmark and a hut are not the same promise. A
-   * landmark has to be visible from the region before it — that is its whole
-   * job — so it is drawn out to sixteen hundred units and left for the fog to
-   * fade. Everything else appears at five hundred and twenty, past every
-   * region's fog, so nothing ever pops into existence in front of you.
+   * A landmark and a hut are not the same promise. A landmark has to be
+   * visible from the region before it — that is its whole job — so it is
+   * drawn out to twelve hundred units and left for the fog to fade.
+   *
+   * Everything else used to share one radius of five hundred and twenty,
+   * which was set when the early regions held three sites each. They now hold
+   * eight or nine.
+   *
+   * So the radius is derived from the site's own footprint instead. A
+   * twenty-unit hut is not visible from six hundred units away whether it is
+   * drawn or not; a hundred-and-twenty-unit city is, and gets six hundred and
+   * forty. That draws every silhouette a player can actually make out and
+   * skips the ones they cannot, which costs nothing on screen.
    */
   update(x, z, dt = 0) {
-    const R2 = 520 * 520;
-    /**
-     * How far a landmark is drawn.
-     *
-     * Twelve hundred units is two regions away and past every region's fog,
-     * so a landmark is still doing its job of being visible from the region
-     * before. Sixteen hundred was measured at ten landmarks live at once in
-     * the middle of the map — four hundred draw calls of scenery mostly
-     * hidden behind fog.
-     */
     const FAR2 = 1200 * 1200;
     for (const s of this.sites) {
       const d2 = (s.at.x - x) ** 2 + (s.at.z - z) ** 2;
-      s.group.visible = d2 < (s.landmark ? FAR2 : R2);
+      if (s.landmark) { s.group.visible = d2 < FAR2; continue; }
+      if (s._show2 === undefined) {
+        const show = 260 + s.r * 3.2;
+        s._show2 = show * show;
+      }
+      s.group.visible = d2 < s._show2;
     }
     for (const [, a] of this.arenas) {
       const d2 = (a.at.x - x) ** 2 + (a.at.z - z) ** 2;
-      a.group.visible = d2 < R2;
+      // A ring of standing stones is a navigation aid, so it keeps the old
+      // generous radius: seeing the arena from a long way off is how a player
+      // knows there is a fight over there before they walk into it.
+      a.group.visible = d2 < 520 * 520;
     }
     // The mill turns, because a landmark that moves is the one you remember.
     for (const [, L] of this.landmarks) {
@@ -1383,6 +1665,17 @@ export class Sites {
   dispose() {
     this.scene.remove(this.root);
     for (const k in this.mats) this.mats[k].dispose();
+    /**
+     * The merged geometries, and only those.
+     *
+     * The parts every site was built from live in the module-level `G` and are
+     * shared with every other site in the world; freeing one would knock the
+     * buffers out from under all of them. The flattened results belong to this
+     * instance, they are the bulk of what a load allocates, and nothing else
+     * will ever free them.
+     */
+    for (const g of this.owned) g.dispose();
+    this.owned.length = 0;
     this.sites.length = 0;
     this.arenas.clear();
     this.landmarks.clear();

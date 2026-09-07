@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
@@ -340,6 +340,92 @@ export const GUARDIANS = [
      */
     blurb: 'He barred the gate from the inside and then stayed inside with it.',
   },
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE OPTIONAL TEN
+  //
+  // One per region along the first half of the road, and not one of them is
+  // in the main line or gates anything. They are what the journey between two
+  // guardians is FOR: something big enough to be worth telling somebody
+  // about, standing over a cave or a mine or a tithe yard that the story never
+  // mentions.
+  //
+  // Each carries `rank: 'mini'` — two phases, a softer guard, less dodging —
+  // so they read as a hard fight rather than as the region's own guardian
+  // fought early. The encounter builder honours a spec's own rank over the
+  // one its region's tier would imply, which is the whole reason the field
+  // exists. See Overworld._buildBoss.
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'hedgewife', name: 'THE HEDGE-WIFE',
+    body: 'lean', skin: 0x6a7a3a, dark: 0x40501f, trim: 0xd9d06a,
+    head: 'mossy', weapon: 'spear', horns: 1, eyes: 0xffe08a,
+    moves: ['throw', 'spores', 'combo'], tune: 0.95, rank: 'mini',
+    blurb: 'She kept the hedges. The hedges have kept her.',
+  },
+  {
+    id: 'eelfather', name: 'THE EEL-FATHER',
+    body: 'hulk', skin: 0x3a5a5a, dark: 0x22383a, trim: 0x8fd0c4,
+    head: 'eel', weapon: 'none', horns: 0, eyes: 0xaef0ff,
+    moves: ['leap', 'puddle', 'combo', 'leap'], tune: 0.93, rank: 'mini',
+    blurb: 'Every eel in the mire is one of his. He is not being poetic.',
+  },
+  {
+    id: 'barkwretch', name: 'BARKWRETCH',
+    body: 'wraith', skin: 0x4a3a26, dark: 0x2c2216, trim: 0x9ac45a,
+    head: 'mossy', weapon: 'none', horns: 2, eyes: 0xc9ff8a,
+    moves: ['spores', 'slam', 'ringout'], tune: 0.93, rank: 'mini',
+    blurb: 'It was a tree. Somebody asked it to move and it has not stopped.',
+  },
+  {
+    id: 'stairwright', name: 'THE STAIRWRIGHT',
+    body: 'stone', skin: 0x6a665c, dark: 0x413e37, trim: 0xc9a227,
+    head: 'blunt', weapon: 'club', horns: 0, eyes: 0xffca6b,
+    moves: ['shockwave', 'slam', 'combo'], tune: 0.92, rank: 'mini',
+    blurb: 'It cut the stair. It has opinions about who uses it.',
+  },
+  {
+    id: 'tithetaker', name: 'THE TITHE-TAKER',
+    body: 'lean', skin: 0x4a3a4a, dark: 0x2c2230, trim: 0xd9b06a,
+    head: 'crowned', weapon: 'twin', horns: 1, eyes: 0xffd08a,
+    moves: ['combo', 'charge', 'throw'], tune: 0.91, rank: 'mini',
+    blurb: 'It counts what leaves the basin and it counts very carefully.',
+  },
+  {
+    id: 'overburden', name: 'THE OVERBURDEN',
+    body: 'stone', skin: 0x5e5a52, dark: 0x393630, trim: 0x9a9790,
+    head: 'blunt', weapon: 'none', horns: 0, eyes: 0xff9a4a,
+    moves: ['throw', 'shockwave', 'slam'], tune: 0.91, rank: 'mini',
+    blurb: 'Everything the cutters threw away, in one heap, upright.',
+  },
+  {
+    id: 'saltjaw', name: 'SALTJAW',
+    body: 'hulk', skin: 0x4a5a4a, dark: 0x2c382c, trim: 0xc4e0b4,
+    head: 'eel', weapon: 'none', horns: 0, eyes: 0xbfffd8,
+    moves: ['puddle', 'leap', 'shockwave'], tune: 0.90, rank: 'mini',
+    blurb: 'It drinks the salt water and it has not been well for a while.',
+  },
+  {
+    id: 'secondvoice', name: 'THE SECOND VOICE',
+    body: 'wraith', skin: 0x3a3a52, dark: 0x22222f, trim: 0x8fd0ff,
+    head: 'skull', weapon: 'none', horns: 0, eyes: 0xbfe8ff,
+    moves: ['volley', 'ringout', 'blink'], tune: 0.90, rank: 'mini',
+    blurb: 'The Choir had two. Nix sings the melody.',
+  },
+  {
+    id: 'slaghide', name: 'SLAGHIDE',
+    body: 'hulk', skin: 0x5a3226, dark: 0x361c14, trim: 0xff9a4a,
+    head: 'horned', weapon: 'club', horns: 2, eyes: 0xffb84a,
+    moves: ['charge', 'slam', 'shockwave'], tune: 0.89, rank: 'mini',
+    blurb: 'Poured, cooled, and then it stood up out of the mould.',
+  },
+  {
+    id: 'windward', name: 'THE WINDWARD',
+    body: 'lean', skin: 0x6a6a76, dark: 0x40404a, trim: 0xdfe8f4,
+    head: 'horned', weapon: 'spear', horns: 3, eyes: 0xdff4ff,
+    moves: ['leap', 'combo', 'volley'], tune: 0.89, rank: 'mini',
+    blurb: 'It hunts the ridge line because the ridge line is where the wind is.',
+  },
+
   {
     id: 'arkos', name: 'ARKOS, WARDEN OF THE SPAN',
     body: 'stone', skin: 0x4a4a52, dark: 0x2c2c32, trim: 0xc9a227,

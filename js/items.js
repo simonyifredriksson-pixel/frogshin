@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG } from './config.js?v=v84';
-import { clamp } from './util.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG } from './config.js?v=v85';
+import { clamp } from './util.js?v=v85';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -149,6 +149,28 @@ export class Inventory {
     let n = 0;
     for (const s of this.slots) if (s && s.item === ITEMS.kunai) n += s.count;
     return n;
+  }
+
+  /**
+   * Set the stack to an exact number.
+   *
+   * The open world owns the count — it is in the save — so entering the mode
+   * has to be able to say "you have eleven", not "add eleven to whatever the
+   * hotbar happened to be built with".
+   */
+  setKunai(n) {
+    const want = Math.max(0, Math.floor(n));
+    const have = this.kunaiCount;
+    if (want === have) return;
+    if (want > have) { this.addKunai(want - have); return; }
+    let over = have - want;
+    for (const s of this.slots) {
+      if (!s || s.item !== ITEMS.kunai || over <= 0) continue;
+      const take = Math.min(s.count, over);
+      s.count -= take;
+      over -= take;
+    }
+    this.dirty = true;
   }
 
   addKunai(n) {
@@ -481,6 +503,31 @@ export class KunaiSystem {
   }
 
   /**
+   * Wipe every blade still in flight inside a cylinder.
+   *
+   * For attacks that are supposed to clear the air — a guardian's ground wave
+   * or the shell it raises. Only ones still travelling: a blade already stuck
+   * in something has done its job and removing it would look like a bug.
+   *
+   * @returns how many were swept away
+   */
+  clearNear(x, z, r) {
+    let n = 0;
+    const r2 = r * r;
+    for (let i = this.active.length - 1; i >= 0; i--) {
+      const k = this.active[i];
+      if (k.stuck) continue;
+      const dx = k.pos.x - x, dz = k.pos.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      if (this.effects) this.effects.puff(k.pos, 0xdff4ff, 6, 4);
+      k.mesh.visible = false;
+      this.active.splice(i, 1);
+      n++;
+    }
+    return n;
+  }
+
+  /**
    * @param targets array of { id, pos, dead, onHit(damage, dirX, dirZ) }
    *                only consulted for locally-owned kunai
    */
@@ -530,7 +577,11 @@ export class KunaiSystem {
         );
         this.effects.hitBurst(_v, { x: _seg.x, y: 0, z: _seg.z }, head);
         if (hitTarget.onHit) {
-          hitTarget.onHit(head ? K.headshotDamage : K.damage, _seg.x, _seg.z, head, _v);
+          // The last argument names the WEAPON. A guardian guards against
+          // thrown blades and not against a katana, so it has to be able to
+          // tell them apart; everything else ignores the extra argument.
+          hitTarget.onHit(
+            head ? K.headshotDamage : K.damage, _seg.x, _seg.z, head, _v, 'ranged');
         }
         k.mesh.visible = false;
         this.active.splice(i, 1);

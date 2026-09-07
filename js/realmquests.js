@@ -24,15 +24,17 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { FrogModel } from './frog.js?v=v84';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { Citizen, pickCitizen, citizenHeight, disposeCitizenMats,
+  disposeCitizenGeos } from './citizen.js?v=v85';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v85';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v84';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v84';
-import { ROADS, RIVERS } from './roads.js?v=v84';
-import { GEAR_BY_ID } from './gear.js?v=v84';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v84';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v85';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v85';
+import { ROADS, RIVERS } from './roads.js?v=v85';
+import { GEAR_BY_ID } from './gear.js?v=v85';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v85';
+import { LORE_COUNT, loreRead } from './lore.js?v=v85';
 
 const $ = (id) => document.getElementById(id);
 
@@ -89,16 +91,34 @@ export class People {
     // coordinates are a hint beside a village, and the ground under them is
     // generated.
     const spot = this.realm.placeSpot(spec.at[0], spec.at[1], 8, R, 0.40);
-    const model = new FrogModel(spec.colour, spec.name, false);
+    /**
+     * A named character is a FROG, and a frog of whatever trade they follow.
+     *
+     * They used to be built from the player's own rig — a ninja in a gi with
+     * a katana across its back — which meant the elder who asks you to fetch
+     * her a bell clapper was visibly better armed than you were. `Citizen`
+     * gives them frog anatomy and the clothes and tools of their role, and
+     * only the three armed roles carry a weapon.
+     */
+    const rnd = mulberry32(((Math.round(spot.x) * 668265263)
+      ^ (Math.round(spot.z) * 374761393)) >>> 0);
+    const model = new Citizen({
+      skin: spec.colour, role: spec.role, rnd,
+      scale: spec.role === 'child' ? 0.8 : 1.06,
+    });
     model.root.position.set(spot.x, spot.y, spot.z);
-    model.root.scale.setScalar(spec.role === 'child' ? 0.78 : 1.05);
     this.scene.add(model.root);
 
     // The marker above their head: a bar over a dot for a quest they are
     // offering, a ring for one they will take back. Never rebuilt — only
     // shown or hidden, so this costs nothing per frame.
+    //
+    // In the model's OWN units, because it is a child of the scaled root:
+    // `citizenHeight` is in world units, so it has to be divided back out or
+    // a large frog's marker ends up twice as far over its head as a small
+    // one's.
     const mark = new THREE.Group();
-    mark.position.y = 2.9;
+    mark.position.y = citizenHeight(1) / model.scale + 0.45;
     const bang = new THREE.Mesh(MARK_GEO.bang, MARK.give);
     bang.position.y = 0.5;
     const dot = new THREE.Mesh(MARK_GEO.dot, MARK.give);
@@ -109,7 +129,7 @@ export class People {
     model.root.add(mark);
 
     this.list.push({
-      spec, model, mark, bang, dot, ring,
+      spec, model, mark, bang, dot, ring, markY: mark.position.y,
       home: spot, at: { x: spot.x, y: spot.y, z: spot.z },
       yaw: Math.random() * Math.PI * 2,
       wander: WANDERS.has(spec.role),
@@ -169,18 +189,13 @@ export class People {
       if (d < 26 && !moving) npc.yaw = dampAngle(npc.yaw, Math.atan2(dx, dz), 4, dt);
 
       npc.model.setFacing(npc.yaw);
-      npc.model.update(dt, {
-        speed: moving ? 2.4 : 0, vy: 0, grounded: true, moving,
-        dashT: 0, attackT: 0, attackIndex: 0, sprinting: false, throwT: 0,
-        parrying: false, grappling: false, tongueTo: null,
-        wallSliding: false, swimming: false, dead: false,
-      });
+      npc.model.update(dt, { speed: moving ? 2.4 : 0, moving });
       const mark = this.markFor(npc, p);
       npc.bang.visible = mark === 'give';
       npc.dot.visible = mark === 'give';
       npc.ring.visible = mark === 'turn';
       npc.mark.rotation.y += dt * 1.6;
-      npc.mark.position.y = 2.9 + Math.sin(performance.now() / 400) * 0.12;
+      npc.mark.position.y = npc.markY + Math.sin(performance.now() / 400) * 0.12;
     }
   }
 
@@ -205,102 +220,41 @@ export class People {
 
 // ════════════════════════════════════════════════════════════════════ life ══
 
-/** Shared geometry for the villagers. Nine parts, and that is the point. */
-const VG = {
-  sphere: new THREE.SphereGeometry(1, 8, 6),
-  low: new THREE.SphereGeometry(1, 6, 5),
-  box: new THREE.BoxGeometry(1, 1, 1),
+/**
+ * Who you find in what kind of place.
+ *
+ * The whole answer to "not everyone is a ninja". A fishing village is
+ * fishermen and their children; a city is merchants, scholars, priests and
+ * bakers. The armed roles are not in ANY of these lists — soldiers only
+ * appear where the occupation puts them, and the player is the only ninja in
+ * the country.
+ */
+const CROWD = {
+  village: ['farmer', 'fisher', 'child', 'elder', 'worker', 'shopkeeper', 'healer'],
+  town: ['merchant', 'smith', 'baker', 'innkeeper', 'child', 'scholar',
+    'shopkeeper', 'farmer', 'fishmonger'],
+  city: ['merchant', 'scholar', 'priest', 'noble', 'baker', 'innkeeper',
+    'healer', 'child', 'shopkeeper', 'smith'],
+  treevillage: ['ranger', 'hunter', 'child', 'elder', 'healer', 'farmer'],
+  camp: ['worker', 'traveller', 'explorer', 'hunter'],
+  farm: ['farmer', 'worker', 'child'],
+  hut: ['hermit', 'farmer'],
 };
-/** One material pair per colour, shared by every villager wearing it. */
-const _villagerMats = new Map();
-function villagerMats(colour) {
-  let m = _villagerMats.get(colour);
-  if (m) return m;
-  const skin = new THREE.Color(colour);
-  m = {
-    skin: new THREE.MeshLambertMaterial({ color: skin }),
-    dark: new THREE.MeshLambertMaterial({ color: skin.clone().multiplyScalar(0.7) }),
-    cloth: new THREE.MeshLambertMaterial({ color: 0xefe6cf }),
-    eye: new THREE.MeshBasicMaterial({ color: 0x101014 }),
-  };
-  _villagerMats.set(colour, m);
-  return m;
-}
 
 /**
- * A villager: nine meshes, and every one of them earns its place.
+ * Free the shared citizen caches.
  *
- * The player's `FrogModel` is about sixty meshes — a full rig with a gi, a
- * scarf, a katana, eyelids and a nameplate. That is right for the player and
- * for the named characters you talk to, and completely wrong for the five
- * frogs milling about in the market: five of them cost three hundred draw
- * calls, which measured as more than the rest of the village put together.
+ * Both of them: the materials, keyed by (skin, cloth), and the MERGED
+ * geometry, keyed by body variant. The geometry is built here rather than at
+ * module scope, so unlike the guardians' shared parts it really is this
+ * mode's to free — and it is a few hundred kilobytes of buffers, so leaving
+ * it behind across a quit and a re-entry would grow with every visit.
  *
- * This is a body, a belly, a head, two eyes, two arms, two legs. It bobs when
- * it walks and it turns to look at you, which is all a background villager
- * has ever needed to do.
+ * Kept under the old name because the whole world calls it that.
  */
-class Villager {
-  constructor(colour, scale = 1) {
-    const M = villagerMats(colour);
-    this.root = new THREE.Group();
-    this.body = new THREE.Group();
-    this.root.add(this.body);
-    this.root.scale.setScalar(scale);
-    const put = (geo, mat, sx, sy, sz, x, y, z) => {
-      const m = new THREE.Mesh(geo, mat);
-      m.scale.set(sx, sy, sz);
-      m.position.set(x, y, z);
-      m.castShadow = true;
-      this.body.add(m);
-      return m;
-    };
-    put(VG.sphere, M.skin, 0.34, 0.30, 0.30, 0, 0.52, 0);
-    put(VG.low, M.cloth, 0.30, 0.16, 0.24, 0, 0.44, 0.06);
-    this.head = put(VG.sphere, M.skin, 0.26, 0.22, 0.24, 0, 0.82, 0.02);
-    for (const sx of [-1, 1]) {
-      put(VG.low, M.eye, 0.06, 0.06, 0.06, sx * 0.12, 0.90, 0.18);
-    }
-    this.arms = [];
-    for (const sx of [-1, 1]) {
-      this.arms.push(put(VG.low, M.dark, 0.09, 0.20, 0.09, sx * 0.34, 0.50, 0));
-    }
-    this.legs = [];
-    for (const sx of [-1, 1]) {
-      this.legs.push(put(VG.low, M.dark, 0.10, 0.18, 0.10, sx * 0.16, 0.18, 0));
-    }
-    this.t = Math.random() * 6;
-    this.stride = 0;
-  }
-
-  setFacing(yaw) { this.root.rotation.y = yaw + Math.PI; }
-
-  update(dt, s) {
-    this.t += dt;
-    const moving = !!s.moving;
-    if (moving) this.stride += dt * 7;
-    const sw = Math.sin(this.stride);
-    this.body.position.y = moving ? Math.abs(sw) * 0.08
-      : Math.sin(this.t * 1.8) * 0.02;
-    for (let i = 0; i < this.legs.length; i++) {
-      this.legs[i].position.z = moving ? sw * 0.14 * (i ? -1 : 1) : 0;
-    }
-    for (let i = 0; i < this.arms.length; i++) {
-      this.arms[i].position.z = moving ? -sw * 0.10 * (i ? -1 : 1) : 0;
-    }
-    this.head.rotation.y = Math.sin(this.t * 0.7) * 0.3;
-  }
-
-  /** Materials are shared by colour, so a villager owns nothing to free. */
-  dispose() {}
-}
-
-/** Free the shared villager materials. Geometry is shared; do not touch it. */
 export function disposeVillagerMats() {
-  for (const [, m] of _villagerMats) {
-    for (const k in m) m[k].dispose();
-  }
-  _villagerMats.clear();
+  disposeCitizenMats();
+  disposeCitizenGeos();
 }
 
 /**
@@ -324,10 +278,18 @@ export class Life {
     this.where = null;
   }
 
-  /** Populate a settlement, or nothing if `site` is null. */
-  moveTo(site) {
-    if (site === this.where) return;
+  /**
+   * Populate a settlement, or nothing if `site` is null.
+   *
+   * @param slain the set of guardians already down, so the crowd knows
+   *              whether this place is still occupied. Rebuilt when it
+   *              changes, which is what makes a village visibly celebrate.
+   */
+  moveTo(site, slain) {
+    const freed = !!(site && site.freedBy && slain && slain.has(site.freedBy));
+    if (site === this.where && freed === this._freed) return;
     this.where = site;
+    this._freed = freed;
     for (const f of this.folk) {
       this.scene.remove(f.model.root);
       f.model.dispose();
@@ -337,21 +299,45 @@ export class Life {
 
     const rnd = mulberry32(((Math.round(site.at.x) * 22695477)
       ^ (Math.round(site.at.z) * 1103515245)) >>> 0);
-    const COLOURS = [0x6cc24a, 0x8fc44a, 0x53b7e8, 0xd9743a, 0xc9a227,
-      0x7fd45a, 0xa8543a, 0x9a6a3a];
-    const n = Math.min(site.spots.length, site.kind === 'city' ? 9
+    /**
+     * Who is out, and whether the occupation is still here.
+     *
+     * A settlement whose guardian is still standing is under it: fewer people
+     * on the street, and a couple of Frogath's soldiers among them. Kill the
+     * thing in the next valley and the soldiers are gone, the square fills
+     * up, and a merchant turns up who was not there before. The boards coming
+     * off the windows is `Sites.setFreed`; this is the other half of it.
+     */
+    const held = !!(site.freedBy && slain && !slain.has(site.freedBy));
+    const roles = (CROWD[site.kind] || CROWD.village).slice();
+    const full = Math.min(site.spots.length, site.kind === 'city' ? 9
       : site.kind === 'town' ? 7 : 5);
+    const n = held ? Math.max(2, full - 2) : full;
     for (let i = 0; i < n; i++) {
       const s = site.spots[Math.floor(rnd() * site.spots.length)];
-      const child = rnd() < 0.22;
-      const model = new Villager(COLOURS[Math.floor(rnd() * COLOURS.length)],
-        child ? 0.72 : 0.95 + rnd() * 0.12);
+      /**
+       * The garrison, and who turns up once it leaves.
+       *
+       * Two soldiers while the place is held; a merchant standing where they
+       * were once it is not. It is the same list of spots either way, so the
+       * change reads as the same square with different people in it.
+       */
+      const role = held && i < 2 ? 'soldier'
+        : (!held && i === 0 && site.kind !== 'village') ? 'merchant'
+          : roles[Math.floor(rnd() * roles.length)];
+      const model = new Citizen(Object.assign(pickCitizen(rnd, [role]), {
+        scale: 0.9 + rnd() * 0.22,
+      }));
       const y = this.realm.heightAt(s.x, s.z);
       model.root.position.set(s.x, y, s.z);
       this.scene.add(model.root);
       this.folk.push({
         model, at: { x: s.x, y, z: s.z }, yaw: rnd() * 6.28,
-        goal: null, wait: rnd() * 4, speed: 0, child,
+        goal: null, wait: rnd() * 4, speed: 0,
+        child: model.buildId === 'young',
+        // A soldier patrols rather than pottering, and does not stop to look
+        // at you: they are not here to be talked to.
+        patrol: role === 'soldier',
       });
     }
   }
@@ -369,7 +355,9 @@ export class Life {
       const gd = Math.hypot(gx, gz);
       let moving = false;
       if (gd > 1.4) {
-        const sp = f.child ? 3.4 : 2.2;
+        // A child runs everywhere, a soldier walks a line, everybody else
+        // ambles.
+        const sp = f.child ? 3.4 : f.patrol ? 2.8 : 2.2;
         f.yaw = dampAngle(f.yaw, Math.atan2(gx, gz), 3, dt);
         f.at.x += (gx / gd) * sp * dt;
         f.at.z += (gz / gd) * sp * dt;
@@ -381,13 +369,20 @@ export class Life {
       }
       f.at.y = this.realm.heightAt(f.at.x, f.at.z);
       f.model.root.position.set(f.at.x, f.at.y, f.at.z);
-      // A villager you walk up to turns and looks at you.
+      /**
+       * A villager you walk up to turns and looks at you.
+       *
+       * A soldier does not, and that is the point of the distinction: the
+       * occupation is not interested in you, and a square where two frogs in
+       * black walk their line while everybody else watches you says what is
+       * happening without a word of dialogue.
+       */
       const dx = playerPos.x - f.at.x, dz = playerPos.z - f.at.z;
-      if (!moving && Math.hypot(dx, dz) < 14) {
+      if (!moving && !f.patrol && Math.hypot(dx, dz) < 14) {
         f.yaw = dampAngle(f.yaw, Math.atan2(dx, dz), 3, dt);
       }
       f.model.setFacing(f.yaw);
-      f.model.update(dt, { moving });
+      f.model.update(dt, { moving, speed: f.speed });
     }
   }
 
@@ -535,7 +530,8 @@ export class Journal {
       + `<div class="ql-stage tick">✔ ${p.camps.size} camps cleared</div>`
       + `<div class="ql-stage tick">✔ ${found} of ${SECRET_IDS.length} secrets found</div>`
       + `<div class="ql-stage tick">✔ ${p.seen.size} of ${REGIONS.length} regions entered</div>`
-      + `<div class="ql-stage tick">✔ ${openRegions} of ${REGIONS.length} regions unsealed</div>`
+      + `<div class="ql-stage tick">✔ ${openRegions} of ${REGIONS.length} regions with their roads open</div>`
+      + `<div class="ql-stage tick">✔ ${loreRead(p)} of ${LORE_COUNT} carvings read</div>`
       + '</div>');
     this.logBody.innerHTML = parts.join('');
   }
@@ -734,10 +730,18 @@ export class Journal {
         ctx.stroke();
       }
       ctx.restore();
+      /**
+       * "ROADS SHUT", and the name of what is standing in them.
+       *
+       * Not "SEALED". A map is allowed to record that a road is closed — that
+       * is what a map is for — but it should say it the way a traveller would
+       * have written it, and the thing under it is a creature holding a
+       * crossing rather than a lock with a key.
+       */
       ctx.fillStyle = 'rgba(255,120,100,0.95)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = 'bold 12px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('SEALED', cx, cz - 3);
+      ctx.fillText('ROADS SHUT', cx, cz - 3);
       const g = GUARDIAN_BY_ID.get(R.gate);
       ctx.font = '10px monospace';
       ctx.fillStyle = 'rgba(255,180,170,0.9)';

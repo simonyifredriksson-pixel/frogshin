@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v84" />
+<link rel="stylesheet" href="css/style.css?v=v85" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -97,7 +97,7 @@
     <!-- PLAY -->
     <div class="panel" id="panel-play">
       <div class="card">
-        <h2 class="card-title">ENTER THE ARENA</h2>
+        <h2 class="card-title">PLAY</h2>
 
         <div class="field">
           <label for="input-name">NINJA NAME</label>
@@ -108,6 +108,17 @@
           <label>FROG COLOUR</label>
           <div id="color-picker" class="swatches"></div>
         </div>
+
+        <div class="divider"><span>THE MAIN GAME</span></div>
+        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
+        <p class="note">The whole game. You are a young frog from a village
+           Frogath's army burned; everyone you know was marched away. Cross the
+           Croaklands, put down the guardians holding it shut, and get to his
+           stronghold. Twenty-four regions from the Lily Reach to the Ashen
+           Throne, joined by seventeen roads and four rivers. Towns, villages,
+           dungeons, caves, ruins, secrets, and people who will tell you where
+           to go next. <b>TAB</b> for your bag, <b>M</b> for the map. Solo, and
+           it saves itself.</p>
 
         <div class="divider"><span>MAP</span></div>
         <button class="btn btn-quiet map-toggle" id="play-map-toggle">
@@ -135,22 +146,6 @@
           Quick Play drops you into the public room <b>FROG</b>. Create Room gives you a
           private code — share it and your friends join from their own machines.
         </p>
-
-        <div class="divider"><span>STORY</span></div>
-        <button class="btn btn-story" id="btn-story"><span>STORY — THE BURNING VILLAGE</span></button>
-        <p class="note">Play alone or with up to 8. You are just a swamp frog —
-           no weapons yet, but you keep your dash and tongue. Host a room first
-           if you want company, then start the story.</p>
-
-        <div class="divider"><span>THE CROAKLANDS</span></div>
-        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS — OPEN WORLD</span></button>
-        <p class="note">Five thousand units a side. Twenty-four regions from
-           the Lily Reach to the Ashen Throne, joined by seventeen roads and
-           four rivers. Thirty-seven guardians, and each one you put down
-           unseals the next part of the world. Towns, villages, dungeons,
-           caves, ruins, forty-one secrets and thirty-seven people who will
-           tell you where to go. <b>TAB</b> for your bag, <b>M</b> for the
-           map. Solo, and it saves itself.</p>
 
         <div class="divider"><span>THE DUNGEON</span></div>
         <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON — 15 BOSSES</span></button>
@@ -195,7 +190,6 @@
 
         <div id="lobby-host-controls">
           <button class="btn btn-go" id="lobby-arena"><span>PLAY ARENA</span></button>
-          <button class="btn btn-story" id="lobby-story"><span>PLAY STORY</span></button>
         </div>
         <div id="lobby-waiting">WAITING FOR THE HOST TO CHOOSE…</div>
         <button class="btn btn-quiet" id="lobby-leave"><span>LEAVE ROOM</span></button>
@@ -288,7 +282,7 @@
               <li><kbd>TAB</kbd><span>The bag — weapons, kunai, armour, food, materials, key items</span></li>
               <li><kbd>J</kbd><span>Quest log — the current objective is at the top of it</span></li>
               <li><kbd>M</kbd><span>Map — regions, roads, rivers, towns, guardians, and a star on where to go</span></li>
-              <li><kbd>E</kbd><span>Talk to whoever is in front of you, or examine the place you are standing</span></li>
+              <li><kbd>E</kbd><span>Reach out — open the chest, throw the lever, push the doors, read the carving, take the sword off the stand, talk to whoever is in front of you, or examine the place you are standing</span></li>
               <li><kbd>0</kbd><span>Eat your best meal without opening anything</span></li>
               <li><kbd>←</kbd><kbd>→</kbd><span>In the bag: switch tab (or <kbd>Q</kbd> / <kbd>E</kbd>)</span></li>
               <li><kbd>ENTER</kbd><span>In the bag: equip, take off, or eat</span></li>
@@ -306,31 +300,63 @@
               <li><b>Juggernaut.</b> One player becomes an armoured toad with a huge katana, endless kunai and a mountain of health — but moves at half speed and barely benefits from sprinting. Its katana hits for a flat 50. It cannot grapple — <kbd>G</kbd> instead charges a leap at whatever you are looking at, winding up for 0.5s to 1.5s depending how far you are throwing yourself. It wins by putting every frog out; the frogs win by bringing it down. <b>Needs 3 players.</b></li>
               <li>In Tag and Infection there is <b>no damage at all</b> — both the kunai <i>and</i> the katana tag instead of wounding, so it is a pure chase.</li>
               <li><b>Spectating.</b> Knocked out of a juggernaut round, you keep flying around with endless kunai but are invisible and cannot touch anyone (or be touched), and cannot take crates. You rejoin when the round ends.</li>
-              <li><b>The Croaklands.</b> Solo, and it saves itself. Five
-                 thousand units a side — twenty-four regions from the warm
-                 shallows you wake up in to the throne at the top of the world,
-                 joined by real roads you can follow and rivers that run down
-                 to the sea. Marshes, ancient forest, a drowned capital, a
-                 quarry, a desert with a buried pyramid in it, a volcano still
-                 going, a shelf of white rock above the cloud, a glowing wood,
-                 an ice range, and a bridge over a place where the land simply
-                 stops.
-                 <br/><b>It opens in order.</b> Every region names the guardian
-                 holding it shut; put that guardian down and the next part of
-                 the world unseals. There are thirty-seven of them and the last
-                 is Frogath. You are always told exactly where to go next —
-                 <kbd>J</kbd> for the log, <kbd>M</kbd> for a map with the
-                 objective starred and a line drawn to it — but nothing stops
-                 you wandering off to find the forty-one things nobody mentions.
+              <li><b>The Croaklands.</b> The main game. Solo, and it saves
+                 itself.
+                 <br/><b>Why you are walking.</b> You wake up in Mirefoot,
+                 which was your village until eleven days ago. Frogath's
+                 soldiers took everybody who could walk and burned the rest.
+                 The next roof you can see is Croakhollow; go and find
+                 somebody who saw it happen, and then follow the column north.
+                 <br/><b>How the country is shut.</b> Nothing tells you a
+                 region is locked, because none of them are. There is a thing
+                 standing in every road: a barred gate with something in it, a
+                 ford nothing crosses, a bridge its builder has never let
+                 anybody use. Put that thing down and the road opens — and the
+                 village behind it takes the black banners down, the soldiers
+                 leave the square, the boards come off the windows and the
+                 people say something different. Thirty-seven guardians, ten
+                 optional ones nobody mentions, and Frogath at the end.
+                 <br/><b>Kunai are finite.</b> You leave home with twenty and
+                 they do not come back. Every blade after those twenty is one
+                 you found — in a chest, on a body, in a ruin, or bought from
+                 a market stall for froglets. Guardians drop a good handful,
+                 so a fight you had to learn pays for itself.
+                 <br/><b>Everything opens for real.</b> Chests have lids that
+                 swing up and the thing inside comes out of them. Levers throw
+                 and lift the portcullis they are wired to. Doors swing.
+                 Swords come off their stands. There are twenty-eight carved
+                 stones and half-burned books scattered across the country and
+                 between them they explain what Frogath is actually doing up
+                 there — read them in any order, or none.
                  <br/>You gain levels, hearts, attack and defence; you find
                  weapons, armour, food and materials and carry them in a bag
-                 you open with <kbd>TAB</kbd>. Thirty-seven people live out
-                 there, thirty-one of them want something, and villagers walk
-                 about their own villages. <b>Die and you wake up at the last
+                 you open with <kbd>TAB</kbd>. You are the only ninja in the
+                 country — everybody else is a farmer, a fishmonger, a smith,
+                 a scholar or a child. <b>Die and you wake up at the last
                  village or shrine you stood in, keeping everything.</b> Walk
                  away from a guardian and the fight resets — so a fight you
                  cannot win yet is a fight to come back to.</li>
               <li><b>The Dungeon.</b> Solo. Fifteen boss rooms, each guardian tougher than the last, and endless kunai throughout. Choose <b>checkpoints</b> (die and restart the room) or <b>no checkpoints</b> (die and go back to room one). Clearing a room heals you. Every attack in the dungeon shows a marker on the floor before it can hurt you, and the marker is exactly the size of the thing that hits you. <b>A red ring means move out of it. An amber ring is a ground wave — jump it</b> (a dash works too). Read it, dodge it, punish the recovery. At the bottom is <b>FROGATH, THE FIRST CROAK</b>. He floats, he does not miss, and he is the reason the other fourteen were put there.</li>
+              <li><b>How a guardian fights, and why spamming does not work.</b>
+                 A guardian on its feet watching you <b>guards</b>: a thrown
+                 kunai lands at a fraction of its damage and you will see it
+                 turned aside. It cannot guard while it is committing to an
+                 attack, and it cannot guard its <b>recovery</b> — the beat
+                 after an attack, which takes <i>double</i> from a blade thrown
+                 from close in. A hit on the <b>head</b> ignores the guard
+                 completely. Cut it with the katana to break its <b>poise</b>
+                 and it reels, wide open. And if you stand at range throwing,
+                 it stops tolerating the distance and comes to you.
+                 <br/>The loop is: read the ring, get out of it, close, cut,
+                 break its poise, spend one blade on the opening, and back out.
+                 Some of them raise a <b>shell</b> that thrown blades do
+                 nothing to at all — walk in and cut it off, because breaking
+                 one staggers them. Wide attacks sweep kunai out of the air.
+                 <br/>Every one of them changes shape two to four times as its
+                 health falls, and each change unlocks two new attacks and
+                 makes the floor of the arena dangerous. Everything is still
+                 telegraphed, every wind-up is still readable, and every
+                 sequence still has a way out of it.</li>
             </ul>
           </div>
 
@@ -343,7 +369,7 @@
               <li><b>Lanterns are targets.</b> The glowing lanterns are always grappleable and the crosshair opens up when one is in reach.</li>
               <li><b>The third swing hits hardest.</b> Land all three combo hits — the finisher does heavy damage and big knockback.</li>
               <li><b>Dash through attacks.</b> The dash has brief invulnerability frames.</li>
-              <li><b>Kunai hit for 25 — or 50 to the head.</b> Press <kbd>2</kbd> to equip them and <kbd>LMB</kbd> to throw. They fly dead straight and very fast, so the crosshair is exactly where they land. You start with 10; glowing crates around the valley hold 5 more each and are replaced every 30 seconds.</li>
+              <li><b>Kunai hit for 25 — or 50 to the head.</b> Press <kbd>2</kbd> to equip them and <kbd>LMB</kbd> to throw. They fly dead straight and very fast, so the crosshair is exactly where they land. In the arena you start with 10 and the glowing crates hold 5 more each, replaced every 30 seconds. <b>In the Croaklands you start with twenty and there are no crates</b> — see the mode notes.</li>
               <li><b>Practise on the dummies.</b> The straw dummies on the arena platforms show exactly how much damage each hit does.</li>
               <li><b>Watch your stamina.</b> Sprinting drains it and every jump costs a chunk. Empty it and you cannot sprint <i>or</i> jump until it climbs back to 70% — so keep some in reserve for the escape. Dashing and grappling are free.</li>
             </ul>
@@ -464,13 +490,13 @@
   </div>
   <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
 
-  <!-- story: objectives (top-left, under the room plate) -->
+  <!-- objectives (top-left, under the room plate) -->
   <div id="objectives">
     <div class="obj-title">OBJECTIVES</div>
     <ul id="obj-list"></ul>
   </div>
 
-  <!-- story: boss health bar -->
+  <!-- boss health bar -->
   <div id="boss-bar">
     <div class="bb-name" id="boss-name">TOADEL</div>
     <div class="bb-sub" id="boss-sub"></div>
@@ -482,7 +508,7 @@
     </div>
   </div>
 
-  <!-- story: guard alert indicator -->
+  <!-- guard alert indicator -->
   <div id="alert">
     <div class="al-eye" id="icon-alert"></div>
     <div class="al-track"><div id="al-fill"></div></div>
@@ -494,14 +520,14 @@
     <b>T</b><span>TRY SKINS &amp; ABILITIES</span>
   </div>
 
-  <!-- story: tutorial prompt -->
+  <!-- tutorial prompt -->
   <div id="tutorial">
     <span class="tut-verb" id="tut-verb"></span>
     <kbd class="tut-key" id="tut-key"></kbd>
     <span class="tut-tail" id="tut-tail"></span>
   </div>
 
-  <!-- story: cinematic bars + subtitle -->
+  <!-- cinematic bars + subtitle -->
   <div id="cinebar-top"></div>
   <div id="cinebar-bottom"></div>
   <div id="subtitle"><b id="sub-speaker"></b><span id="sub-text"></span></div>
@@ -820,15 +846,22 @@
 <!-- Region crossing banner, centred and brief -->
 <div id="region-banner"><b id="rb-region">—</b><span id="rb-blurb"></span></div>
 
-<!-- Shown while walking into a region a guardian still holds shut -->
-<div id="sealed"><b>THE WAY IS SEALED</b><span id="sealed-why"></span></div>
+<!--
+  Shown while walking into a region something is standing in.
 
-<!-- Full-screen fade, above everything: used by the story's defeat sequence -->
+  Deliberately not "SEALED — DEFEAT BOSS 4 TO CONTINUE". It says what is
+  physically in the way and where it is standing, in the voice of somebody who
+  has tried: the turning back is a thing happening in the world, not a lock
+  message. The line under it comes from the region's own `shut` text.
+-->
+<div id="sealed"><b>YOU CANNOT GET THROUGH</b><span id="sealed-why"></span></div>
+
+<!-- Full-screen fade, above everything: cutscenes and defeat sequences -->
 <div id="fade"></div>
 
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v84"></script>
+<script type="module" src="js/main.js?v=v85"></script>
 </body>
 </html>

@@ -21,13 +21,27 @@
  * thing that makes a hard region become a familiar one.
  */
 
-import { GEAR_BY_ID, GEAR } from './gear.js?v=v84';
-import { clamp } from './util.js?v=v84';
+import { GEAR_BY_ID, GEAR } from './gear.js?v=v85';
+import { clamp } from './util.js?v=v85';
 
 /** Health per heart. Four hearts is the starting body. */
 export const HEART = 25;
 export const START_HEARTS = 4;
 export const MAX_HEARTS = 20;
+
+/**
+ * Kunai you leave the village with, and the only ones you are given.
+ *
+ * They do NOT come back. There is no regeneration, no crate in the field and
+ * no unlimited supply — every blade after these twenty is one somebody found:
+ * a chest, a body, a shop, a reward, the bottom of a ruin. That is the whole
+ * point of the number being small enough to count. See `Overworld.giveKunai`
+ * for every route more of them get into a bag, and `_syncKunai` for how the
+ * throwing stack and the save stay the same number.
+ */
+export const START_KUNAI = 20;
+/** A bag only holds so many. Found blades past this are left where they are. */
+export const MAX_KUNAI = 99;
 
 /** Base numbers before any gear or level. */
 export const BASE = { atk: 20, def: 0, stamina: 100 };
@@ -64,6 +78,15 @@ export class Progress {
     this.quests = new Map();
     /** Where the player was standing when they last saved. */
     this.at = null;
+    /**
+     * Kunai in hand. A resource, not a facility.
+     *
+     * Kept HERE rather than only in the hotbar because the hotbar is rebuilt
+     * every time the mode is entered: a count that lived only there would
+     * quietly reset to twenty on every load, which is the same thing as being
+     * unlimited with extra steps.
+     */
+    this.kunai = START_KUNAI;
     if (data) this.load(data);
   }
 
@@ -243,6 +266,7 @@ export class Progress {
       seen: [...this.seen],
       quests: [...this.quests].map(([id, q]) => [id, q.stage, q.done ? 1 : 0]),
       at: this.at,
+      kunai: this.kunai,
     };
   }
 
@@ -298,6 +322,12 @@ export class Progress {
     }
     this.at = (d.at && Number.isFinite(d.at.x) && Number.isFinite(d.at.z))
       ? { x: d.at.x, y: Number(d.at.y) || 0, z: d.at.z } : null;
+    // A save from before kunai were finite has no field, and that player is
+    // owed the starting twenty rather than nothing. Zero is a legal value and
+    // must survive the load, so this tests for the field, not for truthiness.
+    this.kunai = d.kunai === undefined || !Number.isFinite(Number(d.kunai))
+      ? START_KUNAI
+      : clamp(Math.floor(Number(d.kunai)), 0, MAX_KUNAI);
   }
 
   /** A brand new adventurer: the clothes on their back and a reed knife. */

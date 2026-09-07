@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { mulberry32 } from './util.js?v=v84';
-import { SEA } from './regions.js?v=v84';
-import { CHUNK } from './realm.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { mulberry32 } from './util.js?v=v85';
+import { SEA } from './regions.js?v=v85';
+import { CHUNK } from './realm.js?v=v85';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -101,6 +101,86 @@ const DEFAULT_FLORA = {
   conifer: 5, broad: 3, rock: 5, reed: 3, bone: 0, shard: 0, crop: 0,
 };
 
+/**
+ * GROUND DETAIL — flowers, mushrooms, ferns, fallen logs, moss.
+ *
+ * Kept in its own table and its own radius, because it answers a different
+ * question. The mix above decides what a REGION looks like from a hilltop;
+ * this decides what the ground looks like under your feet, and none of it is
+ * visible from more than about a hundred units away.
+ *
+ * So it is only grown on the nine tiles around the player — see DETAIL_R.
+ * That is what makes it affordable to have this much of it: a lush tile grows
+ * forty-odd separate plants, and there are nine such tiles rather than sixty.
+ *
+ * None of it needs a new InstancedMesh either. A flower is a stem (`post`)
+ * and a head (`blob`); a mushroom is a stalk and a cap; a fern is three low
+ * `pine` fronds; a fallen log is a `trunk` on its side with `blob` moss on
+ * top. The five meshes that were already there simply carry more instances.
+ */
+export const DETAIL = {
+  lilyreach:   { flower: 16, shroom: 4,  fern: 8,  log: 2, moss: 6 },
+  harrowmead:  { flower: 20, shroom: 2,  fern: 4,  log: 1, moss: 3 },
+  whispermire: { flower: 5,  shroom: 16, fern: 12, log: 4, moss: 10 },
+  hollowroot:  { flower: 7,  shroom: 14, fern: 18, log: 5, moss: 12 },
+  sunkenstair: { flower: 9,  shroom: 6,  fern: 7,  log: 2, moss: 14 },
+  anurath:     { flower: 8,  shroom: 5,  fern: 6,  log: 2, moss: 7 },
+  quarry:      { flower: 3,  shroom: 2,  fern: 2,  log: 1, moss: 5 },
+  glassfen:    { flower: 6,  shroom: 10, fern: 9,  log: 3, moss: 8 },
+  gravewater:  { flower: 3,  shroom: 14, fern: 8,  log: 4, moss: 9 },
+  thirstlands: { flower: 2,  shroom: 0,  fern: 1,  log: 0, moss: 0 },
+  choircliffs: { flower: 6,  shroom: 3,  fern: 4,  log: 1, moss: 6 },
+  boneflats:   { flower: 1,  shroom: 2,  fern: 0,  log: 0, moss: 1 },
+  drownedkeep: { flower: 5,  shroom: 8,  fern: 8,  log: 3, moss: 11 },
+  emberwaste:  { flower: 1,  shroom: 1,  fern: 1,  log: 1, moss: 0 },
+  cindermaw:   { flower: 0,  shroom: 0,  fern: 0,  log: 0, moss: 0 },
+  spine:       { flower: 2,  shroom: 3,  fern: 2,  log: 1, moss: 2 },
+  moonshelf:   { flower: 3,  shroom: 4,  fern: 2,  log: 0, moss: 3 },
+  palewood:    { flower: 5,  shroom: 18, fern: 16, log: 6, moss: 13 },
+  hollowcity:  { flower: 4,  shroom: 6,  fern: 5,  log: 2, moss: 9 },
+  glimmerwood: { flower: 12, shroom: 20, fern: 12, log: 4, moss: 10 },
+  frostmarch:  { flower: 2,  shroom: 2,  fern: 1,  log: 1, moss: 2 },
+  rimefang:    { flower: 0,  shroom: 0,  fern: 0,  log: 0, moss: 1 },
+  sunderway:   { flower: 2,  shroom: 2,  fern: 2,  log: 1, moss: 4 },
+  ashenthrone: { flower: 1,  shroom: 3,  fern: 1,  log: 1, moss: 2 },
+};
+const DEFAULT_DETAIL = { flower: 8, shroom: 5, fern: 6, log: 2, moss: 6 };
+/**
+ * How far out the ground detail goes, in tiles.
+ *
+ * One, so nine tiles — 576 units on a side. A flower is fifteen centimetres
+ * across; past a hundred units it is not there whether it is drawn or not.
+ */
+const DETAIL_R = 1;
+
+/**
+ * Flower colours, by region family.
+ *
+ * Warm mixed meadow in the south, deep purples in the mire, bone-white in
+ * the dead places, and something luminous in the Glimmerwood.
+ */
+const PETALS = {
+  warm: [0xffe86a, 0xff9ac0, 0xffffff, 0xffb84a, 0xd88fff],
+  mire: [0x9a6ad9, 0xd88fd9, 0xe4e4c0, 0x6a9ad9],
+  pale: [0xe8e4d0, 0xd0d4c8, 0xffffff],
+  glow: [0x8ff0ff, 0xc9a0ff, 0x9affc0, 0xfff08a],
+  ember: [0xff8a3c, 0xffca4a, 0xd94a2c],
+  cold: [0xdff4ff, 0xc9d8ff, 0xffffff],
+};
+const PETAL_FOR = {
+  whispermire: 'mire', glassfen: 'mire', gravewater: 'mire',
+  hollowroot: 'mire', drownedkeep: 'mire',
+  boneflats: 'pale', spine: 'pale', palewood: 'pale', hollowcity: 'pale',
+  glimmerwood: 'glow', moonshelf: 'glow',
+  emberwaste: 'ember', cindermaw: 'ember', ashenthrone: 'ember',
+  frostmarch: 'cold', rimefang: 'cold', sunderway: 'cold',
+};
+/** Mushroom caps: brown and speckled almost everywhere, luminous in two. */
+const CAPS = {
+  normal: [0xa8543a, 0xc4703a, 0xd9a06a, 0x8a4a3a, 0xe0d0b4],
+  glow: [0x6cf0ff, 0xc0a0ff, 0x9affc0],
+};
+
 export class Scatter {
   constructor(scene, realm) {
     this.scene = scene;
@@ -116,7 +196,12 @@ export class Scatter {
      * edge of a very crowded view thins out rather than the game breaking.
      */
     this.caps = {
-      trunk: 3400, pine: 5400, blob: 2600, rock: 2800, post: 6000, shard: 3000,
+      // The ground detail rides on the same five meshes as the trees — a
+      // flower is a `post` and a `blob`, a fern is three `pine` fronds — so
+      // adding it costs instances rather than draw calls. Nine tiles of a
+      // lush region is roughly 1500 extra posts and 1800 extra blobs, hence
+      // the headroom on those two.
+      trunk: 3600, pine: 7200, blob: 6400, rock: 4200, post: 9600, shard: 3000,
     };
     for (const k in KINDS) {
       const mesh = new THREE.InstancedMesh(
@@ -179,7 +264,9 @@ export class Scatter {
     for (let dz = -R; dz <= R; dz++) {
       for (let dx = -R; dx <= R; dx++) {
         if (dx * dx + dz * dz > (R + 0.5) * (R + 0.5)) continue;
-        tiles += this._fillTile(cix + dx, ciz + dz, half) ? 1 : 0;
+        // Ground detail only on the tiles you are standing among.
+        const detail = Math.abs(dx) <= DETAIL_R && Math.abs(dz) <= DETAIL_R;
+        tiles += this._fillTile(cix + dx, ciz + dz, half, detail) ? 1 : 0;
       }
     }
 
@@ -200,7 +287,7 @@ export class Scatter {
    * scatter can be thrown away and regenerated instead of stored: there is
    * nothing to store that the coordinates do not already say.
    */
-  _fillTile(cx, cz, half) {
+  _fillTile(cx, cz, half, detail = false) {
     const per = Math.round(half * 2 / CHUNK);
     if (cx < 0 || cz < 0 || cx >= per || cz >= per) return false;
     const x0 = -half + cx * CHUNK, z0 = -half + cz * CHUNK;
@@ -318,7 +405,112 @@ export class Scatter {
           0.09, h, 0.09, col, r() * 3);
       }
     });
+
+    if (detail) this._detail(region, pal, x0, z0, rnd, scatter);
     return true;
+  }
+
+  /**
+   * The ground under your feet.
+   *
+   * Everything here is small, close and clustered. Clustered on purpose: one
+   * flower in a field is a mistake and eight in a patch is a meadow, and the
+   * same is true of mushrooms round a log. Only ever called for the nine
+   * tiles around the player — see DETAIL_R.
+   */
+  _detail(region, pal, x0, z0, rnd, scatter) {
+    const D = DETAIL[region.id] || DEFAULT_DETAIL;
+    const realm = this.realm;
+    const petals = PETALS[PETAL_FOR[region.id] || 'warm'];
+    const caps = CAPS[region.id === 'glimmerwood' || region.id === 'moonshelf'
+      ? 'glow' : 'normal'];
+
+    // ---- flowers: a stem and a head, in patches of five to nine ----------
+    scatter(D.flower, (x, y, z, r) => {
+      if (y < SEA + 0.6) return;
+      if (realm._slopeAt(x, z) > 0.34) return;
+      const col = petals[Math.floor(r() * petals.length)];
+      const n = 5 + Math.floor(r() * 5);
+      for (let k = 0; k < n; k++) {
+        const px = x + (r() - 0.5) * 3.4, pz = z + (r() - 0.5) * 3.4;
+        const py = realm.heightAt(px, pz);
+        if (py < SEA + 0.4) continue;
+        const h = 0.30 + r() * 0.34;
+        this._emit('post', px, py + h * 0.5, pz, 0.028, h, 0.028, 0x5a7a3a);
+        this._emit('blob', px, py + h + 0.05, pz, 0.10, 0.07, 0.10,
+          col, r() * 3, r(), r());
+      }
+    });
+
+    // ---- mushrooms: a stalk and a cap, in rings ---------------------------
+    scatter(D.shroom, (x, y, z, r) => {
+      if (y < SEA + 0.4) return;
+      if (realm._slopeAt(x, z) > 0.40) return;
+      const col = caps[Math.floor(r() * caps.length)];
+      const n = 3 + Math.floor(r() * 4);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + r();
+        const d = 0.4 + r() * 1.6;
+        const px = x + Math.cos(a) * d, pz = z + Math.sin(a) * d;
+        const py = realm.heightAt(px, pz);
+        if (py < SEA + 0.3) continue;
+        const s = 0.5 + r() * 0.9;
+        this._emit('post', px, py + 0.14 * s, pz, 0.05 * s, 0.28 * s, 0.05 * s,
+          0xe4dcc4);
+        this._emit('blob', px, py + 0.30 * s, pz,
+          0.17 * s, 0.10 * s, 0.17 * s, col, r() * 3);
+      }
+    });
+
+    // ---- ferns: three low fronds out of one crown ------------------------
+    scatter(D.fern, (x, y, z, r) => {
+      if (y < SEA + 0.6) return;
+      if (realm._slopeAt(x, z) > 0.44) return;
+      const col = _c.copy(pal.grass2).multiplyScalar(0.7 + r() * 0.3).getHex();
+      const s = 0.7 + r() * 0.7;
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2 + r() * 2;
+        this._emit('pine', x + Math.cos(a) * 0.16 * s, y + 0.30 * s,
+          z + Math.sin(a) * 0.16 * s,
+          0.30 * s, 0.62 * s, 0.30 * s, col, a, 0.34, 0);
+      }
+    });
+
+    /**
+     * Fallen logs, with moss on them and mushrooms along them.
+     *
+     * The one piece of detail that is bigger than a boot: a log lying across
+     * a slope is a landmark at ten units and the thing that makes a wood look
+     * old rather than planted.
+     */
+    scatter(D.log, (x, y, z, r) => {
+      if (y < SEA + 0.8) return;
+      if (realm._slopeAt(x, z) > 0.30) return;
+      const len = 3.4 + r() * 4.4;
+      const rad = 0.34 + r() * 0.24;
+      const a = r() * Math.PI * 2;
+      // A cylinder stands up the y axis, so a log is one rotated flat and
+      // then turned to lie along its bearing.
+      this._emit('trunk', x, y + rad * 0.85, z, rad, len, rad,
+        0x5a4230, a, Math.PI / 2, 0);
+      for (let k = 0; k < 3; k++) {
+        const t = (k - 1) * len * 0.3;
+        const mx = x + Math.sin(a) * t, mz = z + Math.cos(a) * t;
+        this._emit('blob', mx, y + rad * 1.5, mz, rad * 0.9, rad * 0.35, rad * 0.9,
+          _c.copy(pal.grass).multiplyScalar(0.8).getHex(), r() * 3);
+      }
+    });
+
+    // ---- moss: a green skin over a stone --------------------------------
+    scatter(D.moss, (x, y, z, r) => {
+      if (y < SEA - 1) return;
+      const s = 0.5 + r() * 1.5;
+      this._emit('rock', x, y + s * 0.4, z, s, s * 0.6, s * 0.85,
+        _c.copy(pal.rock).multiplyScalar(0.8).getHex(), r() * 3, r() * 0.3, r() * 0.3);
+      this._emit('blob', x, y + s * 0.62, z, s * 0.82, s * 0.30, s * 0.72,
+        _c.copy(pal.grass).multiplyScalar(0.72 + r() * 0.25).getHex(),
+        r() * 3, r() * 0.2, r() * 0.2);
+    });
   }
 
   /** How many instances are live, by kind — for the budget check. */

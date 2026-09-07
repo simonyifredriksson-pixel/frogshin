@@ -32,26 +32,30 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG } from './config.js?v=v84';
-import { clamp, damp } from './util.js?v=v84';
-import { Realm } from './realm.js?v=v84';
-import { Scatter } from './scatter.js?v=v84';
-import { Sites } from './realmsites.js?v=v84';
-import { Camp } from './mobs.js?v=v84';
-import { DungeonBoss } from './dungeonboss.js?v=v84';
-import { Frogath } from './frogath.js?v=v84';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v84';
-import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v84';
-import { Progress, HEART, BASE } from './progression.js?v=v84';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v84';
-import { QUEST_BY_ID, SECRETS, npcSays, questProgress,
-  mainObjective } from './quests.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG } from './config.js?v=v85';
+import { clamp, damp, mulberry32 } from './util.js?v=v85';
+import { Realm } from './realm.js?v=v85';
+import { Scatter } from './scatter.js?v=v85';
+import { Sites } from './realmsites.js?v=v85';
+import { Camp } from './mobs.js?v=v85';
+import { DungeonBoss } from './dungeonboss.js?v=v85';
+import { Frogath } from './frogath.js?v=v85';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v85';
+import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
+  CONTENT_HALF } from './regions.js?v=v85';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v85';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v85';
+import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
+  mainObjective } from './quests.js?v=v85';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v84';
-import { disposeLandmarkMats } from './landmarks.js?v=v84';
-import { Weather } from './weather.js?v=v84';
-import { Audio } from './audio.js?v=v84';
+  disposeVillagerMats } from './realmquests.js?v=v85';
+import { disposeLandmarkMats } from './landmarks.js?v=v85';
+import { Props, disposePropMats } from './props.js?v=v85';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v85';
+import { Ambience } from './ambience.js?v=v85';
+import { Weather } from './weather.js?v=v85';
+import { Audio } from './audio.js?v=v85';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -62,9 +66,22 @@ const _fogTarget = new THREE.Color();
 /** Encounter distances, in world units. See the file header. */
 const BUILD_AT = 260;
 const DROP_AT = 340;
-/** Camps come and go closer in — there are more of them and they are smaller. */
-const CAMP_BUILD = 300;
-const CAMP_DROP = 420;
+/**
+ * Camps come and go closer in — there are more of them and they are smaller.
+ *
+ * Two hundred and fifty rather than three hundred. A camp is the single most
+ * expensive thing in the world to draw: five or six creatures at forty meshes
+ * each, which is more than the village they are camped outside. The early
+ * regions now hold three or four camps apiece rather than one or two, and at
+ * three hundred units three of the Lilyreach's were live at once from the
+ * middle of Croakhollow — measured at fifteen hundred draw calls.
+ *
+ * At two hundred and fifty they are still an encounter you walk up to and
+ * still visible well before they can reach you (a mob's leash is ninety
+ * units), and never more than two are live from anywhere.
+ */
+const CAMP_BUILD = 250;
+const CAMP_DROP = 340;
 
 /**
  * How a region's tier becomes a guardian's power on the dungeon stat curve.
@@ -79,6 +96,64 @@ function powerFor(tier, indexInRegion) {
   return tier * 2.4 + indexInRegion * 0.7;
 }
 
+/**
+ * What the boss bar says when a guardian changes phase.
+ *
+ * Told, not hidden. A player who watches a fight suddenly get harder with no
+ * explanation reads it as the game cheating; a line under the bar turns the
+ * same moment into "right, that was round one".
+ */
+/**
+ * What kind of place holds what kind of thing.
+ *
+ * `at` says where in the site it goes: 'centre' for the thing the place is
+ * built around, 'edge' for what got shoved against a wall, and the default
+ * for the middle ground. `chance` is rolled against the site's own seed, so
+ * "some ruins have a pedestal" is stable rather than different every load.
+ *
+ * The shape of this table is the answer to "the world is empty between
+ * bosses": every ruin, cave, mine, camp and hut in the Croaklands now has
+ * something in it that opens.
+ */
+const PROP_PLAN = {
+  ruin: [{ kind: 'chest', n: 2, at: 'edge' },
+    { kind: 'pedestal', chance: 0.45, at: 'centre' },
+    { kind: 'pickup', chance: 0.5 }],
+  cave: [{ kind: 'chest', n: 2 }, { kind: 'pickup', chance: 0.7 }],
+  mine: [{ kind: 'chest', n: 2, at: 'edge' }, { kind: 'crate', n: 2 },
+    { kind: 'pickup', chance: 0.6 }],
+  dungeon: [{ kind: 'chest', n: 3, at: 'edge' },
+    { kind: 'gate', at: 'centre' }, { kind: 'lever', at: 'edge' },
+    { kind: 'pedestal', chance: 0.7, at: 'centre' },
+    { kind: 'pickup', chance: 0.8 }],
+  temple: [{ kind: 'chest', at: 'edge' }, { kind: 'pedestal', at: 'centre' },
+    { kind: 'plate', chance: 0.5, at: 'centre' }],
+  shrine: [{ kind: 'pickup', chance: 0.8, at: 'centre' }],
+  tower: [{ kind: 'chest', at: 'edge' }, { kind: 'pickup', chance: 0.4 }],
+  keep: [{ kind: 'chest', n: 2, at: 'edge' }, { kind: 'door', at: 'centre' },
+    { kind: 'pedestal', chance: 0.4 }],
+  gatehouse: [{ kind: 'gate', at: 'centre' }, { kind: 'lever', at: 'edge' }],
+  camp: [{ kind: 'crate', n: 2 }, { kind: 'pickup', chance: 0.75 }],
+  hut: [{ kind: 'crate', chance: 0.9 }],
+  farm: [{ kind: 'crate', n: 2 }],
+  // Every settlement has somewhere to buy blades. It is the only reliable
+  // supply in the country, and it costs froglets.
+  village: [{ kind: 'crate', n: 2, at: 'edge' }, { kind: 'stall' }],
+  town: [{ kind: 'crate', n: 3, at: 'edge' }, { kind: 'stall', n: 2 }],
+  city: [{ kind: 'crate', n: 3, at: 'edge' }, { kind: 'stall', n: 2 }],
+  treevillage: [{ kind: 'crate', n: 2, at: 'edge' }, { kind: 'stall' }],
+  landmark: [{ kind: 'chest', chance: 0.55, at: 'edge' }],
+  bridge: [],
+  arena: [],
+  default: [{ kind: 'chest', chance: 0.6 }],
+};
+
+const PHASE_LINES = [
+  'It has stopped fighting carefully.',
+  'Something under it is awake now.',
+  'Whatever it was keeping back, it is not keeping it back any more.',
+];
+
 export class Overworld {
   constructor(opts) {
     this.scene = opts.scene;
@@ -87,6 +162,14 @@ export class Overworld {
     this.camera = opts.camera;
     this.economy = opts.economy;
     this.inventory = opts.inventory || null;   // an InventoryScreen, or none
+    /**
+     * The player's thrown blades.
+     *
+     * Held only so a guardian's ground wave can sweep them out of the air —
+     * see `_eatProjectiles`. Optional: without it the waves simply do not
+     * clear anything, which is a weaker fight and not a broken one.
+     */
+    this.kunai = opts.kunai || null;
     /** For the inventory's paperdoll: the player's own colour and skins. */
     this.frogColor = opts.color === undefined ? 0x6cc24a : opts.color;
     this.skins = opts.skins || null;
@@ -101,6 +184,15 @@ export class Overworld {
     this.life = null;
     /** What is falling out of the sky. One system, retargeted per region. */
     this.weather = new Weather(this.scene);
+    /**
+     * What the light is doing. The other half of the weather.
+     *
+     * Weather is what comes DOWN — rain, snow, ash. This is what hangs in the
+     * air and what colour the sun is: beams through the trees, fireflies over
+     * the fen, embers over the lava. Retargeted off the region's mood, so
+     * every region already has one.
+     */
+    this.ambience = new Ambience(this.scene);
     this.dialogue = new Dialogue();
     this.journal = new Journal();
 
@@ -108,6 +200,10 @@ export class Overworld {
     this.progress = this.economy && this.economy.realm
       ? new Progress(this.economy.realm) : Progress.fresh();
 
+    /** Chests, levers, gates, doors — everything that physically moves. */
+    this.props = null;
+    this._levers = [];
+    this._gates = [];
     this.encounters = [];
     this.camps = [];
     this.boss = null;              // the live DungeonBoss, if any
@@ -155,6 +251,11 @@ export class Overworld {
     }]);
     tasks.push(['Placing the guardians', () => this._placeEncounters()]);
     tasks.push(['Setting the watch', () => this._placeCamps()]);
+    tasks.push(['Filling the chests', () => {
+      this.props = new Props(this.scene, this.realm.collision);
+      this.props.onPay = (p) => this._propPay(p);
+      this._placeProps();
+    }]);
     /**
      * The broadphase is baked LAST, once, with every site's collider already
      * in it. The collision world hashes its boxes into a grid at bake time
@@ -185,6 +286,239 @@ export class Overworld {
         });
       });
     }
+  }
+
+  /**
+   * Fill the world with things that move when you touch them.
+   *
+   * One pass over every site that has already been built, because a chest
+   * belongs to the ruin it is standing in and there is no other list of where
+   * the ruins are. Deterministic: the seed is the site's own position, so the
+   * same ruin has the same three chests in the same corners on every load and
+   * on every machine, which is what makes `Progress.found` able to remember
+   * that you opened the middle one.
+   *
+   * Runs BEFORE the broadphase is baked — see `buildTasks`. A chest added
+   * after the bake would be a chest you walk through.
+   */
+  _placeProps() {
+    for (const s of this.sites.sites) {
+      const R = REGION_BY_ID.get(s.region);
+      const tier = R ? R.tier : 0;
+      const rnd = mulberry32(((Math.round(s.at.x) * 2654435761)
+        ^ (Math.round(s.at.z) * 1597334677)) >>> 0);
+      const plan = PROP_PLAN[s.kind] || PROP_PLAN.default;
+      let n = 0;
+      /**
+       * The story's own props first.
+       *
+       * A site that holds one of the twenty-eight carvings gets it before
+       * anything else, and it goes near the middle where it cannot be missed.
+       * Placed here rather than in a separate pass so the whole layer shares
+       * one loop, one seed and one collider registration.
+       */
+      const lore = LORE_BY_SITE.get(s.id);
+      if (lore) {
+        const a = rnd() * Math.PI * 2;
+        const d = s.r * 0.2;
+        const lx = s.at.x + Math.cos(a) * d;
+        const lz = s.at.z + Math.sin(a) * d;
+        const ly = this.realm.heightAt(lx, lz);
+        if (ly >= SEA + 0.4) {
+          this._prop(lore.kind, lore.id, lx, ly, lz, a + Math.PI, tier, s, rnd,
+            lore);
+        }
+      }
+      for (const want of plan) {
+        if (want.chance !== undefined && rnd() > want.chance) continue;
+        for (let i = 0; i < (want.n || 1); i++) {
+          const a = rnd() * Math.PI * 2;
+          const d = s.r * (want.at === 'edge' ? 0.62 + rnd() * 0.22
+            : want.at === 'centre' ? 0.12 : 0.34 + rnd() * 0.3);
+          const x = s.at.x + Math.cos(a) * d;
+          const z = s.at.z + Math.sin(a) * d;
+          const y = this.realm.heightAt(x, z);
+          // Nothing under water, and nothing on a slope it would hang off.
+          if (y < SEA + 0.4) continue;
+          this._prop(want.kind, `${s.id}:${want.kind}${n++}`,
+            x, y, z, a + Math.PI, tier, s, rnd);
+        }
+      }
+    }
+  }
+
+  /** One prop, with the look and the reward its kind and its region imply. */
+  _prop(kind, id, x, y, z, yaw, tier, site, rnd, lore) {
+    const P = { kind, id, at: { x, y, z }, yaw };
+    const woods = [0x6b4a2a, 0x59422a, 0x7a5a3a, 0x4a3822];
+    P.wood = woods[Math.floor(rnd() * woods.length)];
+    P.trim = tier >= 4 ? 0xd9b06a : tier >= 2 ? 0xc9a227 : 0x9a7d33;
+    if (lore) {
+      // A carving is worth exactly one thing: what it says.
+      P.label = lore.kind === 'tome' ? 'Read it' : 'Read the carving';
+      P.usedLabel = 'Read it again';
+      P.trim = 0xffd76b;
+      P.prize = { what: 'lore', id: lore.id };
+      const prop = this.props.add(P);
+      return prop;
+    }
+    switch (kind) {
+      case 'chest':
+        P.label = 'Open the chest';
+        P.usedLabel = 'Empty';
+        // Deep in a ruin it is worth gear; on a farm it is worth blades.
+        P.prize = rnd() < 0.45 ? { what: 'loot', tier }
+          : { what: 'kunai', n: 3 + Math.floor(rnd() * 5) + tier };
+        P.prizeLook = P.prize.what === 'kunai' ? 'kunai' : 'relic';
+        break;
+      case 'crate':
+        P.label = 'Prise the lid off';
+        P.usedLabel = 'Empty';
+        P.prize = rnd() < 0.55
+          ? { what: 'kunai', n: 2 + Math.floor(rnd() * 3) }
+          : { what: 'loot', tier: Math.max(0, tier - 1) };
+        P.prizeLook = P.prize.what === 'kunai' ? 'kunai' : 'relic';
+        break;
+      case 'pedestal':
+        P.label = 'Take it';
+        P.look = rnd() < 0.5 ? 'sword' : 'relic';
+        P.prize = { what: 'loot', tier: Math.min(5, tier + 1) };
+        P.prizeLook = null;         // the thing on the stand IS the prize
+        break;
+      case 'pickup':
+        P.label = 'Pick it up';
+        P.look = 'kunai';
+        P.prize = { what: 'kunai', n: 2 + Math.floor(rnd() * 4) };
+        P.prizeLook = null;
+        break;
+      /**
+       * The stall: five blades for froglets, as often as you can pay.
+       *
+       * The one prop in the world that repeats, and the answer to "kunai must
+       * be obtainable from shops". The price rises with the region because a
+       * frog in the Frostmarch is a long way from anywhere that makes them.
+       */
+      case 'stall':
+        P.repeat = true;
+        P.price = 60 + tier * 25;
+        P.give = 5;
+        P.label = `Buy ${P.give} kunai — ${P.price} froglets`;
+        P.prize = { what: 'shop', n: P.give, price: P.price };
+        break;
+      case 'lever':
+        P.label = 'Throw the lever';
+        P.usedLabel = 'Thrown';
+        P.prize = { what: 'open', site: site.id };
+        break;
+      case 'gate':
+        // A gate is opened BY something. Standing at it does nothing, which
+        // is the point — the lever is somewhere else in the ruin.
+        P.label = null;
+        P.w = 7; P.h = 5.5;
+        break;
+      case 'door':
+        P.label = 'Push the doors open';
+        P.usedLabel = 'Open';
+        P.w = 4.4; P.h = 4.4;
+        break;
+      default:
+        P.label = 'Press it';
+        break;
+    }
+    const prop = this.props.add(P);
+    if (kind === 'lever') this._levers.push({ lever: prop, site: site.id });
+    if (kind === 'gate') this._gates.push({ gate: prop, site: site.id });
+    return prop;
+  }
+
+  /**
+   * A prop reached its payoff beat.
+   *
+   * Everything a prop can be worth is resolved here rather than in props.js,
+   * which knows nothing about loot tables, kunai counts or quests — it only
+   * knows how a lid moves and when the thing inside it should appear.
+   */
+  _propPay(prop) {
+    const p = this.progress;
+    const prize = prop.spec.prize;
+    // A repeating prop is never recorded as used — see `Prop.restore`.
+    if (!prop.spec.repeat) p.found.add(prop.id);
+    if (!prize) { this.markDirty(); return; }
+    if (prize.what === 'kunai') {
+      this.giveKunai(prize.n, 'from the chest');
+    } else if (prize.what === 'loot') {
+      const said = [];
+      for (const it of rollLoot(prize.tier, false)) {
+        const g = GEAR_BY_ID.get(it.id);
+        if (g && p.add(it.id, it.n) > 0) {
+          said.push(`${g.name}${it.n > 1 ? ` ×${it.n}` : ''}`);
+        }
+      }
+      // A tier's worth of equipment as well, from anything on a stand.
+      if (prop.kind === 'pedestal') {
+        for (const it of rollLoot(prize.tier, true)) {
+          const g = GEAR_BY_ID.get(it.id);
+          if (g && p.add(it.id, it.n) > 0) said.push(g.name);
+        }
+      }
+      this.hud.toast(said.length ? `Taken: ${said.join(', ')}.` : 'Nothing left in it.', 5);
+      this.applyStats();
+    } else if (prize.what === 'shop') {
+      /**
+       * Paid for on the payoff beat, not on the press.
+       *
+       * So the froglets leave the purse exactly as the rack of blades slides
+       * across the counter. The affordability check happens on the press too
+       * — see `_touch` — because sliding the rack out and then refusing would
+       * be the worst of both.
+       */
+      if (this.economy && this.economy.spend(prize.price)) {
+        this.giveKunai(prize.n, 'bought');
+      } else {
+        this.hud.toast('You cannot afford that.', 3);
+      }
+    } else if (prize.what === 'lore') {
+      this._read(prize.id, true);
+    } else if (prize.what === 'open') {
+      // A lever opens every gate in the place it stands in.
+      let opened = 0;
+      for (const g of this._gates) {
+        if (g.site !== prize.site || g.gate.used || g.gate.moving) continue;
+        g.gate.use();
+        this.progress.found.add(g.gate.id);
+        opened++;
+      }
+      this.hud.toast(opened
+        ? 'Somewhere behind you, something heavy starts to lift.'
+        : 'Nothing happens. Whatever it was for is long gone.', 5);
+    }
+    this.markDirty();
+  }
+
+  /**
+   * Read one of the twenty-eight.
+   *
+   * The first reading pays experience and counts toward the collection; every
+   * reading after that just shows the text again, because a player who wants
+   * to re-read the queen's letter after finding out who she was writing to
+   * should be able to.
+   */
+  _read(id, first) {
+    const l = LORE_BY_ID.get(id);
+    if (!l) return;
+    const p = this.progress;
+    const lines = l.lines.slice();
+    if (first && !p.found.has(id)) {
+      p.found.add(id);
+      const r = p.addXp(60 + l.order * 6);
+      this._announceLevels(r);
+      lines.push(`— ${loreRead(p)} of ${LORE_COUNT} found.`);
+      this.applyStats();
+      this.save();
+    } else {
+      lines.push(`— ${loreRead(p)} of ${LORE_COUNT} found.`);
+    }
+    this.dialogue.start(l.title, lines);
   }
 
   _placeCamps() {
@@ -233,10 +567,21 @@ export class Overworld {
       }
     }
     if (!spot) {
-      const start = this.sites.sites.find((s) => s.id === 'croakhollow');
+      /**
+       * A new game starts in the ashes of the player's own village.
+       *
+       * Not in Croakhollow, which is where it used to start. The difference
+       * is the whole opening: you wake up in Mirefoot, which is yours, with
+       * the roofs gone and one of Frogath's banners standing in the square,
+       * and the first thing the game asks you to do is walk to the next
+       * village and find out what happened. Nothing is explained; it is all
+       * in front of you.
+       */
+      const start = this.sites.sites.find((s) => s.id === 'mirefoot')
+        || this.sites.sites.find((s) => s.id === 'croakhollow');
       spot = start
-        ? { x: start.at.x, y: start.at.y + 1, z: start.at.z + start.r * 0.9 }
-        : { x: 300, y: 0, z: 1790 };
+        ? { x: start.at.x, y: start.at.y + 1, z: start.at.z + start.r * 0.7 }
+        : { x: 430, y: 0, z: 1900 };
       spot.y = this.realm.heightAt(spot.x, spot.z) + 1;
     }
     this.home = { x: spot.x, y: spot.y, z: spot.z };
@@ -246,6 +591,16 @@ export class Overworld {
     player.vel.set(0, 0, 0);
     player.combatEnabled = true;
     player.onUseItem = () => this.eatQuick();
+    /**
+     * The blades you actually have, not a fresh handful.
+     *
+     * `main.js` builds the hotbar with the arena's starting count; the save
+     * is the authority out here. Set before `applyStats` so the very first
+     * HUD paint shows the real number.
+     */
+    player.inventory.setUnlimitedKunai(false);
+    player.inventory.setKunai(p.kunai);
+    this._kunaiSeen = p.kunai;
     this.applyStats();
     player.health.revive();
     player.stamina.reset();
@@ -257,12 +612,18 @@ export class Overworld {
     // Every settlement shows the version of itself that matches the save:
     // boarded up where its guardian still lives, rebuilding where it does not.
     this.sites.setFreed(p.slain);
+    // Every chest you have already emptied is standing open, every lever you
+    // have thrown is thrown, and every gate they lifted is still up.
+    if (this.props) this.props.restore(p);
     this.region = regionAt(spot.x, spot.z, _scratch);
     p.seen.add(this.region.id);
     // The sky and the music of wherever we woke up, with no cross-fade.
     this.weather.set(this.region.weather || 'clear', true);
+    this.ambience.set(this.region.music || 'calm', true);
     Audio.setRegionMood(this.region.music || 'calm');
-    if (this.life) this.life.moveTo(this.sites.nearestSettlement(spot.x, spot.z));
+    if (this.life) {
+      this.life.moveTo(this.sites.nearestSettlement(spot.x, spot.z), p.slain);
+    }
     this._paintObjectives();
     this._watchUnload();
     this.save();
@@ -398,6 +759,9 @@ export class Overworld {
     this.realm.update(dt, player.pos);
     if (this.scatter) this.scatter.streamAround(player.pos.x, player.pos.z);
     this.sites.update(player.pos.x, player.pos.z, dt);
+    if (this.props) {
+      this.props.update(dt, player.pos.x, player.pos.z, player.pos);
+    }
     this.people.update(dt, player.pos, this.progress);
     this._region(player);
     this._gate(dt, player);
@@ -409,9 +773,60 @@ export class Overworld {
     if (this.atmo) this._sky(dt, player);
     this.weather.update(dt, this.camera.position,
       this.atmo ? this.atmo.windDir : null);
+    this.ambience.update(dt, this.camera.position,
+      this.atmo ? this.atmo.sunDir : null,
+      this.atmo ? this.atmo.windDir : null);
     this._life(dt, player);
     this._banner(dt);
+    this._syncKunai();
     this._autosave(dt);
+  }
+
+  /**
+   * Keep the save's kunai count and the hotbar's the same number.
+   *
+   * The throwing system decrements the hotbar; nothing tells the save. Rather
+   * than teaching `items.js` about a `Progress` it should know nothing about,
+   * the difference is noticed here and folded into the autosave — so throwing
+   * your last blade and closing the tab does not hand it back.
+   */
+  _syncKunai() {
+    const pl = this.player;
+    if (!pl || !pl.inventory) return;
+    const n = pl.inventory.kunaiCount;
+    if (n === this._kunaiSeen) return;
+    this._kunaiSeen = n;
+    this.progress.kunai = clamp(n, 0, MAX_KUNAI);
+    this.markDirty();
+  }
+
+  /**
+   * More kunai, from wherever they came from.
+   *
+   * The one road into the stack: chests, bodies, shops, rewards, ruins. It
+   * tops out at what a bag holds and it says how many it gave, because a
+   * resource the player is counting has to be counted out loud.
+   *
+   * @returns how many actually went in — 0 if the bag was already full
+   */
+  giveKunai(n, why) {
+    const pl = this.player;
+    if (!pl || !pl.inventory || n <= 0) return 0;
+    const have = pl.inventory.kunaiCount;
+    const took = Math.min(n, MAX_KUNAI - have);
+    if (took <= 0) {
+      this.hud.toast('You cannot carry another kunai.', 3);
+      return 0;
+    }
+    pl.inventory.addKunai(took);
+    this.progress.kunai = have + took;
+    this._kunaiSeen = this.progress.kunai;
+    this.markDirty();
+    if (why !== false) {
+      this.hud.toast(`✦ ${took} kunai${why ? ` — ${why}` : ''}. `
+        + `You have ${this.progress.kunai}.`, 5);
+    }
+    return took;
   }
 
   /**
@@ -427,7 +842,12 @@ export class Overworld {
     this._lifeAcc = (this._lifeAcc || 0) + dt;
     if (this._lifeAcc > 0.5) {
       this._lifeAcc = 0;
-      this.life.moveTo(this.sites.nearestSettlement(player.pos.x, player.pos.z));
+      // The slain set goes with it: a settlement whose guardian is still
+      // standing has soldiers in the square and fewer people out. See
+      // `Life.moveTo`.
+      this.life.moveTo(
+        this.sites.nearestSettlement(player.pos.x, player.pos.z),
+        this.progress.slain);
     }
     if (this.life.where) this.life.update(dt, player.pos);
   }
@@ -504,10 +924,18 @@ export class Overworld {
     if (el && this._sealedSaid !== R.id) {
       this._sealedSaid = R.id;
       const g = GUARDIAN_BY_ID.get(R.gate);
-      if (why) {
-        why.textContent = `${R.name} will not open until `
-          + `${g ? g.name : R.gate} is dead.`;
-      }
+      /**
+       * WHAT IS IN THE WAY, not what you have not unlocked.
+       *
+       * This used to read "THE LILYREACH will not open until GROTT is dead",
+       * which is a lock message wearing a fantasy hat: it describes the game's
+       * rule rather than the world's situation. `shutBecause` gives the
+       * physical obstruction — a barred gate with something standing in it, a
+       * ford nothing crosses, a bridge its builder has never let anybody on —
+       * and the map already stars the guardian, so a player who reads it knows
+       * exactly where to go without ever being told about a requirement.
+       */
+      if (why) why.textContent = shutBecause(R.id, g ? g.name : R.gate);
       el.classList.add('show');
       Audio.uiBack();
     } else if (el) el.classList.add('show');
@@ -624,6 +1052,7 @@ export class Overworld {
     // Crossing the sky and the music over. Both damp rather than cut, so a
     // border is a couple of seconds of the weather changing round you.
     this.weather.set(R.weather || 'clear');
+    this.ambience.set(R.music || 'calm');
     Audio.setRegionMood(R.music || 'calm');
 
     /**
@@ -703,6 +1132,15 @@ export class Overworld {
       this.atmo.sun.intensity = damp(this.atmo.sun.intensity,
         S.sunIntensity === undefined ? 1.0 : S.sunIntensity, 1.2, dt);
     }
+    /**
+     * The colour of the light, not just how much of it there is.
+     *
+     * Intensity alone made every region the same afternoon behind a different
+     * pane of coloured glass. This grades the sun and the sky bounce toward
+     * the region's mood as well, so the Emberwaste is lit orange from above
+     * and red from below and the Frostmarch is lit blue-white from both.
+     */
+    this.ambience.grade(dt, this.atmo.sun, this.atmo.hemi);
   }
 
   // ------------------------------------------------------------- encounters
@@ -781,16 +1219,59 @@ export class Overworld {
     if (best) this._buildBoss(best);
   }
 
+  /**
+   * How a region's tier becomes a place on the difficulty ladder.
+   *
+   * The first guardian anybody meets is on a farm in a tier-zero region and
+   * its whole job is to teach what a telegraph is, so it stays an `elite`:
+   * two phases, a soft guard, almost no dodging. The endgame regions get the
+   * full treatment. See RANKS in dungeonboss.js for what each step buys.
+   */
+  static rankFor(tier) {
+    if (tier <= 0) return 'elite';
+    if (tier <= 2) return 'mini';
+    if (tier <= 4) return 'major';
+    return 'final';
+  }
+
   _buildBoss(e) {
     _v.set(e.at.x, this.realm.heightAt(e.at.x, e.at.z), e.at.z);
     this.boss = new DungeonBoss(0, _v, this.scene, this.effects,
       this.realm.collision, {
         spec: e.spec,
         power: e.power,
+        /**
+         * A guardian's own rank beats the one its region implies.
+         *
+         * The ten optional mini-bosses along the first half of the road carry
+         * `rank: 'mini'` in their spec, and they are standing in regions
+         * whose tier would otherwise make them `major` — which would make the
+         * side content harder than the story it is beside.
+         */
+        rank: (e.spec && e.spec.rank) || Overworld.rankFor(e.tier),
+        arenaRadius: e.r,
+        // So a ground wave can sweep thrown blades out of the air.
+        kunai: this.kunai,
         groundAt: (x, z) => this.realm.heightAt(x, z),
+        onPhase: (n, of, boss) => this._bossPhase(n, of, boss),
       });
     this.bossOf = e;
     this.deadFor = 0;
+  }
+
+  /**
+   * A guardian has changed shape.
+   *
+   * The announcement is the point: a fight that silently gets harder reads as
+   * the game cheating, and one that says so reads as a second round. The bar
+   * is re-labelled so the phase is on screen for the rest of the fight.
+   */
+  _bossPhase(n, of, boss) {
+    this.hud.showBossBar(`${boss.name}  ·  ${'◆'.repeat(n)}${'◇'.repeat(of - n)}`,
+      boss.fraction, PHASE_LINES[Math.min(n - 2, PHASE_LINES.length - 1)]);
+    this.hud.announce(n >= of ? 'NO MORE HOLDING BACK' : 'IT CHANGES',
+      'divine', false);
+    Audio.bossPhase(n);
   }
 
   _dropBoss() {
@@ -825,6 +1306,16 @@ export class Overworld {
         said.push(`Taken: ${g.name}${it.n > 1 ? ` ×${it.n}` : ''}.`);
       }
     }
+    /**
+     * A guardian always leaves blades behind.
+     *
+     * Kunai are finite now, so a boss fight has to be able to REFILL as well
+     * as cost — otherwise a player who spent forty of them learning a fight
+     * is punished for having learned it. Scaled by tier, and generous: this
+     * is the main resupply in the game.
+     */
+    const blades = this.giveKunai(10 + e.tier * 4, false);
+    if (blades > 0) said.push(`✦ ${blades} kunai.`);
     this.hud.toast(said.join('  '), 7);
     /**
      * The world changes, and the player is told which part of it.
@@ -951,7 +1442,8 @@ export class Overworld {
           headOffset: 8.0, headRadius: 2.6,
           vertical: 14,
         },
-        onHit: (dmg) => this.frogath.takeDamage(dmg),
+        onHit: (dmg, dx, dz, head, at, kind) =>
+          this.frogath.takeDamage(dmg, { head, ranged: kind !== 'melee' }),
       });
     } else if (this.boss && this.boss.alive && this.boss.active) {
       const s = this.boss.scaleFactor;
@@ -962,7 +1454,11 @@ export class Overworld {
           headOffset: 3.6 * s, headRadius: 1.1 * s,
           vertical: 4.5 * s,
         },
-        onHit: (dmg) => this.boss.takeDamage(dmg),
+        // The sixth argument names the weapon — see DungeonBoss.takeDamage.
+        // Without it a guardian cannot tell a thrown kunai from a katana and
+        // the whole guard, weak-point and punish-window layer does nothing.
+        onHit: (dmg, dx, dz, head, at, kind) =>
+          this.boss.takeDamage(dmg, { head, ranged: kind !== 'melee' }),
       });
     }
     for (const c of this.camps) {
@@ -977,6 +1473,15 @@ export class Overworld {
     const p = this.progress;
     const r = p.addXp(Progress.xpFor(mob.tier, false));
     for (const it of mob.loot()) p.add(it.id, it.n);
+    /**
+     * Some of them were carrying kunai.
+     *
+     * A little under half, one or two each. Clearing a camp is therefore a
+     * way to restock — small, unreliable, and worth doing — which is what
+     * keeps the wilderness between two bosses worth fighting through rather
+     * than sneaking past on an empty pouch.
+     */
+    if (Math.random() < 0.42) this.giveKunai(1 + Math.floor(Math.random() * 2), false);
     this._announceLevels(r);
     this.applyStats();
     // Experience and loot, so it has to reach the disk — but a camp is six of
@@ -1009,17 +1514,32 @@ export class Overworld {
   _interact(player, input) {
     const px = player.pos.x, pz = player.pos.z;
     const npc = this.people.near(px, pz);
-    const site = npc ? null : this.sites.at(px, pz);
+    /**
+     * Who wins the E key when several things are in reach.
+     *
+     * A person, then a discovery, then a prop, then a place you have already
+     * been. The discovery goes above the prop deliberately: a site is found
+     * ONCE and the chest standing in it can be opened any time after, so
+     * putting the chest first would let a chest placed near the middle of a
+     * shrine hide the shrine's own moment permanently.
+     */
+    const here = npc ? null : this.sites.at(px, pz);
+    const findable = here && (SECRETS[here.id] || here.landmark);
+    const unfound = findable && !this.progress.found.has(here.id);
+    const prop = (npc || unfound || !this.props) ? null : this.props.at(px, pz);
+    const propSay = prop ? prop.promptFor(this.progress) : null;
+    const site = (npc || propSay) ? null : here;
     // A site only offers a prompt when there is something in it to find.
     // Standing in a village is not an action; standing at the foot of a
     // hundred-metre statue is.
-    const findable = site && (SECRETS[site.id] || site.landmark);
-    const secret = findable
+    const secret = (site && findable)
       ? (this.progress.found.has(site.id) ? 'again' : 'new') : null;
 
     this._npcHere = npc;
     this._siteHere = site;
+    this._propHere = propSay ? prop : null;
     if (npc) this.prompt = `Talk to ${npc.spec.name}`;
+    else if (propSay) this.prompt = propSay;
     else if (secret === 'new') this.prompt = `Examine ${site.name}`;
     else if (secret === 'again') this.prompt = site.name;
     else this.prompt = null;
@@ -1042,7 +1562,49 @@ export class Overworld {
     player.interactPressed = false;
     if (!this.prompt) return;
     if (npc) this._talk(npc);
+    else if (this._propHere) this._touch(this._propHere, player);
     else if (site) this._examine(site);
+  }
+
+  /**
+   * Put a hand on something.
+   *
+   * The frog reaches out first and the prop starts moving second, so the two
+   * animations overlap the way they would if the one were causing the other.
+   * Nothing is granted here: the prop calls back on its own payoff beat, when
+   * the lid is actually up. See `_propPay`.
+   */
+  _touch(prop, player) {
+    const need = prop.blockedBy(this.progress);
+    if (need) {
+      const g = GEAR_BY_ID.get(need);
+      this.hud.toast(`It will not move. ${g ? g.name : 'Something'} would.`, 5);
+      Audio.parry(prop.pos);
+      return;
+    }
+    if (prop.used) {
+      // A carving can be read again. A chest cannot be looted again.
+      const prize = prop.spec.prize;
+      if (prize && prize.what === 'lore') {
+        player.reachOut();
+        this._read(prize.id, false);
+        return;
+      }
+      this.hud.toast(prop.spec.usedLabel || 'Nothing left in it.', 3);
+      return;
+    }
+    // A shop says no before the animation rather than after it.
+    const prize = prop.spec.prize;
+    if (prize && prize.what === 'shop' && this.economy
+        && !this.economy.canAfford(prize.price)) {
+      this.hud.toast(`${prize.price} froglets. You have `
+        + `${Math.floor(this.economy.froglets)}.`, 4);
+      Audio.uiBack();
+      return;
+    }
+    player.reachOut();
+    if (!prop.use()) return;
+    this.markDirty();
   }
 
   _talk(npc) {
@@ -1289,12 +1851,17 @@ export class Overworld {
     if (this.life) this.life.dispose();
     if (this.people) this.people.dispose();
     if (this.sites) this.sites.dispose();
+    if (this.props) this.props.dispose();
+    this._levers.length = 0;
+    this._gates.length = 0;
     if (this.scatter) this.scatter.dispose();
     if (this.weather) this.weather.dispose();
-    // The two module-level material caches. Both are keyed rather than owned
-    // by an instance, so nothing else will ever free them.
+    if (this.ambience) this.ambience.dispose();
+    // The module-level material caches. All are keyed rather than owned by an
+    // instance, so nothing else will ever free them.
     disposeVillagerMats();
     disposeLandmarkMats();
+    disposePropMats();
     Audio.stopRegionMusic();
     this.realm.dispose();
     this.dialogue.close();

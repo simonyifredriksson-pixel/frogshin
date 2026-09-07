@@ -25,8 +25,8 @@
  * silhouette, or the region behind it becomes unreachable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { mulberry32 } from './util.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { mulberry32 } from './util.js?v=v85';
 
 const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -126,6 +126,9 @@ const BUILD = {
     }
     put(g, G.cyl, P.woodDark, 3, 6, 3, 0, 56, 12, Math.PI / 2);
     g.userData.spin = hub;
+    // Marked on the hub itself too, so `Sites.flatten` leaves it as its own
+    // group instead of merging the sails into the tower they turn in front of.
+    hub.userData.spin = true;
   },
 
   // ────────────────────────────────────────────────────── the Whispermire ──

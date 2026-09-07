@@ -54,7 +54,7 @@
  * the sea you woke up in.
  */
 
-import { clamp, smoothstep } from './util.js?v=v84';
+import { clamp, smoothstep } from './util.js?v=v85';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 5120;
@@ -144,14 +144,48 @@ export const REGIONS = [
     camps: [
       { at: [90, 1720], kind: 'lurker', n: 3, tier: 0 },
       { at: [560, 1900], kind: 'lurker', n: 3, tier: 0 },
+      /**
+       * The patrol that burned Mirefoot has not gone far.
+       *
+       * Out by the great lily rather than between the two villages, which is
+       * deliberate on two counts: it is the first thing in the game that
+       * fights back and it should be found rather than tripped over, and a
+       * camp within CAMP_BUILD of Croakhollow would put a third live camp on
+       * screen from the middle of the starting village. Camps are the most
+       * expensive thing in the world to draw.
+       */
+      { at: [650, 2050], kind: 'lurker', n: 3, tier: 0 },
     ],
     sites: [
+      /**
+       * MIREFOOT — where the player wakes up, and why they are walking.
+       *
+       * Their own village. Frogath's soldiers came through it eleven days
+       * ago, took everybody who could walk, and burned the rest. It is the
+       * first thing in the game and it is not a cutscene: the player stands
+       * in it, reads the marks on their own doorway, and then walks to
+       * Croakhollow because it is the only roof left in sight.
+       *
+       * Deliberately a hundred and thirty units from Croakhollow — close
+       * enough that the next place is visible from the ashes, far enough that
+       * getting there is the first thing they do.
+       */
+      { id: 'mirefoot', kind: 'burnt', at: [430, 1900], r: 44,
+        name: 'MIREFOOT', blurb: 'Your village. Eleven days ago it had a roof.' },
       { id: 'croakhollow', kind: 'village', at: [300, 1790], r: 66,
         name: 'CROAKHOLLOW', blurb: 'The last village that still has a roof.' },
       { id: 'listening-stone', kind: 'shrine', at: [80, 1660], r: 18,
         name: 'THE LISTENING STONE' },
       { id: 'reedcaves', kind: 'cave', at: [660, 1710], r: 22,
         name: 'THE REED HOLLOWS', blurb: 'Something has been sleeping in it.' },
+      { id: 'padwatch', kind: 'hut', at: [520, 2020], r: 20,
+        name: 'THE PADWATCH', blurb: 'Somebody watches the lily. In shifts.' },
+      { id: 'sunk-punt', kind: 'easteregg', at: [140, 1980], r: 15,
+        name: 'THE PUNT THAT WENT DOWN',
+        blurb: 'A flat-bottomed boat, upright, four feet under, still moored.' },
+      { id: 'first-milestone', kind: 'shrine', at: [180, 1740], r: 14,
+        name: 'THE FIRST MILESTONE',
+        blurb: 'Nought miles. Everything in the country is measured from it.' },
     ],
   },
 
@@ -173,8 +207,16 @@ export const REGIONS = [
       name: 'THE GREAT HARROW MILL',
       blurb: 'Six sails, and it has not stopped turning in four hundred years.',
     },
-    bosses: [{ id: 'thistlejack', at: [-560, 1900], arena: 40 }],
-    camps: [{ at: [-180, 1900], kind: 'scarecrow', n: 3, tier: 0 }],
+    bosses: [
+      { id: 'thistlejack', at: [-560, 1900], arena: 40 },
+      // Optional, and a long way off the road: the hedges south of the town.
+      { id: 'hedgewife', at: [-250, 1500], arena: 44 },
+    ],
+    camps: [
+      { at: [-180, 1900], kind: 'scarecrow', n: 3, tier: 0 },
+      { at: [-620, 1740], kind: 'scarecrow', n: 4, tier: 0 },
+      { at: [-420, 1520], kind: 'lurker', n: 3, tier: 0 },
+    ],
     sites: [
       { id: 'harrowmead-town', kind: 'town', at: [-330, 1700], r: 86,
         name: 'HARROWMEAD', blurb: 'Grain, gossip, and a blacksmith who talks.' },
@@ -183,6 +225,16 @@ export const REGIONS = [
       { id: 'stoneboat', kind: 'easteregg', at: [-140, 1560], r: 16,
         name: 'THE STONE BOAT',
         blurb: 'A fishing boat, in the middle of a wheat field, made of granite.' },
+      { id: 'hedge-maze', kind: 'ruin', at: [-260, 1560], r: 30,
+        name: 'THE OLD HEDGES',
+        blurb: 'Somebody planted these in rows and then stopped explaining why.' },
+      { id: 'mead-shrine', kind: 'shrine', at: [-620, 1660], r: 16,
+        name: 'THE SHRINE AT SIX SAILS' },
+      { id: 'tithe-barn', kind: 'ruin', at: [-460, 1810], r: 26,
+        name: 'THE TITHE BARN',
+        blurb: 'Emptied, then emptied again, then burned for the trouble.' },
+      { id: 'coldfurrow', kind: 'farm', at: [-160, 1660], r: 34,
+        name: 'COLDFURROW', blurb: 'Nobody has worked it since the closing.' },
     ],
   },
 
@@ -221,10 +273,13 @@ export const REGIONS = [
     bosses: [
       { id: 'silt', at: [-1060, 1300], arena: 46 },
       { id: 'tidemother', at: [-820, 1640], arena: 54 },
+      { id: 'eelfather', at: [-1280, 1250], arena: 48 },
     ],
     camps: [
       { at: [-880, 1360], kind: 'lurker', n: 4, tier: 1 },
       { at: [-1160, 1580], kind: 'reedstalker', n: 3, tier: 1 },
+      { at: [-1320, 1370], kind: 'reedstalker', n: 4, tier: 1 },
+      { at: [-780, 1470], kind: 'lurker', n: 4, tier: 1 },
     ],
     sites: [
       { id: 'the-stilts', kind: 'village', at: [-980, 1560], r: 56,
@@ -234,6 +289,16 @@ export const REGIONS = [
       { id: 'drowned-bell', kind: 'easteregg', at: [-1240, 1680], r: 16,
         name: 'THE DROWNED BELL',
         blurb: 'Ring it three times and something answers.' },
+      { id: 'eelworks', kind: 'hut', at: [-820, 1560], r: 22,
+        name: 'THE EELWORKS', blurb: 'Traps, barrels, and a smell you keep.' },
+      { id: 'sunken-barge', kind: 'ruin', at: [-1080, 1400], r: 28,
+        name: 'THE TITHE BARGE',
+        blurb: 'It was carrying the fen’s tribute. It is carrying it still.' },
+      { id: 'fen-cairn', kind: 'shrine', at: [-1160, 1250], r: 16,
+        name: 'THE FEN CAIRN' },
+      { id: 'boardwalk-post', kind: 'camp', at: [-900, 1250], r: 24,
+        name: 'THE BOARDWALK POST',
+        blurb: 'Whoever kept this dry gave up on it recently.' },
     ],
   },
 
@@ -258,10 +323,13 @@ export const REGIONS = [
     bosses: [
       { id: 'mosshide', at: [1320, 1300], arena: 48 },
       { id: 'whisperweed', at: [860, 1620], arena: 44 },
+      { id: 'barkwretch', at: [1300, 1620], arena: 44 },
     ],
     camps: [
       { at: [1000, 1240], kind: 'thornling', n: 4, tier: 1 },
       { at: [1260, 1580], kind: 'thornling', n: 5, tier: 2 },
+      { at: [880, 1480], kind: 'thornling', n: 4, tier: 1 },
+      { at: [1180, 1720], kind: 'thornling', n: 5, tier: 2 },
     ],
     sites: [
       { id: 'roothome', kind: 'treevillage', at: [1080, 1400], r: 62,
@@ -272,6 +340,19 @@ export const REGIONS = [
         name: 'THE RING', blurb: 'Stand in the middle and the wood goes quiet.' },
       { id: 'sunkenchapel', kind: 'ruin', at: [820, 1280], r: 32,
         name: 'THE SUNKEN CHAPEL' },
+      { id: 'charcoal-burn', kind: 'camp', at: [940, 1660], r: 26,
+        name: 'THE CHARCOAL BURN',
+        blurb: 'Six mounds, all cold. They left in the middle of a firing.' },
+      { id: 'deep-glade', kind: 'shrine', at: [1220, 1480], r: 20,
+        name: 'THE DEEP GLADE' },
+      { id: 'hollow-oak', kind: 'easteregg', at: [900, 1180], r: 16,
+        name: 'THE HOLLOW OAK',
+        blurb: 'A tree with a furnished room in it. Somebody still dusts.' },
+      { id: 'root-cellar', kind: 'cave', at: [1380, 1420], r: 22,
+        name: 'THE ROOT CELLAR',
+        blurb: 'It goes further under the tree than the tree is wide.' },
+      { id: 'wardens-tower', kind: 'tower', at: [1000, 1560], r: 24,
+        name: 'THE WOODWARDEN’S TOWER' },
     ],
   },
 
@@ -307,8 +388,13 @@ export const REGIONS = [
     bosses: [
       { id: 'grott', at: [150, 950], arena: 50 },
       { id: 'skarn', at: [400, 1120], arena: 46 },
+      { id: 'stairwright', at: [-120, 960], arena: 44 },
     ],
-    camps: [{ at: [-60, 1080], kind: 'stonewarden', n: 3, tier: 2 }],
+    camps: [
+      { at: [-60, 1080], kind: 'stonewarden', n: 3, tier: 2 },
+      { at: [320, 1000], kind: 'stonewarden', n: 4, tier: 2 },
+      { at: [40, 1240], kind: 'lurker', n: 4, tier: 1 },
+    ],
     sites: [
       { id: 'stairfoot', kind: 'shrine', at: [150, 1250], r: 22,
         name: 'THE STAIRFOOT SHRINE' },
@@ -316,6 +402,19 @@ export const REGIONS = [
         name: 'THE STAIRHEAD GATE' },
       { id: 'toll-camp', kind: 'camp', at: [-140, 1220], r: 28,
         name: 'THE TOLLKEEPER’S FIRE' },
+      { id: 'cistern', kind: 'cave', at: [280, 1180], r: 24,
+        name: 'THE CISTERN', blurb: 'It fed the stair. It is still full.' },
+      { id: 'watchpost', kind: 'tower', at: [-200, 1040], r: 22,
+        name: 'THE LOWER WATCHPOST' },
+      { id: 'masons-yard', kind: 'ruin', at: [340, 1230], r: 30,
+        name: 'THE MASONS’ YARD',
+        blurb: 'Half-cut treads, still stacked, with the chisels beside them.' },
+      { id: 'stairside-inn', kind: 'hut', at: [40, 1160], r: 22,
+        name: 'THE HALFWAY HOUSE',
+        blurb: 'An inn on a staircase. Business used to be good.' },
+      { id: 'floatstones-2', kind: 'easteregg', at: [-260, 1160], r: 16,
+        name: 'THE COUNTED STEPS',
+        blurb: 'Somebody has numbered every tread. The numbers do not agree.' },
     ],
   },
 
@@ -350,10 +449,13 @@ export const REGIONS = [
     bosses: [
       { id: 'stonewalks', at: [-100, 340], arena: 56 },
       { id: 'sableknight', at: [160, 620], arena: 48 },
+      { id: 'tithetaker', at: [-390, 640], arena: 46 },
     ],
     camps: [
       { at: [-340, 560], kind: 'husk', n: 5, tier: 3 },
       { at: [100, 300], kind: 'husk', n: 5, tier: 3 },
+      { at: [-240, 300], kind: 'husk', n: 5, tier: 2 },
+      { at: [220, 540], kind: 'husk', n: 4, tier: 3 },
     ],
     sites: [
       { id: 'anurath-city', kind: 'city', at: [-170, 550], r: 120,
@@ -364,6 +466,18 @@ export const REGIONS = [
         name: 'THE DROWNED LIBRARY', blurb: 'Every book in the world, ruined.' },
       { id: 'throneless-hall', kind: 'ruin', at: [160, 420], r: 38,
         name: 'THE THRONELESS HALL' },
+      { id: 'tithe-yard', kind: 'ruin', at: [-380, 660], r: 32,
+        name: 'THE TITHE YARD',
+        blurb: 'Where the country’s tribute was weighed before it went north.' },
+      { id: 'aqueduct', kind: 'bridge', at: [80, 640], r: 36,
+        name: 'THE BROKEN AQUEDUCT' },
+      { id: 'low-quarter', kind: 'village', at: [-300, 440], r: 52,
+        name: 'THE LOW QUARTER',
+        blurb: 'The part of the capital that was always underwater.' },
+      { id: 'palace-vaults', kind: 'cave', at: [-40, 400], r: 26,
+        name: 'THE PALACE VAULTS' },
+      { id: 'coin-shrine', kind: 'shrine', at: [-200, 700], r: 18,
+        name: 'THE SHRINE OF THE HONEST WEIGHT' },
     ],
   },
 
@@ -397,10 +511,13 @@ export const REGIONS = [
     bosses: [
       { id: 'quarryhand', at: [1420, 540], arena: 52 },
       { id: 'glassback', at: [1660, 820], arena: 46 },
+      { id: 'overburden', at: [1240, 880], arena: 46 },
     ],
     camps: [
       { at: [1280, 760], kind: 'stonewarden', n: 4, tier: 2 },
       { at: [1560, 460], kind: 'stonewarden', n: 4, tier: 3 },
+      { at: [1680, 560], kind: 'stonewarden', n: 5, tier: 3 },
+      { at: [1360, 940], kind: 'husk', n: 4, tier: 2 },
     ],
     sites: [
       { id: 'cutters-rest', kind: 'town', at: [1520, 780], r: 82,
@@ -409,6 +526,18 @@ export const REGIONS = [
         name: 'THE DEEPCUT', blurb: 'It goes further down than anyone will say.' },
       { id: 'sledge-shrine', kind: 'shrine', at: [1700, 680], r: 20,
         name: 'THE SLEDGE SHRINE' },
+      { id: 'sawpit', kind: 'camp', at: [1600, 900], r: 26,
+        name: 'THE SAWPIT' },
+      { id: 'spoil-heap', kind: 'ruin', at: [1240, 880], r: 30,
+        name: 'THE SPOIL HEAP',
+        blurb: 'Everything the quarry did not want, in one hill.' },
+      { id: 'undercut', kind: 'cave', at: [1440, 900], r: 24,
+        name: 'THE UNDERCUT', blurb: 'They cut sideways here and stopped fast.' },
+      { id: 'crane-tower', kind: 'tower', at: [1340, 500], r: 24,
+        name: 'THE GREAT CRANE' },
+      { id: 'cut-face', kind: 'easteregg', at: [1700, 460], r: 16,
+        name: 'THE FACE IN THE CUT',
+        blurb: 'Eighty feet of exposed rock with a face in it. Not carved.' },
     ],
   },
 
@@ -478,10 +607,12 @@ export const REGIONS = [
       { id: 'gravewater', at: [-1880, 120], arena: 54 },
       { id: 'okka', at: [-1580, 320], arena: 48 },
       { id: 'lanternbearer', at: [-1920, 400], arena: 46 },
+      { id: 'saltjaw', at: [-1700, -100], arena: 46 },
     ],
     camps: [
       { at: [-1700, 40], kind: 'drowned', n: 5, tier: 3 },
       { at: [-1860, 340], kind: 'drowned', n: 5, tier: 3 },
+      { at: [-1600, 120], kind: 'drowned', n: 4, tier: 3 },
     ],
     sites: [
       { id: 'gravekeeper', kind: 'camp', at: [-1620, 40], r: 30,
@@ -490,6 +621,15 @@ export const REGIONS = [
         name: 'THE BARROWFIELDS' },
       { id: 'saltwalk', kind: 'bridge', at: [-1540, 200], r: 32,
         name: 'THE SALT WALK' },
+      { id: 'salt-hut', kind: 'hut', at: [-1660, 300], r: 22,
+        name: 'THE SALTER’S HUT' },
+      { id: 'barrow-road', kind: 'ruin', at: [-1900, -20], r: 30,
+        name: 'THE BARROW ROAD',
+        blurb: 'Paved for funerals. It is still the driest ground here.' },
+      { id: 'drowned-vault', kind: 'cave', at: [-1780, 340], r: 24,
+        name: 'THE DROWNED VAULT' },
+      { id: 'lantern-shrine', kind: 'shrine', at: [-1560, -60], r: 18,
+        name: 'THE SHRINE OF THE KEPT FLAME' },
     ],
   },
 
@@ -594,8 +734,13 @@ export const REGIONS = [
     bosses: [
       { id: 'nix', at: [700, -320], arena: 48 },
       { id: 'twincroaks', at: [500, 20], arena: 52 },
+      { id: 'secondvoice', at: [900, -420], arena: 46 },
     ],
-    camps: [{ at: [880, -40], kind: 'windrider', n: 4, tier: 3 }],
+    camps: [
+      { at: [880, -40], kind: 'windrider', n: 4, tier: 3 },
+      { at: [560, -220], kind: 'windrider', n: 5, tier: 3 },
+      { at: [780, -460], kind: 'windrider', n: 4, tier: 4 },
+    ],
     sites: [
       { id: 'choirhold', kind: 'shrine', at: [700, -20], r: 24,
         name: 'THE CHOIRHOLD' },
@@ -603,6 +748,15 @@ export const REGIONS = [
         name: 'THE WINDSTAIR' },
       { id: 'the-note', kind: 'easteregg', at: [540, -360], r: 16,
         name: 'THE LAST NOTE', blurb: 'Stand still and it finishes the song.' },
+      { id: 'echo-stair', kind: 'ruin', at: [560, -140], r: 30,
+        name: 'THE ECHO STAIR',
+        blurb: 'Shout at the bottom and it answers from four places at once.' },
+      { id: 'bellhouse', kind: 'tower', at: [820, -140], r: 24,
+        name: 'THE BELLHOUSE' },
+      { id: 'singing-hollow', kind: 'cave', at: [620, -420], r: 24,
+        name: 'THE SINGING HOLLOW' },
+      { id: 'lumen-outpost', kind: 'camp', at: [900, -360], r: 26,
+        name: 'THE UPPER OUTPOST' },
     ],
   },
 
@@ -722,10 +876,12 @@ export const REGIONS = [
     bosses: [
       { id: 'varn', at: [1540, -760], arena: 48 },
       { id: 'cindren', at: [1760, -520], arena: 46 },
+      { id: 'slaghide', at: [1360, -880], arena: 46 },
     ],
     camps: [
       { at: [1400, -640], kind: 'emberling', n: 5, tier: 4 },
       { at: [1660, -820], kind: 'emberling', n: 5, tier: 4 },
+      { at: [1800, -620], kind: 'emberling', n: 4, tier: 4 },
     ],
     sites: [
       { id: 'ashfall', kind: 'camp', at: [1400, -760], r: 30,
@@ -734,6 +890,16 @@ export const REGIONS = [
         name: 'WHAT WAS EMBERFORD', blurb: 'Doorways, chimneys, and nothing else.' },
       { id: 'kiln', kind: 'dungeon', at: [1820, -720], r: 34,
         name: 'THE OLD KILN' },
+      { id: 'slag-camp', kind: 'camp', at: [1440, -880], r: 26,
+        name: 'THE SLAG CAMP' },
+      { id: 'glasshouse', kind: 'ruin', at: [1700, -900], r: 32,
+        name: 'THE GLASSHOUSE',
+        blurb: 'The sand here went to glass standing up. It is still standing.' },
+      { id: 'emberford-well', kind: 'shrine', at: [1580, -420], r: 18,
+        name: 'THE EMBERFORD WELL',
+        blurb: 'Somebody comes back and leaves flowers on the lip.' },
+      { id: 'ash-tunnel', kind: 'cave', at: [1300, -700], r: 24,
+        name: 'THE ASH TUNNEL' },
     ],
   },
 
@@ -807,13 +973,30 @@ export const REGIONS = [
       name: 'THE EYE OF THE DEEP',
       blurb: 'A hole through the ridge, big enough to see the next region through.',
     },
-    bosses: [{ id: 'huldr', at: [-440, -960], arena: 52 }],
-    camps: [{ at: [-300, -700], kind: 'bonepicker', n: 4, tier: 4 }],
+    bosses: [
+      { id: 'huldr', at: [-440, -960], arena: 52 },
+      { id: 'windward', at: [-620, -900], arena: 46 },
+    ],
+    camps: [
+      { at: [-300, -700], kind: 'bonepicker', n: 4, tier: 4 },
+      { at: [-540, -680], kind: 'bonepicker', n: 5, tier: 4 },
+      { at: [-320, -1000], kind: 'bonepicker', n: 4, tier: 4 },
+    ],
     sites: [
       { id: 'vertebrae', kind: 'ruin', at: [-580, -760], r: 32,
         name: 'THE SEVENTH VERTEBRA' },
       { id: 'spinecamp', kind: 'camp', at: [-280, -880], r: 28,
         name: 'THE LAST FIRE BEFORE THE RIDGE' },
+      { id: 'ribcage', kind: 'cave', at: [-500, -1000], r: 26,
+        name: 'THE RIBCAGE',
+        blurb: 'You can walk in between two of them. People have lived in here.' },
+      { id: 'windward-camp', kind: 'camp', at: [-640, -860], r: 26,
+        name: 'THE WINDWARD CAMP' },
+      { id: 'ridge-shrine', kind: 'shrine', at: [-380, -780], r: 18,
+        name: 'THE SHRINE ON THE RIDGE' },
+      { id: 'marrow-mine', kind: 'mine', at: [-620, -700], r: 28,
+        name: 'THE MARROW WORKINGS',
+        blurb: 'They were quarrying the ridge. The ridge did not care for it.' },
     ],
   },
 
@@ -911,6 +1094,16 @@ export const REGIONS = [
       { id: 'hollowking', at: [900, -1520], arena: 58 },
       { id: 'gatewright', at: [1120, -1300], arena: 50 },
     ],
+    /**
+     * Six apiece — the biggest fight outside an arena.
+     *
+     * A city husk is the most expensive creature in the game, thirty-two
+     * meshes against a lurker's nineteen, and both of these camps are inside
+     * a hundred-and-twelve-unit city. That used to make standing in the
+     * market the worst place in the country to draw; flattening the sites
+     * took nine hundred draw calls off it (see `Sites.flatten`) and left room
+     * for the city to be as dangerous as its own description.
+     */
     camps: [
       { at: [1020, -1340], kind: 'cityhusk', n: 6, tier: 5 },
       { at: [780, -1500], kind: 'cityhusk', n: 6, tier: 5 },

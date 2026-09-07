@@ -716,7 +716,15 @@ export class AudioEngine {
     const root = 110;
     let step = 0;
 
-    const timer = setInterval(() => {
+    /**
+     * One beat of the bed, kept as a named closure.
+     *
+     * `bossPhase` re-arms the interval at a shorter period when a guardian
+     * changes shape, and it can only do that if there is something to re-arm
+     * it with — an anonymous callback passed straight to setInterval is gone
+     * the moment the handle is cleared.
+     */
+    const beat = () => {
       if (!this._boss) return;
       // Driving eighth-note pulse on the root.
       this.tone({
@@ -745,9 +753,34 @@ export class AudioEngine {
         });
       }
       step++;
-    }, 250);
+    };
+    const timer = setInterval(beat, 250);
 
-    this._boss = { timer, droneGain, oscs };
+    this._boss = { timer, droneGain, oscs, beat, period: 250, phase: 1 };
+  }
+
+  /**
+   * A guardian has changed phase.
+   *
+   * A sting on top, and the bed underneath tightens: shorter beat, louder
+   * drone. Nothing about it is required for the fight to work — the fight
+   * announces itself on screen too — but a phase change that sounds the same
+   * as the phase before it does not land as a phase change.
+   */
+  bossPhase(n) {
+    this.tone({ freq: 88, to: 320, dur: 1.2, type: 'sawtooth', volume: 0.24 });
+    this.tone({ freq: 640, to: 210, dur: 0.9, type: 'triangle', volume: 0.15 });
+    this.noise({
+      dur: 0.75, volume: 0.20, filter: 900, filterTo: 110, type: 'lowpass',
+    });
+    if (!this._boss) return;
+    this._boss.phase = n;
+    clearInterval(this._boss.timer);
+    this._boss.period = Math.max(150, 250 - (n - 1) * 34);
+    this._boss.timer = setInterval(this._boss.beat, this._boss.period);
+    const t = this.ctx.currentTime;
+    this._boss.droneGain.gain.linearRampToValueAtTime(
+      Math.min(0.19, 0.10 + n * 0.025), t + 1.0);
   }
 
   // ------------------------------------------------------------ music files

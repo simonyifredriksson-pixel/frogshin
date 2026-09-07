@@ -46,71 +46,105 @@ const turnIn = (id, text, where, mark) => st(text, where, mark, (p) => p.questDo
 export const QUESTS = [
   {
     id: MAIN,
-    name: 'THE LONG CROAK',
+    name: 'WHAT THEY TOOK',
     side: false,
-    blurb: 'Every guardian in the world has started walking north. Find out why.',
+    blurb: 'They burned Mirefoot and marched everybody north. Follow them.',
+    /**
+     * Every stage names a place, a reason, and a thing standing in the way.
+     *
+     * That is the format, and it is the answer to "make the story extremely
+     * clear without huge on-screen instructions": one line in the log, a star
+     * on the map, and the reason folded into the same sentence. The player is
+     * never told to explore and never told the plot — they are told what they
+     * are walking toward and what is holding it shut, and the carvings, the
+     * villagers and the ruins fill in the rest at whatever pace they like.
+     *
+     * No stage anywhere says "you cannot pass until X is dead". Each one says
+     * what is physically in the way: a barred gate with something standing at
+     * it, a bridge nobody is allowed across, a pass with a beast on it.
+     */
     stages: [
-      st('Speak to Old Bram in Croakhollow.',
+      st('Mirefoot is gone. Walk to Croakhollow and find somebody who saw it.',
         'lilyreach', site('croakhollow'),
         (p) => p.questStage(MAIN) > 0),
-      st('Follow the Mead Way west to Harrowmead and find Reeve Tull.',
+      st('Bram says the column went west along the Mead Way. Follow it to '
+        + 'Harrowmead and ask Reeve Tull.',
         'harrowmead', site('harrowmead-town'),
         (p) => p.questStage(MAIN) > 1 || p.seen.has('harrowmead')),
-      st('Something is standing in Longfurrow’s west field. Put Thistlejack down.',
+      st('Nobody will work Longfurrow while Thistlejack is standing in the '
+        + 'west field, and Tull will not talk until it is dealt with.',
         'harrowmead', boss('thistlejack'),
         (p) => p.slain.has('thistlejack')),
-      st('The Whispermire is rising. Go west to The Stilts and speak to Wade.',
+      st('The prisoners were taken over the fen. Go west to The Stilts and '
+        + 'ask Wade which channel they used.',
         'whispermire', site('the-stilts'),
         (p) => p.seen.has('whispermire')),
-      st('GUARDIAN 1 — Silt, Warden of the Shallows, in the deep channel.',
+      st('Silt holds the deep channel and nothing crosses the fen while it '
+        + 'is in the water.',
         'whispermire', boss('silt'),
         (p) => p.slain.has('silt')),
-      st('The Wood Road east is open. Reach Roothome in Hollowroot Wood.',
+      st('The Wood Road east is walkable again. Reach Roothome, where they '
+        + 'keep the archive.',
         'hollowroot', site('roothome'),
         (p) => p.seen.has('hollowroot')),
-      st('GUARDIAN 2 — Mosshide, the Patient, in the deep wood.',
+      st('The archive is on the far side of the wood and Mosshide has filled '
+        + 'the wood. Clear the road to it.',
         'hollowroot', boss('mosshide'),
         (p) => p.slain.has('mosshide')),
-      st('Take the King’s Road north and climb the Sunken Stair.',
+      st('The archive says the column went up the Sunken Stair. Climb it to '
+        + 'the Stairhead Gate.',
         'sunkenstair', site('stairhead-gate'),
         (p) => p.seen.has('sunkenstair')),
-      st('GUARDIAN 3 — Grott, the Gate-Keeper, holds the Stairhead Gate.',
+      st('The gate is barred and Grott is standing in it. It does not '
+        + 'negotiate — the plate on the gate says so.',
         'sunkenstair', boss('grott'),
         (p) => p.slain.has('grott')),
-      st('The road drops into the Anurath Basin. Find the capital.',
+      st('Beyond the gate the road drops into the Anurath Basin. The capital '
+        + 'is where the tribute goes.',
         'anurath', site('anurath-city'),
         (p) => p.seen.has('anurath')),
-      st('GUARDIAN 4 — The Stone That Walks, in the palace forecourt.',
+      st('The Stone That Walks is in the palace forecourt, on top of the '
+        + 'proclamation nobody is allowed to read.',
         'anurath', boss('stonewalks'),
         (p) => p.slain.has('stonewalks')),
-      st('The Cutter’s Way east is open. GUARDIAN 5 — the Quarry-Hand.',
+      st('The Cutter’s Way is the only road east and the Quarry-Hand throws '
+        + 'at anything that uses it.',
         'quarry', boss('quarryhand'),
         (p) => p.slain.has('quarryhand')),
-      st('Follow the Salt Road west. GUARDIAN 6 — Gravewater itself.',
+      st('The Salt Road west runs through Gravewater, and Gravewater is a '
+        + 'thing rather than a place.',
         'gravewater', boss('gravewater'),
         (p) => p.slain.has('gravewater')),
-      st('GUARDIAN 7 — Nix, last of the Choir, at the Stone Organ.',
+      st('Nix sits on the Stone Organ and the Organ is how the Choir sent '
+        + 'word north. Take it back.',
         'choircliffs', boss('nix'),
         (p) => p.slain.has('nix')),
-      st('Take the Ash Road. GUARDIAN 8 — Varn, who came running.',
+      st('The Ash Road is the last easy ground. Varn runs it end to end and '
+        + 'nothing else gets to.',
         'emberwaste', boss('varn'),
         (p) => p.slain.has('varn')),
-      st('GUARDIAN 9 — Huldr, at the Eye of the Deep on the Spine.',
+      st('Huldr holds the Eye of the Deep, and the pass over the Spine goes '
+        + 'through it.',
         'spine', boss('huldr'),
         (p) => p.slain.has('huldr')),
-      st('GUARDIAN 10 — The Hollow King, behind the Last Gate.',
+      st('The Hollow King is holding court on top of the last full account '
+        + 'of the seven keys. He does not know that. Get under the throne.',
         'hollowcity', boss('hollowking'),
         (p) => p.slain.has('hollowking')),
-      st('Take the Cold Road. GUARDIAN 11 — Brack, at the Hoarfrost Hold.',
+      st('The Cold Road north ends at the Hoarfrost Hold, and Brack is in '
+        + 'the way of the ford.',
         'frostmarch', boss('brack'),
         (p) => p.slain.has('brack')),
-      st('GUARDIAN 12 — Arkos holds the Sunderway, and it is the only bridge north.',
+      st('The Sunderway is the only bridge across the chasm. Arkos built it '
+        + 'and has never let one frog use it.',
         'sunderway', boss('arkos'),
         (p) => p.slain.has('arkos')),
-      st('GUARDIAN 13 — Zehl, the Final Guardian, at the Throne Gate.',
+      st('Zehl asked to be the door. He is the last thing between the road '
+        + 'and the seat.',
         'ashenthrone', boss('zehl'),
         (p) => p.slain.has('zehl')),
-      st('FROGATH. He has been waiting the whole time.',
+      st('FROGATH. Six keys turned, one left, and everybody from Mirefoot is '
+        + 'somewhere behind him.',
         'ashenthrone', boss('frogath'),
         (p) => p.slain.has('frogath')),
     ],
@@ -515,28 +549,43 @@ export const NPCS = [
   {
     id: 'bram', name: 'OLD BRAM', region: 'lilyreach', at: [308, 1772],
     colour: 0x6cc24a, role: 'elder', gives: MAIN, turns: null,
+    /**
+     * The opening conversation, and it has one job.
+     *
+     * Say what happened, say where the column went, and say NOTHING about
+     * keys, hearts or seven kingdoms. The player has just walked out of their
+     * own burned village; what they want is a direction, and what they are
+     * owed is somebody telling them they are not imagining it.
+     *
+     * Everything else the story has to say is on the stones — see lore.js.
+     */
     lines: [
       { when: (p) => p.slain.has('frogath'),
         say: ['You went up there.', 'And you came back down.',
-          'Nobody has ever done the second part.'] },
+          'Nobody has ever done the second part.',
+          'They are coming home along the Mead Way. All of them. Go and look.'] },
       { when: (p) => p.slain.size >= 10,
-        say: ['Ten of them.', 'The old songs only ever named six.',
-          'Whatever is calling them, it is losing its voice.'] },
+        say: ['Ten of the big ones.',
+          'Every one you put down, a road opens and somebody walks home on it.',
+          'Keep going north. That is where he keeps everything.'] },
       { when: (p) => p.slain.has('silt'),
-        say: ['You put the Warden down. Good.',
-          'They are not monsters, you know. They are GUARDIANS.',
-          'Somebody set them to guard something, and now they have all',
-          'started walking the same way. North. Go and find out what is up there.'] },
+        say: ['You put the Warden down, so you have worked out the shape of it.',
+          'They are not his soldiers. They were here first, and they are',
+          'each standing on one thing the country needs — a stair, a ford,',
+          'a bridge. He simply told them to keep standing.',
+          'Which means the road north is a list. Go and shorten it.'] },
       { when: (p) => p.questStage(MAIN) > 0,
-        say: ['Still here? Then listen properly.',
-          'Take the Mead Way west out of the village. It runs to Harrowmead.',
-          'Ask for Reeve Tull. He has been writing to me about the fields.'] },
+        say: ['Mirefoot. Forty-one roofs. I knew every one of them.',
+          'They went WEST, up the Mead Way, on foot, in a line.',
+          'Follow it to Harrowmead and ask for Reeve Tull —',
+          'he counts everything that goes past his fields, including frogs.'] },
       { when: () => true,
-        say: ['You are the one who came out of the water, then.',
-          'Thirteen guardians between here and the Ashen Throne.',
-          'They have all started walking the same direction. North.',
-          'Somebody has to go and look. It is not going to be me.',
-          'Start west. The Mead Way. Ask for Reeve Tull at Harrowmead.'] },
+        say: ['I saw the smoke from here. I am sorry. I truly am.',
+          'Eleven days ago. Frogs in black, forty of them, and a cart.',
+          'They took everybody who could walk and left the rest to the fire.',
+          'You are the rest.',
+          'They went west along the Mead Way. Ask for Reeve Tull at Harrowmead.',
+          'And take this — you will want something to throw.'] },
     ],
   },
   {
@@ -1209,12 +1258,246 @@ export const NPCS = [
   },
 ];
 
+// ══════════════════════════════════════════════════════ the occupation ══
+
+/**
+ * WHAT A REGION SOUNDS LIKE BEFORE AND AFTER.
+ *
+ * The world reacts to a guardian falling in four places at once: the boards
+ * come off the houses, Frogath's banners come down, the soldiers in the
+ * square are replaced by villagers and a merchant — and the people say
+ * something different. This table is the fourth of those.
+ *
+ *   by     the guardian whose death frees the region
+ *   held   what anybody here says while it is still standing
+ *   freed  what they say afterwards
+ *
+ * It is applied to EVERY NPC in the region by `_applyOccupation` below,
+ * inserted just above their default line — so a character's quest dialogue
+ * still wins, and the fallback they drop to is the mood of the place rather
+ * than the same sentence for the whole game. Twenty-two regions of it,
+ * written per region, because "the village is happy now" said in the same
+ * words in the fen and on the volcano is worse than saying nothing.
+ */
+const OCCUPATION = {
+  harrowmead: { by: 'thistlejack',
+    held: ['There is a thing standing in Longfurrow’s west field and it has',
+      'not moved in a month. Nobody will go past it, so nobody is reaping.',
+      'And his soldiers take the tribute anyway.'],
+    freed: ['The west field is being worked again. First time this year.',
+      'They took the black flags down at dawn. Nobody told them to.'] },
+  whispermire: { by: 'silt',
+    held: ['Keep to the boards. Silt is in the deep channel and it is not',
+      'guarding anything of ours — it is guarding the crossing.',
+      'Nothing has gone over the fen since the spring.'],
+    freed: ['The channel is quiet. You can hear frogs on the far bank again.',
+      'The Stilts is putting its rope back up.'] },
+  hollowroot: { by: 'mosshide',
+    held: ['The wood has gone wrong. It is not dying, it is FILLING —',
+      'spores in the air, everything soft, and the road under it somewhere.',
+      'Mosshide does not chase. It just keeps growing toward the archive.'],
+    freed: ['You can see the road through the trees again.',
+      'Give it a season and Roothome will be a wood instead of a lung.'] },
+  sunkenstair: { by: 'grott',
+    held: ['The Stairhead Gate is shut and Grott is in it. There is a bronze',
+      'plate on the gate telling you not to bother talking to it.',
+      'Everything north of here might as well be a rumour.'],
+    freed: ['The gate is open. OPEN. Four years.',
+      'There are carts going up the stair. Carts!'] },
+  anurath: { by: 'stonewalks',
+    held: ['This was the capital of the whole country. Now the tribute comes',
+      'here and goes straight north, and the palace forecourt has a stone',
+      'thing sitting in it on top of the proclamation.'],
+    freed: ['They have started reading the old proclamation out loud in the',
+      'forecourt. Every evening. Just because they can.'] },
+  quarry: { by: 'quarryhand',
+    held: ['The Cutter’s Way is closed and the Quarry-Hand closes it. It',
+      'throws. From a long way off. You will not see the first one.'],
+    freed: ['The Way is open and the cutters are back in the pit.',
+      'Four hundred names on that wall. We are still reading them.'] },
+  glassfen: { by: 'glassback',
+    held: ['Glassback is out on the flats and it sends your own blows back',
+      'at you. Aim for the seams, if you are stupid enough to try.'],
+    freed: ['The flats are safe as far as the reeds. That is not far.',
+      'It is further than yesterday.'] },
+  gravewater: { by: 'gravewater',
+    held: ['Gravewater is not a place with a thing in it. Gravewater IS the',
+      'thing. The Salt Road goes through it and that is all there is to say.'],
+    freed: ['The Salt Road is walkable. Bring salt, not luck.'] },
+  thirstlands: { by: 'sandreaver',
+    held: ['It travels under the dunes. The wave is the only warning and the',
+      'wave is about a second long.'],
+    freed: ['You can cross the dunes on foot now. Slowly, but on foot.'] },
+  choircliffs: { by: 'nix',
+    held: ['The Stone Organ is how we sent word to the north kingdoms.',
+      'Nix sits on it now, and it sings three notes, and all of them arrive.'],
+    freed: ['The Organ works. We sounded it last night and something answered',
+      'from the Moonshelf. Somebody is still alive up there.'] },
+  boneflats: { by: 'ossuar',
+    held: ['Ossuar is still collecting. Do not lie down out there.'],
+    freed: ['It has come apart. There is a hill of it and nothing holding it.'] },
+  drownedkeep: { by: 'dolmath',
+    held: ['Dolmath held the keep when it was dry, and he is still holding',
+      'it, and it has been under six feet of water for two hundred years.'],
+    freed: ['The keep is empty. First time. You can swim the great hall.'] },
+  emberwaste: { by: 'varn',
+    held: ['Varn runs the Ash Road end to end. Nothing else gets to use it.',
+      'You will hear him before you see him and it will not help.'],
+    freed: ['The Ash Road is a road again. Still ash. Still a road.'] },
+  cindermaw: { by: 'emberthrone',
+    held: ['The thing on the rim has been sitting in the caldera long enough',
+      'that the caldera has given up trying to put it out.'],
+    freed: ['The rim is clear. The mountain is still a mountain about it.'] },
+  spine: { by: 'huldr',
+    held: ['The pass over the Spine goes through the Eye of the Deep, and',
+      'Huldr is in the Eye, and Huldr turns, and the turn is the attack.'],
+    freed: ['The pass is open. You can get north over the Spine on legs.'] },
+  moonshelf: { by: 'moonwake',
+    held: ['Moonwake walks the shelf at night, and up here it is always',
+      'night, so work that out.'],
+    freed: ['We have started walking the shelf again. In pairs. But we have.'] },
+  palewood: { by: 'palecroak',
+    held: ['The Pale Croak sings and the wood fills with teeth. Do not go',
+      'in at dusk. Do not go in at dawn either.'],
+    freed: ['The wood is only fog now. Only fog is a gift, out here.'] },
+  hollowcity: { by: 'hollowking',
+    held: ['The Hollow King holds court in a city with nobody in it. He',
+      'still expects to be announced. He is sitting on the archive.'],
+    freed: ['The undercity is open. There are books down there that nobody',
+      'has read in four hundred years, and now somebody can.'] },
+  glimmerwood: { by: 'prismgaunt',
+    held: ['The Prismgaunt splits whatever hits it and gives you all the',
+      'pieces back at once. Do not fight it at range.'],
+    freed: ['The wood glows and nothing in it is trying to fold you in half.'] },
+  frostmarch: { by: 'brack',
+    held: ['Brack is at the ford by the Hoarfrost Hold. Three strokes,',
+      'always three, and never a pause between them.'],
+    freed: ['The ford is crossable. The Cold Road runs all the way up.'] },
+  rimefang: { by: 'rimeglass',
+    held: ['Rimeglass is cold enough that the air round it falls out of the',
+      'sky. You will see it snowing indoors before you see it.'],
+    freed: ['It is merely freezing now. That is an improvement and we will',
+      'take it.'] },
+  sunderway: { by: 'arkos',
+    held: ['Arkos built the span and has never let one frog cross it. Not',
+      'one. Including the frog who paid for it.'],
+    freed: ['The bridge is open. Two hundred feet of it and nothing on it.',
+      'Somebody should walk across just to prove it happened.'] },
+  ashenthrone: { by: 'zehl',
+    held: ['Zehl is the door and the door is shut. There is nothing behind',
+      'him except the seat and whoever is sitting in it.'],
+    freed: ['The Throne Gate is open. Go on, then. We will wait here.'] },
+};
+
+/**
+ * Splice each region's mood in above every NPC's default line.
+ *
+ * Done once, at module load, rather than written into thirty-seven line
+ * lists by hand — which would be the same text four times over in the towns
+ * that have four people in them, and would drift the moment one was edited.
+ *
+ * ABOVE the default and BELOW everything else, so a character's own quest
+ * dialogue always wins and what they fall back on is the state of the place
+ * they live in.
+ */
+function applyOccupation() {
+  for (const npc of NPCS) {
+    const O = OCCUPATION[npc.region];
+    if (!O) continue;
+    const at = Math.max(0, npc.lines.length - 1);
+    npc.lines.splice(at, 0,
+      { when: (p) => p.slain.has(O.by), say: O.freed },
+      { when: (p) => !p.slain.has(O.by), say: O.held });
+  }
+}
+applyOccupation();
+
 export const NPC_BY_ID = new Map(NPCS.map((n) => [n.id, n]));
 
 /** What this NPC is saying today — the first line-set whose test holds. */
 export function npcSays(npc, p) {
   for (const l of npc.lines) if (l.when(p)) return l.say;
   return ['...'];
+}
+
+/** Which guardian's death changes a region's mood, or null. */
+export function freesRegion(regionId) {
+  const O = OCCUPATION[regionId];
+  return O ? O.by : null;
+}
+export const OCCUPIED_REGIONS = Object.keys(OCCUPATION);
+
+/**
+ * WHY YOU CANNOT GET IN YET, said as a thing in the world.
+ *
+ * Keyed by the region you are trying to enter — which is NOT the same as the
+ * region the guardian is standing in: the Hollowroot Wood is shut because
+ * Silt is in the fen behind you, holding the only crossing.
+ *
+ * The whole point is that none of these is a lock message. Every one names a
+ * physical obstruction and where it is: a barred gate with something in it, a
+ * ford nothing crosses, a bridge nobody is allowed on, a pass with a beast on
+ * it. A player who reads one knows what to do next without being told there
+ * is a boss requirement, because there isn't one — there is a thing in the
+ * road.
+ *
+ * Regions with no entry in here are open from the start.
+ */
+const SHUT = {
+  hollowroot: 'The Wood Road runs through the fen and the fen has Silt in '
+    + 'it. Nothing has crossed the deep channel since the spring.',
+  sunkenstair: 'The King’s Road up to the stair goes through Hollowroot '
+    + 'Wood, and the wood has grown shut. Mosshide is still filling it.',
+  anurath: 'The Stairhead Gate is barred and Grott is standing in it. There '
+    + 'is a plate on the gate telling you not to bother talking to it.',
+  quarry: 'The Cutter’s Way starts in the palace forecourt, and the Stone '
+    + 'That Walks is sitting on the forecourt.',
+  glassfen: 'The causeway west leaves from the capital, and the capital’s '
+    + 'gate is under the Stone That Walks.',
+  gravewater: 'The Salt Road leaves the quarry and the Quarry-Hand throws at '
+    + 'anything on it. You will not see the first stone.',
+  thirstlands: 'The dune road out of the quarry is watched. The Quarry-Hand '
+    + 'has the whole cut in range.',
+  choircliffs: 'The stair up the cliffs starts in Gravewater, and Gravewater '
+    + 'is a thing rather than a place. It is in the shallows.',
+  boneflats: 'The only dry line across the flats runs out of Gravewater, and '
+    + 'Gravewater is still in it.',
+  drownedkeep: 'The way east goes under the Stone Organ, and Nix is sitting '
+    + 'on the Organ. It sings, and all three notes arrive.',
+  emberwaste: 'The Ash Road begins under the Choir Cliffs and Nix holds the '
+    + 'cliffs. Nothing gets onto the road.',
+  cindermaw: 'Varn runs the Ash Road end to end and the mountain track '
+    + 'leaves from the middle of it.',
+  spine: 'The ridge track leaves the Ash Road, and Varn is on the Ash Road, '
+    + 'and Varn crosses it before you have finished looking.',
+  moonshelf: 'The climb to the shelf starts past the Ash Road. Varn is on '
+    + 'the Ash Road.',
+  palewood: 'The pass over the Spine goes through the Eye of the Deep, and '
+    + 'Huldr is in the Eye. It turns, and the turn is the attack.',
+  hollowcity: 'The road north goes through the Eye of the Deep. Huldr has '
+    + 'not moved off it.',
+  glimmerwood: 'The Hollow King holds the city and the city holds the only '
+    + 'gate west. He is still holding court in it.',
+  frostmarch: 'The Last Gate is barred from the inside and the Hollow King '
+    + 'is sitting behind it.',
+  rimefang: 'The ford at the Hoarfrost Hold is the only way up, and Brack is '
+    + 'standing in the ford. Three strokes, always three.',
+  sunderway: 'The Cold Road ends at the ford, and Brack is in the ford.',
+  ashenthrone: 'The Sunderway is the only bridge over the chasm and Arkos '
+    + 'built it. He has never let one frog cross.',
+};
+
+/**
+ * What to put on screen when the player is turned back at a border.
+ *
+ * Falls back to naming the thing in the way, which is still world logic — a
+ * region added later without a written line gets a sentence rather than a
+ * lock notice.
+ */
+export function shutBecause(regionId, guardianName) {
+  return SHUT[regionId]
+    || `${guardianName || 'Something'} is standing in the road, and it has `
+      + 'not moved in four years.';
 }
 
 // ═════════════════════════════════════════════════════════════════ secrets ══

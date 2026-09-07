@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG } from './config.js?v=v84';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v84';
-import { FrogModel } from './frog.js?v=v84';
-import { Grapple, GrappleState } from './grapple.js?v=v84';
-import { Combat, Health } from './combat.js?v=v84';
-import { Stamina } from './stamina.js?v=v84';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v84';
-import { Audio } from './audio.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG } from './config.js?v=v85';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v85';
+import { FrogModel } from './frog.js?v=v85';
+import { Grapple, GrappleState } from './grapple.js?v=v85';
+import { Combat, Health } from './combat.js?v=v85';
+import { Stamina } from './stamina.js?v=v85';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v85';
+import { Audio } from './audio.js?v=v85';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -46,6 +46,8 @@ export class Player {
     this.inventory = new Inventory();
     this.kunaiCooldown = 0;
     this.throwT = 0;
+    /** Counts down through the reach-out gesture. See `reachOut`. */
+    this.reachT = 0;
     // Set each frame by the round manager: taggers throw faster, and the
     // chase modes turn player damage off entirely.
     this.throwCooldownOverride = 0;
@@ -439,6 +441,7 @@ export class Player {
     if (this._tiredCue > 0) this._tiredCue -= dt;
     if (this.kunaiCooldown > 0) this.kunaiCooldown -= dt;
     if (this.throwT > 0) this.throwT -= dt;
+    if (this.reachT > 0) this.reachT -= dt;
     if (this.jumpBuffer > 0) this.jumpBuffer -= dt;
     if (this.coyote > 0) this.coyote -= dt;
     if (this.wallCoyote > 0) this.wallCoyote -= dt;
@@ -1739,8 +1742,26 @@ export class Player {
       dead: this.health.dead,
       // Drives the climb: the rig reaches for the step it is walking onto.
       climbing: this.climbing,
+      /**
+       * Reaching out to touch something.
+       *
+       * Set by whatever owns the world's interactive props (see props.js).
+       * It lives here rather than in the props themselves because the arm
+       * doing the reaching belongs to the frog: a chest that opens while the
+       * player stands with their hands by their sides is a chest that opened
+       * on its own.
+       */
+      reachT: this.reachT > 0 ? this.reachT / 0.55 : 0,
     });
   }
+
+  /**
+   * Reach for something. One shot, purely cosmetic.
+   *
+   * Called the moment an interaction is accepted, so the arm is already on
+   * its way out while the lid, the lever or the door begins to move.
+   */
+  reachOut() { this.reachT = 0.55; }
 
   /**
    * Turn this frame's ledge snap into something that can be drawn.

@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v84';
-import { CFG } from './config.js?v=v84';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v84';
-import { Audio } from './audio.js?v=v84';
+import * as THREE from '../lib/three.module.js?v=v85';
+import { CFG } from './config.js?v=v85';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v85';
+import { Audio } from './audio.js?v=v85';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -321,11 +321,74 @@ export class Frogath {
 
   // --------------------------------------------------------------- damage
 
-  takeDamage(amount) {
+  /**
+   * Committed to an attack, and therefore unable to swat anything away.
+   *
+   * `attackName` is set for as long as an attack is running, so it is exactly
+   * the window in which he has both hands full.
+   */
+  get committed() { return !!this.attackName; }
+
+  /**
+   * The rest between attacks — the player's whole opening, and the only time
+   * a thrown blade is worth anything against him. See `_restTime`.
+   */
+  get vulnerable() { return !this.attackName && this.attackTimer > 0; }
+
+  /**
+   * @param amount raw damage
+   * @param o      { ranged, head } — a thrown blade sets `ranged`, a hit on
+   *               the head sets `head`. The katana passes neither.
+   *
+   * ── why he swats kunai out of the air ────────────────────────────────────
+   * The same four rules every guardian in the country uses, at their harshest
+   * setting, because he is the last fight in the game and the one a player
+   * will have the most blades saved up for:
+   *
+   *   GUARD   a thrown blade lands at a FIFTH while he is hovering and
+   *           watching you. He cannot guard while an attack is running.
+   *   WINDOW  the rest between attacks takes double from a blade thrown from
+   *           close in, which is the whole reward for reading his patterns.
+   *   WEAK    a head hit ignores the guard. Aiming works on him too.
+   *   PUNISH  three guarded blades and the next thing he does is come to you.
+   *
+   * He was, measured, killable by standing at the edge of the dais and
+   * throwing — which made the hardest-authored fight in the game the easiest
+   * one to cheese.
+   */
+  takeDamage(amount, o = {}) {
     if (!this.alive || this.state !== STATE.FIGHT) return false;
-    this.health = Math.max(0, this.health - amount);
+    const ranged = !!o.ranged;
+    let dmg = amount;
+    let guarded = false;
+    if (this.vulnerable) {
+      const close = (this.playerDist === undefined ? 0 : this.playerDist) < 15;
+      dmg *= ranged ? (close ? 2.0 : 0.7) : 1.5;
+    } else if (o.head) {
+      dmg *= 1.25;
+    } else if (ranged && !this.committed) {
+      dmg *= 0.20;
+      guarded = true;
+    }
+    dmg = Math.max(1, Math.round(dmg));
+    this.health = Math.max(0, this.health - dmg);
     _tmp.copy(this.pos).y += 4;
-    this.effects.hitBurst(_tmp, { x: 0, y: 0, z: 1 }, amount > 30);
+    if (guarded) {
+      // A blade turned aside. Deliberately loud, so the lesson is one throw
+      // long rather than twenty.
+      this.effects.puff(_tmp, 0xffe9a8, 8, 6);
+      this.effects.ring(_tmp, 0.8, 4, 0.24, GOLD_HOT, false, { x: 0, y: 1, z: 0 });
+      Audio.parry(this.pos);
+      this._deflects = (this._deflects || 0) + 1;
+      if (this._deflects >= 3) {
+        this._deflects = 0;
+        // He stops hovering and comes for you, at once.
+        this.attackTimer = 0;
+        this._forceClose = true;
+      }
+    } else {
+      this.effects.hitBurst(_tmp, { x: 0, y: 0, z: 1 }, dmg > 30);
+    }
 
     // Phase transitions.
     const F = CFG.dungeon.frogath;
@@ -556,8 +619,22 @@ export class Frogath {
     this.attackTimer -= dt;
     if (this.attackTimer > 0) return;
 
+    /**
+     * Three blades turned aside, and the next thing he does closes the gap.
+     *
+     * `teleportStrike` is the one attack in his book that arrives wherever
+     * you are standing, so camping at the edge of the dais is answered by
+     * him appearing at the edge of the dais. Available from phase one for
+     * this purpose only — his ordinary phase-one pool is still just sword
+     * combos and star volleys.
+     */
     const pool = this._attackPool();
-    this.attackName = pool[Math.floor(Math.random() * pool.length)];
+    if (this._forceClose) {
+      this._forceClose = false;
+      this.attackName = 'teleportStrike';
+    } else {
+      this.attackName = pool[Math.floor(Math.random() * pool.length)];
+    }
     this.attackStep = 0;
     this.attackT = 0;
     this._startAttack(player);
@@ -582,6 +659,10 @@ export class Frogath {
 
   _hover(dt, player) {
     const F = CFG.dungeon.frogath;
+    // Remembered for `takeDamage`, which is called from the player's own hit
+    // path and has no idea where anybody is standing.
+    this.playerDist = Math.hypot(player.pos.x - this.pos.x,
+      player.pos.z - this.pos.z);
     // Always faces you. (Not atan2(dx,dz) — see lookYaw; that points a rig
     // the other way, which is exactly the bug this replaced.)
     const want = lookYaw(this.pos.x, this.pos.z, player.pos.x, player.pos.z);
