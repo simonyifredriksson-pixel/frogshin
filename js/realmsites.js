@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v81';
-import { mulberry32, clamp } from './util.js?v=v81';
-import { SEA } from './regions.js?v=v81';
-import { buildLandmark } from './landmarks.js?v=v81';
-import { ROADS } from './roads.js?v=v81';
+import * as THREE from '../lib/three.module.js?v=v82';
+import { mulberry32, clamp } from './util.js?v=v82';
+import { SEA } from './regions.js?v=v82';
+import { buildLandmark } from './landmarks.js?v=v82';
+import { ROADS } from './roads.js?v=v82';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -241,14 +241,48 @@ export class Sites {
 
     g.visible = false;
     this.root.add(g);
+    /**
+     * Which guardian's death this settlement is waiting on.
+     *
+     * The region's own first guardian, not its gate: the gate is what let you
+     * IN, and what these people are frightened of is the thing living next
+     * door. A region with no guardian of its own is never boarded up.
+     */
+    const own = (R.bosses || []).find((b) => !b.final);
     this.sites.push({
       id: spec.id, kind: spec.kind, name: spec.name,
       blurb: spec.blurb || '', region: R.id,
       at: spot, r: spec.r, group: g,
       settlement: spec.kind === 'village' || spec.kind === 'town'
         || spec.kind === 'city' || spec.kind === 'treevillage',
+      freedBy: own ? own.id : null,
       spots,
     });
+  }
+
+  /**
+   * Show every settlement the version of itself that matches the save.
+   *
+   * Called on entry and after every guardian falls. Cheap — it is a visibility
+   * flag on two groups per settlement — so it can be called whenever anything
+   * changes rather than being carefully scheduled.
+   *
+   * @returns the ids of settlements that changed state, so the game can say so
+   */
+  setFreed(slain) {
+    const changed = [];
+    for (const s of this.sites) {
+      if (!s.settlement) continue;
+      const g = s.group;
+      if (!g.userData.wreck) continue;
+      const freed = !s.freedBy || slain.has(s.freedBy);
+      if (s._freed === freed) continue;
+      s._freed = freed;
+      g.userData.wreck.visible = !freed;
+      g.userData.mend.visible = freed;
+      changed.push(s);
+    }
+    return changed;
   }
 
   // ---------------------------------------------------------- the buildings
@@ -359,6 +393,24 @@ export class Sites {
    */
   _settlement(g, spec, R, rnd, style, cfg) {
     const spots = [];
+    /**
+     * Two versions of the same village, and only one of them drawn.
+     *
+     * A settlement in a region a guardian still holds is boarded up: planks
+     * over the doorways, a cold brazier, a broken cart, a scorch where
+     * something came through. Put that guardian down and the boards come off,
+     * the brazier is lit, banners go up and there is scaffolding where they
+     * have started repairing the roof.
+     *
+     * Both sets are built once and toggled by `setFreed`, because a village
+     * that rebuilt itself by allocating geometry would do it in the frame the
+     * player walked back in.
+     */
+    const wreck = new THREE.Group();
+    const mend = new THREE.Group();
+    g.add(wreck, mend);
+    g.userData.wreck = wreck;
+    g.userData.mend = mend;
     const ring = spec.r * cfg.ring;
     const n = cfg.houses;
     for (let i = 0; i < n; i++) {
@@ -434,6 +486,55 @@ export class Sites {
         this._put(g, G.box, 'iron', 0.9, 0.7, 0.5, x + 4, 0.4, z + 2.4);
         spots.push({ x: g.position.x + x + 4, z: g.position.z + z + 2.4 });
       }
+    }
+
+    // ---- boarded up, or rebuilding ----
+    {
+      const ring2 = ring * 0.9;
+      // Boards over three of the doorways, a cold brazier, a broken cart.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + 0.9;
+        const x = Math.cos(a) * ring2, z = Math.sin(a) * ring2;
+        const gy = this.realm.heightAt(g.position.x + x, g.position.z + z)
+          - g.position.y;
+        for (let k = 0; k < 3; k++) {
+          const m = this._put(wreck, G.box, 'plank', 3.4, 0.3, 0.22,
+            x, gy + 1.2 + k * 0.9, z, a);
+          m.rotation.z = (k - 1) * 0.16;
+        }
+      }
+      this._put(wreck, G.cyl, 'ash', 1.0, 1.2, 1.0, -ring * 0.3, 0.6, ring * 0.3);
+      this._put(wreck, G.low, 'ash', 0.9, 0.35, 0.9, -ring * 0.3, 1.3, ring * 0.3);
+      const cart = this._put(wreck, G.box, 'woodDark', 2.6, 0.3, 1.8,
+        ring * 0.42, 0.5, -ring * 0.3, 0.7);
+      cart.rotation.z = 0.5;
+      this._put(wreck, G.disc, 'woodDark', 1.0, 0.25, 1.0,
+        ring * 0.34, 0.3, -ring * 0.42, 0.4).rotation.x = 0.2;
+      // A scorch where something came through the fence.
+      this._put(wreck, G.disc, 'obsidian', 4.4, 0.12, 4.4, ring * 0.1, 0.1, -ring2);
+
+      // Banners, bunting, a lit brazier and scaffolding on the hall roof.
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        const x = Math.cos(a) * ring * 0.52, z = Math.sin(a) * ring * 0.52;
+        this._put(mend, G.box, i % 2 ? 'cloth' : 'clothBlue',
+          1.4, 3.2, 0.16, x, 4.2, z, a);
+      }
+      this._put(mend, G.cyl, 'stoneDark', 1.1, 1.6, 1.1, -ring * 0.3, 0.8, ring * 0.3);
+      this._put(mend, G.low, 'ember', 1.0, 1.1, 1.0, -ring * 0.3, 1.9, ring * 0.3);
+      for (let i = 0; i < 5; i++) {
+        this._put(mend, G.cyl, 'plank', 0.12, 5.0, 0.12,
+          ring * 0.6 + i * 1.3, 2.5, -ring * 0.2);
+      }
+      for (let i = 0; i < 3; i++) {
+        this._put(mend, G.box, 'plank', 6.4, 0.2, 0.5,
+          ring * 0.6 + 2.6, 1.4 + i * 1.6, -ring * 0.2);
+      }
+      // Fresh thatch, stacked and ready to go up.
+      this._put(mend, G.cyl, 'thatch', 1.1, 2.2, 1.1,
+        ring * 0.6 + 6, 1.1, -ring * 0.2, 0.4).rotation.z = Math.PI / 2;
+      wreck.visible = true;
+      mend.visible = false;
     }
 
     // A wall, for a city.
@@ -1000,6 +1101,42 @@ export class Sites {
         }
         this._put(g, G.disc, 'ice', 9, 0.4, 9, 0, 0.2, 3);
         break;
+
+      case 'oathbreaker': {
+        /**
+         * A sword the length of a bridge, point-first into the ground.
+         *
+         * Leaning, so the silhouette is a diagonal against the sky — a
+         * vertical one at this scale reads as a tower. Solid at the base
+         * only, so you can walk right up to it and under the guard.
+         */
+        const s = new THREE.Group();
+        s.rotation.z = 0.22;
+        s.rotation.y = 0.5;
+        g.add(s);
+        this._put(s, G.box, 'iron', 3.4, 74, 0.9, 0, 30, 0);
+        this._put(s, G.box, 'stonePale', 0.7, 66, 1.1, 0, 34, 0);
+        this._put(s, G.cone, 'iron', 3.4, 12, 0.9, 0, -8, 0, 0).rotation.x = Math.PI;
+        this._put(s, G.box, 'gold', 12, 2.4, 3.0, 0, 66, 0);
+        this._put(s, G.cyl, 'woodDark', 1.3, 14, 1.3, 0, 74, 0);
+        this._put(s, G.low, 'gold', 1.8, 2.0, 1.8, 0, 82, 0);
+        this._solid(g, 3.0, 8, 3.0, 0, 8, 0, 'sword');
+        // Where it went in: shattered rib and thrown-up ground.
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          this._put(g, G.low, 'bone', 1.6 + rnd() * 1.6, 1.0, 1.6 + rnd() * 1.6,
+            Math.cos(a) * (8 + rnd() * 7), 0.5, Math.sin(a) * (8 + rnd() * 7));
+        }
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2 + 0.4;
+          const m = this._put(g, G.box, 'boneDark', 1.6, 16, 1.2,
+            Math.cos(a) * 13, 6, Math.sin(a) * 13, a);
+          m.rotation.z = Math.cos(a) * 0.6;
+          m.rotation.x = -Math.sin(a) * 0.6;
+        }
+        this._anchor(g, 0, 60, 0, 3.0);
+        break;
+      }
 
       case 'the-note':
         this._put(g, G.box, 'stone', 1.1, 0.5, 1.1, 0, 0.25, 0);

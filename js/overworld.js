@@ -32,26 +32,26 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v81';
-import { CFG } from './config.js?v=v81';
-import { clamp, damp } from './util.js?v=v81';
-import { Realm } from './realm.js?v=v81';
-import { Scatter } from './scatter.js?v=v81';
-import { Sites } from './realmsites.js?v=v81';
-import { Camp } from './mobs.js?v=v81';
-import { DungeonBoss } from './dungeonboss.js?v=v81';
-import { Frogath } from './frogath.js?v=v81';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v81';
-import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v81';
-import { Progress, HEART, BASE } from './progression.js?v=v81';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v81';
+import * as THREE from '../lib/three.module.js?v=v82';
+import { CFG } from './config.js?v=v82';
+import { clamp, damp } from './util.js?v=v82';
+import { Realm } from './realm.js?v=v82';
+import { Scatter } from './scatter.js?v=v82';
+import { Sites } from './realmsites.js?v=v82';
+import { Camp } from './mobs.js?v=v82';
+import { DungeonBoss } from './dungeonboss.js?v=v82';
+import { Frogath } from './frogath.js?v=v82';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v82';
+import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v82';
+import { Progress, HEART, BASE } from './progression.js?v=v82';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v82';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress,
-  mainObjective } from './quests.js?v=v81';
+  mainObjective } from './quests.js?v=v82';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v81';
-import { disposeLandmarkMats } from './landmarks.js?v=v81';
-import { Weather } from './weather.js?v=v81';
-import { Audio } from './audio.js?v=v81';
+  disposeVillagerMats } from './realmquests.js?v=v82';
+import { disposeLandmarkMats } from './landmarks.js?v=v82';
+import { Weather } from './weather.js?v=v82';
+import { Audio } from './audio.js?v=v82';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -254,6 +254,9 @@ export class Overworld {
     this.realm.streamAround(spot.x, spot.z, true);
     if (this.scatter) this.scatter.streamAround(spot.x, spot.z, true);
     this.sites.update(spot.x, spot.z, 0);
+    // Every settlement shows the version of itself that matches the save:
+    // boarded up where its guardian still lives, rebuilding where it does not.
+    this.sites.setFreed(p.slain);
     this.region = regionAt(spot.x, spot.z, _scratch);
     p.seen.add(this.region.id);
     // The sky and the music of wherever we woke up, with no cross-fade.
@@ -742,6 +745,17 @@ export class Overworld {
       }
     }
     this.hud.toast(said.join('  '), 7);
+    /**
+     * The world changes, and the player is told which part of it.
+     *
+     * This is the payoff for the boarded-up villages: killing the thing in
+     * the next valley is what takes the planks off their doors, and being
+     * told which village it was is what makes the kill feel like it landed
+     * somewhere outside the arena.
+     */
+    for (const s of this.sites.setFreed(p.slain)) {
+      this.hud.toast(`${s.name} is taking the boards down.`, 8);
+    }
     this._announceLevels(r);
     this.economy.award(CFG.economy.roundWinReward * (1 + e.tier), 'GUARDIAN DOWN');
     this.applyStats();

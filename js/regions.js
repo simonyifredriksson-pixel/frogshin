@@ -54,7 +54,7 @@
  * the sea you woke up in.
  */
 
-import { clamp, smoothstep } from './util.js?v=v81';
+import { clamp, smoothstep } from './util.js?v=v82';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 5120;
@@ -648,6 +648,9 @@ export const REGIONS = [
         name: 'RIBWATCH', blurb: 'Bonepickers, and they are not the worst of it.' },
       { id: 'seventh-rib', kind: 'ruin', at: [-900, -160], r: 32,
         name: 'THE SEVENTH RIB' },
+      { id: 'oathbreaker', kind: 'easteregg', at: [-700, -470], r: 20,
+        name: 'THE OATHBREAKER',
+        blurb: 'A sword the length of a bridge, driven through the ribs into the ground.' },
     ],
   },
 

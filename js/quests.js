@@ -1374,6 +1374,15 @@ export const SECRETS = {
       'a very long way north to something smoking.'],
     gives: [{ id: 'choir-crystal', n: 3 }], xp: 360,
   },
+  oathbreaker: {
+    title: 'THE OATHBREAKER',
+    say: ['A sword the length of a bridge, driven point-first through the ribs',
+      'and a long way into the ground under them.',
+      'There is writing on the guard, forty feet up, and it is upside down.',
+      'It reads: I SWORE I WOULD NOT.',
+      'The grip is wrapped for a hand nothing has.'],
+    gives: [{ id: 'hollow-iron', n: 3 }, { id: 'god-shard', n: 1 }], xp: 480,
+  },
   'seventh-rib': {
     title: 'THE SEVENTH RIB',
     say: ['You are standing inside a bone.',
