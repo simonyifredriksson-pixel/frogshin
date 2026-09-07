@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v85" />
+<link rel="stylesheet" href="css/style.css?v=v86" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -109,17 +109,6 @@
           <div id="color-picker" class="swatches"></div>
         </div>
 
-        <div class="divider"><span>THE MAIN GAME</span></div>
-        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
-        <p class="note">The whole game. You are a young frog from a village
-           Frogath's army burned; everyone you know was marched away. Cross the
-           Croaklands, put down the guardians holding it shut, and get to his
-           stronghold. Twenty-four regions from the Lily Reach to the Ashen
-           Throne, joined by seventeen roads and four rivers. Towns, villages,
-           dungeons, caves, ruins, secrets, and people who will tell you where
-           to go next. <b>TAB</b> for your bag, <b>M</b> for the map. Solo, and
-           it saves itself.</p>
-
         <div class="divider"><span>MAP</span></div>
         <button class="btn btn-quiet map-toggle" id="play-map-toggle">
           <span>CHOOSE MAP — <b id="play-map-current">—</b></span>
@@ -146,6 +135,21 @@
           Quick Play drops you into the public room <b>FROG</b>. Create Room gives you a
           private code — share it and your friends join from their own machines.
         </p>
+
+        <!--
+          The Croaklands sits exactly where Story Mode used to, between the
+          multiplayer block and the dungeon, because it replaced it.
+        -->
+        <div class="divider"><span>THE CROAKLANDS</span></div>
+        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
+        <p class="note">You are a young frog from a village Frogath's army
+           burned; everyone you know was marched away. Cross the Croaklands,
+           put down the guardians holding it shut, and get to his stronghold.
+           Twenty-four regions from the Lily Reach to the Ashen Throne, joined
+           by seventeen roads and four rivers. Towns, villages, dungeons,
+           caves, ruins, secrets, and people who will tell you where to go
+           next. <b>TAB</b> for your bag, <b>M</b> for the map. Solo, and it
+           saves itself.</p>
 
         <div class="divider"><span>THE DUNGEON</span></div>
         <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON — 15 BOSSES</span></button>
@@ -862,6 +866,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v85"></script>
+<script type="module" src="js/main.js?v=v86"></script>
 </body>
 </html>

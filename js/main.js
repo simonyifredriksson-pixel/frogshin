@@ -5,35 +5,35 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v85';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v85';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v85';
-import { Input } from './input.js?v=v85';
-import { Audio } from './audio.js?v=v85';
-import { World } from './world.js?v=v85';
-import { Effects } from './effects.js?v=v85';
-import { Atmosphere } from './atmosphere.js?v=v85';
-import { FollowCamera } from './camera.js?v=v85';
-import { Player } from './player.js?v=v85';
-import { RemotePlayer } from './remote.js?v=v85';
-import { HUD } from './hud.js?v=v85';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v85';
-import { FrogModel } from './frog.js?v=v85';
-import { DummyField } from './dummy.js?v=v85';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v85';
-import { ToadModel } from './npc.js?v=v85';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v85';
-import { DungeonRun } from './dungeon.js?v=v85';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v85';
-import { JudgmentRun } from './judgment.js?v=v85';
-import { COMBO_NAMES } from './ascended.js?v=v85';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v85';
-import { MenuScene } from './menu.js?v=v85';
-import { Economy } from './economy.js?v=v85';
-import { Shop } from './shop.js?v=v85';
-import { Network, NetRole } from './net.js?v=v85';
-import { Overworld } from './overworld.js?v=v85';
-import { InventoryScreen } from './inventoryui.js?v=v85';
+import * as THREE from '../lib/three.module.js?v=v86';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v86';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v86';
+import { Input } from './input.js?v=v86';
+import { Audio } from './audio.js?v=v86';
+import { World } from './world.js?v=v86';
+import { Effects } from './effects.js?v=v86';
+import { Atmosphere } from './atmosphere.js?v=v86';
+import { FollowCamera } from './camera.js?v=v86';
+import { Player } from './player.js?v=v86';
+import { RemotePlayer } from './remote.js?v=v86';
+import { HUD } from './hud.js?v=v86';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v86';
+import { FrogModel } from './frog.js?v=v86';
+import { DummyField } from './dummy.js?v=v86';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v86';
+import { ToadModel } from './npc.js?v=v86';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v86';
+import { DungeonRun } from './dungeon.js?v=v86';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v86';
+import { JudgmentRun } from './judgment.js?v=v86';
+import { COMBO_NAMES } from './ascended.js?v=v86';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v86';
+import { MenuScene } from './menu.js?v=v86';
+import { Economy } from './economy.js?v=v86';
+import { Shop } from './shop.js?v=v86';
+import { Network, NetRole } from './net.js?v=v86';
+import { Overworld } from './overworld.js?v=v86';
+import { InventoryScreen } from './inventoryui.js?v=v86';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -157,11 +157,6 @@ class Game {
       this.camera.updateProjectionMatrix();
     }
     if (this.menuScene) this.menuScene.resize(w, h);
-    // The fireflies are drawn as points, and a point's size is in PIXELS —
-    // so without this they are twice as big on a half-resolution buffer.
-    if (this.overworld && this.overworld.ambience) {
-      this.overworld.ambience.setPixelHeight(h * ratio);
-    }
   }
 
   // -------------------------------------------------------------- settings

@@ -32,30 +32,30 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v85';
-import { CFG } from './config.js?v=v85';
-import { clamp, damp, mulberry32 } from './util.js?v=v85';
-import { Realm } from './realm.js?v=v85';
-import { Scatter } from './scatter.js?v=v85';
-import { Sites } from './realmsites.js?v=v85';
-import { Camp } from './mobs.js?v=v85';
-import { DungeonBoss } from './dungeonboss.js?v=v85';
-import { Frogath } from './frogath.js?v=v85';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v85';
+import * as THREE from '../lib/three.module.js?v=v86';
+import { CFG } from './config.js?v=v86';
+import { clamp, damp, mulberry32 } from './util.js?v=v86';
+import { Realm } from './realm.js?v=v86';
+import { Scatter } from './scatter.js?v=v86';
+import { Sites } from './realmsites.js?v=v86';
+import { Camp } from './mobs.js?v=v86';
+import { DungeonBoss } from './dungeonboss.js?v=v86';
+import { Frogath } from './frogath.js?v=v86';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v86';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v85';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v85';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v85';
+  CONTENT_HALF } from './regions.js?v=v86';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v86';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v86';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v85';
+  mainObjective } from './quests.js?v=v86';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v85';
-import { disposeLandmarkMats } from './landmarks.js?v=v85';
-import { Props, disposePropMats } from './props.js?v=v85';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v85';
-import { Ambience } from './ambience.js?v=v85';
-import { Weather } from './weather.js?v=v85';
-import { Audio } from './audio.js?v=v85';
+  disposeVillagerMats } from './realmquests.js?v=v86';
+import { disposeLandmarkMats } from './landmarks.js?v=v86';
+import { Props, disposePropMats } from './props.js?v=v86';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v86';
+import { Ambience } from './ambience.js?v=v86';
+import { Weather } from './weather.js?v=v86';
+import { Audio } from './audio.js?v=v86';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -185,12 +185,12 @@ export class Overworld {
     /** What is falling out of the sky. One system, retargeted per region. */
     this.weather = new Weather(this.scene);
     /**
-     * What the light is doing. The other half of the weather.
+     * What COLOUR the light is. The other half of the weather.
      *
-     * Weather is what comes DOWN — rain, snow, ash. This is what hangs in the
-     * air and what colour the sun is: beams through the trees, fireflies over
-     * the fen, embers over the lava. Retargeted off the region's mood, so
-     * every region already has one.
+     * Weather is what comes down — rain, snow, ash. This is the hue of the
+     * sun and of the bounce off the ground, retargeted off the region's mood,
+     * so the Emberwaste is lit orange from above and red from below and the
+     * Frostmarch is lit blue-white from both. It draws nothing.
      */
     this.ambience = new Ambience(this.scene);
     this.dialogue = new Dialogue();
@@ -773,9 +773,7 @@ export class Overworld {
     if (this.atmo) this._sky(dt, player);
     this.weather.update(dt, this.camera.position,
       this.atmo ? this.atmo.windDir : null);
-    this.ambience.update(dt, this.camera.position,
-      this.atmo ? this.atmo.sunDir : null,
-      this.atmo ? this.atmo.windDir : null);
+    this.ambience.update(dt);
     this._life(dt, player);
     this._banner(dt);
     this._syncKunai();
