@@ -24,15 +24,15 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v83';
-import { FrogModel } from './frog.js?v=v83';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v83';
+import * as THREE from '../lib/three.module.js?v=v84';
+import { FrogModel } from './frog.js?v=v84';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v84';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v83';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v83';
-import { ROADS, RIVERS } from './roads.js?v=v83';
-import { GEAR_BY_ID } from './gear.js?v=v83';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v83';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v84';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v84';
+import { ROADS, RIVERS } from './roads.js?v=v84';
+import { GEAR_BY_ID } from './gear.js?v=v84';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v84';
 
 const $ = (id) => document.getElementById(id);
 
@@ -571,20 +571,26 @@ export class Journal {
 
   // -------------------------------------------------------------------- map
 
-  toggleMap(p, playerPos, realm) {
+  toggleMap(p, playerPos, realm, facing = 0) {
     this.mapOpen = !this.mapOpen;
     this.mapRoot.classList.toggle('hidden', !this.mapOpen);
-    if (this.mapOpen) this.paintMap(p, playerPos, realm);
+    if (this.mapOpen) this.paintMap(p, playerPos, realm, facing);
   }
 
-  /** Called every frame while the map is up, so the objective star pulses. */
-  tick(dt, p, playerPos, realm) {
+  /**
+   * Called every frame while the map is up.
+   *
+   * Twelve times a second rather than sixty: the objective star pulses and
+   * the player arrow turns with the camera, and neither of those needs the
+   * whole map redrawn on every frame.
+   */
+  tick(dt, p, playerPos, realm, facing = 0) {
     if (!this.mapOpen) return;
     this.pulse += dt;
     this._acc = (this._acc || 0) + dt;
-    if (this._acc < 1 / 12) return;      // twelve frames a second is plenty
+    if (this._acc < 1 / 12) return;
     this._acc = 0;
-    this.paintMap(p, playerPos, realm);
+    this.paintMap(p, playerPos, realm, facing);
   }
 
   /**
@@ -597,7 +603,7 @@ export class Journal {
    * cannot enter yet are drawn dark AND told to you: the map is a record of
    * where you have been and a statement of where you may go.
    */
-  paintMap(p, playerPos, realm) {
+  paintMap(p, playerPos, realm, facing = 0) {
     const c = this.canvas;
     if (!c) return;
     const ctx = c.getContext('2d');
@@ -816,14 +822,54 @@ export class Journal {
       ctx.restore();
     }
 
-    // ---- you. Drawn last and biggest, because it is what the map is for ----
+    /**
+     * You: an arrow, pointing the way you are facing.
+     *
+     * A dot tells you where you are and nothing else, which means opening the
+     * map still leaves you turning on the spot trying to work out which way
+     * is north. An arrow answers both questions at once.
+     *
+     * ── the angle ──────────────────────────────────────────────────────────
+     * `facing` is the follow camera's yaw. Its flat forward vector is
+     * `(-sin yaw, -cos yaw)` in world x/z (see FollowCamera.flatForward), and
+     * the map puts -z at the top, so that same pair is the direction on the
+     * canvas. The arrow below is drawn pointing UP, and rotating "up" by θ
+     * clockwise gives `(sin θ, -cos θ)` — equate the two and θ is `-yaw`.
+     *
+     * A translucent wedge goes behind it for the field of view, which is what
+     * makes the heading readable at a glance rather than something you have
+     * to squint at a triangle to work out.
+     */
+    ctx.save();
+    ctx.translate(px, pz);
+    ctx.rotate(-facing);
+
+    // The view cone: a 70-degree wedge, fading out.
+    const cone = ctx.createRadialGradient(0, 0, 3, 0, 0, 46);
+    cone.addColorStop(0, 'rgba(124,192,236,0.55)');
+    cone.addColorStop(1, 'rgba(124,192,236,0)');
+    ctx.fillStyle = cone;
     ctx.beginPath();
-    ctx.arc(px, pz, 6.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#7cc0ec';
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 46, -Math.PI / 2 - 0.61, -Math.PI / 2 + 0.61);
+    ctx.closePath();
     ctx.fill();
+
+    // The arrow: a chevron, so the tail reads as a tail and not as a second
+    // point. Outlined in the map's own dark so it survives any ground colour.
+    ctx.beginPath();
+    ctx.moveTo(0, -11);
+    ctx.lineTo(7.5, 8);
+    ctx.lineTo(0, 3.6);
+    ctx.lineTo(-7.5, 8);
+    ctx.closePath();
+    ctx.fillStyle = '#7cc0ec';
     ctx.strokeStyle = '#0d1117';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = 'round';
     ctx.stroke();
+    ctx.fill();
+    ctx.restore();
 
     if (this.objEl) {
       this.objEl.innerHTML = obj
@@ -837,7 +883,7 @@ export class Journal {
         + '<span><i style="background:#6cc24a"></i>guardian down</span>'
         + '<span><i style="background:#ffd76b"></i>Frogath</span>'
         + '<span><i style="background:#ffcf5c"></i>found</span>'
-        + '<span><i style="background:#7cc0ec"></i>you</span>'
+        + '<span><i style="background:#7cc0ec"></i>you — the arrow points where you are looking</span>'
         + '<span><i style="background:rgba(192,57,43,0.5)"></i>sealed</span>'
         + '<span><i style="background:rgba(228,206,150,0.7)"></i>road</span>'
         + '<span><i style="background:rgba(70,140,190,0.9)"></i>river</span>';

@@ -32,26 +32,26 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v83';
-import { CFG } from './config.js?v=v83';
-import { clamp, damp } from './util.js?v=v83';
-import { Realm } from './realm.js?v=v83';
-import { Scatter } from './scatter.js?v=v83';
-import { Sites } from './realmsites.js?v=v83';
-import { Camp } from './mobs.js?v=v83';
-import { DungeonBoss } from './dungeonboss.js?v=v83';
-import { Frogath } from './frogath.js?v=v83';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v83';
-import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v83';
-import { Progress, HEART, BASE } from './progression.js?v=v83';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v83';
+import * as THREE from '../lib/three.module.js?v=v84';
+import { CFG } from './config.js?v=v84';
+import { clamp, damp } from './util.js?v=v84';
+import { Realm } from './realm.js?v=v84';
+import { Scatter } from './scatter.js?v=v84';
+import { Sites } from './realmsites.js?v=v84';
+import { Camp } from './mobs.js?v=v84';
+import { DungeonBoss } from './dungeonboss.js?v=v84';
+import { Frogath } from './frogath.js?v=v84';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v84';
+import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v84';
+import { Progress, HEART, BASE } from './progression.js?v=v84';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v84';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress,
-  mainObjective } from './quests.js?v=v83';
+  mainObjective } from './quests.js?v=v84';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v83';
-import { disposeLandmarkMats } from './landmarks.js?v=v83';
-import { Weather } from './weather.js?v=v83';
-import { Audio } from './audio.js?v=v83';
+  disposeVillagerMats } from './realmquests.js?v=v84';
+import { disposeLandmarkMats } from './landmarks.js?v=v84';
+import { Weather } from './weather.js?v=v84';
+import { Audio } from './audio.js?v=v84';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -264,6 +264,7 @@ export class Overworld {
     Audio.setRegionMood(this.region.music || 'calm');
     if (this.life) this.life.moveTo(this.sites.nearestSettlement(spot.x, spot.z));
     this._paintObjectives();
+    this._watchUnload();
     this.save();
   }
 
@@ -288,11 +289,85 @@ export class Overworld {
     this._syncMeal();
   }
 
+  /**
+   * Write the save now.
+   *
+   * `Economy.setRealm` goes straight to localStorage, so this is a real
+   * synchronous write. Called directly for the things a player would be
+   * furious to lose — a guardian down, a quest handed in, a secret found —
+   * and by the autosave below for everything smaller.
+   */
   save() {
     if (!this.economy) return;
     const pl = this.player;
     if (pl) this.progress.at = { x: pl.pos.x, y: pl.pos.y, z: pl.pos.z };
     this.economy.setRealm(this.progress.toJSON());
+    this._dirty = false;
+    this._sinceSave = 0;
+    this._savedAt = pl ? { x: pl.pos.x, z: pl.pos.z } : null;
+  }
+
+  /**
+   * Something small changed. It will be on disk within a few seconds.
+   *
+   * Camp mobs are the reason this exists. Killing one awards experience and
+   * loot, and a camp is five or six of them — writing the whole save six
+   * times in four seconds is wasteful, and writing it none of the times (the
+   * bug this replaces) meant a player who cleared four camps, gained two
+   * levels and then closed the tab lost all of it.
+   */
+  markDirty() { this._dirty = true; }
+
+  /**
+   * The autosave.
+   *
+   * Two triggers, and they answer different worries:
+   *
+   *   DIRTY     something changed and has not been written. Flushed after a
+   *             few seconds, so a burst of kills costs one write.
+   *   MOVED     nothing changed, but the player has walked a long way. Their
+   *             POSITION is progress too — coming back to find yourself half
+   *             a region behind where you stopped is the same annoyance as
+   *             losing a level, and it is what makes a save feel unreliable
+   *             even when nothing was actually lost.
+   */
+  _autosave(dt) {
+    this._sinceSave = (this._sinceSave || 0) + dt;
+    if (this._dirty && this._sinceSave > 4) { this.save(); return; }
+    if (this._sinceSave < 25) return;
+    const pl = this.player;
+    const from = this._savedAt;
+    if (!pl || !from) { this.save(); return; }
+    if (Math.hypot(pl.pos.x - from.x, pl.pos.z - from.z) > 60) this.save();
+    else this._sinceSave = 0;
+  }
+
+  /**
+   * Write the save on the way out of the PAGE, not just out of the mode.
+   *
+   * Quitting to the menu calls `dispose`, which saves. Closing the tab,
+   * refreshing, or navigating away calls neither — so without this the last
+   * few seconds of a session are lost, which is exactly the case a player
+   * notices and describes as "it did not save".
+   *
+   * `pagehide` rather than `beforeunload`: it is the one mobile browsers
+   * actually fire, and it fires on a tab being frozen or discarded as well as
+   * on a real close. localStorage is synchronous, so the write completes.
+   */
+  _watchUnload() {
+    if (this._onHide) return;
+    this._onHide = () => {
+      try { this.save(); } catch (e) { /* nothing useful to do here */ }
+    };
+    window.addEventListener('pagehide', this._onHide);
+    window.addEventListener('beforeunload', this._onHide);
+  }
+
+  _unwatchUnload() {
+    if (!this._onHide) return;
+    window.removeEventListener('pagehide', this._onHide);
+    window.removeEventListener('beforeunload', this._onHide);
+    this._onHide = null;
   }
 
   // ----------------------------------------------------------------- update
@@ -311,9 +386,10 @@ export class Overworld {
     if (this.frozen) {
       this._panelKeys(input);
       if (this.inventory) this.inventory.update(dt);
-      // The map keeps drawing while it is open: the objective star pulses and
-      // the dashed line to it has to follow you if you opened it mid-stride.
-      this.journal.tick(dt, this.progress, player.pos, this.realm);
+      // The map keeps drawing while it is open: the objective star pulses,
+      // the dashed line to it follows you if you opened it mid-stride, and
+      // the player arrow turns as you turn.
+      this.journal.tick(dt, this.progress, player.pos, this.realm, this.facing);
       return;
     }
     if (this._openKeys(input)) return;
@@ -335,6 +411,7 @@ export class Overworld {
       this.atmo ? this.atmo.windDir : null);
     this._life(dt, player);
     this._banner(dt);
+    this._autosave(dt);
   }
 
   /**
@@ -455,7 +532,8 @@ export class Overworld {
     }
     if (input.consume('KeyJ')) { this.journal.toggleLog(this.progress); return true; }
     if (input.consume('KeyM')) {
-      this.journal.toggleMap(this.progress, this.player.pos, this.realm);
+      this.journal.toggleMap(this.progress, this.player.pos, this.realm,
+        this.facing);
       return true;
     }
     return false;
@@ -497,6 +575,8 @@ export class Overworld {
     this.progress.remove(item.id, 1);
     Audio.refreshed(pl.pos);
     this._syncMeal();
+    // One item out of the bag. Small, but it is still the bag changing.
+    this.markDirty();
     return true;
   }
 
@@ -899,6 +979,10 @@ export class Overworld {
     for (const it of mob.loot()) p.add(it.id, it.n);
     this._announceLevels(r);
     this.applyStats();
+    // Experience and loot, so it has to reach the disk — but a camp is six of
+    // these in a few seconds, so it goes through the autosave rather than
+    // writing the whole save six times.
+    this.markDirty();
   }
 
   _announceLevels(r) {
@@ -1181,10 +1265,21 @@ export class Overworld {
   /** What the main line currently wants, for the HUD and the map. */
   get objective() { return mainObjective(this.progress); }
 
+  /**
+   * Which way the player is looking, for the arrow on the map.
+   *
+   * The CAMERA's yaw, not the frog's. The frog turns to face where it is
+   * walking and snaps about during a dash or a swing; the camera is what the
+   * player is actually pointing at the world, and it is what they mean when
+   * they ask which way they are facing.
+   */
+  get facing() { return this.followCam ? this.followCam.yaw : 0; }
+
   // ---------------------------------------------------------------- teardown
 
   dispose() {
     this.save();
+    this._unwatchUnload();
     if (this._savedWater !== null) CFG.world.waterLevel = this._savedWater;
     if (this.boss) this.boss.dispose();
     if (this.frogath) this.frogath.dispose();

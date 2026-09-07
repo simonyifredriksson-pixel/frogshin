@@ -5,36 +5,36 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v83';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v83';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v83';
-import { Input } from './input.js?v=v83';
-import { Audio } from './audio.js?v=v83';
-import { World } from './world.js?v=v83';
-import { Effects } from './effects.js?v=v83';
-import { Atmosphere } from './atmosphere.js?v=v83';
-import { FollowCamera } from './camera.js?v=v83';
-import { Player } from './player.js?v=v83';
-import { RemotePlayer } from './remote.js?v=v83';
-import { HUD } from './hud.js?v=v83';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v83';
-import { FrogModel } from './frog.js?v=v83';
-import { DummyField } from './dummy.js?v=v83';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v83';
-import { ToadModel } from './npc.js?v=v83';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v83';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v83';
-import { DungeonRun } from './dungeon.js?v=v83';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v83';
-import { JudgmentRun } from './judgment.js?v=v83';
-import { COMBO_NAMES } from './ascended.js?v=v83';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v83';
-import { MenuScene } from './menu.js?v=v83';
-import { Economy } from './economy.js?v=v83';
-import { Shop } from './shop.js?v=v83';
-import { Network, NetRole } from './net.js?v=v83';
-import { Overworld } from './overworld.js?v=v83';
-import { InventoryScreen } from './inventoryui.js?v=v83';
+import * as THREE from '../lib/three.module.js?v=v84';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v84';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v84';
+import { Input } from './input.js?v=v84';
+import { Audio } from './audio.js?v=v84';
+import { World } from './world.js?v=v84';
+import { Effects } from './effects.js?v=v84';
+import { Atmosphere } from './atmosphere.js?v=v84';
+import { FollowCamera } from './camera.js?v=v84';
+import { Player } from './player.js?v=v84';
+import { RemotePlayer } from './remote.js?v=v84';
+import { HUD } from './hud.js?v=v84';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v84';
+import { FrogModel } from './frog.js?v=v84';
+import { DummyField } from './dummy.js?v=v84';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v84';
+import { ToadModel } from './npc.js?v=v84';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v84';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v84';
+import { DungeonRun } from './dungeon.js?v=v84';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v84';
+import { JudgmentRun } from './judgment.js?v=v84';
+import { COMBO_NAMES } from './ascended.js?v=v84';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v84';
+import { MenuScene } from './menu.js?v=v84';
+import { Economy } from './economy.js?v=v84';
+import { Shop } from './shop.js?v=v84';
+import { Network, NetRole } from './net.js?v=v84';
+import { Overworld } from './overworld.js?v=v84';
+import { InventoryScreen } from './inventoryui.js?v=v84';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2085,6 +2085,10 @@ class Game {
   _pause() {
     if (this.mode !== 'playing') return;
     this.mode = 'paused';
+    // Pausing is a natural place to lose a session — the player walks away
+    // from the machine, or closes the tab from the pause screen — so the
+    // open world commits whatever it is holding before the world stops.
+    if (this.overworld) this.overworld.save();
     $('pause').classList.add('show');
     $('pause-room').textContent = this.isRealm
       ? (this.overworld && this.overworld.region
