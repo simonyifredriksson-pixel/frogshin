@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v86';
-import { CFG } from './config.js?v=v86';
-import { staminaBand } from './stamina.js?v=v86';
-import { modeAvailable } from './rounds.js?v=v86';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v86';
-import { Audio } from './audio.js?v=v86';
-import { PX, setIcon } from './icons.js?v=v86';
+import { clamp } from './util.js?v=v87';
+import { CFG } from './config.js?v=v87';
+import { staminaBand } from './stamina.js?v=v87';
+import { modeAvailable } from './rounds.js?v=v87';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v87';
+import { Audio } from './audio.js?v=v87';
+import { PX, setIcon } from './icons.js?v=v87';
 
 const $ = (id) => document.getElementById(id);
 
@@ -192,6 +192,31 @@ export class HUD {
     this.comboEl.classList.remove('show');
     this._rbMode = null;
     this._bossFrac = 0;
+    /**
+     * The Croaklands' objective list and its minimap.
+     *
+     * Both belong to one mode and both live OUTSIDE #hud, so hiding the HUD
+     * left them on screen — a deathmatch with "Put Thistlejack down" in the
+     * corner and a map of a country nobody is in. `_objKey` has to be cleared
+     * with them or the next realm entry sees an unchanged key and never
+     * rebuilds the list it just threw away.
+     */
+    this.setObjectives(null);
+    this._objKey = null;
+    this.setMinimap(false);
+  }
+
+  /**
+   * The Croaklands' minimap, top right under the purse.
+   *
+   * Only a visibility flag — the drawing belongs to `Journal.paintMini`. It
+   * is here so `resetOverlays` can take it down with everything else that
+   * belongs to one mode, which is how the objective list used to end up in
+   * the middle of a deathmatch.
+   */
+  setMinimap(on) {
+    const el = $('minimap');
+    if (el) el.classList.toggle('hidden', !on);
   }
 
   /** @param list array of { id, text, done, active } — or null to hide */

@@ -24,17 +24,17 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v86';
+import * as THREE from '../lib/three.module.js?v=v87';
 import { Citizen, pickCitizen, citizenHeight, disposeCitizenMats,
-  disposeCitizenGeos } from './citizen.js?v=v86';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v86';
+  disposeCitizenGeos } from './citizen.js?v=v87';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v87';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v86';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v86';
-import { ROADS, RIVERS } from './roads.js?v=v86';
-import { GEAR_BY_ID } from './gear.js?v=v86';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v86';
-import { LORE_COUNT, loreRead } from './lore.js?v=v86';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v87';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v87';
+import { ROADS, RIVERS } from './roads.js?v=v87';
+import { GEAR_BY_ID } from './gear.js?v=v87';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v87';
+import { LORE_COUNT, loreRead } from './lore.js?v=v87';
 
 const $ = (id) => document.getElementById(id);
 
@@ -461,80 +461,28 @@ const PIN = {
   arena: '◎', landmark: '★', easteregg: '?',
 };
 
+/**
+ * The map, and the objective list that sits in the corner of the HUD.
+ *
+ * There used to be a third thing here: a full-screen quest LOG on `J`,
+ * listing every stage of every quest you had accepted. It has been removed.
+ * The objective panel already says what to do next and the map already stars
+ * where, so the log was a third place to read the same sentence — and a
+ * full-screen panel you have to close is a worse way to read one line than
+ * the four rows that are on screen all the time anyway.
+ */
 export class Journal {
   constructor() {
-    this.logRoot = $('questlog');
-    this.logBody = $('ql-body');
     this.mapRoot = $('realmmap');
     this.canvas = $('rm-canvas');
     this.legend = $('rm-legend');
     this.objEl = $('rm-objective');
-    this.logOpen = false;
     this.mapOpen = false;
     this._ground = null;
     this.pulse = 0;
   }
 
-  get open() { return this.logOpen || this.mapOpen; }
-
-  // -------------------------------------------------------------------- log
-
-  toggleLog(p) {
-    this.logOpen = !this.logOpen;
-    this.logRoot.classList.toggle('hidden', !this.logOpen);
-    if (this.logOpen) this.paintLog(p);
-  }
-
-  /**
-   * The log, recomputed from the save every time it opens.
-   *
-   * The main line is always listed, and always first. Side quests appear once
-   * they have been started — a log full of quests you have never heard of is
-   * a checklist, not a journal.
-   */
-  paintLog(p) {
-    if (!this.logBody) return;
-    const parts = [];
-    const obj = mainObjective(p);
-    if (obj) {
-      const where = REGION_BY_ID.get(obj.where);
-      parts.push('<div class="ql-current"><span>★ CURRENT OBJECTIVE</span>'
-        + `<b>${obj.text}</b>`
-        + `<i>${where ? where.name : ''} &nbsp;·&nbsp; step ${obj.index + 1} of ${obj.total}</i>`
-        + '</div>');
-    }
-    for (const q of QUESTS) {
-      const known = q.id === MAIN || p.quests.has(q.id);
-      if (!known) continue;
-      const at = questProgress(q, p);
-      const done = at >= q.stages.length || p.questDone(q.id);
-      parts.push(`<div class="ql-quest${done ? ' done' : ''}">`
-        + `<div class="ql-name${q.side ? '' : ' main'}">${q.name}`
-        + (done ? ' — COMPLETE' : '') + '</div>'
-        + `<div class="ql-blurb">${q.blurb}</div>`
-        + q.stages.map((s, i) => {
-          if (i > at) return '';       // nothing about what comes next
-          const tick = i < at;
-          const where = REGION_BY_ID.get(s.where);
-          return `<div class="ql-stage${tick ? ' tick' : ''}">`
-            + `${tick ? '✔' : '▸'} ${s.text}`
-            + (tick || !where ? '' : ` <span class="ql-where">— ${where.name}</span>`)
-            + '</div>';
-        }).join('')
-        + '</div>');
-    }
-    const found = SECRET_IDS.filter((k) => p.found.has(k)).length;
-    const openRegions = REGIONS.filter((R) => regionOpen(R, p.slain)).length;
-    parts.push('<div class="ql-quest"><div class="ql-name">THE REALM</div>'
-      + `<div class="ql-stage tick">✔ ${p.slain.size} guardians put down</div>`
-      + `<div class="ql-stage tick">✔ ${p.camps.size} camps cleared</div>`
-      + `<div class="ql-stage tick">✔ ${found} of ${SECRET_IDS.length} secrets found</div>`
-      + `<div class="ql-stage tick">✔ ${p.seen.size} of ${REGIONS.length} regions entered</div>`
-      + `<div class="ql-stage tick">✔ ${openRegions} of ${REGIONS.length} regions with their roads open</div>`
-      + `<div class="ql-stage tick">✔ ${loreRead(p)} of ${LORE_COUNT} carvings read</div>`
-      + '</div>');
-    this.logBody.innerHTML = parts.join('');
-  }
+  get open() { return this.mapOpen; }
 
   /**
    * The objectives panel, top-left of the HUD.
@@ -563,6 +511,248 @@ export class Journal {
       if (out.length >= 4) break;
     }
     return out;
+  }
+
+  // ---------------------------------------------------------------- minimap
+
+  /**
+   * THE MINIMAP — top right, always up, zoomed into where you are standing.
+   *
+   * The full map on `M` is for planning: the whole country, the objective
+   * starred, a line drawn to it. This is for WALKING — a few hundred units
+   * around you, the road you are on, the next three places, and your own arrow
+   * turning in the middle of it. You should be able to follow a road without
+   * stopping to open anything.
+   *
+   * ── why it is cheap ───────────────────────────────────────────────────────
+   * The ground is sampled from `realm.terrain`, the pre-built collision
+   * heightfield — an array lookup rather than `realm.heightAt`, which blends
+   * the region table and carves the river network and costs about fifteen
+   * microseconds a call. At this canvas's resolution that difference is the
+   * difference between a stutter every few steps and nothing measurable.
+   *
+   * And it is only re-sampled when you have actually moved somewhere else:
+   * RESAMPLE units of walking, which is about two seconds at a run. In between,
+   * the cached image is drawn at an offset, so it scrolls smoothly rather than
+   * snapping.
+   */
+  paintMini(p, playerPos, realm, facing = 0, regionName = '') {
+    const c = $('mm-canvas');
+    if (!c || !realm || !realm.terrain) return;
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    const N = c.width;
+    /** How many world units the little map covers, corner to corner. */
+    const VIEW = 420;
+    const RESAMPLE = 26;
+    const px = playerPos.x, pz = playerPos.z;
+    const toPx = (wx, wz) => [
+      (wx - px) / VIEW * N + N / 2,
+      (wz - pz) / VIEW * N + N / 2,
+    ];
+
+    /**
+     * The ground, re-sampled only when you have left the last patch.
+     *
+     * `_mini` holds the offscreen image and the world point it was centred
+     * on. Between resamples the image is simply drawn shifted by how far you
+     * have walked since, which is exact — one world unit is a fixed number of
+     * pixels — so the scroll is smooth and free.
+     */
+    const M = this._mini;
+    if (!M || Math.hypot(M.x - px, M.z - pz) > RESAMPLE) {
+      this._sampleMini(realm, px, pz, VIEW, N);
+    }
+    const g = this._mini;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(0, 0, N, N);
+    if (g) {
+      // Drawn OVERSIZE and offset: the sample covers more ground than the
+      // window shows, which is what leaves something to scroll into.
+      const scale = N / VIEW;
+      const dx = (g.x - px) * scale;
+      const dz = (g.z - pz) * scale;
+      const span = g.span * scale;
+      ctx.drawImage(g.canvas, N / 2 - span / 2 + dx, N / 2 - span / 2 + dz,
+        span, span);
+    }
+
+    // ---- the network: rivers under roads, same as the big map ----
+    const line = (pts, colour, width) => {
+      ctx.save();
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      let drawn = 0;
+      pts.forEach((q, i) => {
+        const [a, b] = toPx(q[0], q[1]);
+        if (i === 0) ctx.moveTo(a, b); else ctx.lineTo(a, b);
+        drawn++;
+      });
+      if (drawn) ctx.stroke();
+      ctx.restore();
+    };
+    /** Skip anything whose nodes are all well outside the window. */
+    const near = (pts) => pts.some((q) =>
+      Math.abs(q[0] - px) < VIEW && Math.abs(q[1] - pz) < VIEW);
+    for (const r of RIVERS) if (near(r.pts)) line(r.pts, 'rgba(70,140,190,0.9)', 5);
+    for (const r of ROADS) if (near(r.pts)) line(r.pts, 'rgba(228,206,150,0.7)', 5);
+
+    // ---- what is around you: places, then guardians ----
+    const half = VIEW * 0.55;
+    ctx.textAlign = 'center';
+    for (const R of REGIONS) {
+      if (Math.abs(R.x - px) > R.r + VIEW || Math.abs(R.z - pz) > R.r + VIEW) continue;
+      for (const s of R.sites || []) {
+        if (Math.abs(s.at[0] - px) > half || Math.abs(s.at[1] - pz) > half) continue;
+        const [a, b] = toPx(s.at[0], s.at[1]);
+        ctx.font = '15px monospace';
+        ctx.fillStyle = 'rgba(12,14,20,0.75)';
+        ctx.fillText(PIN[s.kind] || '·', a + 1, b + 6);
+        ctx.fillStyle = p.found.has(s.id) ? '#ffcf5c' : 'rgba(240,232,212,0.85)';
+        ctx.fillText(PIN[s.kind] || '·', a, b + 5);
+      }
+      for (const b0 of R.bosses || []) {
+        if (Math.abs(b0.at[0] - px) > half || Math.abs(b0.at[1] - pz) > half) continue;
+        const [a, b] = toPx(b0.at[0], b0.at[1]);
+        ctx.beginPath();
+        ctx.arc(a, b, 5, 0, Math.PI * 2);
+        if (p.slain.has(b0.id)) {
+          ctx.strokeStyle = '#6cc24a'; ctx.lineWidth = 2.4; ctx.stroke();
+        } else {
+          ctx.fillStyle = b0.final ? '#ffd76b' : '#c0392b';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 1.4; ctx.stroke();
+        }
+      }
+    }
+
+    /**
+     * The objective, even when it is off the edge.
+     *
+     * Inside the window it gets its star. Outside it, the star is pinned to
+     * the rim in the right direction — which is the whole reason a minimap
+     * beats a compass strip: it tells you where to go AND what is between you
+     * and it.
+     */
+    const obj = mainObjective(p);
+    const target = obj && obj.mark ? this._markPos(obj.mark) : null;
+    if (target) {
+      let [tx, tz] = toPx(target.x, target.z);
+      const edge = N / 2 - 12;
+      const ox = tx - N / 2, oz = tz - N / 2;
+      const d = Math.hypot(ox, oz);
+      if (d > edge) { tx = N / 2 + ox / d * edge; tz = N / 2 + oz / d * edge; }
+      const beat = 1 + Math.sin(this.pulse * 4) * 0.16;
+      ctx.save();
+      ctx.translate(tx, tz);
+      ctx.scale(beat, beat);
+      ctx.font = 'bold 19px monospace';
+      ctx.fillStyle = 'rgba(12,14,20,0.85)';
+      ctx.fillText('★', 1, 8);
+      ctx.fillStyle = '#ffcf5c';
+      ctx.fillText('★', 0, 7);
+      ctx.restore();
+    }
+
+    // ---- you, in the middle, pointing where you are looking ----
+    ctx.save();
+    ctx.translate(N / 2, N / 2);
+    ctx.rotate(-facing);
+    const cone = ctx.createRadialGradient(0, 0, 2, 0, 0, 34);
+    cone.addColorStop(0, 'rgba(124,192,236,0.5)');
+    cone.addColorStop(1, 'rgba(124,192,236,0)');
+    ctx.fillStyle = cone;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 34, -Math.PI / 2 - 0.61, -Math.PI / 2 + 0.61);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(6.8, 7.2);
+    ctx.lineTo(0, 3.2);
+    ctx.lineTo(-6.8, 7.2);
+    ctx.closePath();
+    ctx.fillStyle = '#7cc0ec';
+    ctx.strokeStyle = '#0d1117';
+    ctx.lineWidth = 2.2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.fill();
+    ctx.restore();
+
+    // North, so the little map is orientable even though it does not rotate.
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(12,14,20,0.8)';
+    ctx.fillText('N', N / 2 + 1, 13);
+    ctx.fillStyle = 'rgba(245,238,220,0.75)';
+    ctx.fillText('N', N / 2, 12);
+
+    const label = $('mm-region');
+    if (label && label.textContent !== regionName) label.textContent = regionName;
+  }
+
+  /**
+   * Sample the ground around a point into an offscreen canvas.
+   *
+   * Deliberately WIDER than the window — 1.5× — so walking does not
+   * immediately expose an unsampled edge, and heights come from the collision
+   * heightfield rather than the height function. The palette is looked up once
+   * per block of pixels rather than per pixel: `paletteAt` blends every region
+   * whose weight reaches the point, and at this size the answer does not
+   * change within a few metres.
+   */
+  _sampleMini(realm, cx, cz, view, n) {
+    const span = view * 1.5;
+    const S = 128;
+    let off = this._mini && this._mini.canvas;
+    if (!off) {
+      off = document.createElement('canvas');
+      off.width = S; off.height = S;
+    }
+    const octx = off.getContext('2d');
+    if (!octx) return;
+    const img = octx.createImageData(S, S);
+    const step = span / S;
+    const pal = this._miniPal || (this._miniPal = {});
+    const T = realm.terrain;
+    for (let j = 0; j < S; j++) {
+      const z = cz - span / 2 + j * step;
+      for (let i = 0; i < S; i++) {
+        const x = cx - span / 2 + i * step;
+        const h = T.heightAt(x, z);
+        // One palette lookup per eight pixels each way: sixteen a row rather
+        // than a hundred and twenty-eight.
+        if ((i & 7) === 0 || (j & 7) === 0) realm.paletteAt(x, z, pal);
+        // Palette entries are THREE.Colors — components in 0..1, as the big
+        // map's sampler above also assumes.
+        let r, g, b;
+        if (h < SEA) {
+          const k = clamp((SEA - h) / 24, 0, 1);
+          r = lerp(44, 12, k); g = lerp(96, 40, k); b = lerp(138, 86, k);
+        } else {
+          const col = h > pal.highAt ? pal.high : pal.grass;
+          r = col.r * 255; g = col.g * 255; b = col.b * 255;
+        }
+        // Hillshade off the same field, so ridges and valleys read.
+        const dx = T.heightAt(x + step, z) - h;
+        const dz = T.heightAt(x, z + step) - h;
+        const shade = clamp(1 + (-dx - dz) / (step * 0.5), 0.45, 1.6);
+        const o = (j * S + i) * 4;
+        img.data[o] = clamp(r * shade, 0, 255);
+        img.data[o + 1] = clamp(g * shade, 0, 255);
+        img.data[o + 2] = clamp(b * shade, 0, 255);
+        img.data[o + 3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    this._mini = { canvas: off, x: cx, z: cz, span };
+    void n;
   }
 
   // -------------------------------------------------------------------- map
@@ -919,9 +1109,7 @@ export class Journal {
   }
 
   closeAll() {
-    this.logOpen = false;
     this.mapOpen = false;
-    this.logRoot.classList.add('hidden');
     this.mapRoot.classList.add('hidden');
   }
 }

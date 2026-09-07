@@ -24,11 +24,12 @@
  * there is exactly one selected thing and one code path that acts on it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v86';
-import { CATS, GEAR_BY_ID } from './gear.js?v=v86';
-import { HEART } from './progression.js?v=v86';
-import { FrogModel } from './frog.js?v=v86';
-import { clamp } from './util.js?v=v86';
+import * as THREE from '../lib/three.module.js?v=v87';
+import { CATS, GEAR_BY_ID } from './gear.js?v=v87';
+import { gearIcon, catIcon } from './gearicons.js?v=v87';
+import { HEART } from './progression.js?v=v87';
+import { FrogModel } from './frog.js?v=v87';
+import { clamp } from './util.js?v=v87';
 
 const $ = (id) => document.getElementById(id);
 
@@ -95,7 +96,7 @@ export class InventoryScreen {
     CATS.forEach((c, i) => {
       const b = document.createElement('button');
       b.className = 'inv-tab';
-      b.innerHTML = `<span class="it-icon">${c.icon}</span>`
+      b.innerHTML = `<span class="it-icon">${catIcon(c)}</span>`
         + `<span class="it-name">${c.name}</span>`
         + `<span class="it-n" data-count="${c.id}">0</span>`;
       b.onclick = () => { this.cat = i; this.cursor = 0; this.refresh(); };
@@ -215,7 +216,7 @@ export class InventoryScreen {
       el.className = 'inv-slot';
       el.classList.toggle('on', i === this.cursor);
       el.classList.toggle('worn', p.isEquipped(g.id));
-      el.innerHTML = `<span class="is-icon">${g.icon}</span>`
+      el.innerHTML = `<span class="is-icon">${gearIcon(g)}</span>`
         + `<span class="is-stars">${starRow(g.stars)}</span>`
         + (row.n > 1 ? `<span class="is-n">×${row.n}</span>` : '')
         + (p.isEquipped(g.id) ? '<span class="is-worn">WORN</span>' : '')
@@ -233,7 +234,7 @@ export class InventoryScreen {
         const g = GEAR_BY_ID.get(p.equipped[slot]);
         return `<button class="inv-wornrow${g ? '' : ' none'}" data-slot="${slot}">`
           + `<span class="iw-label">${label}</span>`
-          + `<span class="iw-icon">${g ? g.icon : '·'}</span>`
+          + `<span class="iw-icon">${g ? gearIcon(g) : '<i class="iw-none">·</i>'}</span>`
           + `<span class="iw-name">${g ? g.name : '—'}</span>`
           + `<span class="iw-num">${g ? (g.atk ? '+' + g.atk + ' ATK' : '') + (g.def ? '+' + g.def + ' DEF' : '') : ''}</span>`
           + '</button>';

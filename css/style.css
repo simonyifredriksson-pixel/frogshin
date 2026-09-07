@@ -1141,6 +1141,9 @@ kbd {
   background: rgba(10,14,20,0.74);
   border: 3px solid rgba(255,207,92,0.4);
   box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+  /* Above the minimap, which sits directly underneath it — the award popups
+     drop out of the purse and would otherwise be hidden behind the map. */
+  z-index: 7;
 }
 /* ==========================================================================
    MAP PICKER — the play panel and the lobby share it
@@ -1342,6 +1345,53 @@ kbd {
   font-size: 7px;
   letter-spacing: 1px;
   color: var(--parch-dim);
+}
+
+/* ==========================================================================
+   MINIMAP — top right, directly under the purse
+   ========================================================================== */
+/*
+ * Sized to sit under the froglet counter and line up with its right edge.
+ * `pointer-events: none` throughout: it is a readout, and a panel you can
+ * accidentally click while the mouse is captured is a panel that steals the
+ * pointer lock.
+ */
+#minimap {
+  position: absolute;
+  right: 26px;
+  top: 74px;
+  width: 176px;
+  height: 176px;
+  padding: 4px;
+  background: rgba(10,14,20,0.74);
+  border: 3px solid rgba(255,207,92,0.4);
+  box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+  pointer-events: none;
+  z-index: 6;
+}
+#minimap.hidden { display: none; }
+#mm-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* Chunky on purpose — the map is drawn as pixels, not smoothed into mush. */
+  image-rendering: pixelated;
+}
+/* The region you are standing in, across the bottom of the frame. */
+#mm-region {
+  position: absolute;
+  left: 4px; right: 4px; bottom: 4px;
+  padding: 3px 0 2px;
+  text-align: center;
+  font-family: var(--font-px);
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: var(--parch);
+  background: rgba(8,10,16,0.82);
+  text-shadow: 0 2px 0 rgba(0,0,0,0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Award popups stack downward out of the purse. */
@@ -2562,13 +2612,19 @@ kbd {
   cursor: pointer;
 }
 .inv-tab:last-child { border-right: 0; }
-.inv-tab .it-icon { font-size: 20px; filter: grayscale(0.5); }
+/*
+ * The icons are inline SVG now, not emoji — see gearicons.js. They are sized
+ * by the BOX rather than by a font size, and image-rendering: pixelated is
+ * what keeps a sixteen-pixel drawing hard-edged when it is blown up to thirty.
+ */
+.inv-tab .it-icon { width: 22px; height: 22px; display: block; opacity: 0.62; }
+.inv-tab .it-icon svg { width: 100%; height: 100%; display: block; }
 .inv-tab.on {
   background: linear-gradient(rgba(108,194,74,0.22), rgba(108,194,74,0.06));
   color: var(--parch);
   box-shadow: inset 0 -4px 0 var(--jade);
 }
-.inv-tab.on .it-icon { filter: none; }
+.inv-tab.on .it-icon { opacity: 1; }
 .inv-tab .it-n {
   min-width: 22px;
   padding: 0 4px;
@@ -2612,7 +2668,8 @@ kbd {
   cursor: pointer;
   overflow: hidden;
 }
-.inv-slot .is-icon { font-size: 30px; line-height: 32px; }
+.inv-slot .is-icon { width: 34px; height: 34px; display: block; }
+.inv-slot .is-icon svg { width: 100%; height: 100%; display: block; }
 .inv-slot .is-stars { font-size: 11px; color: var(--gold); letter-spacing: 1px; }
 .inv-slot .is-stars i { color: #55503c; font-style: normal; }
 .inv-slot .is-name {
@@ -2677,7 +2734,9 @@ kbd {
   cursor: pointer;
 }
 .inv-wornrow .iw-label { color: var(--parch-dim); font-size: 12px; }
-.inv-wornrow .iw-icon { font-size: 18px; }
+.inv-wornrow .iw-icon { width: 22px; height: 22px; display: block; flex: 0 0 22px; }
+.inv-wornrow .iw-icon svg { width: 100%; height: 100%; display: block; }
+.inv-wornrow .iw-none { color: var(--parch-dim); font-style: normal; font-size: 18px; }
 .inv-wornrow .iw-num { color: var(--jade); font-size: 14px; }
 .inv-wornrow.none { opacity: 0.45; cursor: default; }
 
@@ -2751,17 +2810,17 @@ kbd {
 .talk-more b { color: var(--gold); }
 
 /* ==========================================================================
-   QUEST LOG + MAP
+   THE REALM MAP
    ========================================================================== */
 
-#questlog, #realmmap {
+#realmmap {
   position: fixed; inset: 0;
   z-index: 68;
   display: flex; align-items: center; justify-content: center;
   background: rgba(6,8,12,0.86);
   font-family: var(--font-ui);
 }
-.ql-frame, .rm-frame {
+.rm-frame {
   display: flex; flex-direction: column;
   width: min(900px, 94vw);
   max-height: 92vh;
@@ -2770,22 +2829,13 @@ kbd {
   border: var(--edge) solid var(--ink-3);
   box-shadow: 0 0 0 4px #0a0a10;
 }
-.ql-title, .rm-title {
+.rm-title {
   font-family: var(--font-px);
   font-size: 14px; color: var(--gold);
   margin-bottom: 12px;
 }
-.ql-body { flex: 1; overflow-y: auto; }
-.ql-quest { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--ink-3); }
-.ql-quest.done { opacity: 0.55; }
-.ql-name { color: var(--parch); font-size: 21px; }
-.ql-name.main { color: var(--gold); }
-.ql-blurb { color: #7d8496; font-size: 16px; margin-bottom: 4px; }
-.ql-stage { color: var(--jade); font-size: 18px; }
-.ql-stage.tick { color: #5c6070; }
-.ql-where { color: var(--parch-dim); font-size: 15px; }
-.ql-foot, .rm-foot { margin-top: 10px; text-align: right; color: var(--parch-dim); font-size: 16px; }
-.ql-foot b, .rm-foot b { color: var(--gold); }
+.rm-foot { margin-top: 10px; text-align: right; color: var(--parch-dim); font-size: 16px; }
+.rm-foot b { color: var(--gold); }
 
 .rm-plot { display: flex; justify-content: center; }
 #rm-canvas {
@@ -2841,11 +2891,11 @@ kbd {
 @media (max-width: 1100px) {
   .inv-right { width: 300px; }
   .inv-doll { height: 230px; }
-  .inv-slot .is-icon { font-size: 24px; line-height: 26px; }
+  .inv-slot .is-icon { width: 27px; height: 27px; }
   .inv-slot .is-name { font-size: 11px; line-height: 11px; }
 }
 /* ==========================================================================
-   THE REALM MAP + QUEST LOG, expanded
+   THE REALM MAP, expanded
    ========================================================================== */
 
 .rm-head {
@@ -2872,21 +2922,6 @@ kbd {
   width: min(760px, 70vh);
   height: min(760px, 70vh);
 }
-
-/* The current objective, at the top of the log. */
-.ql-current {
-  display: flex; flex-direction: column;
-  padding: 10px 14px;
-  margin-bottom: 14px;
-  background: linear-gradient(rgba(255,207,92,0.16), rgba(255,207,92,0.05));
-  border-left: 4px solid var(--gold);
-}
-.ql-current span {
-  font-family: var(--font-px);
-  font-size: 10px; color: var(--gold); letter-spacing: 1px;
-}
-.ql-current b { color: var(--parch); font-size: 22px; line-height: 26px; margin: 4px 0; }
-.ql-current i { color: var(--parch-dim); font-size: 15px; font-style: normal; }
 
 /* Objectives panel: the main-line row gets the gold treatment. */
 #objectives li.active {

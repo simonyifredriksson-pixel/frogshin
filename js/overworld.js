@@ -32,30 +32,30 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v86';
-import { CFG } from './config.js?v=v86';
-import { clamp, damp, mulberry32 } from './util.js?v=v86';
-import { Realm } from './realm.js?v=v86';
-import { Scatter } from './scatter.js?v=v86';
-import { Sites } from './realmsites.js?v=v86';
-import { Camp } from './mobs.js?v=v86';
-import { DungeonBoss } from './dungeonboss.js?v=v86';
-import { Frogath } from './frogath.js?v=v86';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v86';
+import * as THREE from '../lib/three.module.js?v=v87';
+import { CFG } from './config.js?v=v87';
+import { clamp, damp, mulberry32 } from './util.js?v=v87';
+import { Realm } from './realm.js?v=v87';
+import { Scatter } from './scatter.js?v=v87';
+import { Sites } from './realmsites.js?v=v87';
+import { Camp } from './mobs.js?v=v87';
+import { DungeonBoss } from './dungeonboss.js?v=v87';
+import { Frogath } from './frogath.js?v=v87';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v87';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v86';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v86';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v86';
+  CONTENT_HALF } from './regions.js?v=v87';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v87';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v87';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v86';
+  mainObjective } from './quests.js?v=v87';
 import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v86';
-import { disposeLandmarkMats } from './landmarks.js?v=v86';
-import { Props, disposePropMats } from './props.js?v=v86';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v86';
-import { Ambience } from './ambience.js?v=v86';
-import { Weather } from './weather.js?v=v86';
-import { Audio } from './audio.js?v=v86';
+  disposeVillagerMats } from './realmquests.js?v=v87';
+import { disposeLandmarkMats } from './landmarks.js?v=v87';
+import { Props, disposePropMats } from './props.js?v=v87';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v87';
+import { Ambience } from './ambience.js?v=v87';
+import { Weather } from './weather.js?v=v87';
+import { Audio } from './audio.js?v=v87';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -625,6 +625,12 @@ export class Overworld {
       this.life.moveTo(this.sites.nearestSettlement(spot.x, spot.z), p.slain);
     }
     this._paintObjectives();
+    // The minimap belongs to this mode: put it up here and `resetOverlays`
+    // takes it down on the way out.
+    this._miniShown = true;
+    this.hud.setMinimap(true);
+    this.journal.paintMini(p, player.pos, this.realm, this.facing,
+      this.region ? this.region.name : '');
     this._watchUnload();
     this.save();
   }
@@ -745,6 +751,9 @@ export class Overworld {
 
     // ---- panels first. A frozen world still runs its UI ------------------
     if (this.frozen) {
+      // The bag, the map and a conversation all take the screen; the corner
+      // map goes away until they are closed.
+      this._miniVisible(false);
       this._panelKeys(input);
       if (this.inventory) this.inventory.update(dt);
       // The map keeps drawing while it is open: the objective star pulses,
@@ -753,6 +762,7 @@ export class Overworld {
       this.journal.tick(dt, this.progress, player.pos, this.realm, this.facing);
       return;
     }
+    this._miniVisible(true);
     if (this._openKeys(input)) return;
 
     // ---- the world -------------------------------------------------------
@@ -776,8 +786,41 @@ export class Overworld {
     this.ambience.update(dt);
     this._life(dt, player);
     this._banner(dt);
+    this._mini(dt, player);
     this._syncKunai();
     this._autosave(dt);
+  }
+
+  /**
+   * The minimap in the corner, redrawn twelve times a second.
+   *
+   * Not sixty: nothing on it moves fast enough to need it, and the arrow's
+   * turn is smooth at twelve. The expensive part — the ground — is cached
+   * inside `paintMini` and only re-sampled when the player has walked out of
+   * the last patch, so this is a few hundred lines of vector drawing.
+   */
+  _mini(dt, player) {
+    this.journal.pulse += dt;
+    this._miniAcc = (this._miniAcc || 0) + dt;
+    if (this._miniAcc < 1 / 12) return;
+    this._miniAcc = 0;
+    this.journal.paintMini(this.progress, player.pos, this.realm, this.facing,
+      this.region ? this.region.name : '');
+  }
+
+  /**
+   * The minimap gets out of the way while a panel is up.
+   *
+   * The bag, the map and a conversation all cover the screen, and a little
+   * map of the country sitting on top of the corner of them is clutter you
+   * cannot dismiss. Driven off `frozen`, so it covers all three without any
+   * of them having to remember, and guarded on a cached flag because it runs
+   * every frame and toggling a class is a style recalculation.
+   */
+  _miniVisible(on) {
+    if (this._miniShown === on) return;
+    this._miniShown = on;
+    this.hud.setMinimap(on);
   }
 
   /**
@@ -956,7 +999,6 @@ export class Overworld {
       input.releaseLock();
       return true;
     }
-    if (input.consume('KeyJ')) { this.journal.toggleLog(this.progress); return true; }
     if (input.consume('KeyM')) {
       this.journal.toggleMap(this.progress, this.player.pos, this.realm,
         this.facing);
@@ -979,11 +1021,6 @@ export class Overworld {
         // the same path every other mode already relies on.
         input.requestLock();
       }
-      return;
-    }
-    if (this.journal.logOpen && (input.consume('KeyJ') || input.consume('Escape')
-      || input.consume('Tab'))) {
-      this.journal.closeAll();
       return;
     }
     if (this.journal.mapOpen && (input.consume('KeyM') || input.consume('Escape')
@@ -1764,11 +1801,19 @@ export class Overworld {
   // ------------------------------------------------------------------ death
 
   /**
-   * Dying puts you back at the last place with a roof.
+   * DYING IN A FIGHT PUTS YOU BACK OUTSIDE THAT FIGHT.
    *
-   * Not at the start of the region and not where you fell: the first is a
-   * punishment measured in walking, the second is a death with no meaning.
-   * Everything you had, you keep — the realm's difficulty is in the fights.
+   * Not at the last village. Losing to a guardian used to teleport you across
+   * the region to somewhere with a roof, which turned every attempt at a boss
+   * into a two-minute walk — the walk is not the difficulty, the guardian is.
+   *
+   * So: die with something live in front of you and you wake up a short way
+   * off it, with the fight fully reset — the guardian back at its stone on
+   * full health, the camp back on its feet. Die to anything else (a fall, a
+   * hazard, drowning) and the old rule still applies: back to the last place
+   * with a roof, because there is nothing to be put down beside.
+   *
+   * Everything you had, you keep. The realm's difficulty is in the fights.
    */
   _death(dt, player) {
     if (!player.health.dead) {
@@ -1779,18 +1824,35 @@ export class Overworld {
         || site.kind === 'camp')) {
         this.home = { x: site.at.x, y: site.at.y, z: site.at.z };
       }
+      // And a note of what is currently trying to kill us, because by the
+      // time the respawn runs it will have been thrown away.
+      this._killer = this._liveFight(player);
       return;
     }
     this.deathT += dt;
     if (this.deathT < 3.2) return;
     this.deathT = 0;
+
+    const fight = this._killer;
+    this._killer = null;
+    /**
+     * Reset whatever it was.
+     *
+     * A guardian is DROPPED — the encounter rebuilds it at full health, back
+     * at its own stone and asleep, when you walk into the ring again. A camp
+     * is despawned, which does the same for its creatures. Neither is marked
+     * cleared, so nothing is lost by dying.
+     */
     if (this.boss) this._dropBoss();
     if (this.frogath) {
       this.frogath.dispose();
       this.frogath = null;
       this.hud.hideBossBar();
     }
-    const h = this.home || { x: 0, z: 470 };
+    if (fight && fight.camp) fight.camp.despawn();
+
+    const spot = fight ? this._retreatSpot(fight.at) : null;
+    const h = spot || this.home || { x: 430, z: 1900 };
     player.pos.set(h.x, this.realm.heightAt(h.x, h.z) + 1.4, h.z);
     player.vel.set(0, 0, 0);
     player.health.revive();
@@ -1799,7 +1861,75 @@ export class Overworld {
     this.hud.hideRespawn();
     this.realm.streamAround(h.x, h.z, true);
     if (this.scatter) this.scatter.streamAround(h.x, h.z, true);
+    if (spot) {
+      this.hud.toast(fight.name
+        ? `${fight.name} is back on its feet. So are you.`
+        : 'They are back on their feet. So are you.', 5);
+    }
     this.save();
+  }
+
+  /**
+   * What is currently fighting the player, or null.
+   *
+   * The guardian first, then Frogath, then the nearest camp with something
+   * alive in it and close enough to have been the thing that did it. Forty
+   * units is the outer edge of any camp's reach plus a margin — die further
+   * off than that and whatever killed you was the landscape.
+   */
+  _liveFight(player) {
+    const px = player.pos.x, pz = player.pos.z;
+    if (this.frogath && this.frogath.alive && this.frogath.fighting) {
+      return { at: this.frogath.pos, name: 'FROGATH' };
+    }
+    if (this.boss && this.boss.alive && this.boss.active) {
+      return { at: { x: this.boss.pos.x, z: this.boss.pos.z }, name: this.boss.name };
+    }
+    let best = null, bestD = 40;
+    for (const c of this.camps) {
+      if (!c.live || c.cleared) continue;
+      const d = Math.hypot(c.at.x - px, c.at.z - pz);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return best ? { at: best.at, camp: best, name: null } : null;
+  }
+
+  /**
+   * Standable ground about a dozen paces off something.
+   *
+   * Two rules and both matter. It has to be FAR enough that you are not
+   * standing inside the thing you just lost to — RETREAT is a little over a
+   * guardian's own reach — and it has to be ground the character controller
+   * can actually stand on, or the respawn drops you inside a hillside.
+   *
+   * Sixteen bearings, nearest-to-your-corpse first so you reappear roughly
+   * where you fell rather than on the far side of the arena, and each
+   * candidate is put through `placeSpot`, which is the same search every
+   * village and boss arena in the world was placed with. Nothing standable
+   * anywhere on the ring hands back null and the caller falls through to the
+   * last village — a bad respawn is worse than a long walk.
+   */
+  _retreatSpot(at) {
+    const RETREAT = 14;
+    const pl = this.player;
+    const from = pl ? Math.atan2(pl.pos.x - at.x, pl.pos.z - at.z) : 0;
+    const R = regionAt(at.x, at.z, _scratch);
+    for (let i = 0; i < 16; i++) {
+      // Alternate either side of the bearing we died on: 0, +1, -1, +2, -2...
+      const step = Math.ceil(i / 2) * (i % 2 ? 1 : -1);
+      const a = from + step * (Math.PI * 2 / 16);
+      const x = at.x + Math.sin(a) * RETREAT;
+      const z = at.z + Math.cos(a) * RETREAT;
+      const h = this.realm.heightAt(x, z);
+      if (h < SEA + 1.0 && !(R && R.amphibious)) continue;
+      if (this.realm._slopeAt(x, z) > 0.34) continue;
+      return { x, z };
+    }
+    // Nothing on the ring: let the placement search look further out.
+    const spot = this.realm.placeSpot(at.x, at.z, RETREAT, R, 0.34);
+    if (!spot) return null;
+    const d = Math.hypot(spot.x - at.x, spot.z - at.z);
+    return d > 6 ? { x: spot.x, z: spot.z } : null;
   }
 
   // -------------------------------------------------------------------- HUD
@@ -1870,5 +2000,7 @@ export class Overworld {
       if (el) el.classList.remove('show');
     }
     this.hud.setPickupPrompt(false, '');
+    this.hud.setObjectives(null);
+    this.hud.setMinimap(false);
   }
 }

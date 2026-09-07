@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v86';
-import { mulberry32, clamp } from './util.js?v=v86';
-import { SEA } from './regions.js?v=v86';
-import { buildLandmark } from './landmarks.js?v=v86';
-import { ROADS } from './roads.js?v=v86';
+import * as THREE from '../lib/three.module.js?v=v87';
+import { mulberry32, clamp } from './util.js?v=v87';
+import { SEA } from './regions.js?v=v87';
+import { buildLandmark } from './landmarks.js?v=v87';
+import { ROADS } from './roads.js?v=v87';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -288,6 +288,122 @@ export class Sites {
   _anchor(g, x, y, z, r = 1.8) {
     this.realm.collision.addAnchor(
       g.position.x + x, g.position.y + y, g.position.z + z, r);
+  }
+
+  // ------------------------------------------------- standing on the ground
+
+  /**
+   * THE GROUND UNDER A PART, in the group's own coordinates.
+   *
+   * A site's group is placed at ONE height — the terrain at its middle — and
+   * everything inside it was authored at a fixed offset from that. On level
+   * ground that is right and on a slope it is a disaster: half a colonnade
+   * buried to the capitals, half of it standing on nothing. Measured across
+   * the world, the worst sites had eleven units of relief under a footprint
+   * built as if it were a table top, which is exactly why a ruin read as
+   * "some stone pillars randomly placed" — the pillars were all that was
+   * still above the dirt.
+   *
+   * Anything that stands ON the ground asks this where the ground is.
+   * Anything that stands on something ELSE — a roof on its walls, a lintel on
+   * its posts — keeps its fixed offset, because that is a real relationship.
+   */
+  _gy(g, x, z) {
+    return this.realm.heightAt(g.position.x + x, g.position.z + z) - g.position.y;
+  }
+
+  /** `_put`, with the part's BASE resting on the terrain under it. */
+  _putOn(g, geo, mat, sx, sy, sz, x, z, ry) {
+    return this._put(g, geo, mat, sx, sy, sz, x, this._gy(g, x, z) + sy * 0.5, z, ry);
+  }
+
+  /**
+   * How far the ground drops under a footprint, and to what.
+   *
+   * Sampled on a five-by-five grid rather than at the corners: a site is
+   * often placed on a saddle or a shoulder, where the middle of an edge is
+   * lower than either end of it.
+   */
+  _relief(g, hw, hd) {
+    let lo = Infinity, hi = -Infinity;
+    for (let j = -2; j <= 2; j++) {
+      for (let i = -2; i <= 2; i++) {
+        const y = this._gy(g, (i / 2) * hw, (j / 2) * hd);
+        if (y < lo) lo = y;
+        if (y > hi) hi = y;
+      }
+    }
+    return { lo, hi };
+  }
+
+  /**
+   * A LEVEL FOUNDATION, filling whatever the slope leaves under a building.
+   *
+   * This is the fix for every site that is not a single object. Rather than
+   * trying to make a temple follow a hillside — which no temple does — the
+   * hillside is filled in under it with courses of stone down to the lowest
+   * ground in the footprint, and the building is put on top of a flat plinth.
+   * Which is what anybody actually building on a slope does, and it means the
+   * thing above can go on being authored as if the world were flat.
+   *
+   * Three courses, each a little smaller than the one below, so it reads as
+   * masonry rather than as a slab. Skipped entirely where the ground is
+   * already level enough that a plinth would be a step for no reason.
+   *
+   * @returns the local Y the building should be built from — 0 when nothing
+   *          was needed, so a caller can always just use it.
+   */
+  _plinth(g, hw, hd, mat = 'stoneDark', pad = 1.06) {
+    const { lo, hi } = this._relief(g, hw, hd);
+    // Under half a unit of fall is a floor, not a slope.
+    if (hi - lo < 0.5) return 0;
+    const drop = Math.min(hi - lo + 1.2, 26);
+    const bottom = lo - 0.6;
+    const courses = 3;
+    /**
+     * A RING of courses, not a solid block.
+     *
+     * The middle is deliberately left empty. Several of the things that stand
+     * on a plinth are sunk INTO it — a dungeon's stair goes down through the
+     * floor of its hall to a door below ground — and a solid slab buries all
+     * of that in stone. Nothing sees the inside of a foundation anyway, so
+     * the four edge beams are the whole of what a plinth needs to be.
+     */
+    for (let i = 0; i < courses; i++) {
+      const k = pad - i * 0.045;
+      const y0 = bottom + (drop * i) / courses;
+      const y1 = bottom + (drop * (i + 1)) / courses;
+      const h = y1 - y0, cy = (y0 + y1) * 0.5;
+      const m = i === courses - 1 ? mat : 'stone';
+      const t = Math.max(2.2, Math.min(hw, hd) * 0.22);   // beam thickness
+      this._put(g, G.box, m, hw * k, h, t, 0, cy, hd * k - t);
+      this._put(g, G.box, m, hw * k, h, t, 0, cy, -(hd * k - t));
+      this._put(g, G.box, m, t, h, hd * k, hw * k - t, cy, 0);
+      this._put(g, G.box, m, t, h, hd * k, -(hw * k - t), cy, 0);
+    }
+    // The colliders follow the ring, so the middle stays walkable.
+    const t0 = Math.max(2.2, Math.min(hw, hd) * 0.22);
+    const half = (0 - bottom) * 0.5, cy0 = bottom * 0.5;
+    this._solid(g, hw * pad, half, t0, 0, cy0, hd * pad - t0, 'wall');
+    this._solid(g, hw * pad, half, t0, 0, cy0, -(hd * pad - t0), 'wall');
+    this._solid(g, t0, half, hd * pad, hw * pad - t0, cy0, 0, 'wall');
+    this._solid(g, t0, half, hd * pad, -(hw * pad - t0), cy0, 0, 'wall');
+    /**
+     * Steps up the low side.
+     *
+     * Without them a plinth on a real slope is a wall you cannot climb, and
+     * the site becomes scenery. Tagged `deck`, which is the surface the
+     * character controller allows a two-unit step onto.
+     */
+    const rise = -bottom;
+    const n = Math.max(2, Math.round(rise / 1.4));
+    for (let i = 0; i < n; i++) {
+      const y = bottom + (rise * (i + 1)) / n;
+      const out = hd * pad + (n - i) * 1.5;
+      this._put(g, G.box, 'stone', hw * 0.5, 0.5, 1.5, 0, y, out);
+      this._solid(g, hw * 0.25, 0.3, 0.9, 0, y, out, 'deck');
+    }
+    return 0;
   }
 
   // --------------------------------------------------------------- landmark
@@ -957,6 +1073,7 @@ export class Sites {
   /** A shrine: a stepped platform under a gate, with an offering slab. */
   _shrine(g, spec, rnd, style) {
     const r = Math.max(9, spec.r);
+    this._plinth(g, r * 1.05, r * 1.05);
     for (let i = 0; i < 3; i++) {
       const k = 1 - i * 0.22;
       this._put(g, G.box, i ? 'stone' : 'stoneDark',
@@ -973,16 +1090,19 @@ export class Sites {
     this._put(g, G.box, 'stoneDark', 1.5, 0.9, 1.0, 0, top + 0.45, 0);
     this._put(g, G.low, 'lamp', 0.3, 0.34, 0.3, 0, top + 1.1, 0);
     this._anchor(g, 0, top + 5.5, 0, 2.0);
+    // Offering stones round the outside, lying on whatever the ground does.
     for (let i = 0; i < 6; i++) {
-      const a = rnd() * Math.PI * 2, d = r * (0.55 + rnd() * 0.3);
-      this._put(g, G.low, 'stone', 0.5 + rnd() * 0.5, 0.4 + rnd() * 0.4,
-        0.5 + rnd() * 0.5, Math.cos(a) * d, top + 0.3, Math.sin(a) * d);
+      const a = rnd() * Math.PI * 2, d = r * (1.1 + rnd() * 0.4);
+      this._putOn(g, G.low, 'stone', 0.5 + rnd() * 0.5, 0.5 + rnd() * 0.5,
+        0.5 + rnd() * 0.5, Math.cos(a) * d, Math.sin(a) * d);
     }
   }
 
   /** A temple: a colonnade, a roof, a dark doorway and something lit inside. */
   _temple(g, spec, rnd, style) {
     const r = Math.max(16, spec.r);
+    // Level ground first, whatever the hill is doing. See `_plinth`.
+    this._plinth(g, r * 1.1, r * 0.9);
     this._put(g, G.box, 'stoneDark', r * 1.1, 1.6, r * 0.9, 0, 0.8, 0);
     this._solid(g, r * 1.1, 0.9, r * 0.9, 0, 0.8, 0, 'deck');
     for (let i = 0; i < 4; i++) {
@@ -1007,73 +1127,160 @@ export class Sites {
     this._solid(g, r * 0.26, 5, r * 0.24, 0, base + 5, 0, 'wall');
     for (let i = 0; i < 8; i++) {
       const a = i * 0.9;
-      this._put(g, G.box, 'stoneDark', 3.0, 0.5, 1.4, Math.cos(a) * r * 0.9,
-        0.5, Math.sin(a) * r * 0.9 - r * 0.7);
+      const x = Math.cos(a) * r * 0.9, z = Math.sin(a) * r * 0.9 - r * 0.7;
+      this._putOn(g, G.box, 'stoneDark', 3.0, 0.5, 1.4, x, z);
     }
   }
 
-  /** A ruin: broken wall, standing arch, rubble. */
+  /**
+   * A ruin: a broken hall, its arch still standing, and the rest fallen in.
+   *
+   * Built on a plinth like everything else, because the thing that made ruins
+   * read as "some pillars randomly placed" was every wall being buried to a
+   * different depth by the hillside they were dropped on.
+   *
+   * The rubble is the exception — it is meant to be lying on the ground, so
+   * it goes through `_putOn` and follows the slope out of the footprint.
+   */
   _ruin(g, spec, rnd, style) {
     const r = Math.max(14, spec.r);
+    this._plinth(g, r * 0.62, r * 0.5);
+    /**
+     * A floor, but only where the building was.
+     *
+     * Kept to the span between the standing piers rather than the whole
+     * footprint: a ruin whose floor is a forty-metre slab reads as a car park
+     * with some rocks on it. What is left of a floor is the bit that had
+     * walls round it.
+     */
+    this._put(g, G.box, 'stonePale', r * 0.46, 0.5, r * 0.24, 0, 0.25, 0);
+    this._solid(g, r * 0.46, 0.25, r * 0.24, 0, 0.25, 0, 'deck');
+
+    // The arch that is still up: two piers and a lintel across them.
     for (const sx of [-1, 1]) {
-      this._put(g, G.box, 'stone', 1.5, 7.0, 1.5, sx * r * 0.42, 3.5, 0);
-      this._solid(g, 1.5, 3.5, 1.5, sx * r * 0.42, 3.5, 0, 'pillar');
+      this._put(g, G.box, 'stone', 1.5, 7.0, 1.5, sx * r * 0.42, 4.0, 0);
+      this._solid(g, 1.5, 3.5, 1.5, sx * r * 0.42, 4.0, 0, 'pillar');
     }
-    this._put(g, G.box, 'stone', r * 0.5 + 1.5, 1.1, 1.6, 0, 7.6, 0);
-    this._put(g, G.box, 'stoneDark', r * 0.36, 0.8, 1.2, 0, 8.7, 0);
-    this._anchor(g, 0, 8.2, 0, 2.0);
+    this._put(g, G.box, 'stone', r * 0.5 + 1.5, 1.1, 1.6, 0, 8.0, 0);
+    this._put(g, G.box, 'stoneDark', r * 0.36, 0.8, 1.2, 0, 9.1, 0);
+    this._anchor(g, 0, 8.6, 0, 2.0);
+
+    /**
+     * The walls, falling away from the arch in both directions.
+     *
+     * They step DOWN as they go out and they touch: a wall built out of
+     * blocks with gaps between them is a row of stumps, which is the other
+     * half of why these read as scattered stone. Each block is as wide as the
+     * gap between it and the next.
+     */
+    for (const side of [-1, 1]) {
+      for (let k = 1; k <= 4; k++) {
+        const h = Math.max(1.2, 6.0 - k * (0.9 + rnd() * 0.6));
+        const x = side * (r * 0.42 + k * 3.0);
+        this._put(g, G.box, 'stone', 1.6, h, 1.4, x, 0.5 + h * 0.5, 0);
+        this._solid(g, 1.6, h * 0.5, 1.4, x, 0.5 + h * 0.5, 0, 'wall');
+      }
+      // A cross wall, so it reads as a building rather than a fence.
+      for (let k = 0; k < 3; k++) {
+        const h = Math.max(1.0, 4.2 - k * 1.2);
+        const x = side * (r * 0.42);
+        const z = -(k + 1) * 3.0;
+        this._put(g, G.box, 'stone', 1.4, h, 1.6, x, 0.5 + h * 0.5, z);
+        this._solid(g, 1.4, h * 0.5, 1.6, x, 0.5 + h * 0.5, z, 'wall');
+      }
+    }
+
+    // A statue that lost its head, and the head, on the floor beside it.
+    this._put(g, G.box, 'stoneDark', 1.6, 5.0, 1.6, r * 0.2, 3.0, -r * 0.3);
+    this._put(g, G.low, 'stone', 1.1, 1.2, 1.1, r * 0.2 + 2.6, 1.6, -r * 0.3 + 2);
+
+    // Fallen stone, lying wherever the ground is.
+    for (let i = 0; i < 16; i++) {
+      const a = rnd() * Math.PI * 2, d = r * (0.3 + rnd() * 0.8);
+      const x = Math.cos(a) * d, z = Math.sin(a) * d;
+      this._putOn(g, G.low, 'stoneDark', 0.6 + rnd() * 0.9, 0.6 + rnd() * 0.7,
+        0.6 + rnd() * 0.9, x, z);
+    }
+    // Vines down the standing piers.
     for (let i = 0; i < 8; i++) {
       const side = i < 4 ? -1 : 1;
-      const k = (i % 4) + 1;
-      const h = 5.5 - k * (0.8 + rnd() * 0.7);
-      const x = side * (r * 0.42 + k * 4.2);
-      this._put(g, G.box, 'stone', 2.0, h, 1.4, x, h, 0);
-      this._solid(g, 2.0, h, 1.4, x, h, 0, 'wall');
-    }
-    // A statue that lost its head, and the head.
-    this._put(g, G.box, 'stoneDark', 1.6, 5.0, 1.6, r * 0.2, 2.5, -r * 0.5);
-    this._put(g, G.low, 'stone', 1.1, 1.2, 1.1, r * 0.2 + 3, 1.1, -r * 0.5 + 2);
-    for (let i = 0; i < 16; i++) {
-      const a = rnd() * Math.PI * 2, d = r * (0.2 + rnd() * 0.8);
-      this._put(g, G.low, 'stoneDark', 0.6 + rnd() * 0.9, 0.4 + rnd() * 0.6,
-        0.6 + rnd() * 0.9, Math.cos(a) * d, 0.3, Math.sin(a) * d);
-    }
-    // Vines, if the region grows any.
-    for (let i = 0; i < 10; i++) {
-      const a = rnd() * Math.PI * 2;
-      this._put(g, G.box, 'leaf', 0.5, 3 + rnd() * 3, 0.5,
-        Math.cos(a) * r * 0.42, 3, Math.sin(a) * r * 0.42);
+      this._put(g, G.box, 'leaf', 0.4, 3 + rnd() * 3, 0.4,
+        side * (r * 0.42 + 0.9), 3.5, (rnd() - 0.5) * 2.4);
     }
   }
 
   /** A tower: round, tall, with a stair up the outside and a light on top. */
+  /**
+   * A tower: round, tall, with a stair up the outside and a light on top.
+   *
+   * ── the two things that were wrong with it ────────────────────────────────
+   * The base sat at a fixed height, so on any slope the tower stood on a
+   * pillar of air down one side. And the spiral stair was built out of BOXES
+   * rotated flat about Y — a helix of horizontal slabs whose corners stick
+   * out through the wall at every angle, which is what reads as a tilted
+   * mess bolted to the side of a cylinder.
+   *
+   * Both are fixed the same way: a proper skirt of masonry filling to the
+   * lowest ground under it, and the stair rebuilt as treads that hug the
+   * wall — narrow, tangential and pitched, so it reads as a stair going up.
+   */
   _tower(g, spec, rnd, style) {
     const h = 34 + rnd() * 12;
-    this._put(g, G.disc, 'stoneDark', 6.5, 1.2, 6.5, 0, 0.6, 0);
-    this._solid(g, 6.5, 0.6, 6.5, 0, 0.6, 0, 'deck');
-    this._put(g, G.cyl, style.wall, 4.6, h, 4.6, 0, h * 0.5, 0);
-    this._solid(g, 4.6, h * 0.5, 4.6, 0, h * 0.5, 0, 'tower');
-    this._put(g, G.disc, 'stone', 5.8, 1.4, 5.8, 0, h, 0);
+    // A skirt down to the ground on every side, so it never floats.
+    const { lo } = this._relief(g, 7, 7);
+    const foot = Math.min(0, lo) - 0.8;
+    this._put(g, G.disc, 'stoneDark', 7.0, -foot + 1.2, 7.0, 0, (foot + 1.2) * 0.5, 0);
+    this._put(g, G.disc, 'stone', 6.4, 0.7, 6.4, 0, 1.1, 0);
+    this._solid(g, 6.4, (1.4 - foot) * 0.5, 6.4, 0, (foot + 1.4) * 0.5, 0, 'deck');
+
+    this._put(g, G.cyl, style.wall, 4.6, h, 4.6, 0, h * 0.5 + 1, 0);
+    this._solid(g, 4.6, h * 0.5, 4.6, 0, h * 0.5 + 1, 0, 'tower');
+    /**
+     * String courses up the shaft.
+     *
+     * Three of them, because without any the tower is thirty-five units of
+     * unbroken tube and reads as a pipe. They cost three meshes and they are
+     * what makes it look built rather than extruded.
+     */
+    for (let i = 1; i <= 3; i++) {
+      this._put(g, G.disc, 'stoneDark', 4.9, 0.6, 4.9, 0, 1 + h * (i / 4), 0);
+    }
+    this._put(g, G.disc, 'stone', 5.8, 1.4, 5.8, 0, h + 1, 0);
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       this._put(g, G.box, 'stoneDark', 1.2, 1.8, 1.0,
-        Math.cos(a) * 5.4, h + 1.6, Math.sin(a) * 5.4, a);
+        Math.cos(a) * 5.4, h + 2.6, Math.sin(a) * 5.4, a);
     }
-    this._put(g, G.low, 'lamp', 1.4, 1.6, 1.4, 0, h + 2.6, 0);
-    this._anchor(g, 0, h + 2, 0, 2.4);
-    // The stair, spiralling up the outside as `deck` steps.
-    const steps = Math.floor(h / 1.4);
+    this._put(g, G.cone, style.roofMat, 6.0, 6.0, 6.0, 0, h + 6.4, 0);
+    this._put(g, G.low, 'lamp', 1.0, 1.2, 1.0, 0, h + 3.4, 0);
+    this._anchor(g, 0, h + 3, 0, 2.4);
+
+    /**
+     * The stair: treads hugging the wall, each turned to face along the climb.
+     *
+     * Half as long as they were and rotated tangentially rather than being
+     * left as flat squares — so what you see is a ribbon winding up the tower
+     * instead of a stack of slabs poking out of it at every angle.
+     */
+    const steps = Math.floor(h / 1.5);
     for (let i = 0; i < steps; i++) {
-      const a = i * 0.44;
-      const x = Math.cos(a) * 5.6, z = Math.sin(a) * 5.6;
-      this._put(g, G.box, 'stone', 2.4, 0.4, 1.6, x, 1.2 + i * 1.4, z, a);
-      this._solid(g, 1.3, 0.25, 0.9, x, 1.2 + i * 1.4, z, 'deck');
+      const a = i * 0.40;
+      const rad = 5.3;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      this._put(g, G.box, 'stone', 1.1, 0.42, 2.4, x, 1.9 + i * 1.5, z,
+        -a + Math.PI / 2);
+      this._solid(g, 0.9, 0.25, 1.2, x, 1.9 + i * 1.5, z, 'deck');
+      // A baluster on the outside of every third tread.
+      if (i % 3 === 0) {
+        this._put(g, G.cyl, 'stoneDark', 0.16, 1.5, 0.16,
+          Math.cos(a) * (rad + 0.9), 2.8 + i * 1.5, Math.sin(a) * (rad + 0.9));
+      }
     }
     // Windows going up, so it is lit from inside.
     for (let i = 1; i < 5; i++) {
       const a = i * 1.7;
       this._put(g, G.box, 'lamp', 0.9, 1.4, 0.4,
-        Math.cos(a) * 4.7, i * (h / 5), Math.sin(a) * 4.7, a);
+        Math.cos(a) * 4.7, 1 + i * (h / 5), Math.sin(a) * 4.7, a);
     }
   }
 
@@ -1112,6 +1319,9 @@ export class Sites {
   /** A gatehouse: an arch across a road, with a guard walk over the top. */
   _gatehouse(g, spec, rnd, style) {
     const r = Math.max(18, spec.r);
+    // A gatehouse straddles a road, and a road is graded flat — but the
+    // ground beside it is not, so the piers get a foundation of their own.
+    this._plinth(g, r * 0.5 + 6, 10);
     for (const sx of [-1, 1]) {
       this._put(g, G.box, style.wall, 5, 18, 8, sx * (r * 0.36 + 3), 9, 0);
       this._solid(g, 5, 9, 8, sx * (r * 0.36 + 3), 9, 0, 'wall');
@@ -1150,9 +1360,20 @@ export class Sites {
         this._anchor(g, sx * 4.2, 3.9, i * (len * 0.22), 1.6);
       }
     }
-    // Piers going down into whatever is underneath.
+    /**
+     * Piers going down to whatever is underneath — however far that is.
+     *
+     * They used to be a fixed twenty-two units long, so over anything deeper
+     * than that the bridge stood on three stubs hanging in the air, and over
+     * anything shallower they buried themselves. Each one now reaches the
+     * actual ground under its own foot.
+     */
     for (let i = -1; i <= 1; i++) {
-      this._put(g, G.box, 'stoneDark', 4, 22, 5, 0, -11, i * (len * 0.33));
+      const z = i * (len * 0.33);
+      const foot = Math.min(-2, this._gy(g, 0, z)) - 1;
+      this._put(g, G.box, 'stoneDark', 4, -foot, 5, 0, foot * 0.5, z);
+      // A splayed base, so it reads as taking the weight.
+      this._put(g, G.box, 'stone', 5.4, 1.4, 6.4, 0, foot + 0.7, z);
     }
   }
 
@@ -1162,10 +1383,10 @@ export class Sites {
     // The outcrop the mouth is in.
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI - 0.4;
-      this._put(g, G.low, 'stoneDark', 8 + rnd() * 5, 7 + rnd() * 7, 8 + rnd() * 5,
-        Math.cos(a) * r * 0.9, 3, Math.sin(a) * r * 0.9 - r * 0.5);
+      this._putOn(g, G.low, 'stoneDark', 8 + rnd() * 5, 7 + rnd() * 7, 8 + rnd() * 5,
+        Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9 - r * 0.5);
     }
-    this._put(g, G.low, 'stoneDark', r * 0.9, 12, r * 0.7, 0, 4, -r * 0.55);
+    this._putOn(g, G.low, 'stoneDark', r * 0.9, 12, r * 0.7, 0, -r * 0.55);
     this._solid(g, r * 0.8, 6, r * 0.5, 0, 5, -r * 0.7, 'rock');
     // The mouth itself, and the black behind it.
     this._put(g, G.cyl, 'obsidian', 4.4, 8, 4.4, 0, 3.4, -r * 0.2, 0);
@@ -1186,7 +1407,7 @@ export class Sites {
   /** A mine: a timbered adit, spoil heaps, a winch and a track. */
   _mine(g, spec, rnd, style) {
     const r = Math.max(14, spec.r);
-    this._put(g, G.low, 'stoneDark', r * 0.8, 14, r * 0.6, 0, 4, -r * 0.5);
+    this._putOn(g, G.low, 'stoneDark', r * 0.8, 14, r * 0.6, 0, -r * 0.5);
     this._solid(g, r * 0.7, 7, r * 0.45, 0, 6, -r * 0.62, 'rock');
     // The adit: two posts and a lintel, and black behind.
     for (const sx of [-1, 1]) {
@@ -1202,8 +1423,8 @@ export class Sites {
     this._anchor(g, -4.5, 4.4, 2, 1.8);
     for (let i = 0; i < 5; i++) {
       const a = rnd() * Math.PI * 2, d = 8 + rnd() * 8;
-      this._put(g, G.low, 'stone', 2 + rnd() * 2, 1.4, 2 + rnd() * 2,
-        Math.cos(a) * d, 0.6, Math.sin(a) * d);
+      this._putOn(g, G.low, 'stone', 2 + rnd() * 2, 1.4, 2 + rnd() * 2,
+        Math.cos(a) * d, Math.sin(a) * d);
     }
     for (let i = 0; i < 12; i++) {
       this._put(g, G.box, 'ironDark', 2.4, 0.12, 0.2, 0, 0.4, -r * 0.1 + i * 2.4);
@@ -1220,39 +1441,137 @@ export class Sites {
    * The stair treads are `deck`, so you can walk down and stand in front of
    * the door — which is where the loot and the lore are.
    */
+  /**
+   * A DUNGEON ENTRANCE — a building over a stair going down.
+   *
+   * This one was the worst in the world and the player named it: the Drowned
+   * Library, "just some stone pillars randomly placed". It was a ring of
+   * fourteen short wall stubs at a fixed height, on ground with eleven units
+   * of fall across it — so eleven of them were buried, three stuck out, and
+   * the stair went down into a hillside that was already above it.
+   *
+   * Rebuilt as an actual structure: a level plinth, a rectangular hall with
+   * FOUR corners and walls that meet at them, a colonnade down the inside, a
+   * roof that is missing most of its slabs, and the stair sunk through the
+   * floor at the back with a door at the bottom. It is a building that has
+   * lost its roof, which is what a ruined library is, rather than a scatter
+   * of blocks in a circle.
+   */
   _dungeon(g, spec, rnd, style) {
     const r = Math.max(16, spec.r);
-    // A sunken court, walled, with the stair down one side.
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2;
-      if (i === 0 || i === 13) continue;
-      const x = Math.cos(a) * r * 0.7, z = Math.sin(a) * r * 0.7;
-      this._put(g, G.box, style.wall, r * 0.18, 8, 2.0, x, 2, z, a + Math.PI / 2);
-      this._solid(g, r * 0.1, 4, 1.4, x, 2, z, 'wall');
+    const hw = r * 0.62, hd = r * 0.5;
+    this._plinth(g, hw + 1.5, hd + 1.5);
+
+    // ---- the floor ----
+    this._put(g, G.box, 'stone', hw, 0.7, hd, 0, 0.35, 0);
+    this._solid(g, hw, 0.35, hd, 0, 0.35, 0, 'deck');
+    this._put(g, G.box, 'stoneDark', hw + 1.3, 0.5, hd + 1.3, 0, 0.15, 0);
+
+    /**
+     * The walls: four runs that MEET.
+     *
+     * Built as continuous slabs along each side rather than as blocks spaced
+     * round a circle, with a gap left in the front wall for the doorway. A
+     * wall you can see through the middle of is a fence.
+     */
+    const H = 9;
+    const wall = (x, z, sx, sz) => {
+      this._put(g, G.box, style.wall, sx, H, sz, x, 0.7 + H * 0.5, z);
+      this._solid(g, sx, H * 0.5, sz, x, 0.7 + H * 0.5, z, 'wall');
+    };
+    wall(0, -hd, hw, 1.4);                       // back
+    wall(-hw, 0, 1.4, hd);                       // left
+    wall(hw, 0, 1.4, hd);                        // right
+    const doorHalf = 3.2;
+    for (const sx of [-1, 1]) {
+      const run = (hw - doorHalf) * 0.5;
+      wall(sx * (doorHalf + run), hd, run, 1.4);  // front, either side of the door
     }
+    // The doorway's own frame, and the lintel over it.
+    for (const sx of [-1, 1]) {
+      this._put(g, G.box, 'stoneDark', 0.8, H, 2.0, sx * doorHalf, 0.7 + H * 0.5, hd);
+    }
+    this._put(g, G.box, 'stoneDark', doorHalf + 0.8, 1.2, 2.2, 0, 0.7 + H - 0.6, hd);
+
+    // Corner piers, so the runs read as joined rather than as four fences.
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        this._put(g, G.box, 'stoneDark', 2.0, H + 1.4, 2.0,
+          sx * hw, 0.7 + (H + 1.4) * 0.5, sz * hd);
+        this._solid(g, 2.0, (H + 1.4) * 0.5, 2.0, sx * hw, 0.7 + (H + 1.4) * 0.5,
+          sz * hd, 'pillar');
+      }
+    }
+
+    /**
+     * A colonnade down both long sides, and what is left of the roof.
+     *
+     * Two thirds of the slabs are gone, chosen off the site's own seed so the
+     * same library is the same ruin every time. The ones that remain are what
+     * make the columns read as having held something up.
+     */
+    const cols = 4;
+    for (let i = 0; i < cols; i++) {
+      const z = -hd * 0.62 + (i / (cols - 1)) * hd * 1.24;
+      for (const sx of [-1, 1]) {
+        const x = sx * hw * 0.55;
+        this._put(g, G.cyl, style.wall, 1.1, H - 1.4, 1.1, x, 0.7 + (H - 1.4) * 0.5, z);
+        this._put(g, G.disc, 'stoneDark', 1.5, 0.5, 1.5, x, 0.7 + H - 1.6, z);
+        this._solid(g, 1.1, (H - 1.4) * 0.5, 1.1, x, 0.7 + (H - 1.4) * 0.5, z, 'pillar');
+        if (rnd() < 0.4) {
+          this._put(g, G.box, style.roofMat, hw * 0.62, 0.7, hd * 0.3,
+            sx * hw * 0.5, 0.7 + H + 0.4, z);
+        }
+      }
+    }
+
+    /**
+     * The stair down, sunk through the floor at the back.
+     *
+     * It reaches the door at the bottom and every tread is `deck`, so you can
+     * walk down and stand in front of it — which is where the chests and the
+     * carvings are.
+     */
     const steps = 9;
     for (let i = 0; i < steps; i++) {
-      const z = r * 0.6 - i * 1.9;
-      this._put(g, G.box, 'stone', 7, 0.6, 2.0, 0, -i * 1.1, z);
-      this._solid(g, 3.5, 0.35, 1.0, 0, -i * 1.1, z, 'deck');
+      const z = -hd * 0.1 - i * 1.9;
+      this._put(g, G.box, 'stone', 4.4, 0.6, 2.0, 0, -i * 1.1, z);
+      this._solid(g, 2.2, 0.35, 1.0, 0, -i * 1.1, z, 'deck');
+      // Cheek walls, so the stair is a cut and not a floating ladder.
+      for (const sx of [-1, 1]) {
+        this._put(g, G.box, 'stoneDark', 0.7, 2.4 + i * 1.1, 2.0,
+          sx * 4.8, 0.5 - i * 1.1 * 0.5, z);
+      }
     }
     const floorY = -steps * 1.1;
-    this._put(g, G.box, 'stoneDark', 14, 0.8, 12, 0, floorY - 0.4, -r * 0.2);
-    this._solid(g, 7, 0.5, 6, 0, floorY - 0.4, -r * 0.2, 'deck');
-    // The door.
-    this._put(g, G.box, style.wall, 10, 12, 1.6, 0, floorY + 6, -r * 0.5);
-    this._put(g, G.box, 'obsidian', 6.4, 9, 0.8, 0, floorY + 4.6, -r * 0.54);
-    this._put(g, G.torus, 'gold', 1.0, 1.0, 1.0, 0, floorY + 4.6, -r * 0.58);
-    this._solid(g, 5, 6, 1.2, 0, floorY + 6, -r * 0.5, 'door');
+    const backZ = -hd * 0.1 - steps * 1.9;
+    this._put(g, G.box, 'stoneDark', 5.6, 0.8, 5.0, 0, floorY - 0.4, backZ - 2.2);
+    this._solid(g, 5.6, 0.5, 5.0, 0, floorY - 0.4, backZ - 2.2, 'deck');
+    // The door at the bottom, and it does not open.
+    this._put(g, G.box, style.wall, 5.6, 11, 1.4, 0, floorY + 5.4, backZ - 4.6);
+    this._put(g, G.box, 'obsidian', 3.4, 7.6, 0.7, 0, floorY + 4.2, backZ - 4.9);
+    this._put(g, G.torus, 'gold', 0.9, 0.9, 0.9, 0, floorY + 4.2, backZ - 5.2);
+    this._solid(g, 3.0, 4.0, 1.0, 0, floorY + 5.4, backZ - 4.6, 'door');
     for (const sx of [-1, 1]) {
-      this._put(g, G.cyl, 'stoneDark', 0.7, 5, 0.7, sx * 5.4, floorY + 2.5, -r * 0.3);
-      this._put(g, G.low, 'ember', 0.5, 0.6, 0.5, sx * 5.4, floorY + 5.4, -r * 0.3);
+      this._put(g, G.cyl, 'stoneDark', 0.6, 4.4, 0.6, sx * 3.4, floorY + 2.2, backZ - 3.2);
+      this._put(g, G.low, 'ember', 0.45, 0.55, 0.45, sx * 3.4, floorY + 4.8, backZ - 3.2);
+    }
+
+    // Fallen roof slabs on the floor of the hall, and outside it.
+    for (let i = 0; i < 9; i++) {
+      const x = (rnd() - 0.5) * hw * 1.4, z = (rnd() - 0.5) * hd * 1.4;
+      if (Math.abs(x) < 5 && z < 0) continue;         // not down the stairwell
+      const m = this._put(g, G.box, style.roofMat, 2.2 + rnd() * 1.6, 0.5,
+        1.6 + rnd() * 1.2, x, 0.9, z, rnd() * 3);
+      m.rotation.z = (rnd() - 0.5) * 0.3;
     }
   }
 
   /** An arena you can walk into: tiered seating round a sand floor. */
   _siteArena(g, spec, rnd, style) {
     const r = Math.max(24, spec.r);
+    // A bowl of seating cut into a hillside still needs a level floor.
+    this._plinth(g, r * 0.9, r * 0.9);
     this._put(g, G.disc, 'sand', r * 0.6, 0.8, r * 0.6, 0, 0.4, 0);
     this._solid(g, r * 0.6, 0.4, r * 0.6, 0, 0.4, 0, 'deck');
     for (let t = 0; t < 5; t++) {

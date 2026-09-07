@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v86" />
+<link rel="stylesheet" href="css/style.css?v=v87" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -284,7 +284,6 @@
             <h3>IN THE CROAKLANDS</h3>
             <ul class="keys">
               <li><kbd>TAB</kbd><span>The bag — weapons, kunai, armour, food, materials, key items</span></li>
-              <li><kbd>J</kbd><span>Quest log — the current objective is at the top of it</span></li>
               <li><kbd>M</kbd><span>Map — regions, roads, rivers, towns, guardians, and a star on where to go</span></li>
               <li><kbd>E</kbd><span>Reach out — open the chest, throw the lever, push the doors, read the carving, take the sword off the stand, talk to whoever is in front of you, or examine the place you are standing</span></li>
               <li><kbd>0</kbd><span>Eat your best meal without opening anything</span></li>
@@ -566,6 +565,18 @@
     <div id="purse-pops"></div>
   </div>
 
+  <!--
+    The Croaklands' minimap, directly under the purse.
+
+    A zoomed-in local view with the player's arrow at the middle of it, turning
+    as they turn. M still opens the full map; this is the one that is always
+    there, so you can follow a road without stopping to read anything.
+  -->
+  <div id="minimap" class="hidden">
+    <canvas id="mm-canvas" width="220" height="220"></canvas>
+    <b id="mm-region">—</b>
+  </div>
+
   <div id="killfeed"></div>
 
   <!-- bottom-left: vitals -->
@@ -825,16 +836,13 @@
   </div>
 </div>
 
-<!-- ═════════════════════════════════════════════════════════ QUEST / MAP ══
-     Quest log (J) and the realm map (M), both read from the save. -->
-<div id="questlog" class="hidden">
-  <div class="ql-frame">
-    <div class="ql-title">THE ROAD SO FAR</div>
-    <div id="ql-body" class="ql-body"></div>
-    <div class="ql-foot"><b>J</b> close</div>
-  </div>
-</div>
+<!-- ══════════════════════════════════════════════════════════════ THE MAP ══
+     The realm map (M), read from the save.
 
+     There used to be a full-screen quest LOG on J alongside it. It has been
+     removed: the objective panel in the corner already says what to do next
+     and the map already stars where, so it was a third place to read the same
+     sentence — behind a panel you had to close. -->
 <div id="realmmap" class="hidden">
   <div class="rm-frame">
     <div class="rm-head">
@@ -866,6 +874,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v86"></script>
+<script type="module" src="js/main.js?v=v87"></script>
 </body>
 </html>

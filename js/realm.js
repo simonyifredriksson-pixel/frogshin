@@ -29,13 +29,13 @@
  * thing that must never stream is the thing the simulation depends on.
  */
 
-import * as THREE from '../lib/three.module.js?v=v86';
-import { CFG } from './config.js?v=v86';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v86';
-import { Terrain, CollisionWorld } from './collision.js?v=v86';
+import * as THREE from '../lib/three.module.js?v=v87';
+import { CFG } from './config.js?v=v87';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v87';
+import { Terrain, CollisionWorld } from './collision.js?v=v87';
 import { REGIONS, REGION_BY_ID, REALM_SIZE, REALM_HALF, SEA,
-  regionWeights, regionAt } from './regions.js?v=v86';
-import { Network } from './roads.js?v=v86';
+  regionWeights, regionAt } from './regions.js?v=v87';
+import { Network } from './roads.js?v=v87';
 
 const _scratch = [];
 const _col = new THREE.Color();
@@ -212,8 +212,25 @@ export class Realm {
     return tasks;
   }
 
+  /**
+   * One water plane over the whole realm, at the waterline.
+   *
+   * ── why it used to leave holes in lakes ───────────────────────────────────
+   * The surface ripples, and the ripple was ±0.9 units on a plane tessellated
+   * at 170 units per quad — about two vertices per wavelength. So the trough
+   * of every wave dipped nearly a metre BELOW the waterline while the crest
+   * rose a metre above it, and everywhere a lake bed sits within a metre of
+   * SEA (which is most of a shoreline, and all of a shallow lake) the water
+   * simply was not there. From the bank it read as a lake that had not been
+   * filled in.
+   *
+   * Now the ripple is a fifth of that and the plane sits a touch above the
+   * line, so the surface never falls below the level the swim check uses, and
+   * the tessellation is fine enough that the wave is a wave rather than a set
+   * of facets. Cheaper, too: the animation walks every vertex at 30Hz.
+   */
   _buildWater() {
-    const geo = new THREE.PlaneGeometry(REALM_SIZE, REALM_SIZE, 60, 60);
+    const geo = new THREE.PlaneGeometry(REALM_SIZE, REALM_SIZE, 96, 96);
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
       color: 0x2f7fa8, transparent: true, opacity: 0.72,
@@ -222,7 +239,9 @@ export class Realm {
       // looks like being in empty blue space.
       side: THREE.DoubleSide, depthWrite: false,
     }));
-    mesh.position.y = SEA;
+    // A hair above the line the swim check reads, so the ripple's trough is
+    // still at or above it.
+    mesh.position.y = SEA + 0.18;
     mesh.renderOrder = 1;
     this.scene.add(mesh);
     this.waterMesh = mesh;
@@ -386,8 +405,10 @@ export class Realm {
       const base = this.waterBase;
       for (let i = 0; i < p.count; i++) {
         const x = base[i * 3], z = base[i * 3 + 2];
-        p.array[i * 3 + 1] = Math.sin(x * 0.02 + t * 1.1) * 0.5
-          + Math.sin(z * 0.026 - t * 0.85) * 0.4;
+        // Amplitude 0.18 total, not 0.9 — see `_buildWater`. Shorter waves
+        // too, so the plane's own tessellation can actually describe them.
+        p.array[i * 3 + 1] = Math.sin(x * 0.05 + t * 1.1) * 0.10
+          + Math.sin(z * 0.062 - t * 0.85) * 0.08;
       }
       p.needsUpdate = true;
     }
