@@ -29,16 +29,19 @@
  * thing that must never stream is the thing the simulation depends on.
  */
 
-import * as THREE from '../lib/three.module.js?v=v80';
-import { CFG } from './config.js?v=v80';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v80';
-import { Terrain, CollisionWorld } from './collision.js?v=v80';
+import * as THREE from '../lib/three.module.js?v=v81';
+import { CFG } from './config.js?v=v81';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v81';
+import { Terrain, CollisionWorld } from './collision.js?v=v81';
 import { REGIONS, REGION_BY_ID, REALM_SIZE, REALM_HALF, SEA,
-  regionWeights, regionAt } from './regions.js?v=v80';
+  regionWeights, regionAt } from './regions.js?v=v81';
+import { Network } from './roads.js?v=v81';
 
 const _scratch = [];
 const _col = new THREE.Color();
 const _tmp = new THREE.Color();
+/** River water, blended over the ground colour where a channel is cut. */
+const _wetCol = new THREE.Color(0x3a6f8a);
 
 /** How the ground is drawn and streamed. */
 export const CHUNK = 192;                 // world units per tile
@@ -57,6 +60,15 @@ export class Realm {
     this.noise = new ValueNoise(seed);
     this.noise2 = new ValueNoise(seed + 991);
     this.rnd = mulberry32(seed);
+
+    /**
+     * Roads and rivers, which are part of the GROUND and not decals on it.
+     *
+     * Handed the base height function — regions and rim, nothing else — so
+     * it can sample the untouched terrain for its bed heights without asking
+     * about its own output. See roads.js.
+     */
+    this.network = new Network((x, z) => this.baseHeightAt(x, z));
 
     this.terrain = null;
     this.collision = null;
@@ -87,6 +99,18 @@ export class Realm {
    * collision uses, which is just this function evaluated on a grid.
    */
   heightAt(x, z) {
+    return this.network.carve(x, z, this.baseHeightAt(x, z));
+  }
+
+  /**
+   * The land before anybody built on it: regions blended, plus the rim.
+   *
+   * Separate from `heightAt` because the road and river network needs to know
+   * where the ground WAS in order to decide where to put its beds. Nothing
+   * else should call this — the roads are part of the world, and a system
+   * that asks about the ground without them will disagree with collision.
+   */
+  baseHeightAt(x, z) {
     const total = regionWeights(x, z, _scratch);
     let h = 0;
     for (let i = 0; i < _scratch.length; i++) {
@@ -115,7 +139,7 @@ export class Realm {
   /** Blended ground palette at a point, so region borders fade in colour too. */
   paletteAt(x, z, out) {
     const total = regionWeights(x, z, _scratch);
-    const keys = ['sand', 'grass', 'grass2', 'dirt', 'rock', 'high'];
+    const keys = ['sand', 'grass', 'grass2', 'dirt', 'rock', 'high', 'road'];
     for (const k of keys) {
       let r = 0, g = 0, b = 0;
       for (const e of _scratch) {
@@ -150,7 +174,7 @@ export class Realm {
    * the loading bar freezes at whatever it last said, which reads as a hang.
    */
   buildTasks() {
-    const SLICES = 6;
+    const SLICES = 10;
     const tasks = [];
     tasks.push(['Waking the realm', () => {
       const cell = 4.5;
@@ -161,6 +185,15 @@ export class Realm {
       this.collision.climbLimitY = Infinity;
       this.collision.climbLimitRadius = REALM_HALF * 0.86;
     }]);
+    /**
+     * Rivers and roads BEFORE the heightfield.
+     *
+     * They only sample about a hundred and thirty points between them, so
+     * they are almost free — but everything the heightfield records has to
+     * already include them, or collision would disagree with the mesh about
+     * where the roads are.
+     */
+    for (const t of this.network.buildTasks()) tasks.push(t);
     for (let s = 0; s < SLICES; s++) {
       const which = s;
       tasks.push([`Raising the land (${s + 1}/${SLICES})`, () => {
@@ -292,6 +325,20 @@ export class Realm {
           _col.lerp(pal.high, clamp((h - (pal.highAt - 30)) / 30, 0, 1));
         }
       }
+      /**
+       * The road and the river, painted last.
+       *
+       * Both are already IN the height — this is only the surface, so a road
+       * reads as a road from the air and a river reads as water even where it
+       * has cut too shallow for the water plane to cover it. The road colour
+       * is the region's own, so the Thirstlands has a pale sand track and
+       * Hollowroot has churned mud.
+       */
+      const road = this.network.roadAt(wx, wz);
+      if (road > 0.01) _col.lerp(pal.road, road * 0.85);
+      const wet = this.network.riverAt(wx, wz);
+      if (wet > 0.01) _col.lerp(_wetCol, wet * 0.7);
+
       const shade = 0.9 + varia * 0.2;
       col.setXYZ(i, _col.r * shade, _col.g * shade, _col.b * shade);
     }

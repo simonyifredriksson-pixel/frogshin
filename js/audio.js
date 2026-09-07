@@ -33,6 +33,74 @@ const TRACKS = {
   ascended: 'audio/frogath-ascended.mp3',
 };
 
+/**
+ * THE EIGHT MOODS — what a region sounds like.
+ *
+ * Each region in the overworld names one of these, and it decides the wind,
+ * the incidental noises and the slow music bed underneath. All of it is
+ * synthesised, like everything else in the game: no files, so a region's
+ * theme costs a scale, a root note and a waveform.
+ *
+ *   wind    level of the filtered noise bed
+ *   voice   which incidental sound plays: bird, croak, bell, groan,
+ *           crackle, chime, ping
+ *   gap     seconds between those, low and high
+ *   scale   semitone degrees the figure is drawn from
+ *   root    hertz the whole thing is built on
+ *   drone   multiples of the root held underneath
+ *   tempo   milliseconds between notes of the figure
+ */
+export const MOODS = {
+  calm: {
+    wind: 0.075, voice: 'bird', gap: [4, 13],
+    scale: [0, 2, 4, 7, 9], root: 110, drone: [1, 1.5, 2.005],
+    wave: 'triangle', lead: 'triangle', cutoff: 900,
+    tempo: 2600, hold: 2.2, note: 0.055, pad: 0.045,
+  },
+  wild: {
+    wind: 0.095, voice: 'bird', gap: [3, 9],
+    scale: [0, 3, 5, 7, 10], root: 98, drone: [1, 1.335, 2],
+    wave: 'triangle', lead: 'sine', cutoff: 1100,
+    tempo: 2200, hold: 1.8, note: 0.06, pad: 0.05,
+  },
+  grim: {
+    wind: 0.11, voice: 'croak', gap: [3, 10],
+    scale: [0, 2, 3, 7, 8], root: 82, drone: [1, 1.5, 2.01],
+    wave: 'sawtooth', lead: 'triangle', cutoff: 480,
+    tempo: 3000, hold: 2.6, note: 0.055, pad: 0.055,
+  },
+  holy: {
+    wind: 0.06, voice: 'bell', gap: [8, 20],
+    scale: [0, 4, 5, 7, 11], root: 131, drone: [1, 1.5, 3.005],
+    wave: 'sine', lead: 'sine', cutoff: 1600,
+    tempo: 3400, hold: 3.2, note: 0.05, pad: 0.04,
+  },
+  hot: {
+    wind: 0.13, voice: 'crackle', gap: [2, 7],
+    scale: [0, 1, 4, 6, 8], root: 73, drone: [1, 1.49, 2.02],
+    wave: 'sawtooth', lead: 'square', cutoff: 380,
+    tempo: 2400, hold: 1.6, note: 0.05, pad: 0.06,
+  },
+  cold: {
+    wind: 0.12, voice: 'chime', gap: [5, 14],
+    scale: [0, 2, 3, 7, 10], root: 147, drone: [1, 1.5, 2.005],
+    wave: 'sine', lead: 'sine', cutoff: 2200,
+    tempo: 3200, hold: 3.0, note: 0.042, pad: 0.035,
+  },
+  strange: {
+    wind: 0.07, voice: 'ping', gap: [4, 11],
+    scale: [0, 1, 6, 7, 11], root: 116, drone: [1, 1.414, 2.03],
+    wave: 'triangle', lead: 'sine', cutoff: 1400,
+    tempo: 2800, hold: 2.4, note: 0.048, pad: 0.042,
+  },
+  dread: {
+    wind: 0.10, voice: 'groan', gap: [6, 16],
+    scale: [0, 1, 3, 6, 8], root: 62, drone: [1, 1.06, 1.5],
+    wave: 'sawtooth', lead: 'triangle', cutoff: 300,
+    tempo: 3600, hold: 3.4, note: 0.05, pad: 0.065,
+  },
+};
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -47,6 +115,9 @@ export class AudioEngine {
     this.maxDistance = 90;
     this._ambient = null;
     this._music = null;
+    /** The open world's slow bed, and which mood it is playing. */
+    this._region = null;
+    this._mood = null;
     this._birdTimer = 0;
     this._lastStep = 0;
     this._buffers = new Map();    // track name -> AudioBuffer | 'missing'
@@ -390,6 +461,10 @@ export class AudioEngine {
   }
 
   stopAmbient() {
+    // The open world's bed rides on the ambient wind, so it goes with it.
+    // Leaving it playing meant the Frostmarch's theme following you into the
+    // menu and then into an arena match.
+    this.stopRegionMusic();
     if (!this._ambient) return;
     const t = this.ctx.currentTime;
     this._ambient.g.gain.linearRampToValueAtTime(0, t + 0.6);
@@ -398,23 +473,163 @@ export class AudioEngine {
     this._ambient = null;
   }
 
-  /** Occasional birds/frogs. Driven from the game loop. */
+  /**
+   * Occasional birds/frogs. Driven from the game loop.
+   *
+   * What you hear depends on where you are standing: the open world sets a
+   * MOOD per region (see `setRegionMood`) and this picks the flavour from it.
+   * That is most of what makes a region sound different — the wind bed and
+   * the music underneath it change slowly, but the incidental noises are what
+   * you actually notice.
+   */
   updateAmbient(dt) {
     if (!this.ready) return;
     this._birdTimer -= dt;
-    if (this._birdTimer <= 0) {
-      this._birdTimer = 4 + Math.random() * 9;
-      if (Math.random() < 0.55) {
-        // Bird chirp: two quick rising blips.
-        const f = 1800 + Math.random() * 1400;
-        this.tone({ freq: f, to: f * 1.5, dur: 0.09, type: 'sine', volume: 0.05 });
-        setTimeout(() => this.tone({ freq: f * 1.2, to: f * 0.85, dur: 0.11, type: 'sine', volume: 0.045 }), 110);
-      } else {
-        // Distant frog croak.
-        const f = 120 + Math.random() * 60;
-        this.tone({ freq: f, to: f * 1.6, dur: 0.2, type: 'sawtooth', volume: 0.05 });
+    if (this._birdTimer > 0) return;
+    const M = MOODS[this._mood] || MOODS.calm;
+    this._birdTimer = M.gap[0] + Math.random() * (M.gap[1] - M.gap[0]);
+    const roll = Math.random();
+    switch (M.voice) {
+      case 'croak': {
+        const f = 100 + Math.random() * 70;
+        this.tone({ freq: f, to: f * 1.7, dur: 0.24, type: 'sawtooth', volume: 0.055 });
+        if (roll < 0.4) {
+          setTimeout(() => this.tone({ freq: f * 0.8, to: f * 1.2, dur: 0.3,
+            type: 'sawtooth', volume: 0.04 }), 320);
+        }
+        break;
+      }
+      case 'bell': {
+        const f = 520 + Math.floor(Math.random() * 4) * 130;
+        this.tone({ freq: f, dur: 2.6, type: 'sine', volume: 0.05, attack: 0.01 });
+        this.tone({ freq: f * 2.01, dur: 1.6, type: 'sine', volume: 0.02 });
+        break;
+      }
+      case 'groan': {
+        const f = 58 + Math.random() * 26;
+        this.tone({ freq: f * 1.4, to: f, dur: 2.2, type: 'triangle', volume: 0.06 });
+        this.noise({ dur: 1.6, volume: 0.03, filter: 260, filterTo: 120, q: 1.2 });
+        break;
+      }
+      case 'crackle':
+        this.noise({ dur: 0.4, volume: 0.05, filter: 2400, filterTo: 700, q: 0.8 });
+        if (roll < 0.5) {
+          setTimeout(() => this.noise({ dur: 0.24, volume: 0.035,
+            filter: 3200, filterTo: 900 }), 210);
+        }
+        break;
+      case 'chime': {
+        const f = 1200 + Math.floor(Math.random() * 5) * 220;
+        this.tone({ freq: f, dur: 1.4, type: 'sine', volume: 0.035 });
+        this.tone({ freq: f * 1.5, dur: 1.0, type: 'sine', volume: 0.02 });
+        break;
+      }
+      case 'ping': {
+        const f = 700 + Math.random() * 900;
+        this.tone({ freq: f, to: f * 1.9, dur: 0.5, type: 'sine', volume: 0.04 });
+        break;
+      }
+      default: {
+        if (roll < 0.55) {
+          // Bird chirp: two quick rising blips.
+          const f = 1800 + Math.random() * 1400;
+          this.tone({ freq: f, to: f * 1.5, dur: 0.09, type: 'sine', volume: 0.05 });
+          setTimeout(() => this.tone({ freq: f * 1.2, to: f * 0.85, dur: 0.11,
+            type: 'sine', volume: 0.045 }), 110);
+        } else {
+          const f = 120 + Math.random() * 60;
+          this.tone({ freq: f, to: f * 1.6, dur: 0.2, type: 'sawtooth', volume: 0.05 });
+        }
+        break;
       }
     }
+  }
+
+  // ---------------------------------------------------------- region moods
+
+  /**
+   * Put the world into a region's mood.
+   *
+   * Three things change: the wind bed's filter and level, which incidental
+   * noises play, and the slow music underneath. The music is rebuilt only
+   * when the mood actually changes — crossing a border must not restart the
+   * theme you were already listening to.
+   */
+  setRegionMood(mood) {
+    if (!this.ready || this._mood === mood) return;
+    this._mood = mood;
+    const M = MOODS[mood] || MOODS.calm;
+    // Retune the wind. It is one filtered noise loop for the whole session,
+    // so this is a ramp rather than a rebuild.
+    if (this._ambient) {
+      try {
+        this._ambient.g.gain.linearRampToValueAtTime(
+          M.wind, this.ctx.currentTime + 2.5);
+      } catch (e) { /* a stopped node; harmless */ }
+    }
+    this.stopRegionMusic();
+    this._startRegionBed(M);
+  }
+
+  /**
+   * The bed: a drone and a very slow figure over it.
+   *
+   * Deliberately sparse — one note every two to four seconds. This plays for
+   * as long as the player is in a region, which can be twenty minutes, and
+   * anything busier becomes wallpaper you want to turn off.
+   */
+  _startRegionBed(M) {
+    if (!this.ready || this._region) return;
+    const t = this.ctx.currentTime;
+    const pad = this.ctx.createGain();
+    pad.gain.value = 0;
+    pad.gain.linearRampToValueAtTime(M.pad, t + 4);
+    pad.connect(this.musicBus);
+    const oscs = [];
+    for (const mult of M.drone) {
+      const o = this.ctx.createOscillator();
+      o.type = M.wave;
+      o.frequency.value = M.root * mult;
+      o.detune.value = (Math.random() - 0.5) * 14;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = M.cutoff;
+      o.connect(lp); lp.connect(pad);
+      o.start(t);
+      oscs.push(o);
+    }
+    let step = 0;
+    const timer = setInterval(() => {
+      if (!this._region) return;
+      const deg = M.scale[(step * 3 + ((step / 4) | 0)) % M.scale.length];
+      const oct = step % 12 < 6 ? 2 : 4;
+      const freq = M.root * oct * Math.pow(2, deg / 12);
+      this.tone({
+        freq, dur: M.hold, type: M.lead, volume: M.note,
+        bus: this.musicBus, attack: 0.05,
+      });
+      if (step % 5 === 0) {
+        this.tone({ freq: freq * 1.5, dur: M.hold * 0.7, type: 'sine',
+          volume: M.note * 0.45, bus: this.musicBus, attack: 0.08 });
+      }
+      step++;
+    }, M.tempo);
+    this._region = { timer, pad, oscs };
+  }
+
+  stopRegionMusic() {
+    if (!this._region) return;
+    const r = this._region;
+    this._region = null;
+    clearInterval(r.timer);
+    try {
+      const t = this.ctx.currentTime;
+      r.pad.gain.linearRampToValueAtTime(0, t + 1.2);
+      setTimeout(() => {
+        for (const o of r.oscs) { try { o.stop(); } catch (e) { /* gone */ } }
+      }, 1500);
+    } catch (e) { /* context torn down */ }
+    this._mood = null;
   }
 
   // ------------------------------------------------------------------ music

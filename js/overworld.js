@@ -32,22 +32,26 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v80';
-import { CFG } from './config.js?v=v80';
-import { clamp, damp } from './util.js?v=v80';
-import { Realm } from './realm.js?v=v80';
-import { Scatter } from './scatter.js?v=v80';
-import { Sites } from './realmsites.js?v=v80';
-import { Camp } from './mobs.js?v=v80';
-import { DungeonBoss } from './dungeonboss.js?v=v80';
-import { Frogath } from './frogath.js?v=v80';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v80';
-import { REGIONS, SEA, regionAt } from './regions.js?v=v80';
-import { Progress, HEART, BASE } from './progression.js?v=v80';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v80';
-import { QUEST_BY_ID, SECRETS, npcSays, questProgress } from './quests.js?v=v80';
-import { People, Dialogue, Journal, grantReward } from './realmquests.js?v=v80';
-import { Audio } from './audio.js?v=v80';
+import * as THREE from '../lib/three.module.js?v=v81';
+import { CFG } from './config.js?v=v81';
+import { clamp, damp } from './util.js?v=v81';
+import { Realm } from './realm.js?v=v81';
+import { Scatter } from './scatter.js?v=v81';
+import { Sites } from './realmsites.js?v=v81';
+import { Camp } from './mobs.js?v=v81';
+import { DungeonBoss } from './dungeonboss.js?v=v81';
+import { Frogath } from './frogath.js?v=v81';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v81';
+import { REGIONS, SEA, regionAt, regionOpen, CONTENT_HALF } from './regions.js?v=v81';
+import { Progress, HEART, BASE } from './progression.js?v=v81';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v81';
+import { QUEST_BY_ID, SECRETS, npcSays, questProgress,
+  mainObjective } from './quests.js?v=v81';
+import { People, Life, Dialogue, Journal, grantReward,
+  disposeVillagerMats } from './realmquests.js?v=v81';
+import { disposeLandmarkMats } from './landmarks.js?v=v81';
+import { Weather } from './weather.js?v=v81';
+import { Audio } from './audio.js?v=v81';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -93,6 +97,10 @@ export class Overworld {
     this.scatter = null;
     this.sites = null;
     this.people = null;
+    /** The unnamed villagers, in whichever settlement is nearest. */
+    this.life = null;
+    /** What is falling out of the sky. One system, retargeted per region. */
+    this.weather = new Weather(this.scene);
     this.dialogue = new Dialogue();
     this.journal = new Journal();
 
@@ -112,6 +120,15 @@ export class Overworld {
     this.prompt = null;            // what E would do right now
     this.time = 0;
     this._savedWater = null;
+    /**
+     * The last place the player stood that they were allowed to stand in.
+     *
+     * The gate pushes them back toward it, so a sealed border is a wall you
+     * bounce off rather than a teleport. See `_gate`.
+     */
+    this.lastOpen = null;
+    this.sealedT = 0;
+    this._sealedSaid = null;
   }
 
   get collision() { return this.realm.collision; }
@@ -133,6 +150,9 @@ export class Overworld {
     for (const t of this.sites.buildTasks(REGIONS)) tasks.push(t);
     this.people = new People(this.scene, this.realm);
     for (const t of this.people.buildTasks()) tasks.push(t);
+    tasks.push(['Opening the shutters', () => {
+      this.life = new Life(this.scene, this.realm);
+    }]);
     tasks.push(['Placing the guardians', () => this._placeEncounters()]);
     tasks.push(['Setting the watch', () => this._placeCamps()]);
     /**
@@ -204,16 +224,23 @@ export class Overworld {
     let spot = null;
     if (p.at) {
       const h = this.realm.heightAt(p.at.x, p.at.z);
-      if (h > SEA - 1 && Math.abs(h - p.at.y) < 40) spot = { x: p.at.x, y: h, z: p.at.z };
+      const R = regionAt(p.at.x, p.at.z, _scratch);
+      // On land, roughly where the save said, and somewhere the player is
+      // actually allowed to be. A save from before a gate existed must not
+      // strand them inside a sealed region.
+      if (h > SEA - 1 && Math.abs(h - p.at.y) < 40 && regionOpen(R, p.slain)) {
+        spot = { x: p.at.x, y: h, z: p.at.z };
+      }
     }
     if (!spot) {
       const start = this.sites.sites.find((s) => s.id === 'croakhollow');
       spot = start
         ? { x: start.at.x, y: start.at.y + 1, z: start.at.z + start.r * 0.9 }
-        : { x: 0, y: this.realm.heightAt(0, 470) + 1, z: 470 };
+        : { x: 300, y: 0, z: 1790 };
       spot.y = this.realm.heightAt(spot.x, spot.z) + 1;
     }
     this.home = { x: spot.x, y: spot.y, z: spot.z };
+    this.lastOpen = { x: spot.x, z: spot.z };
 
     player.pos.set(spot.x, spot.y + 1.2, spot.z);
     player.vel.set(0, 0, 0);
@@ -226,9 +253,13 @@ export class Overworld {
     // Everything within sight, before the first frame is drawn.
     this.realm.streamAround(spot.x, spot.z, true);
     if (this.scatter) this.scatter.streamAround(spot.x, spot.z, true);
-    this.sites.update(spot.x, spot.z);
+    this.sites.update(spot.x, spot.z, 0);
     this.region = regionAt(spot.x, spot.z, _scratch);
     p.seen.add(this.region.id);
+    // The sky and the music of wherever we woke up, with no cross-fade.
+    this.weather.set(this.region.weather || 'clear', true);
+    Audio.setRegionMood(this.region.music || 'calm');
+    if (this.life) this.life.moveTo(this.sites.nearestSettlement(spot.x, spot.z));
     this._paintObjectives();
     this.save();
   }
@@ -277,6 +308,9 @@ export class Overworld {
     if (this.frozen) {
       this._panelKeys(input);
       if (this.inventory) this.inventory.update(dt);
+      // The map keeps drawing while it is open: the objective star pulses and
+      // the dashed line to it has to follow you if you opened it mid-stride.
+      this.journal.tick(dt, this.progress, player.pos, this.realm);
       return;
     }
     if (this._openKeys(input)) return;
@@ -284,15 +318,118 @@ export class Overworld {
     // ---- the world -------------------------------------------------------
     this.realm.update(dt, player.pos);
     if (this.scatter) this.scatter.streamAround(player.pos.x, player.pos.z);
-    this.sites.update(player.pos.x, player.pos.z);
+    this.sites.update(player.pos.x, player.pos.z, dt);
     this.people.update(dt, player.pos, this.progress);
     this._region(player);
+    this._gate(dt, player);
     this._encounters(dt, player, onHit);
     this._camps(dt, player, onHit);
     this._interact(player, input);
     this._death(dt, player);
     if (this.atmo) this._sky(dt, player);
+    this.weather.update(dt, this.camera.position,
+      this.atmo ? this.atmo.windDir : null);
+    this._life(dt, player);
     this._banner(dt);
+  }
+
+  /**
+   * The people who live in the nearest settlement.
+   *
+   * Only one settlement is populated at a time, and only when the player is
+   * close enough to see it. Checked twice a second rather than every frame —
+   * moving a village's worth of frogs is a rebuild, and the answer cannot
+   * change in a frame.
+   */
+  _life(dt, player) {
+    if (!this.life) return;
+    this._lifeAcc = (this._lifeAcc || 0) + dt;
+    if (this._lifeAcc > 0.5) {
+      this._lifeAcc = 0;
+      this.life.moveTo(this.sites.nearestSettlement(player.pos.x, player.pos.z));
+    }
+    if (this.life.where) this.life.update(dt, player.pos);
+  }
+
+  /**
+   * The gate: a region a guardian still holds shut is a region you bounce off.
+   *
+   * Not a teleport and not an invisible wall you can slide along — the player
+   * is pushed back the way they came, told what is holding it, and told which
+   * guardian opens it. That last part is the whole design: a locked door that
+   * does not say what the key is is indistinguishable from a bug.
+   *
+   * The push is away from the locked region's CENTRE, which is the direction
+   * that reaches an open region fastest — every region's border is where its
+   * own weight stops being the largest.
+   */
+  _gate(dt, player) {
+    const R = this.region;
+    if (!R) return;
+    if (regionOpen(R, this.progress.slain)) {
+      this.lastOpen = { x: player.pos.x, z: player.pos.z };
+      if (this.sealedT > 0) {
+        this.sealedT -= dt;
+        if (this.sealedT <= 0) {
+          const el = $('sealed');
+          if (el) el.classList.remove('show');
+        }
+      }
+      return;
+    }
+    /**
+     * Sealed. Walk them back the way they came.
+     *
+     * The direction is toward the last place they were allowed to stand,
+     * NOT away from the sealed region's centre. Away-from-centre is the
+     * obvious choice and it has a hole in it: at the exact centre there is no
+     * "away", the direction is zero, and the player stands in the middle of a
+     * region they are not allowed in with a warning on screen and nothing
+     * moving. Measured — a save or a teleport that lands dead centre stuck
+     * there permanently.
+     *
+     * The last open position is always in an open region by construction, so
+     * stepping toward it always gets out, and it retraces the route rather
+     * than shoving them sideways into somewhere else they cannot go.
+     */
+    let ux = 0, uz = 0;
+    if (this.lastOpen) {
+      ux = this.lastOpen.x - player.pos.x;
+      uz = this.lastOpen.z - player.pos.z;
+    }
+    let len = Math.hypot(ux, uz);
+    if (len < 1) {
+      // No history, or standing on it: fall back to outward, then to due east.
+      ux = player.pos.x - R.x;
+      uz = player.pos.z - R.z;
+      len = Math.hypot(ux, uz);
+      if (len < 1) { ux = 1; uz = 0; len = 1; }
+    }
+    ux /= len; uz /= len;
+    const push = 26 * dt + 0.35;
+    player.pos.x += ux * push;
+    player.pos.z += uz * push;
+    player.pos.y = this.realm.heightAt(player.pos.x, player.pos.z) + 1.0;
+    // Any velocity still pointing the wrong way is thrown away, or the player
+    // would grind against the border instead of being turned round.
+    const into = -(player.vel.x * ux + player.vel.z * uz);
+    if (into > 0) {
+      player.vel.x += ux * into;
+      player.vel.z += uz * into;
+    }
+    this.sealedT = 2.4;
+    const el = $('sealed');
+    const why = $('sealed-why');
+    if (el && this._sealedSaid !== R.id) {
+      this._sealedSaid = R.id;
+      const g = GUARDIAN_BY_ID.get(R.gate);
+      if (why) {
+        why.textContent = `${R.name} will not open until `
+          + `${g ? g.name : R.gate} is dead.`;
+      }
+      el.classList.add('show');
+      Audio.uiBack();
+    } else if (el) el.classList.add('show');
   }
 
   /** Keys that OPEN a panel. Returns true if one just did. */
@@ -397,25 +534,44 @@ export class Overworld {
   _region(player) {
     const R = regionAt(player.pos.x, player.pos.z, _scratch);
     if (R === this.region) return;
+    const open = regionOpen(R, this.progress.slain);
     this.region = R;
-    const first = !this.progress.seen.has(R.id);
-    this.progress.seen.add(R.id);
+
+    // Crossing the sky and the music over. Both damp rather than cut, so a
+    // border is a couple of seconds of the weather changing round you.
+    this.weather.set(R.weather || 'clear');
+    Audio.setRegionMood(R.music || 'calm');
+
+    /**
+     * A region only counts as SEEN if you were allowed in.
+     *
+     * Region weights overlap, so standing at the border of a sealed region
+     * makes `regionAt` name it — and the main line asks whether regions have
+     * been seen. Without this check, walking up to a sealed border would tick
+     * off "reach the next region" without ever entering it.
+     */
+    const first = open && !this.progress.seen.has(R.id);
+    if (open) this.progress.seen.add(R.id);
+    else this._sealedSaid = null;
+
     const el = $('region-banner');
     if (el) {
       const name = $('rb-region'), blurb = $('rb-blurb');
       if (name) name.textContent = R.name;
       if (blurb) {
-        blurb.textContent = first ? R.blurb
-          : `Tier ${R.tier} · ${R.blurb}`;
+        blurb.textContent = open ? `Tier ${R.tier} · ${R.blurb}`
+          : 'SEALED · ' + R.blurb;
       }
+      el.classList.toggle('locked', !open);
       el.classList.add('show');
     }
     this.bannerT = 4.5;
     if (first) {
       // Seeing a place for the first time is worth something on its own —
       // it is what makes walking off the road a decision rather than a risk.
-      const r = this.progress.addXp(40 + R.tier * 30);
+      const r = this.progress.addXp(60 + R.tier * 40);
       this._announceLevels(r);
+      this.hud.toast(`${R.name} — ${R.blurb}`, 6);
       this.save();
       this._paintObjectives();
     }
@@ -521,6 +677,7 @@ export class Overworld {
      */
     for (const e of this.encounters) {
       if (!e.final || this.progress.slain.has(e.id)) continue;
+      if (!regionOpen(e.region, this.progress.slain)) continue;
       const d = Math.hypot(e.at.x - px, e.at.z - pz);
       if (d < e.r + 10) {
         this._maybeFrogath(e, d, player);
@@ -530,6 +687,10 @@ export class Overworld {
     let best = null, bestD = BUILD_AT;
     for (const e of this.encounters) {
       if (e.final || this.progress.slain.has(e.id)) continue;
+      // A guardian inside a region you cannot walk into is not an encounter
+      // yet. Building it would put a fight on the far side of a sealed
+      // border, close enough to be shot at across it.
+      if (!regionOpen(e.region, this.progress.slain)) continue;
       const d = Math.hypot(e.at.x - px, e.at.z - pz);
       if (d < bestD) { bestD = d; best = e; }
     }
@@ -751,8 +912,10 @@ export class Overworld {
     const npc = this.people.near(px, pz);
     const site = npc ? null : this.sites.at(px, pz);
     // A site only offers a prompt when there is something in it to find.
-    // Standing in a village is not an action.
-    const secret = site && SECRETS[site.id]
+    // Standing in a village is not an action; standing at the foot of a
+    // hundred-metre statue is.
+    const findable = site && (SECRETS[site.id] || site.landmark);
+    const secret = findable
       ? (this.progress.found.has(site.id) ? 'again' : 'new') : null;
 
     this._npcHere = npc;
@@ -849,6 +1012,34 @@ export class Overworld {
   _examine(site) {
     const p = this.progress;
     const secret = SECRETS[site.id];
+    /**
+     * A landmark is its own kind of find.
+     *
+     * There is no hand-written secret for the twenty-four enormous things,
+     * because what they give you is the fact that you now know where they
+     * are — so this records them, pays for the walk, and reads their own
+     * blurb back. They then show as found on the map, which is what makes
+     * them navigation aids rather than scenery.
+     */
+    if (!secret && site.landmark) {
+      const already = p.found.has(site.id);
+      if (!already) {
+        p.found.add(site.id);
+        const R = REGIONS.find((r) => r.id === site.region);
+        const r = p.addXp(120 + (R ? R.tier : 0) * 60);
+        this._announceLevels(r);
+        _v.copy(this.player.pos);
+        _v.y += 1;
+        this.effects.ring(_v, 1, 10, 0.9, 0xffd76b, true);
+        Audio.refreshed(this.player.pos);
+        this._paintObjectives();
+        this.save();
+      }
+      this.dialogue.start(site.name,
+        [site.blurb || 'You will be able to find your way back to this.']
+          .concat(already ? [] : ['Marked on your map.']));
+      return;
+    }
     if (!secret) {
       this.hud.toast(site.blurb || site.name, 4);
       return;
@@ -935,10 +1126,16 @@ export class Overworld {
    */
   _paintObjectives() {
     const rows = Journal.objectives(this.progress).map((o, i) => ({
-      id: `${i}:${o.text}`, text: o.text, done: o.done, active: i === 0,
+      id: `${i}:${o.text}`,
+      text: o.sub ? `${o.text}  (${o.sub})` : o.text,
+      done: o.done,
+      active: i === 0,
     }));
     this.hud.setObjectives(rows);
   }
+
+  /** What the main line currently wants, for the HUD and the map. */
+  get objective() { return mainObjective(this.progress); }
 
   // ---------------------------------------------------------------- teardown
 
@@ -950,15 +1147,24 @@ export class Overworld {
     for (const c of this.camps) c.despawn();
     this.camps.length = 0;
     this.encounters.length = 0;
+    if (this.life) this.life.dispose();
     if (this.people) this.people.dispose();
     if (this.sites) this.sites.dispose();
     if (this.scatter) this.scatter.dispose();
+    if (this.weather) this.weather.dispose();
+    // The two module-level material caches. Both are keyed rather than owned
+    // by an instance, so nothing else will ever free them.
+    disposeVillagerMats();
+    disposeLandmarkMats();
+    Audio.stopRegionMusic();
     this.realm.dispose();
     this.dialogue.close();
     this.journal.closeAll();
     if (this.inventory) this.inventory.close();
-    const el = $('region-banner');
-    if (el) el.classList.remove('show');
+    for (const id of ['region-banner', 'sealed']) {
+      const el = $(id);
+      if (el) el.classList.remove('show');
+    }
     this.hud.setPickupPrompt(false, '');
   }
 }

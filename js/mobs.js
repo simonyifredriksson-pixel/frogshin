@@ -19,10 +19,10 @@
  * holds it for the wind-up, and only then swings. They are quick, not unfair.
  */
 
-import * as THREE from '../lib/three.module.js?v=v80';
-import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v80';
-import { buildGuardian } from './guardians.js?v=v80';
-import { rollLoot } from './gear.js?v=v80';
+import * as THREE from '../lib/three.module.js?v=v81';
+import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v81';
+import { buildGuardian } from './guardians.js?v=v81';
+import { rollLoot } from './gear.js?v=v81';
 
 const _to = new THREE.Vector3();
 const _at = new THREE.Vector3();
@@ -101,6 +101,50 @@ export const MOB_KINDS = {
     rig: { id: 'frostling', name: 'FROSTLING', body: 'lean',
       skin: 0x9fc2dd, dark: 0x6a8ba8, trim: 0xf6f9fc,
       head: 'horned', weapon: 'spear', horns: 3, eyes: 0xbff0ff },
+  },
+
+  // ── the Croaklands' own ────────────────────────────────────────────────
+  scarecrow: {
+    name: 'SCARECROW', reach: 3.2, scale: 0.60, speed: 6.2, sight: 24,
+    rig: { id: 'scarecrow', name: 'SCARECROW', body: 'lean',
+      skin: 0x9a8a4a, dark: 0x63582c, trim: 0xd9c46a,
+      head: 'blunt', weapon: 'spear', horns: 0, eyes: 0xff8a3c },
+  },
+  husk: {
+    name: 'CITY HUSK', reach: 3.4, scale: 0.68, speed: 6.8, sight: 28,
+    rig: { id: 'husk', name: 'HUSK', body: 'wraith',
+      skin: 0x6a6a7a, dark: 0x42424e, trim: 0xb0b8c4,
+      head: 'crowned', weapon: 'none', horns: 0, eyes: 0xa8d8ff },
+  },
+  mirebeast: {
+    name: 'MIREBEAST', reach: 3.6, scale: 0.70, speed: 6.6, sight: 28,
+    rig: { id: 'mirebeast', name: 'MIREBEAST', body: 'hulk',
+      skin: 0x466055, dark: 0x2b3c34, trim: 0x8fc4b0,
+      head: 'eel', weapon: 'none', horns: 0, eyes: 0xa8f0d8 },
+  },
+  dunestalker: {
+    name: 'DUNESTALKER', reach: 3.6, scale: 0.66, speed: 8.6, sight: 36,
+    rig: { id: 'dunestalker', name: 'DUNESTALKER', body: 'lean',
+      skin: 0xc4a06a, dark: 0x8a6a3c, trim: 0xffe0a0,
+      head: 'toad', weapon: 'twin', horns: 0, eyes: 0xff7a3c },
+  },
+  cinderhound: {
+    name: 'CINDERHOUND', reach: 3.2, scale: 0.62, speed: 9.2, sight: 34,
+    rig: { id: 'cinderhound', name: 'CINDERHOUND', body: 'lean',
+      skin: 0x6a2418, dark: 0x3f120c, trim: 0xff8a3c,
+      head: 'horned', weapon: 'none', horns: 2, eyes: 0xffca4a },
+  },
+  rimewraith: {
+    name: 'RIMEWRAITH', reach: 3.4, scale: 0.68, speed: 7.0, sight: 30,
+    rig: { id: 'rimewraith', name: 'RIMEWRAITH', body: 'wraith',
+      skin: 0xb8d4e4, dark: 0x7d9cb0, trim: 0xffffff,
+      head: 'skull', weapon: 'none', horns: 0, eyes: 0xbff0ff },
+  },
+  prismling: {
+    name: 'PRISMLING', reach: 3.0, scale: 0.58, speed: 8.0, sight: 30,
+    rig: { id: 'prismling', name: 'PRISMLING', body: 'stone',
+      skin: 0x5a6aa8, dark: 0x35406a, trim: 0xa8f0ff,
+      head: 'horned', weapon: 'none', horns: 3, eyes: 0xffffff },
   },
 };
 

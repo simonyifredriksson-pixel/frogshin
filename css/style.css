@@ -2847,6 +2847,9 @@ kbd {
   font-size: 21px;
   color: var(--parch);
 }
+/* A region you are not allowed into announces itself in red. */
+#region-banner.locked b { color: var(--danger); }
+#region-banner.locked span { color: #f0b8ae; }
 
 /* The column COUNT is not changed here on purpose: the keyboard cursor steps
    by a fixed six when you press down, so a narrower screen keeps six columns
@@ -2857,4 +2860,81 @@ kbd {
   .inv-doll { height: 230px; }
   .inv-slot .is-icon { font-size: 24px; line-height: 26px; }
   .inv-slot .is-name { font-size: 11px; line-height: 11px; }
+}
+/* ==========================================================================
+   THE REALM MAP + QUEST LOG, expanded
+   ========================================================================== */
+
+.rm-head {
+  display: flex; align-items: flex-start; gap: 20px;
+  margin-bottom: 10px;
+}
+.rm-objective {
+  flex: 1;
+  display: flex; flex-direction: column;
+  padding: 6px 12px;
+  background: linear-gradient(rgba(255,207,92,0.14), rgba(255,207,92,0.04));
+  border-left: 4px solid var(--gold);
+}
+.rm-objective span {
+  font-family: var(--font-px);
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.rm-objective b { color: var(--parch); font-size: 21px; line-height: 24px; }
+.rm-objective i { color: var(--parch-dim); font-size: 15px; font-style: normal; }
+
+#rm-canvas {
+  width: min(760px, 70vh);
+  height: min(760px, 70vh);
+}
+
+/* The current objective, at the top of the log. */
+.ql-current {
+  display: flex; flex-direction: column;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: linear-gradient(rgba(255,207,92,0.16), rgba(255,207,92,0.05));
+  border-left: 4px solid var(--gold);
+}
+.ql-current span {
+  font-family: var(--font-px);
+  font-size: 10px; color: var(--gold); letter-spacing: 1px;
+}
+.ql-current b { color: var(--parch); font-size: 22px; line-height: 26px; margin: 4px 0; }
+.ql-current i { color: var(--parch-dim); font-size: 15px; font-style: normal; }
+
+/* Objectives panel: the main-line row gets the gold treatment. */
+#objectives li.active {
+  color: var(--gold);
+}
+
+/* ==========================================================================
+   SEALED-REGION WARNING
+   Shown when the player walks into a region a guardian still holds shut.
+   ========================================================================== */
+
+#sealed {
+  position: fixed;
+  left: 0; right: 0; top: 34vh;
+  z-index: 26;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  text-shadow: 2px 2px 0 #000, 0 0 24px rgba(0,0,0,0.95);
+}
+#sealed.show { opacity: 1; }
+#sealed b {
+  font-family: var(--font-px);
+  font-size: 18px;
+  color: var(--danger);
+  letter-spacing: 2px;
+}
+#sealed span {
+  margin-top: 8px;
+  font-family: var(--font-ui);
+  font-size: 21px;
+  color: var(--parch);
 }

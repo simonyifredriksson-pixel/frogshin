@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v80';
+import * as THREE from '../lib/three.module.js?v=v81';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
@@ -204,6 +204,157 @@ export const GUARDIANS = [
     moves: ['charge', 'shockwave', 'slam', 'volley', 'charge'],
     tune: 0.85,
     blurb: 'It eats fire and breathes it back out bigger. It has been growing.',
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE CROAKLANDS
+  //
+  // One more for each region the expanded world added, plus the two that gate
+  // the road north. Same primitives, same rules — every attack any of these
+  // can make is one the player has already learned to read somewhere else.
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'thistlejack', name: 'THISTLEJACK',
+    body: 'lean', skin: 0x8a7a3a, dark: 0x554a22, trim: 0xd9c46a,
+    head: 'horned', weapon: 'spear', horns: 2, eyes: 0xff8a3c,
+    moves: ['throw', 'combo', 'throw'],
+    tune: 0.95,
+    /**
+     * Deliberately the softest thing in the book.
+     *
+     * He is in the second region you can reach, on a farm, at tier zero: the
+     * first guardian most players will fight, and the one that teaches what a
+     * telegraph is. He throws twice for every time he closes, so the lesson
+     * is "read the ring, then punish the recovery" and nothing else.
+     */
+    blurb: 'Straw, string and bad intentions. Somebody built him to guard wheat.',
+  },
+  {
+    id: 'sableknight', name: 'THE SABLE KNIGHT',
+    body: 'lean', skin: 0x2a2a34, dark: 0x16161c, trim: 0xb0b8c4,
+    head: 'crowned', weapon: 'great', horns: 1, eyes: 0xa8d8ff,
+    moves: ['combo', 'charge', 'combo', 'slam'],
+    tune: 0.90,
+    blurb: 'The last of the palace guard. Nobody told him it fell.',
+  },
+  {
+    id: 'mirrorwidow', name: 'THE MIRROR WIDOW',
+    body: 'lean', skin: 0x6a8a9a, dark: 0x3f5460, trim: 0xdff4ff,
+    head: 'eel', weapon: 'twin', horns: 0, eyes: 0xffffff,
+    moves: ['blink', 'volley', 'blink', 'ringout'],
+    tune: 0.89,
+    blurb: 'There are two of her and one is a reflection. Not always the same one.',
+  },
+  {
+    id: 'sandreaver', name: 'THE SANDREAVER',
+    body: 'hulk', skin: 0xc4a06a, dark: 0x8a6a3c, trim: 0xffe0a0,
+    head: 'blunt', weapon: 'none', horns: 0, eyes: 0xff7a3c,
+    moves: ['shockwave', 'charge', 'shockwave', 'slam'],
+    tune: 0.88,
+    blurb: 'It travels under the dunes. The wave is the only warning.',
+  },
+  {
+    id: 'dunelord', name: 'THE DUNE LORD',
+    body: 'stone', skin: 0xa8905e, dark: 0x6a5836, trim: 0xffd76b,
+    head: 'crowned', weapon: 'spear', horns: 2, eyes: 0xffca4a,
+    moves: ['throw', 'volley', 'combo', 'throw'],
+    tune: 0.88,
+    blurb: 'Buried with everything he owned, including the habit of command.',
+  },
+  {
+    id: 'ossuar', name: 'OSSUAR, THE STACKED',
+    body: 'hulk', skin: 0xd8d2c2, dark: 0x9a9484, trim: 0xf4f0e4,
+    head: 'skull', weapon: 'club', horns: 0, eyes: 0xff5a2c,
+    moves: ['slam', 'shockwave', 'slam', 'combo'],
+    tune: 0.87,
+    blurb: 'Assembled out of what was lying about. It is still collecting.',
+  },
+  {
+    id: 'dolmath', name: 'DOLMATH OF THE DEEP WATER',
+    body: 'hulk', skin: 0x2a4a5a, dark: 0x152c38, trim: 0x8fd8ff,
+    head: 'eel', weapon: 'spear', horns: 0, eyes: 0xa8f0ff,
+    moves: ['puddle', 'leap', 'volley', 'puddle', 'combo'],
+    tune: 0.86,
+    blurb: 'He held the keep when it was dry. He is still holding it.',
+  },
+  {
+    id: 'cindren', name: 'CINDREN, THE SECOND FIRE',
+    body: 'lean', skin: 0x8a3a1a, dark: 0x542010, trim: 0xffb03c,
+    head: 'horned', weapon: 'twin', horns: 3, eyes: 0xffd24a,
+    moves: ['charge', 'combo', 'charge', 'volley'],
+    tune: 0.86,
+    blurb: 'Whatever started the Emberwaste, this is what it left behind.',
+  },
+  {
+    id: 'emberthrone', name: 'THE THING ON THE RIM',
+    body: 'stone', skin: 0x3a2a28, dark: 0x201614, trim: 0xff6a2c,
+    head: 'crowned', weapon: 'great', horns: 4, eyes: 0xff4a20,
+    moves: ['shockwave', 'slam', 'spin', 'shockwave', 'charge'],
+    tune: 0.84,
+    blurb: 'It sits in the caldera and the caldera has not put it out.',
+  },
+  {
+    id: 'moonwake', name: 'MOONWAKE',
+    body: 'wraith', skin: 0x3a4a72, dark: 0x222c48, trim: 0xcfe0ff,
+    head: 'skull', weapon: 'spear', horns: 0, eyes: 0xdff0ff,
+    moves: ['volley', 'blink', 'ringout', 'volley'],
+    tune: 0.85,
+    blurb: 'It walks the shelf at night, which up here is always.',
+  },
+  {
+    id: 'prismgaunt', name: 'THE PRISMGAUNT',
+    body: 'stone', skin: 0x5a6aa8, dark: 0x35406a, trim: 0xa8f0ff,
+    head: 'horned', weapon: 'none', horns: 4, eyes: 0xffffff,
+    moves: ['ringout', 'volley', 'spin', 'ringout'],
+    tune: 0.84,
+    blurb: 'It splits what it is hit with and gives you all the pieces back.',
+  },
+  {
+    id: 'rimeglass', name: 'RIMEGLASS',
+    body: 'wraith', skin: 0xa8c8dd, dark: 0x6a8ba8, trim: 0xffffff,
+    head: 'crowned', weapon: 'twin', horns: 2, eyes: 0xbff0ff,
+    moves: ['blink', 'combo', 'ringout', 'blink', 'volley'],
+    tune: 0.84,
+    blurb: 'Cold enough that the air around it falls out of the sky.',
+  },
+  {
+    id: 'hoarwarden', name: 'THE HOARWARDEN',
+    body: 'stone', skin: 0xa8bccc, dark: 0x6a8296, trim: 0xffffff,
+    head: 'blunt', weapon: 'club', horns: 0, eyes: 0xbff0ff,
+    moves: ['slam', 'shockwave', 'charge', 'slam'],
+    tune: 0.85,
+    blurb: 'It has been standing in the courtyard so long it is part of it.',
+  },
+  {
+    id: 'gatewright', name: 'THE GATEWRIGHT',
+    body: 'stone', skin: 0x5a564e, dark: 0x36332e, trim: 0xc9a227,
+    head: 'blunt', weapon: 'great', horns: 0, eyes: 0xff8a3c,
+    moves: ['combo', 'slam', 'shockwave', 'combo'],
+    tune: 0.85,
+    /**
+     * Arkos's opposite number.
+     *
+     * The Hollow City's gate is barred from the inside and somebody barred
+     * it. He and Arkos were the same rank in the same order, and the pair of
+     * them are why nothing has come south in four hundred years.
+     */
+    blurb: 'He barred the gate from the inside and then stayed inside with it.',
+  },
+  {
+    id: 'arkos', name: 'ARKOS, WARDEN OF THE SPAN',
+    body: 'stone', skin: 0x4a4a52, dark: 0x2c2c32, trim: 0xc9a227,
+    head: 'blunt', weapon: 'great', horns: 0, eyes: 0xffd76b,
+    moves: ['slam', 'shockwave', 'combo', 'charge', 'spin'],
+    tune: 0.85,
+    /**
+     * The last gate before the throne.
+     *
+     * The Ashen Throne is gated on this one rather than on Zehl, because Zehl
+     * is standing IN the Ashen Throne — a region gated on a guardian inside
+     * it can never be entered. Arkos holds the bridge, and the bridge is the
+     * only way across.
+     */
+    blurb: 'He built the bridge. He has never once let anybody use it.',
   },
 ];
 

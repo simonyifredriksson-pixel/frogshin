@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v80';
-import { mulberry32 } from './util.js?v=v80';
-import { SEA } from './regions.js?v=v80';
-import { CHUNK } from './realm.js?v=v80';
+import * as THREE from '../lib/three.module.js?v=v81';
+import { mulberry32 } from './util.js?v=v81';
+import { SEA } from './regions.js?v=v81';
+import { CHUNK } from './realm.js?v=v81';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -48,6 +48,16 @@ const KINDS = {
   blob:  { geo: () => new THREE.IcosahedronGeometry(1, 0), cast: false },
   rock:  { geo: () => new THREE.DodecahedronGeometry(1, 0), cast: true },
   post:  { geo: () => new THREE.CylinderGeometry(1, 1, 1, 6), cast: false },
+  /**
+   * Spikes out of the ground: crystal in the Glimmerwood, ice in the
+   * Rimefang, cooled obsidian at Cindermaw.
+   *
+   * One shape for all three because the region's own palette does the rest —
+   * the same octahedron is white in the north, blue in the glowing wood and
+   * near-black on the volcano, and it is the thing that makes those three
+   * places read as different at a glance from inside them.
+   */
+  shard: { geo: () => new THREE.OctahedronGeometry(1, 0), cast: true },
 };
 
 /**
@@ -58,21 +68,38 @@ const KINDS = {
  * and the Frostmarch is bare, and one number each is what says so.
  */
 export const FLORA = {
-  shallows:    { conifer: 3,  broad: 5, rock: 3,  reed: 14, bone: 0 },
-  mirefen:     { conifer: 1,  broad: 1, rock: 2,  reed: 30, bone: 2 },
-  bramblewood: { conifer: 14, broad: 9, rock: 2,  reed: 2,  bone: 0 },
-  sunkenstair: { conifer: 4,  broad: 3, rock: 7,  reed: 2,  bone: 0 },
-  quarry:      { conifer: 1,  broad: 1, rock: 16, reed: 0,  bone: 1 },
-  gravewater:  { conifer: 2,  broad: 1, rock: 3,  reed: 16, bone: 8 },
-  choircliffs: { conifer: 5,  broad: 1, rock: 12, reed: 0,  bone: 1 },
-  spine:       { conifer: 2,  broad: 0, rock: 10, reed: 0,  bone: 12 },
-  emberwaste:  { conifer: 3,  broad: 0, rock: 9,  reed: 0,  bone: 4 },
-  palewood:    { conifer: 16, broad: 3, rock: 2,  reed: 3,  bone: 3 },
-  hollowcity:  { conifer: 2,  broad: 2, rock: 8,  reed: 1,  bone: 5 },
-  frostmarch:  { conifer: 4,  broad: 0, rock: 6,  reed: 0,  bone: 2 },
-  ashenthrone: { conifer: 1,  broad: 0, rock: 7,  reed: 0,  bone: 9 },
+  // ── the south: green, worked, wet ──
+  lilyreach:   { conifer: 3,  broad: 6,  rock: 3,  reed: 16, bone: 0,  shard: 0,  crop: 0 },
+  harrowmead:  { conifer: 2,  broad: 5,  rock: 3,  reed: 3,  bone: 0,  shard: 0,  crop: 10 },
+  whispermire: { conifer: 1,  broad: 1,  rock: 2,  reed: 32, bone: 2,  shard: 0,  crop: 0 },
+  hollowroot:  { conifer: 16, broad: 11, rock: 2,  reed: 2,  bone: 0,  shard: 0,  crop: 0 },
+  sunkenstair: { conifer: 4,  broad: 3,  rock: 8,  reed: 2,  bone: 0,  shard: 0,  crop: 0 },
+  // ── the middle ──
+  anurath:     { conifer: 2,  broad: 4,  rock: 6,  reed: 6,  bone: 1,  shard: 0,  crop: 0 },
+  quarry:      { conifer: 1,  broad: 1,  rock: 18, reed: 0,  bone: 1,  shard: 0,  crop: 0 },
+  glassfen:    { conifer: 2,  broad: 2,  rock: 3,  reed: 22, bone: 1,  shard: 0,  crop: 0 },
+  gravewater:  { conifer: 2,  broad: 1,  rock: 3,  reed: 16, bone: 9,  shard: 0,  crop: 0 },
+  thirstlands: { conifer: 0,  broad: 0,  rock: 10, reed: 0,  bone: 4,  shard: 2,  crop: 5 },
+  choircliffs: { conifer: 5,  broad: 1,  rock: 14, reed: 0,  bone: 1,  shard: 0,  crop: 0 },
+  boneflats:   { conifer: 0,  broad: 0,  rock: 6,  reed: 0,  bone: 16, shard: 0,  crop: 0 },
+  drownedkeep: { conifer: 3,  broad: 2,  rock: 4,  reed: 14, bone: 2,  shard: 0,  crop: 0 },
+  // ── the frontier ──
+  emberwaste:  { conifer: 4,  broad: 0,  rock: 10, reed: 0,  bone: 5,  shard: 3,  crop: 0 },
+  cindermaw:   { conifer: 0,  broad: 0,  rock: 12, reed: 0,  bone: 2,  shard: 10, crop: 0 },
+  spine:       { conifer: 2,  broad: 0,  rock: 10, reed: 0,  bone: 14, shard: 0,  crop: 0 },
+  moonshelf:   { conifer: 1,  broad: 0,  rock: 12, reed: 0,  bone: 1,  shard: 5,  crop: 0 },
+  palewood:    { conifer: 18, broad: 3,  rock: 2,  reed: 3,  bone: 3,  shard: 0,  crop: 0 },
+  // ── the end ──
+  hollowcity:  { conifer: 2,  broad: 2,  rock: 9,  reed: 1,  bone: 6,  shard: 0,  crop: 0 },
+  glimmerwood: { conifer: 6,  broad: 4,  rock: 4,  reed: 2,  bone: 0,  shard: 12, crop: 0 },
+  frostmarch:  { conifer: 5,  broad: 0,  rock: 7,  reed: 0,  bone: 2,  shard: 4,  crop: 0 },
+  rimefang:    { conifer: 1,  broad: 0,  rock: 8,  reed: 0,  bone: 1,  shard: 12, crop: 0 },
+  sunderway:   { conifer: 1,  broad: 0,  rock: 11, reed: 0,  bone: 3,  shard: 0,  crop: 0 },
+  ashenthrone: { conifer: 1,  broad: 0,  rock: 8,  reed: 0,  bone: 10, shard: 4,  crop: 0 },
 };
-const DEFAULT_FLORA = { conifer: 5, broad: 3, rock: 5, reed: 3, bone: 0 };
+const DEFAULT_FLORA = {
+  conifer: 5, broad: 3, rock: 5, reed: 3, bone: 0, shard: 0, crop: 0,
+};
 
 export class Scatter {
   constructor(scene, realm) {
@@ -88,7 +115,9 @@ export class Scatter {
      * over does not corrupt anything — `_emit` simply stops, so the far
      * edge of a very crowded view thins out rather than the game breaking.
      */
-    this.caps = { trunk: 2600, pine: 5400, blob: 2600, rock: 2600, post: 5200 };
+    this.caps = {
+      trunk: 3400, pine: 5400, blob: 2600, rock: 2800, post: 6000, shard: 3000,
+    };
     for (const k in KINDS) {
       const mesh = new THREE.InstancedMesh(
         KINDS[k].geo(), new THREE.MeshLambertMaterial({}), this.caps[k]);
@@ -243,6 +272,51 @@ export class Scatter {
       const h = 1.4 + r() * 4.4;
       this._emit('post', x, y + h * 0.45, z, 0.22 + r() * 0.2, h, 0.22 + r() * 0.2,
         0xcfc7b4, r() * 3, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5);
+    });
+
+    /**
+     * Shards: crystal, ice or cooled obsidian, depending where you are.
+     *
+     * Tinted from the region's OWN `high` colour — the one it paints its
+     * peaks with — so the same octahedron is white in the Rimefang, pale blue
+     * in the Glimmerwood and near-black at Cindermaw without this file
+     * knowing which region it is filling. Emitted in pairs, a big one and a
+     * lean-to, because a single spike reads as a rock.
+     */
+    scatter(mix.shard, (x, y, z, r) => {
+      if (y < SEA - 1) return;
+      // A generous slope limit on purpose: the two regions that grow the most
+      // of these are the Rimefang and Cindermaw, both of which are made
+      // almost entirely of steep ground. At the trees' 0.42 the Rimefang grew
+      // almost nothing, which left the ice range bare.
+      if (realm._slopeAt(x, z) > 0.72) return;
+      const s = 1.4 + r() * 3.6;
+      const col = _c.copy(pal.high).multiplyScalar(0.85 + r() * 0.35).getHex();
+      this._emit('shard', x, y + s * 0.9, z, s * 0.5, s * 1.9, s * 0.5,
+        col, r() * 3, (r() - 0.5) * 0.3, (r() - 0.5) * 0.3);
+      if (r() < 0.7) {
+        const t = s * (0.4 + r() * 0.4);
+        this._emit('shard', x + s * 0.7, y + t * 0.8, z - s * 0.4,
+          t * 0.5, t * 1.7, t * 0.5, col, r() * 3, 0.4, 0.3);
+      }
+    });
+
+    /**
+     * Crops: wheat in the Harrowmead, scrub in the Thirstlands.
+     *
+     * Clusters of five stalks rather than five separate scatters, so a field
+     * reads as planted rather than as weeds — which is what tells you at a
+     * glance that somebody works this ground.
+     */
+    scatter(mix.crop, (x, y, z, r) => {
+      if (y < SEA + 1.4) return;
+      if (realm._slopeAt(x, z) > 0.3) return;
+      const col = _c.copy(pal.grass2).multiplyScalar(1.25 + r() * 0.2).getHex();
+      for (let k = 0; k < 5; k++) {
+        const h = 1.1 + r() * 0.9;
+        this._emit('post', x + (r() - 0.5) * 5, y + h * 0.5, z + (r() - 0.5) * 5,
+          0.09, h, 0.09, col, r() * 3);
+      }
     });
     return true;
   }

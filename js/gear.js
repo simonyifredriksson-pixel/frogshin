@@ -175,6 +175,111 @@ export const GEAR = [
     'Written on a scrap. It finishes the song.'),
   K('white-door-handle', 'Handle of the White Door', '🚪',
     'The door was not attached to anything. Neither is this.'),
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE CROAKLANDS
+  //
+  // Everything below belongs to a region the expanded world added. Kept in
+  // one block rather than filed into the lists above so that "what came from
+  // where" stays readable, and so a region's whole kit can be checked at a
+  // glance against the region it drops in.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ─── weapons ───
+  W('harrow-scythe', 'Harrow Scythe', 0, 2, 6, 46, '🌾',
+    'For wheat. It has been used for other things.', ['Reach Up']),
+  W('glass-sabre', 'Glassfen Sabre', 2, 3, 17, 260, '🗡',
+    'Ground on a stone under still water. You can see through the edge.'),
+  W('dune-pike', 'Dune Pike', 3, 2, 21, 340, '🔱',
+    'Long enough to reach whatever is under the sand.', ['Reach Up']),
+  W('bone-maul', 'Ossuary Maul', 3, 3, 24, 430, '🔨',
+    'Somebody made a hammer out of somebody.', ['Heavy']),
+  W('moonglass-lance', 'Moonglass Lance', 4, 3, 29, 700, '🔱',
+    'Cut on the shelf, above the cloud, at night. It is always night up there.',
+    ['Reach Up']),
+  W('prism-edge', 'Prism Edge', 5, 3, 32, 980, '⚔',
+    'It splits the light and it splits most other things.', ['Divine']),
+  W('rime-pick', 'Rimefang Pick', 5, 3, 33, 1050, '🪓',
+    'It was for the ice. The ice is not what it is for now.', ['Cold Guard']),
+
+  // ─── armour ───
+  A('harrow-hat', 'Harrow Hat', 'head', 0, 2, 2, 24, '🎽',
+    'Straw. Keeps the sun and the crows off.'),
+  A('harrow-coat', 'Harrow Coat', 'body', 0, 2, 4, 34, '🎽',
+    'Canvas, waxed, and patched about nine times.'),
+
+  A('glass-veil', 'Glassfen Veil', 'head', 2, 3, 7, 190, '🎽',
+    'The fen shows you your own face. This stops it.', ['Unseen']),
+  A('glass-scale', 'Glassfen Scale', 'body', 2, 3, 11, 250, '🛡',
+    'Mirror-bright. Things look at it instead of at you.', ['Unseen']),
+  A('glass-fins', 'Glassfen Fins', 'legs', 2, 3, 7, 190, '🥾',
+    'Made for still water and no noise.', ['Swim Speed Up']),
+
+  A('sand-wrap', 'Sunwrap', 'head', 3, 2, 8, 280, '🎽',
+    'Ten feet of linen and a reason for all of it.', ['Heat Guard']),
+  A('sand-mail', 'Sandreed Mail', 'body', 3, 3, 12, 380, '🛡',
+    'Scales cut from something that swims in dunes.', ['Heat Guard']),
+  A('sand-boots', 'Dune Striders', 'legs', 3, 2, 8, 280, '🥾',
+    'You stop sinking. That is the whole trick.', ['Heat Guard']),
+
+  A('bone-crest', 'Ossuary Crest', 'head', 3, 3, 10, 340, '⛑',
+    'Somebody else wore this first, from the inside.'),
+  A('bone-carapace', 'Ossuary Carapace', 'body', 3, 3, 14, 450, '🛡',
+    'Ribs. Not yours.'),
+
+  A('moon-circlet', 'Moonshelf Circlet', 'head', 4, 3, 13, 600, '⛑',
+    'The astronomers wear them so they can see in the dark.', ['Unseen']),
+  A('moon-robe', 'Moonshelf Robe', 'body', 4, 3, 18, 760, '🎽',
+    'Woven above the cloud, which is why it weighs nothing.', ['Unseen']),
+  A('moon-slippers', 'Moonshelf Slippers', 'legs', 4, 3, 13, 600, '👖',
+    'They make no sound at all. It is unnerving.', ['Unseen']),
+
+  A('prism-helm', 'Prismgaunt Helm', 'head', 5, 3, 16, 940, '⛑',
+    'The light goes in and comes out somewhere else.', ['Divine']),
+  A('prism-plate', 'Prismgaunt Plate', 'body', 5, 3, 23, 1400, '🛡',
+    'Hit it hard enough and it hands the blow back in pieces.', ['Divine']),
+  A('rime-greaves', 'Rimefang Greaves', 'legs', 5, 3, 16, 960, '🥾',
+    'Nothing in the north can find your feet.', ['Cold Guard']),
+
+  // ─── food ───
+  F('harrow-loaf', 'Harrow Loaf', 0, 22, 8, '🍞',
+    'The mill has not stopped in four hundred years. This is why.'),
+  F('mirror-clam', 'Mirror Clam', 2, 50, 26, '🐚',
+    'They come out of the Glassfen already open.'),
+  F('sand-date', 'Sandreed Date', 3, 58, 32, '🌰',
+    'Sweet enough to walk another day on.', ['Heat Guard']),
+  F('glow-cap', 'Glimmer Cap', 4, 96, 74, '🍄',
+    'It is still glowing on the way down.'),
+  F('rime-broth', 'Rime Broth', 5, 160, 150, '🍲',
+    'Made with snow, and it still warms you.', ['Cold Guard']),
+
+  // ─── materials ───
+  M('mill-grain', 'Harrow Grain', 0, 4, '🌾', 'The whole south eats this.'),
+  M('lily-silk', 'Lily Silk', 0, 6, '🧵', 'Pulled off the underside of a pad.'),
+  M('mirror-glass', 'Mirror Glass', 2, 30, '🪟',
+    'The Glassfen makes it by lying perfectly still.'),
+  M('sand-glass', 'Sun Glass', 3, 38, '🔸', 'Lightning strikes sand and leaves this.'),
+  M('bone-meal', 'Bone Meal', 3, 30, '🦴', 'The Boneflats are made of it.'),
+  M('obsidian-chip', 'Obsidian Chip', 4, 52, '⬛', 'It was liquid this century.'),
+  M('moon-silver', 'Moon Silver', 4, 74, '⚪', 'Only found above the cloud line.'),
+  M('prism-shard', 'Prism Shard', 5, 110, '🔷', 'A piece of the Heartshard.'),
+  M('rime-core', 'Rime Core', 5, 120, '❄', 'It has not melted. It is not going to.'),
+
+  // ─── key items ───
+  K('mill-key', 'Mill Loft Key', '🗝',
+    'Reeve Tull would like somebody else to go up there.'),
+  K('scarecrow-heart', "Thistlejack's Heart", '🎃',
+    'A turnip, a nail and a great deal of malice.'),
+  K('library-seal', 'Seal of the Drowned Library', '📜',
+    'Reading it makes your eyes water and your ears ring.'),
+  K('lantern-oil', 'Gravekeeper’s Oil', '🛢',
+    'Six months of light, if nobody drops it.'),
+  K('star-chart', 'The Unfinished Chart', '🌌',
+    'Someone was mapping the sky and stopped mid-constellation.'),
+  K('span-token', 'Warden’s Token', '🎖',
+    'Arkos gave these to people he let across. There are two.'),
+  K('crown-fragment', 'Fragment of the Crown', '👑',
+    'Anurath had a crown. This is a corner of it.'),
 ];
 
 export const GEAR_BY_ID = new Map(GEAR.map((g) => [g.id, g]));
