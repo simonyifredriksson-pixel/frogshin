@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v79';
+import { CFG } from './config.js?v=v80';
 
 export class Economy {
   constructor() {
@@ -53,6 +53,15 @@ export class Economy {
      * does not quietly throw away the other mode's progress either.
      */
     this.dungeonRuns = { checkpoints: null, hard: null };
+    /**
+     * The open world's whole save, as one opaque blob.
+     *
+     * Opaque on purpose: `Progress` owns its own shape and its own validation,
+     * and this file has no business knowing what an equipped legging is. One
+     * blob also means there is exactly one realm save and no way for the bag
+     * to load while the quest log does not.
+     */
+    this.realm = null;
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -83,6 +92,8 @@ export class Economy {
       this.crystal = !!d.crystal;
       this.statueOpened = !!d.statueOpened;
       this.ascendedBeaten = !!d.ascendedBeaten;
+      // Handed to Progress.load, which validates every field of it.
+      this.realm = (d.realm && typeof d.realm === 'object') ? d.realm : null;
       // Only a well-formed run is restored; anything else means no offer.
       const slot = (v) => (v && typeof v.checkpoint === 'number'
         ? { checkpoint: v.checkpoint } : null);
@@ -121,6 +132,7 @@ export class Economy {
         statueOpened: this.statueOpened,
         ascendedBeaten: this.ascendedBeaten,
         dungeonRuns: this.dungeonRuns,
+        realm: this.realm,
       }));
     } catch (e) {
       console.warn('[frogshin] could not save progress:', e);
@@ -149,6 +161,26 @@ export class Economy {
 
   clearDungeonRun(checkpoints) {
     this.dungeonRuns[this._slot(checkpoints)] = null;
+    this.save();
+  }
+
+  // ------------------------------------------------------------- the realm
+
+  /**
+   * Store the open world's save.
+   *
+   * Written straight through rather than debounced. The realm saves at the
+   * moments that matter — a guardian down, a quest turned in, a secret found,
+   * quitting to the menu — and every one of those is a thing the player would
+   * be furious to lose to a closed tab three seconds later.
+   */
+  setRealm(blob) {
+    this.realm = blob;
+    this.save();
+  }
+
+  clearRealm() {
+    this.realm = null;
     this.save();
   }
 

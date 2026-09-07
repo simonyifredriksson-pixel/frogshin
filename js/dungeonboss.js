@@ -16,11 +16,11 @@
  * unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
-import { CFG } from './config.js?v=v79';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v79';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v79';
-import { Audio } from './audio.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
+import { CFG } from './config.js?v=v80';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v80';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v80';
+import { Audio } from './audio.js?v=v80';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();
@@ -79,16 +79,32 @@ const MOVES = {
 };
 
 export class DungeonBoss {
-  constructor(index, spot, scene, effects, collision) {
+  /**
+   * @param index  which room this is, 0-14. Drives the stat curve.
+   * @param opts   the OVERWORLD's way in, and nothing the dungeon passes:
+   *                 spec      an explicit guardian spec, for the seven that
+   *                           live in the open world and have no room number
+   *                 power     what to use instead of `index` on the stat
+   *                           curve, so a region's tier decides how hard its
+   *                           guardian hits rather than an arbitrary index
+   *                 scale     body size override
+   *                 groundAt  (x, z) => y. Given one, the guardian STANDS ON
+   *                           the terrain instead of on a fixed plane — a
+   *                           dungeon room is dead flat, an open-world arena
+   *                           never quite is.
+   */
+  constructor(index, spot, scene, effects, collision, opts = {}) {
     const D = CFG.dungeon.boss;
     this.index = index;
     this.scene = scene;
     this.effects = effects;
     this.collision = collision;
-    this.spec = GUARDIANS[index] || GUARDIANS[GUARDIANS.length - 1];
+    this.spec = opts.spec || GUARDIANS[index] || GUARDIANS[GUARDIANS.length - 1];
     this.moves = this.spec.moves;
+    this.groundAt = opts.groundAt || null;
 
-    const g = (base, growth) => base * Math.pow(growth, index);
+    const power = opts.power === undefined ? index : opts.power;
+    const g = (base, growth) => base * Math.pow(growth, power);
     // Per-boss trim on top of the curve, for the ones the curve overshot.
     const tune = this.spec.tune || 1;
     this.maxHealth = Math.round(g(D.baseHealth, D.healthGrowth) * tune);
@@ -96,12 +112,12 @@ export class DungeonBoss {
     this.damage = Math.round(g(D.baseDamage, D.damageGrowth) * tune);
     this.speed = g(D.baseSpeed, D.speedGrowth);
     this.telegraph = Math.max(D.minTelegraph,
-      D.telegraph * Math.pow(D.telegraphShrink, index));
+      D.telegraph * Math.pow(D.telegraphShrink, power));
     this.reach = D.reach;
 
     this.rig = buildGuardian(this.spec);
     this.model = this.rig;                 // the run treats these the same
-    this.scaleFactor = 1.5 + index * 0.05;
+    this.scaleFactor = opts.scale || (1.5 + power * 0.05);
     this.rig.root.scale.setScalar(this.scaleFactor);
     this.hovers = this.rig.hover;
 
@@ -190,6 +206,20 @@ export class DungeonBoss {
 
   update(dt, player, onHit) {
     this.t += dt;
+    /**
+     * Follow the ground, if we were given a way to ask where it is.
+     *
+     * `baseY` is the height everything else is measured from — the floor
+     * markers, the leap arc, the hover bob — so moving it is all it takes to
+     * put this fight on a hillside. Read every frame rather than once, because
+     * the guardian walks: a charge across a boss arena covers sixty units and
+     * the far end is not the height of the near end.
+     */
+    if (this.groundAt) {
+      this.baseY = this.groundAt(this.pos.x, this.pos.z) + (this.hovers ? 1.6 : 0);
+      // Only when it is not mid-leap: the leap sets pos.y from baseY itself.
+      if (this.state !== STATE.STRIKE || this.move !== 'leap') this.pos.y = this.baseY;
+    }
     this._updateProjectiles(dt, player, onHit);
     this._updateHazards(dt, player, onHit);
 
@@ -674,8 +704,18 @@ export class DungeonBoss {
 
   dispose() {
     this.scene.remove(this.rig.root);
+    /**
+     * Materials only — never the geometry.
+     *
+     * `buildGuardian` draws every part from module-level geometry singletons
+     * that EVERY guardian shares, so disposing them here frees buffers other
+     * creatures are still drawing from and Three re-uploads them on the next
+     * frame. Harmless in the dungeon, where one boss is torn down before the
+     * next is built; in the overworld a camp despawning behind the player
+     * would knock the geometry out from under every mob still on screen.
+     * The materials are made per rig, so those are ours to free.
+     */
     this.rig.root.traverse((o) => {
-      if (o.geometry) o.geometry.dispose();
       if (o.material) o.material.dispose();
     });
     for (const p of this.projectiles) {

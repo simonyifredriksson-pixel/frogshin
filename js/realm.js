@@ -29,12 +29,12 @@
  * thing that must never stream is the thing the simulation depends on.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
-import { CFG } from './config.js?v=v79';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v79';
-import { Terrain, CollisionWorld } from './collision.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
+import { CFG } from './config.js?v=v80';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v80';
+import { Terrain, CollisionWorld } from './collision.js?v=v80';
 import { REGIONS, REGION_BY_ID, REALM_SIZE, REALM_HALF, SEA,
-  regionWeights, regionAt } from './regions.js?v=v79';
+  regionWeights, regionAt } from './regions.js?v=v80';
 
 const _scratch = [];
 const _col = new THREE.Color();
@@ -374,7 +374,7 @@ export class Realm {
      * Shallows and its village stands on stilts. Wading depth is walkable
      * here, so those regions accept ground a couple of metres under.
      *
-     * The slope ceiling is the caller''s, because the two things placed here
+     * The slope ceiling is the caller's, because the two things placed here
      * want different ground. A boss ARENA has to be close to level — you
      * fight there, and footing is the fight. A SITE is a building or a
      * standing stone, and a ruin on a slope is a ruin on a slope: those are

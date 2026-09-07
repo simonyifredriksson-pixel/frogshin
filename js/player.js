@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
-import { CFG } from './config.js?v=v79';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v79';
-import { FrogModel } from './frog.js?v=v79';
-import { Grapple, GrappleState } from './grapple.js?v=v79';
-import { Combat, Health } from './combat.js?v=v79';
-import { Stamina } from './stamina.js?v=v79';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v79';
-import { Audio } from './audio.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
+import { CFG } from './config.js?v=v80';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v80';
+import { FrogModel } from './frog.js?v=v80';
+import { Grapple, GrappleState } from './grapple.js?v=v80';
+import { Combat, Health } from './combat.js?v=v80';
+import { Stamina } from './stamina.js?v=v80';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v80';
+import { Audio } from './audio.js?v=v80';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -76,6 +76,15 @@ export class Player {
     this.damageMultiplier = 1;     // broken sword scales this down
     this.justParried = 0;
     this.justKnockedDown = false;
+
+    /**
+     * What to do when a CONSUMABLE hotbar slot is pressed.
+     *
+     * Set by whichever mode put one there — only the open world does — and
+     * called with the item. Left null everywhere else, so the arena, the
+     * story and the dungeon are unchanged.
+     */
+    this.onUseItem = null;
 
     // --- abilities ---
     this.abilityCd = {};       // id -> seconds remaining
@@ -380,7 +389,12 @@ export class Player {
         if (!input.consume(SLOT_KEYS[i])) continue;
         const slot = this.inventory.slots[i];
         if (slot && slot.item.ability) this._useAbility(slot.item.id);
-        else if (this.inventory.select(i)) Audio.uiClick();
+        // A consumable is USED, and what using it means belongs to the mode
+        // that put it there — the open world's meal comes out of a bag this
+        // controller knows nothing about.
+        else if (slot && slot.item.consume) {
+          if (this.onUseItem) this.onUseItem(slot.item);
+        } else if (this.inventory.select(i)) Audio.uiClick();
       }
       const wheel = input.takeWheel();
       if (wheel) this._cycleSlot(wheel);

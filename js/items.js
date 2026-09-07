@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
-import { CFG } from './config.js?v=v79';
-import { clamp } from './util.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
+import { CFG } from './config.js?v=v80';
+import { clamp } from './util.js?v=v80';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -32,6 +32,15 @@ export const ITEMS = {
   // rather than selecting them — there is nothing else to do with one.
   invisibility: { id: 'invisibility', name: 'Vanish', infinite: true, ability: true },
   shadowclone: { id: 'shadowclone', name: 'Clone', infinite: true, ability: true },
+  /**
+   * The open world's quick meal.
+   *
+   * Marked `consume` rather than `ability`: pressing its key USES it, like an
+   * ability, but it has a count and can run out, like the kunai. The bag is
+   * where you choose what to eat at leisure; this is the one you can reach
+   * with a guardian swinging at you.
+   */
+  meal: { id: 'meal', name: 'Meal', infinite: false, consume: true },
 };
 
 /** Inline SVG icons, drawn to read clearly at hotbar size. */
@@ -74,6 +83,17 @@ export const ITEM_ICONS = {
     </g>
     <g fill="#12121a"><rect x="20" y="14" width="3" height="3"/><rect x="26" y="14" width="3" height="3"/></g>
   </svg>`,
+  meal: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <ellipse cx="16" cy="20" rx="12" ry="7" fill="#8b6b3a"/>
+    <ellipse cx="16" cy="18.5" rx="11" ry="6" fill="#c9a227"/>
+    <ellipse cx="16" cy="17.5" rx="8" ry="4" fill="#e8734a"/>
+    <g fill="#6cc24a">
+      <rect x="10" y="14" width="4" height="2"/><rect x="18" y="15" width="4" height="2"/>
+    </g>
+    <g fill="#efe6cf" opacity="0.85">
+      <rect x="13" y="6" width="2" height="6"/><rect x="17" y="7" width="2" height="5"/>
+    </g>
+  </svg>`,
 };
 
 export class Inventory {
@@ -113,10 +133,11 @@ export class Inventory {
 
   select(index) {
     if (index < 0 || index >= this.slots.length) return false;
-    // Abilities are fired, never held. Selecting one would leave you with
-    // no weapon in hand, which is not a state the game should allow.
+    // Abilities are fired, never held; a meal is eaten, never held. Selecting
+    // either would leave you with no weapon in hand, which is not a state the
+    // game should allow.
     const s = this.slots[index];
-    if (s && s.item.ability) return false;
+    if (s && (s.item.ability || s.item.consume)) return false;
     if (index === this.selected) return false;
     this.selected = index;
     this.dirty = true;
@@ -171,6 +192,24 @@ export class Inventory {
         : null;
     }
     // Never leave the cursor parked on a slot that just emptied.
+    if (!this.slots[this.selected]) this.selected = 0;
+    this.dirty = true;
+  }
+
+  /**
+   * Put the open world's quick meal in the last slot (key 0), or clear it.
+   *
+   * The LAST slot on purpose: one, three and four are the katana, the kunai
+   * and the abilities, and those bindings are muscle memory from every other
+   * mode in the game. A meal that moved them would cost more than it saves.
+   */
+  setMeal(count) {
+    const last = this.slots.length - 1;
+    const want = count > 0 ? { item: ITEMS.meal, count } : null;
+    const had = this.slots[last];
+    if (!want && !had) return;
+    if (want && had && had.item === ITEMS.meal && had.count === count) return;
+    this.slots[last] = want;
     if (!this.slots[this.selected]) this.selected = 0;
     this.dirty = true;
   }

@@ -34,7 +34,7 @@
  * below is the only place that arithmetic lives.
  */
 
-import { clamp, smoothstep } from './util.js?v=v79';
+import { clamp, smoothstep } from './util.js?v=v80';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 3072;

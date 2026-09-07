@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
@@ -34,70 +34,70 @@ const G = {
  */
 export const GUARDIANS = [
   {
-    name: 'GROTT, THE GATE-KEEPER',
+    id: 'grott', name: 'GROTT, THE GATE-KEEPER',
     body: 'hulk', skin: 0x6f7a3e, dark: 0x4a5228, trim: 0x9a7d33,
     head: 'toad', weapon: 'club', horns: 0, eyes: 0xff5a2c,
     moves: ['slam', 'slam', 'combo'],
     blurb: 'Slow. Enormous. Hits like a falling wall.',
   },
   {
-    name: 'SILT, WARDEN OF THE SHALLOWS',
+    id: 'silt', name: 'SILT, WARDEN OF THE SHALLOWS',
     body: 'lean', skin: 0x4a6b6f, dark: 0x2e4a4e, trim: 0x8fc4c9,
     head: 'eel', weapon: 'spear', horns: 0, eyes: 0x8fe8ff,
     moves: ['leap', 'combo', 'leap'],
     blurb: 'Leaps the whole room and lands on your head.',
   },
   {
-    name: 'BRACK, THE THREE-STROKE',
+    id: 'brack', name: 'BRACK, THE THREE-STROKE',
     body: 'lean', skin: 0x7a4a2a, dark: 0x53301a, trim: 0xd9a05a,
     head: 'toad', weapon: 'twin', horns: 2, eyes: 0xffb03c,
     moves: ['combo', 'combo', 'charge'],
     blurb: 'Three strokes, always three, and never a pause between them.',
   },
   {
-    name: 'MOSSHIDE, THE PATIENT',
+    id: 'mosshide', name: 'MOSSHIDE, THE PATIENT',
     body: 'hulk', skin: 0x3f5f2c, dark: 0x27401b, trim: 0x8fc44a,
     head: 'mossy', weapon: 'none', horns: 0, eyes: 0xc9ff6b,
     moves: ['spores', 'slam', 'spores'],
     blurb: 'Does not chase. Fills the room instead.',
   },
   {
-    name: 'VARN, WHO CAME RUNNING',
+    id: 'varn', name: 'VARN, WHO CAME RUNNING',
     body: 'lean', skin: 0x8a3a2a, dark: 0x5c2318, trim: 0xffb03c,
     head: 'horned', weapon: 'club', horns: 2, eyes: 0xff7a3c,
     moves: ['charge', 'charge', 'combo'],
     blurb: 'Crosses the room before you have finished reading this.',
   },
   {
-    name: 'THE QUARRY-HAND',
+    id: 'quarryhand', name: 'THE QUARRY-HAND',
     body: 'stone', skin: 0x6d6a63, dark: 0x46443f, trim: 0x9a9790,
     head: 'blunt', weapon: 'none', horns: 0, eyes: 0xffd76b,
     moves: ['throw', 'throw', 'shockwave'],
     blurb: 'Never comes close. Never needs to.',
   },
   {
-    name: 'OKKA, TWICE-DROWNED',
+    id: 'okka', name: 'OKKA, TWICE-DROWNED',
     body: 'lean', skin: 0x2e4a6b, dark: 0x1b2f46, trim: 0x6fa8d9,
     head: 'eel', weapon: 'twin', horns: 0, eyes: 0x8fd8ff,
     moves: ['blink', 'combo', 'blink', 'volley'],
     blurb: 'Is not where you last saw it.',
   },
   {
-    name: 'THE PALE CROAK',
+    id: 'palecroak', name: 'THE PALE CROAK',
     body: 'wraith', skin: 0xcfc5b4, dark: 0x9a9280, trim: 0xffffff,
     head: 'skull', weapon: 'none', horns: 0, eyes: 0xd8f0ff,
     moves: ['volley', 'ringout', 'volley'],
     blurb: 'Sings, and the room fills with teeth.',
   },
   {
-    name: 'HULDR, SPINE OF THE DEEP',
+    id: 'huldr', name: 'HULDR, SPINE OF THE DEEP',
     body: 'hulk', skin: 0x4a3a6b, dark: 0x2e2346, trim: 0xa88fd9,
     head: 'horned', weapon: 'great', horns: 4, eyes: 0xc9a0ff,
     moves: ['spin', 'slam', 'spin', 'combo'],
     blurb: 'Turns, and the turn is the attack.',
   },
   {
-    name: 'THE STONE THAT WALKS',
+    id: 'stonewalks', name: 'THE STONE THAT WALKS',
     body: 'stone', skin: 0x53504a, dark: 0x33312d, trim: 0xc9a227,
     head: 'blunt', weapon: 'great', horns: 0, eyes: 0xff8a3c,
     moves: ['shockwave', 'slam', 'shockwave', 'charge'],
@@ -108,7 +108,7 @@ export const GUARDIANS = [
   // of the run is pulled back slightly — the shape of each fight is
   // unchanged, there is just a little less of it.
   {
-    name: 'NIX, LAST OF THE CHOIR',
+    id: 'nix', name: 'NIX, LAST OF THE CHOIR',
     body: 'wraith', skin: 0x2a2a44, dark: 0x16162a, trim: 0x6cc2ff,
     head: 'skull', weapon: 'spear', horns: 0, eyes: 0x6cf0ff,
     moves: ['volley', 'blink', 'volley', 'ringout'],
@@ -116,7 +116,7 @@ export const GUARDIANS = [
     blurb: 'Sings three notes. All of them arrive.',
   },
   {
-    name: 'GRAVEWATER',
+    id: 'gravewater', name: 'GRAVEWATER',
     body: 'hulk', skin: 0x2f4a3a, dark: 0x1b2f24, trim: 0x6fd99a,
     head: 'mossy', weapon: 'none', horns: 0, eyes: 0x8fffc4,
     moves: ['puddle', 'leap', 'puddle', 'combo'],
@@ -124,7 +124,7 @@ export const GUARDIANS = [
     blurb: 'Leaves the floor behind it worse than it found it.',
   },
   {
-    name: 'THE HOLLOW KING',
+    id: 'hollowking', name: 'THE HOLLOW KING',
     body: 'wraith', skin: 0x3a2a4a, dark: 0x231830, trim: 0xffd76b,
     head: 'crowned', weapon: 'great', horns: 3, eyes: 0xffd76b,
     moves: ['spin', 'charge', 'volley', 'combo', 'shockwave'],
@@ -132,14 +132,90 @@ export const GUARDIANS = [
     blurb: 'Wore a crown once. Still behaves as though it does.',
   },
   {
-    name: 'ZEHL, THE FINAL GUARDIAN',
+    id: 'zehl', name: 'ZEHL, THE FINAL GUARDIAN',
     body: 'hulk', skin: 0x1f1f2e, dark: 0x101018, trim: 0xff5a3c,
     head: 'crowned', weapon: 'great', horns: 4, eyes: 0xff3c2c,
     moves: ['combo', 'charge', 'shockwave', 'volley', 'spin', 'slam', 'blink'],
     tune: 0.85,
     blurb: 'The last thing between you and the door.',
   },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE OVERWORLD'S OWN
+  //
+  // The fourteen above are the dungeon's, in the order you meet them going
+  // down. These seven never had a room: they belong to the realm, and each
+  // one is there because a region needed something of its own to be about.
+  // They are built out of the same primitives, so none of them can invent an
+  // unfair attack — only recombine fair ones.
+  // ══════════════════════════════════════════════════════════════════════════
+  {
+    id: 'tidemother', name: 'THE TIDEMOTHER, SWOLLEN',
+    body: 'hulk', skin: 0x3f6a63, dark: 0x24443f, trim: 0x9fe0d0,
+    head: 'toad', weapon: 'none', horns: 0, eyes: 0xbdf6ff,
+    moves: ['puddle', 'slam', 'shockwave', 'puddle'],
+    tune: 0.92,
+    blurb: 'The fen rises when she moves. She has never had to chase anything.',
+  },
+  {
+    id: 'whisperweed', name: 'WHISPERWEED',
+    body: 'wraith', skin: 0x35662c, dark: 0x1f3f1a, trim: 0xc9ff6b,
+    head: 'mossy', weapon: 'none', horns: 0, eyes: 0xdcff8a,
+    moves: ['spores', 'spores', 'leap', 'ringout'],
+    tune: 0.90,
+    blurb: 'It is not one plant. You will work that out too late.',
+  },
+  {
+    id: 'skarn', name: 'SKARN, THE RUSTED KNIGHT',
+    body: 'stone', skin: 0x7a5a3a, dark: 0x4a3422, trim: 0xd9b06a,
+    head: 'blunt', weapon: 'great', horns: 1, eyes: 0xffb03c,
+    moves: ['combo', 'charge', 'combo', 'slam'],
+    tune: 0.89,
+    blurb: 'Every joint screams. It has not stopped him for four hundred years.',
+  },
+  {
+    id: 'glassback', name: 'GLASSBACK',
+    body: 'stone', skin: 0x5a6a8a, dark: 0x36415a, trim: 0xa8d8ff,
+    head: 'skull', weapon: 'none', horns: 2, eyes: 0x8fe8ff,
+    moves: ['spin', 'ringout', 'charge', 'spin'],
+    tune: 0.88,
+    blurb: 'The shell throws your own blows back at you. Aim for the seams.',
+  },
+  {
+    id: 'lanternbearer', name: 'THE LANTERN-BEARER',
+    body: 'wraith', skin: 0x2e3a44, dark: 0x1a222a, trim: 0xffd76b,
+    head: 'skull', weapon: 'spear', horns: 0, eyes: 0xffe9a8,
+    moves: ['blink', 'volley', 'blink', 'combo'],
+    tune: 0.87,
+    blurb: 'Follow the light. That is what it is for.',
+  },
+  {
+    id: 'twincroaks', name: 'THE TWIN CROAKS',
+    body: 'lean', skin: 0x6a4a7a, dark: 0x412e4c, trim: 0xe0a8ff,
+    head: 'horned', weapon: 'twin', horns: 2, eyes: 0xe8b0ff,
+    moves: ['combo', 'leap', 'combo', 'blink'],
+    tune: 0.87,
+    blurb: 'One of them is always behind you. They take turns being the one.',
+  },
+  {
+    id: 'volkh', name: 'VOLKH, THE EMBER-EATER',
+    body: 'hulk', skin: 0x6a2a1a, dark: 0x3f1610, trim: 0xff8a3c,
+    head: 'horned', weapon: 'club', horns: 3, eyes: 0xffca4a,
+    moves: ['charge', 'shockwave', 'slam', 'volley', 'charge'],
+    tune: 0.85,
+    blurb: 'It eats fire and breathes it back out bigger. It has been growing.',
+  },
 ];
+
+/**
+ * By stable id — how the region table and the save file name them.
+ *
+ * The dungeon addresses guardians by INDEX (`GUARDIANS[room]`), which is why
+ * the seven overworld ones are appended rather than slotted in: rooms one to
+ * fourteen have to keep pointing at the same fourteen creatures, and a save
+ * that says a boss is dead has to still mean that boss.
+ */
+export const GUARDIAN_BY_ID = new Map(GUARDIANS.map((g) => [g.id, g]));
 
 /**
  * Build a guardian's body from its spec.

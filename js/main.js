@@ -5,34 +5,36 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v79';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v79';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v79';
-import { Input } from './input.js?v=v79';
-import { Audio } from './audio.js?v=v79';
-import { World } from './world.js?v=v79';
-import { Effects } from './effects.js?v=v79';
-import { Atmosphere } from './atmosphere.js?v=v79';
-import { FollowCamera } from './camera.js?v=v79';
-import { Player } from './player.js?v=v79';
-import { RemotePlayer } from './remote.js?v=v79';
-import { HUD } from './hud.js?v=v79';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v79';
-import { FrogModel } from './frog.js?v=v79';
-import { DummyField } from './dummy.js?v=v79';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v79';
-import { ToadModel } from './npc.js?v=v79';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v79';
-import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v79';
-import { DungeonRun } from './dungeon.js?v=v79';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v79';
-import { JudgmentRun } from './judgment.js?v=v79';
-import { COMBO_NAMES } from './ascended.js?v=v79';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v79';
-import { MenuScene } from './menu.js?v=v79';
-import { Economy } from './economy.js?v=v79';
-import { Shop } from './shop.js?v=v79';
-import { Network, NetRole } from './net.js?v=v79';
+import * as THREE from '../lib/three.module.js?v=v80';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v80';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v80';
+import { Input } from './input.js?v=v80';
+import { Audio } from './audio.js?v=v80';
+import { World } from './world.js?v=v80';
+import { Effects } from './effects.js?v=v80';
+import { Atmosphere } from './atmosphere.js?v=v80';
+import { FollowCamera } from './camera.js?v=v80';
+import { Player } from './player.js?v=v80';
+import { RemotePlayer } from './remote.js?v=v80';
+import { HUD } from './hud.js?v=v80';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v80';
+import { FrogModel } from './frog.js?v=v80';
+import { DummyField } from './dummy.js?v=v80';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v80';
+import { ToadModel } from './npc.js?v=v80';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v80';
+import { StoryMode, STORY_PHASE, STORY_PHASE_CODE, PRISON_CODE } from './story.js?v=v80';
+import { DungeonRun } from './dungeon.js?v=v80';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v80';
+import { JudgmentRun } from './judgment.js?v=v80';
+import { COMBO_NAMES } from './ascended.js?v=v80';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v80';
+import { MenuScene } from './menu.js?v=v80';
+import { Economy } from './economy.js?v=v80';
+import { Shop } from './shop.js?v=v80';
+import { Network, NetRole } from './net.js?v=v80';
+import { Overworld } from './overworld.js?v=v80';
+import { InventoryScreen } from './inventoryui.js?v=v80';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -85,6 +87,12 @@ class Game {
     this.hud = new HUD();
     this.hud.show(false);
     this.hud.setFroglets(this.economy.froglets);
+
+    // The Tab inventory is built once and borrows the renderer for its
+    // paperdoll. It only ever opens in the open world.
+    this.inventoryUI = new InventoryScreen(this.renderer, () => {
+      if (this.overworld) this.overworld.applyStats();
+    });
 
     this.menuScene = new MenuScene(this.renderer);
     this._resize();
@@ -300,6 +308,15 @@ class Game {
       this.pendingMode = 'story';
       if (this.net.isOnline && this.net.connected) this._enterGame();
       else this._connect('solo', null);
+    };
+
+    // --- the open world: solo, offline, and it remembers everything ---
+    $('btn-realm').onclick = () => {
+      Audio.uiClick();
+      Audio.init(); Audio.resume();
+      this.pendingMode = 'realm';
+      if (this.net.isOnline) this.net.disconnect();
+      this._enterGame();
     };
 
     // --- the dungeon: solo, offline, and the run style is fixed up front ---
@@ -814,6 +831,13 @@ class Game {
       await this._enterDungeon(loading, bar, label, frame, this._dungeonCheckpoints);
       return;
     }
+    // The open world builds its own realm, in its own scene.
+    if (this.pendingMode === 'realm') {
+      this.pendingMode = null;
+      this.sessionMode = 'realm';
+      await this._enterRealm(loading, bar, label, frame);
+      return;
+    }
     // And the judgment arena, reached only through the statue.
     if (this.pendingMode === 'judgment') {
       this.pendingMode = null;
@@ -1285,6 +1309,214 @@ class Game {
         done(0);
       };
     });
+  }
+
+  /**
+   * Build and enter the open world.
+   *
+   * Same shape as the dungeon entry — its own scene, its own loop, solo and
+   * offline — but a great deal more of it: the ground is streamed, the props
+   * are streamed, and the boss fights build and drop themselves as you walk.
+   *
+   * Solo for the same reason the dungeon is. Every guardian is a hand-tuned
+   * fight with a health bar and a telegraph, the quests read one save, and
+   * the whole thing is built around walking away and coming back — none of
+   * which survives a shared clock.
+   */
+  async _enterRealm(loading, bar, label, frame) {
+    this.isRealm = true;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight,
+      CFG.camera.near, 2600);
+    this.effects = new Effects(this.scene, this.camera);
+
+    const prof = this.profile;
+    this.overworld = new Overworld({
+      scene: this.scene,
+      effects: this.effects,
+      hud: this.hud,
+      camera: this.camera,
+      economy: this.economy,
+      inventory: this.inventoryUI,
+      color: prof.color,
+      skins: this.equippedSkins,
+    });
+
+    const tasks = this.overworld.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 94) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+
+    this.world = { collision: this.overworld.collision, update: () => {} };
+    this.followCam = new FollowCamera(this.camera, this.overworld.collision);
+    this.overworld.followCam = this.followCam;
+
+    /**
+     * One atmosphere for the whole realm, retuned as you cross regions.
+     *
+     * Not one per region: the sky sphere, the sun and the cloud field are the
+     * expensive parts and rebuilding them at a border would be a hitch every
+     * time you walked into a new place. The Overworld damps the fog, the sky
+     * colours and the sun toward whatever region you are standing in, so the
+     * Emberwaste's red haze arrives over a couple of seconds of walking.
+     */
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: this.quality.leaves,
+      cloudCount: this.quality.clouds,
+      shadows: this.quality.shadows,
+      fogNear: 70, fogFar: 620,
+    });
+    this.overworld.atmo = this.atmo;
+    this.renderer.setClearColor(0x79bfee);
+
+    this.dummies = new DummyField(this.scene);
+    this.kunaiSystem = new KunaiSystem(this.scene, this.overworld.collision,
+      this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
+    this.pickups = null;
+
+    bar.style.width = '100%';
+    await frame();
+
+    if (this.player) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.player = new Player({
+      id: 'local', name: prof.name, color: prof.color,
+      world: this.world, effects: this.effects, scene: this.scene,
+      kunai: this.kunaiSystem, pickups: null, skins: this.equippedSkins,
+    });
+    this.player.combatEnabled = true;
+    // Kunai are the realm's ranged option and there are no supply crates in
+    // three thousand units of wilderness to refill them from.
+    this.player.inventory.setUnlimitedKunai(true);
+    this.player.inventory.setAbilities(this.shop.equippedAbilities());
+
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.onSlotClick = (i) => {
+      const slot = this.player.inventory.slots[i];
+      if (slot && slot.item.ability) this.player._useAbility(slot.item.id);
+      // Clicking the meal eats it, exactly as its key does.
+      else if (slot && slot.item.consume) this.overworld.eatQuick();
+      else if (this.player.inventory.select(i)) Audio.uiClick();
+    };
+    this.hud.resetOverlays();
+    this.hud.show(true);
+    this.hud.setRoom('', 'The Realm', false);
+
+    this.overworld.start(this.player);
+    this.followCam.snapTo(this.player.pos);
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.startAmbient();
+    Audio.stopMenuMusic();
+    this.hud.toast('TAB bag · J log · M map · E talk', 8);
+    this._resize();
+  }
+
+  /**
+   * One frame of the open world.
+   *
+   * The panels — bag, log, map, dialogue — freeze the simulation rather than
+   * running beside it. That is deliberate: they are read while standing in a
+   * field with a guardian somewhere over the hill, and a mob that keeps
+   * swinging at a player reading their inventory is a mob nobody can answer.
+   */
+  _updateRealm(dt, t) {
+    const p = this.player;
+    const ow = this.overworld;
+    if (this.frozen) { this._renderRealm(); return; }
+
+    // The panels have the keyboard while one is open, and the world holds
+    // still behind them.
+    if (ow.frozen) {
+      ow.update(dt, p, this.input, () => {});
+      this._renderRealm();
+      return;
+    }
+
+    const look = this.input.takeLook();
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+
+    const targets = ow.targets();
+    p.update(dt, this.input, this.followCam, targets);
+    this.kunaiSystem.update(dt, targets);
+    if (p.deathPending) p.deathPending = false;
+
+    // The katana reports hits as queued events because in the arena they have
+    // to reach the victim's machine. Nothing out here is networked, so this is
+    // where they land.
+    for (const ev of p.events) {
+      if (ev.t === 'hit') this.hud.hitmarker(ev.c === 2);
+    }
+    p.events.length = 0;
+
+    ow.update(dt, p, this.input, (dmg, from) => this._realmHit(dmg, from));
+
+    this.effects.update(dt);
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    if (!p.cinematic) {
+      this.followCam.update(p.renderPos, speed, dt, {
+        dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        sprinting: p.sprinting,
+      });
+    }
+    this.atmo.update(dt, this.camera.position);
+    this._updateHud(dt, speed);
+    this._updateAudioListener();
+    Audio.updateAmbient(dt);
+    this._renderRealm();
+  }
+
+  /** The world, then the inventory's frog on top of it. */
+  _renderRealm() {
+    this.renderer.render(this.scene, this.camera);
+    if (this.inventoryUI) this.inventoryUI.render();
+  }
+
+  /**
+   * Something in the realm hit the player.
+   *
+   * Routed through `Progress.damageTaken` so armour actually does something,
+   * and through the player's own parry so guarding works out here exactly as
+   * it does in the dungeon.
+   */
+  _realmHit(damage, from) {
+    const p = this.player;
+    if (!p || p.health.dead || p.health.protected || p.dashTimer > 0) return;
+    if (p.parrying) {
+      p.parryHits++;
+      p.justParried = 0.2;
+      const dx = p.pos.x - (from ? from.x : p.pos.x);
+      const dz = p.pos.z - (from ? from.z : p.pos.z);
+      const len = Math.hypot(dx, dz) || 1;
+      if (p.parryHits >= CFG.story.parry.knockdownAfter) {
+        p._breakParry(dx / len, dz / len);
+        this.hud.toast('GUARD BROKEN', 1.2);
+        this.followCam.shake(0.6);
+      } else {
+        this.hud.toast('PARRIED', 0.5);
+        Audio.parry(p.pos);
+        this.followCam.shake(0.25);
+      }
+      return;
+    }
+    const dealt = Math.round(this.overworld.progress.damageTaken(damage));
+    p.health.damage(dealt, 'realm');
+    _v3.set(p.pos.x, p.pos.y + 1.2, p.pos.z);
+    this.effects.damageNumber(_v3, dealt, dealt > 40);
+    this.hud.damageFlash(clamp(dealt / 60, 0.3, 1));
+    this.followCam.shake(clamp(dealt / 40, 0.3, 1.1));
+    Audio.hurt(p.pos);
+    if (p.health.dead) this.hud.showRespawn(3.2, null);
   }
 
   /**
@@ -1833,7 +2065,9 @@ class Game {
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
     // The practice ring's try-out panel and the dev menu also release the
     // mouse on purpose, and neither should drop the pause screen on top.
-    if (this.mode === 'playing' && !locked && !voting
+    // Nor should the realm's own panels — the bag is meant to be clicked.
+    const panel = !!(this.overworld && this.overworld.frozen);
+    if (this.mode === 'playing' && !locked && !voting && !panel
       && !this._tryPanelOpen && !this.cheatsOpen) this._pause();
     else if (this.mode === 'paused' && locked) this._resume();
   }
@@ -1852,7 +2086,11 @@ class Game {
     if (this.mode !== 'playing') return;
     this.mode = 'paused';
     $('pause').classList.add('show');
-    $('pause-room').textContent = this.isDungeon
+    $('pause-room').textContent = this.isRealm
+      ? (this.overworld && this.overworld.region
+        ? `The Realm — ${this.overworld.region.name}`
+        : 'The Realm')
+      : this.isDungeon
       ? (this.dungeon && this.dungeon.checkpoints
         ? 'The Dungeon — checkpoints on'
         : 'The Dungeon — no checkpoints')
@@ -1897,6 +2135,22 @@ class Game {
       this.atmo = null;
       this.player = null;
       this.pickups = null;
+    }
+    // The realm is three thousand units of streamed ground plus every camp,
+    // village and guardian in it. All of it goes, and the save is written on
+    // the way out by `Overworld.dispose`.
+    if (this.isRealm) {
+      if (this.overworld) this.overworld.dispose();
+      this.overworld = null;
+      this.isRealm = false;
+      this.world = null;
+      this.scene = null;
+      this.atmo = null;
+      this.player = null;
+      this.pickups = null;
+      this.kunaiSystem = null;
+      this.effects = null;
+      this.followCam = null;
     }
     // Story keeps a whole separate scene; drop it so a later arena match
     // does not inherit the swamp.
@@ -2033,6 +2287,7 @@ class Game {
 
       // Each mode is its own loop; they share the renderer and nothing else.
       if (this.isJudgment) this._updateJudgment(dt, t);
+      else if (this.isRealm) this._updateRealm(dt, t);
       else if (this.isDungeon) this._updateDungeon(dt, t);
       else if (this.isStory) this._updateStory(dt, t);
       else this._updateGame(dt, t);
@@ -2053,8 +2308,9 @@ class Game {
     // dev menu is open — it needs the cursor, and the prompt would sit on
     // top of it and grab the very click meant for a cheat button.
     const voting = this.round && this.round.phase === PHASE.VOTING && !this.isStory;
+    const panel = !!(this.overworld && this.overworld.frozen);
     const want = this.mode === 'playing' && !this.input.locked
-      && !voting && !this._tryPanelOpen && !this.cheatsOpen;
+      && !voting && !panel && !this._tryPanelOpen && !this.cheatsOpen;
     if (want === this._ctpShown) return;
     this._ctpShown = want;
     $('click-to-play').classList.toggle('show', want);
@@ -3047,6 +3303,22 @@ class Game {
    * a kunai stops curving once its target dies or disconnects.
    */
   _resolveAimTarget(id, out) {
+    /**
+     * The realm's targets are whatever is near enough to be live.
+     *
+     * Asked by ID rather than handed the object, because a kunai in flight
+     * outlives its target: the mob it was thrown at can die, and its camp can
+     * despawn, between the throw and the landing. Not finding the id is the
+     * answer — the kunai stops curving and flies straight.
+     */
+    if (this.overworld) {
+      for (const t of this.overworld.targets()) {
+        if (t.id !== id) continue;
+        out.set(t.pos.x, t.pos.y + t.hitbox.bodyOffset, t.pos.z);
+        return true;
+      }
+      return false;
+    }
     // The dungeon's boss is the only thing in the room worth curving toward.
     if (this.dungeon) {
       const b = this.dungeon.bossTarget();
@@ -3158,8 +3430,10 @@ class Game {
     // village's fruit stalls, and _updateFruitStalls owns it. Setting it here
     // too would blank their prompt on the same frame it appeared.
     // The statue's prompt takes precedence when it is up, or the two would
-    // fight over the same element every frame.
-    if (!this.isStory && !this._statuePrompt) {
+    // fight over the same element every frame. The realm owns the prompt
+    // outright — it is how you talk to people and examine places, and there
+    // are no supply crates out there to compete for it.
+    if (!this.isStory && !this.isRealm && !this._statuePrompt) {
       this.hud.setPickupPrompt(
         !!this.pickups && !p.health.dead && !!this.pickups.nearest(p.pos));
     }

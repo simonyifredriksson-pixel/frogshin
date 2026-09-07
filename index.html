@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v79" />
+<link rel="stylesheet" href="css/style.css?v=v80" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -142,6 +142,12 @@
            no weapons yet, but you keep your dash and tongue. Host a room first
            if you want company, then start the story.</p>
 
+        <div class="divider"><span>THE REALM</span></div>
+        <button class="btn btn-realm" id="btn-realm"><span>THE REALM — OPEN WORLD</span></button>
+        <p class="note">Three thousand units of it, thirteen regions, twenty-two
+           guardians and Frogath at the top. Levels, gear, quests, people and a
+           bag you open with <b>TAB</b>. Solo, and it saves itself.</p>
+
         <div class="divider"><span>THE DUNGEON</span></div>
         <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON — 15 BOSSES</span></button>
         <p class="note">Fifteen guardians, each harder than the last, and
@@ -268,9 +274,20 @@
               <li><kbd>LMB</kbd><span>Attack — swing the katana, or throw the equipped kunai</span></li>
               <li><kbd>RMB</kbd><span>Parry — hold, katana only</span></li>
               <li><kbd>1</kbd><kbd>2</kbd>…<kbd>0</kbd><span>Hotbar — or click a slot</span></li>
-              <li><kbd>E</kbd><span>Pick up a kunai crate</span></li>
-              <li><kbd>TAB</kbd><span>Scoreboard</span></li>
+              <li><kbd>E</kbd><span>Pick up a kunai crate — or, in the Realm, talk / examine</span></li>
+              <li><kbd>TAB</kbd><span>Scoreboard — or, in the Realm, your bag</span></li>
               <li><kbd>ESC</kbd><span>Pause</span></li>
+            </ul>
+
+            <h3>IN THE REALM</h3>
+            <ul class="keys">
+              <li><kbd>TAB</kbd><span>The bag — weapons, kunai, armour, food, materials, key items</span></li>
+              <li><kbd>J</kbd><span>Quest log</span></li>
+              <li><kbd>M</kbd><span>Map of the realm</span></li>
+              <li><kbd>E</kbd><span>Talk to whoever is in front of you, or examine the place you are standing</span></li>
+              <li><kbd>0</kbd><span>Eat your best meal without opening anything</span></li>
+              <li><kbd>←</kbd><kbd>→</kbd><span>In the bag: switch tab (or <kbd>Q</kbd> / <kbd>E</kbd>)</span></li>
+              <li><kbd>ENTER</kbd><span>In the bag: equip, take off, or eat</span></li>
             </ul>
           </div>
 
@@ -285,6 +302,18 @@
               <li><b>Juggernaut.</b> One player becomes an armoured toad with a huge katana, endless kunai and a mountain of health — but moves at half speed and barely benefits from sprinting. Its katana hits for a flat 50. It cannot grapple — <kbd>G</kbd> instead charges a leap at whatever you are looking at, winding up for 0.5s to 1.5s depending how far you are throwing yourself. It wins by putting every frog out; the frogs win by bringing it down. <b>Needs 3 players.</b></li>
               <li>In Tag and Infection there is <b>no damage at all</b> — both the kunai <i>and</i> the katana tag instead of wounding, so it is a pure chase.</li>
               <li><b>Spectating.</b> Knocked out of a juggernaut round, you keep flying around with endless kunai but are invisible and cannot touch anyone (or be touched), and cannot take crates. You rejoin when the round ends.</li>
+              <li><b>The Realm.</b> Solo, and it saves itself. Three thousand
+                 units across, thirteen regions from the Lily Shallows to the
+                 Ashen Throne, twenty-two guardians each in its own habitat and
+                 Frogath at the top of it. You gain levels, hearts, attack and
+                 defence; you find weapons, armour, food and materials; you
+                 carry them in a bag you open with <kbd>TAB</kbd>. There are
+                 people to talk to, a main story, eight side tasks, ten secrets
+                 that nobody tells you about, and camps of things between every
+                 pair of them. <b>Die and you wake up at the last village or
+                 shrine you stood in, keeping everything.</b> Walk away from a
+                 guardian and the fight resets — so a fight you cannot win yet
+                 is a fight to come back to.</li>
               <li><b>The Dungeon.</b> Solo. Fifteen boss rooms, each guardian tougher than the last, and endless kunai throughout. Choose <b>checkpoints</b> (die and restart the room) or <b>no checkpoints</b> (die and go back to room one). Clearing a room heals you. Every attack in the dungeon shows a marker on the floor before it can hurt you, and the marker is exactly the size of the thing that hits you. <b>A red ring means move out of it. An amber ring is a ground wave — jump it</b> (a dash works too). Read it, dodge it, punish the recovery. At the bottom is <b>FROGATH, THE FIRST CROAK</b>. He floats, he does not miss, and he is the reason the other fourteen were put there.</li>
             </ul>
           </div>
@@ -712,12 +741,72 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════ INVENTORY ══
+     Opened with TAB in the open world. Everything inside is built by
+     inventoryui.js from the save.
+
+     `.inv-doll` MUST stay transparent: the frog inside it is drawn by the
+     game's own renderer straight through the panel, so a background there
+     covers the only thing that box exists for. -->
+<div id="inv" class="hidden">
+  <div class="inv-frame">
+    <div class="inv-titlebar">
+      <b>THE BAG</b>
+      <div id="inv-head" class="inv-head"></div>
+    </div>
+    <div id="inv-tabs" class="inv-tabs"></div>
+    <div class="inv-body">
+      <div class="inv-left">
+        <div id="inv-grid" class="inv-grid"></div>
+      </div>
+      <div class="inv-right">
+        <div id="inv-doll" class="inv-doll"></div>
+        <div id="inv-worn" class="inv-wornlist"></div>
+        <div id="inv-detail" class="inv-detail"></div>
+      </div>
+    </div>
+    <div id="inv-foot" class="inv-foot"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ DIALOGUE ══
+     One NPC line at a time, advanced with E. -->
+<div id="talk" class="hidden">
+  <div class="talk-card">
+    <div class="talk-who" id="talk-who">—</div>
+    <div class="talk-say" id="talk-say"></div>
+    <div class="talk-more"><b>E</b> continue &nbsp;·&nbsp; <b>ESC</b> leave</div>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════ QUEST / MAP ══
+     Quest log (J) and the realm map (M), both read from the save. -->
+<div id="questlog" class="hidden">
+  <div class="ql-frame">
+    <div class="ql-title">THE ROAD SO FAR</div>
+    <div id="ql-body" class="ql-body"></div>
+    <div class="ql-foot"><b>J</b> close</div>
+  </div>
+</div>
+
+<div id="realmmap" class="hidden">
+  <div class="rm-frame">
+    <div class="rm-title">THE REALM</div>
+    <div class="rm-plot"><canvas id="rm-canvas" width="720" height="720"></canvas></div>
+    <div id="rm-legend" class="rm-legend"></div>
+    <div class="rm-foot"><b>M</b> close</div>
+  </div>
+</div>
+
+<!-- Region crossing banner, centred and brief -->
+<div id="region-banner"><b id="rb-region">—</b><span id="rb-blurb"></span></div>
+
 <!-- Full-screen fade, above everything: used by the story's defeat sequence -->
 <div id="fade"></div>
 
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v79"></script>
+<script type="module" src="js/main.js?v=v80"></script>
 </body>
 </html>
