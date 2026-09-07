@@ -83,9 +83,11 @@ export const GEAR = [
     'Still warm. It has not been near a fire in years.', ['Burning']),
   W('hollow-kings-blade', "The Hollow King's Blade", 5, 3, 34, 1200, '⚔',
     'He was holding it when the city emptied. He never let go.'),
-  W('frogshin', 'FROGSHIN', 5, 3, 30, 0, '⚔',
+  // The only `unique` item in the game: it drops from Frogath and from
+  // nothing else. See gearOfTier.
+  Object.assign(W('frogshin', 'FROGSHIN', 5, 3, 30, 0, '⚔',
     'The blade the game is named for. It was always going to be yours.',
-    ['Divine']),
+    ['Divine']), { unique: true }),
 
   // ────────────────────────────────────────────────────────────── armour ──
   A('reed-hood', 'Reed Hood', 'head', 0, 1, 1, 10, '🎽',
@@ -177,9 +179,17 @@ export const GEAR = [
 
 export const GEAR_BY_ID = new Map(GEAR.map((g) => [g.id, g]));
 
-/** Everything of a tier, for rolling loot. */
+/**
+ * Everything of a tier that a drop table may hand out.
+ *
+ * `unique` items are excluded. There is exactly one of those — FROGSHIN — and
+ * it comes from beating the First Croak and from nowhere else. Being tier 5 it
+ * was in the tier-5 pool, so any of the four tier-5 guardians could drop the
+ * blade the game is named for before you had ever seen him, which took the
+ * reward off the one fight that is supposed to give it.
+ */
 export function gearOfTier(tier, cat = null) {
-  return GEAR.filter((g) => g.tier === tier && (!cat || g.cat === cat));
+  return GEAR.filter((g) => g.tier === tier && !g.unique && (!cat || g.cat === cat));
 }
 
 /**

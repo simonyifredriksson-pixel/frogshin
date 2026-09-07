@@ -300,6 +300,16 @@ export class Overworld {
     if (input.consume('Tab') && this.inventory) {
       this.inventory.onEat = (item) => this._eat(item);
       this.inventory.open(this.progress, this.frogColor, this.skins);
+      /**
+       * Give the mouse back.
+       *
+       * The bag has slots and tabs to click, and the game has the pointer
+       * captured — so without this the panel is keyboard-only and the cursor
+       * is invisible. Releasing the lock would normally drop the pause screen
+       * on top; `Game._onLockChange` asks `overworld.frozen` first, which is
+       * true from the moment `open` is called above.
+       */
+      input.releaseLock();
       return true;
     }
     if (input.consume('KeyJ')) { this.journal.toggleLog(this.progress); return true; }
@@ -318,6 +328,11 @@ export class Overworld {
         this.inventory.close();
         this.applyStats();
         this.save();
+        // Take the mouse back for looking around. A browser can refuse a
+        // lock requested this soon after leaving one, in which case the
+        // click-to-play prompt appears and the next click gets it — which is
+        // the same path every other mode already relies on.
+        input.requestLock();
       }
       return;
     }
@@ -614,11 +629,17 @@ export class Overworld {
       p.slain.add('frogath');
       const r = p.addXp(Progress.xpFor(5, true) * 2);
       this._announceLevels(r);
-      // The blade the game is named for, and it only ever comes from here.
-      if (p.add('frogshin', 1) > 0) {
-        p.equip('frogshin');
-        this.hud.toast('FROGSHIN is yours.', 10);
-      }
+      /**
+       * The blade the game is named for, and it only ever comes from here.
+       *
+       * Equipped unconditionally rather than only when `add` reports a new
+       * item: `equip` TOGGLES, so a second victory would have taken it back
+       * out of your hand, and a save that already held it would never have
+       * put it in.
+       */
+      p.add('frogshin', 1);
+      if (!p.isEquipped('frogshin')) p.equip('frogshin');
+      this.hud.toast('FROGSHIN is yours.', 10);
       this.applyStats();
       this.hud.hideBossBar();
       this.hud.announce('THE FIRST CROAK FALLS', 'divine', true);
@@ -745,7 +766,19 @@ export class Overworld {
     // means one prompt in one place rather than two that can both appear.
     this.hud.setPickupPrompt(!!this.prompt, this.prompt || '');
 
-    if (!input.consume('KeyE') || !this.prompt) return;
+    /**
+     * `player.interactPressed`, not `input.consume('KeyE')`.
+     *
+     * The player controller runs first and consumes E itself — for a supply
+     * crate, of which there are none out here — so a second consume in this
+     * file would never see the key and E would do nothing at all. The
+     * controller already raises this one-shot flag for exactly this case (the
+     * story's fruit stalls use it), so the overworld reads the flag and
+     * clears it.
+     */
+    if (!player.interactPressed) return;
+    player.interactPressed = false;
+    if (!this.prompt) return;
     if (npc) this._talk(npc);
     else if (site) this._examine(site);
   }
