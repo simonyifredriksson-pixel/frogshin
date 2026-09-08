@@ -37,9 +37,10 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v90';
-import { Audio } from './audio.js?v=v90';
-import { Cine } from './cinema.js?v=v90';
+import { MEMORY_THEME } from './themes.js?v=v91';
+import { Audio } from './audio.js?v=v91';
+import { Cine } from './cinema.js?v=v91';
+import { MemoryScene, STAGE } from './memoryscene.js?v=v91';
 
 const $ = (id) => document.getElementById(id);
 
@@ -300,7 +301,7 @@ export function memoryStage(progress) {
 
 export class Flashbacks {
   /**
-   * @param opts hud, progress, onSave
+   * @param opts hud, onSave, and — for the cutscenes — scene and camera
    */
   constructor(opts = {}) {
     this.hud = opts.hud || null;
@@ -311,6 +312,18 @@ export class Flashbacks {
     this.t = 0;
     /** Set true while a memory owns the screen, read by the overworld. */
     this.busy = false;
+    /**
+     * THE STAGE THE MEMORIES ARE ACTED ON.
+     *
+     * Built lazily and only if a scene was given: a flashback with no
+     * camera to drive still works, it is just the words. That fallback is
+     * what keeps every existing test and every non-realm mode running
+     * without having to know this exists.
+     */
+    this.camera = opts.camera || null;
+    this.stage = opts.scene ? new MemoryScene(opts.scene) : null;
+    /** Where the camera was before the memory took it. */
+    this._camWas = null;
   }
 
   /**
@@ -361,25 +374,70 @@ export class Flashbacks {
     this.t = 0;
     progress.memories.add(m.id);
     this.onSave();
+
+    /**
+     * CUT TO THE SCENE, if there is one.
+     *
+     * This is the difference between a flashback and a subtitle. The camera
+     * is taken over completely — its position is remembered so it can be
+     * put back exactly — and the wash goes to `thin` rather than solid,
+     * because the whole point is that the player can now SEE the memory
+     * rather than being told about it over a white screen.
+     */
+    const acted = this.stage && this.camera && this.stage.begin(m.id);
+    if (acted) {
+      this._camWas = {
+        pos: this.camera.position.clone(),
+        quat: this.camera.quaternion.clone(),
+      };
+    }
     if (this.wash) {
       const label = this.wash.querySelector('.mw-label');
       if (label) label.textContent = m.title;
       this.wash.classList.add('show');
+      // A solid wash over a scene would hide the scene. Thinned to a
+      // wash you can see through, and taken off entirely once the first
+      // line arrives — see `update`.
+      this.wash.classList.toggle('thin', !!acted);
     }
+    this._acted = !!acted;
+    this._lifted = false;
+
     Audio.stopTheme();
     Audio.setTheme(MEMORY_THEME, 'memory:' + m.id);
     Audio.cue(null);
     if (this.hud) this.hud.announce('MEMORY RECOVERED', 'divine', false);
-    // A beat of white before anybody speaks, so the label is read.
-    const script = [{ wait: 1.5 }].concat(m.lines.map((l) => Object.assign({}, l)));
-    Cine.play(script, {
-      bars: false,
-      onEnd: () => this._end(),
+    /**
+     * A beat before anybody speaks, so the title is read and the first
+     * camera move has started — and a `next()` cue on every third line, so
+     * the shot changes as the conversation goes on rather than one long
+     * slow drift.
+     */
+    const script = [{ wait: acted ? 2.2 : 1.5 }];
+    m.lines.forEach((l, i) => {
+      const beat = Object.assign({}, l);
+      if (acted && i > 0 && i % 3 === 0) {
+        script.push({ wait: 0.35, act: () => this.stage.next() });
+      }
+      script.push(beat);
     });
+    Cine.play(script, { bars: !!acted, onEnd: () => this._end() });
   }
 
   _end() {
-    if (this.wash) this.wash.classList.remove('show');
+    if (this.wash) {
+      this.wash.classList.remove('show');
+      this.wash.classList.remove('thin');
+    }
+    // Put the camera back exactly where the world left it, so the player
+    // comes out of a memory looking at what they were looking at.
+    if (this.stage) this.stage.end();
+    if (this._camWas && this.camera) {
+      this.camera.position.copy(this._camWas.pos);
+      this.camera.quaternion.copy(this._camWas.quat);
+    }
+    this._camWas = null;
+    this._acted = false;
     this.busy = false;
     const m = this.live;
     this.live = null;
@@ -387,17 +445,39 @@ export class Flashbacks {
     if (this.hud && m) this.hud.toast(m.note, 6);
   }
 
-  /** Drive the dialogue. Called every frame while `busy`. */
+  /** Drive the scene and the dialogue. Called every frame while `busy`. */
   update(dt, input) {
     if (!this.busy) return;
+    this.t += dt;
+    /**
+     * The wash lifts once the scene has had a second to establish.
+     *
+     * It is there to cover the CUT — the frame where the camera jumps a
+     * mile into the sky — and once that is past it is just in the way of
+     * the thing the player is meant to be looking at.
+     */
+    if (this._acted && !this._lifted && this.t > 1.1) {
+      this._lifted = true;
+      if (this.wash) this.wash.classList.remove('show');
+    }
+    if (this.stage) this.stage.update(dt, this.camera);
     Cine.update(dt);
     Cine.keys(input);
   }
+
+  /** Which tableau a memory is acted on, or null. For the tests. */
+  static stageFor(id) { return STAGE[id] || null; }
 
   /** Abandon whatever is playing — used when the mode is left. */
   cancel() {
     if (!this.busy) return;
     Cine.cancel();
     this._end();
+  }
+
+  dispose() {
+    this.cancel();
+    if (this.stage) this.stage.dispose();
+    this.stage = null;
   }
 }

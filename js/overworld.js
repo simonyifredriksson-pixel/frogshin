@@ -32,36 +32,36 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v90';
-import { CFG } from './config.js?v=v90';
-import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v90';
-import { Realm } from './realm.js?v=v90';
-import { Scatter } from './scatter.js?v=v90';
-import { Sites } from './realmsites.js?v=v90';
-import { Camp } from './mobs.js?v=v90';
-import { DungeonBoss } from './dungeonboss.js?v=v90';
-import { Frogath } from './frogath.js?v=v90';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v90';
+import * as THREE from '../lib/three.module.js?v=v91';
+import { CFG } from './config.js?v=v91';
+import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v91';
+import { Realm } from './realm.js?v=v91';
+import { Scatter } from './scatter.js?v=v91';
+import { Sites } from './realmsites.js?v=v91';
+import { Camp } from './mobs.js?v=v91';
+import { DungeonBoss } from './dungeonboss.js?v=v91';
+import { Frogath } from './frogath.js?v=v91';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v91';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v90';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v90';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v90';
+  CONTENT_HALF } from './regions.js?v=v91';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v91';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v91';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v90';
+  mainObjective } from './quests.js?v=v91';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v90';
-import { disposeLandmarkMats } from './landmarks.js?v=v90';
-import { Props, disposePropMats } from './props.js?v=v90';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v90';
-import { Ambience } from './ambience.js?v=v90';
-import { Weather } from './weather.js?v=v90';
-import { Audio } from './audio.js?v=v90';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v90';
+  disposeVillagerMats } from './realmquests.js?v=v91';
+import { disposeLandmarkMats } from './landmarks.js?v=v91';
+import { Props, disposePropMats } from './props.js?v=v91';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v91';
+import { Ambience } from './ambience.js?v=v91';
+import { Weather } from './weather.js?v=v91';
+import { Audio } from './audio.js?v=v91';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v91';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v90';
-import { Cine } from './cinema.js?v=v90';
-import { recommendedFor, readiness } from './guardians.js?v=v90';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v90';
+  MEMORY_COUNT } from './flashbacks.js?v=v91';
+import { Cine } from './cinema.js?v=v91';
+import { recommendedFor, readiness } from './guardians.js?v=v91';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v91';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -322,6 +322,10 @@ export class Overworld {
     this.flash = new Flashbacks({
       hud: this.hud,
       onSave: () => this.save(),
+      // The scene and the camera, so a memory can be ACTED rather than
+      // merely described. See js/memoryscene.js.
+      scene: this.scene,
+      camera: this.camera,
     });
     /** Guardians whose readiness warning has already been given. */
     this._warned = new Set();
@@ -2654,7 +2658,7 @@ export class Overworld {
     // its white wash over the main screen.
     this._endGreeting();
     this._greetSite = null;
-    if (this.flash) this.flash.cancel();
+    if (this.flash) this.flash.dispose();
     Cine.cancel();
     this.realm.dispose();
     this.dialogue.close();
