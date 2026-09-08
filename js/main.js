@@ -5,35 +5,39 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v87';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v87';
-import { Input } from './input.js?v=v87';
-import { Audio } from './audio.js?v=v87';
-import { World } from './world.js?v=v87';
-import { Effects } from './effects.js?v=v87';
-import { Atmosphere } from './atmosphere.js?v=v87';
-import { FollowCamera } from './camera.js?v=v87';
-import { Player } from './player.js?v=v87';
-import { RemotePlayer } from './remote.js?v=v87';
-import { HUD } from './hud.js?v=v87';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v87';
-import { FrogModel } from './frog.js?v=v87';
-import { DummyField } from './dummy.js?v=v87';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v87';
-import { ToadModel } from './npc.js?v=v87';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v87';
-import { DungeonRun } from './dungeon.js?v=v87';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v87';
-import { JudgmentRun } from './judgment.js?v=v87';
-import { COMBO_NAMES } from './ascended.js?v=v87';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v87';
-import { MenuScene } from './menu.js?v=v87';
-import { Economy } from './economy.js?v=v87';
-import { Shop } from './shop.js?v=v87';
-import { Network, NetRole } from './net.js?v=v87';
-import { Overworld } from './overworld.js?v=v87';
-import { InventoryScreen } from './inventoryui.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v88';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v88';
+import { Input } from './input.js?v=v88';
+import { Audio } from './audio.js?v=v88';
+import { World } from './world.js?v=v88';
+import { Effects } from './effects.js?v=v88';
+import { Atmosphere } from './atmosphere.js?v=v88';
+import { FollowCamera } from './camera.js?v=v88';
+import { Player } from './player.js?v=v88';
+import { RemotePlayer } from './remote.js?v=v88';
+import { HUD } from './hud.js?v=v88';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v88';
+import { FrogModel } from './frog.js?v=v88';
+import { DummyField } from './dummy.js?v=v88';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v88';
+import { ToadModel } from './npc.js?v=v88';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v88';
+import { DungeonRun } from './dungeon.js?v=v88';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v88';
+import { JudgmentRun } from './judgment.js?v=v88';
+import { COMBO_NAMES } from './ascended.js?v=v88';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v88';
+import { MenuScene } from './menu.js?v=v88';
+import { Economy } from './economy.js?v=v88';
+import { Shop } from './shop.js?v=v88';
+import { Network, NetRole } from './net.js?v=v88';
+import { Overworld } from './overworld.js?v=v88';
+import { InventoryScreen } from './inventoryui.js?v=v88';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v88';
+import { Prologue } from './prologue.js?v=v88';
+import { Cine } from './cinema.js?v=v88';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v88';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -82,6 +86,13 @@ class Game {
     this._wireNetwork();
 
     this.economy = new Economy();
+    /**
+     * The ten save files, and the hook that routes every realm write into
+     * whichever one is open. Built straight after the economy because its
+     * constructor migrates the single old save into solo file one.
+     */
+    this.saves = new SaveSlots(this.economy);
+    this._eraseTarget = null;
 
     this.hud = new HUD();
     this.hud.show(false);
@@ -195,7 +206,7 @@ class Game {
 
   _buildMenuUI() {
     const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings',
-      'credits', 'dungeon'];
+      'credits', 'dungeon', 'saves', 'erase'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       Audio.uiClick();
@@ -315,9 +326,29 @@ class Game {
     $('btn-realm').onclick = () => {
       Audio.uiClick();
       Audio.init(); Audio.resume();
-      this.pendingMode = 'realm';
-      if (this.net.isOnline) this.net.disconnect();
-      this._enterGame();
+      this._showSaves();
+    };
+
+    // --- the save files ---
+    /**
+     * BACK, from the file screen, goes to PLAY rather than to the home menu.
+     *
+     * The generic `.btn-back` handler above sends everything home, which is
+     * right for the leaf panels but wrong here: the player got to this screen
+     * from the Croaklands button on the Play panel, and that is where they
+     * expect back to put them. Assigned after that loop so it wins.
+     */
+    const savesBack = $('panel-saves').querySelector('.btn-back');
+    if (savesBack) {
+      savesBack.onclick = () => { Audio.uiBack(); this.showPanel('play'); };
+    }
+    $('btn-erase-no').onclick = () => { Audio.uiBack(); this._showSaves(); };
+    $('btn-erase-yes').onclick = () => {
+      const t = this._eraseTarget;
+      if (t) this.saves.erase(t.kind, t.index);
+      this._eraseTarget = null;
+      Audio.uiClick();
+      this._showSaves();
     };
 
     // --- the dungeon: solo, offline, and the run style is fixed up front ---
@@ -387,6 +418,126 @@ class Game {
       $('menu').classList.add('show');
       this.showPanel('settings');
     };
+  }
+
+  // ------------------------------------------------------------ save files
+
+  /**
+   * THE SAVE SCREEN.
+   *
+   * Ten rows, built from `SaveSlots`. An empty one says so and starts a new
+   * adventure; a used one shows what is in it and continues. The bin beside
+   * each row goes to its own confirmation screen with the file named on it.
+   */
+  _showSaves() {
+    this._paintSaves('solo', $('saves-solo'));
+    this._paintSaves('mp', $('saves-mp'));
+    $('save-status').textContent = '';
+    this.showPanel('saves');
+  }
+
+  _paintSaves(kind, host) {
+    if (!host) return;
+    host.innerHTML = '';
+    for (const row of this.saves.list(kind)) {
+      const el = document.createElement('div');
+      el.className = 'save-row' + (row.empty ? ' is-empty' : '');
+      const active = this.saves.active;
+      if (active && active.kind === kind && active.index === row.index) {
+        el.classList.add('is-active');
+      }
+
+      const pick = document.createElement('button');
+      pick.className = 'save-pick';
+      const no = document.createElement('span');
+      no.className = 'save-slotno';
+      no.textContent = 'FILE ' + (row.index + 1);
+      const body = document.createElement('div');
+      body.className = 'save-body';
+      const title = document.createElement('div');
+      title.className = 'save-title';
+      const facts = document.createElement('div');
+      facts.className = 'save-facts';
+
+      if (row.empty) {
+        title.textContent = 'EMPTY — START A NEW ADVENTURE';
+        facts.textContent = kind === 'mp'
+          ? 'A fresh run through the Croaklands, played with others.'
+          : 'A fresh run through the Croaklands.';
+      } else {
+        const m = row.meta || {};
+        title.textContent = m.prologue
+          ? (m.region ? String(m.region).toUpperCase() : 'THE CROAKLANDS')
+          : 'THE LAST MORNING OF THE WAR';
+        const bits = [];
+        bits.push(`<b>${m.slain || 0}</b> guardians`);
+        bits.push(`<b>${m.memories || 0}</b> memories`);
+        bits.push(`<b>${m.hearts || 3}</b> hearts`);
+        bits.push(playtime(m.seconds));
+        bits.push(stamp(m.updated));
+        facts.innerHTML = bits.join('<span class="sep">·</span>');
+        // Thirty-seven guardians is the whole main line; the bar is how far
+        // along it this file is, which is the one number that means anything
+        // at a glance.
+        const bar = document.createElement('div');
+        bar.className = 'save-bar';
+        const fill = document.createElement('i');
+        fill.style.width = Math.min(100,
+          Math.round(((m.slain || 0) / 37) * 100)) + '%';
+        bar.appendChild(fill);
+        body.appendChild(bar);
+      }
+      body.insertBefore(facts, body.firstChild);
+      body.insertBefore(title, body.firstChild);
+      pick.appendChild(no);
+      pick.appendChild(body);
+      pick.onmouseenter = () => Audio.uiHover();
+      pick.onclick = () => this._openSave(kind, row.index, row.empty);
+      el.appendChild(pick);
+
+      if (!row.empty) {
+        const del = document.createElement('button');
+        del.className = 'save-del';
+        del.textContent = '✕';
+        del.title = 'Delete this file';
+        del.onclick = (ev) => {
+          ev.stopPropagation();
+          Audio.uiBack();
+          this._askErase(kind, row.index, row.meta);
+        };
+        el.appendChild(del);
+      }
+      host.appendChild(el);
+    }
+  }
+
+  _askErase(kind, index, meta) {
+    this._eraseTarget = { kind, index };
+    const m = meta || {};
+    $('erase-what').innerHTML =
+      `<b>${kind === 'mp' ? 'MULTIPLAYER' : 'SOLO'} — FILE ${index + 1}</b><br>`
+      + `${m.slain || 0} guardians down · ${m.memories || 0} memories `
+      + `recovered · ${playtime(m.seconds)} played<br>`
+      + `Last played ${stamp(m.updated) || 'never'}`;
+    this.showPanel('erase');
+  }
+
+  /**
+   * Open a file and go.
+   *
+   * A brand new file plays the opening — the heavenly battlefield, Frogath,
+   * and the fall — and then wakes up in the Croaklands. A file that has
+   * already seen it goes straight back to where it left off.
+   */
+  _openSave(kind, index, empty) {
+    Audio.uiClick();
+    Audio.init(); Audio.resume();
+    if (empty) this.saves.create(kind, index);
+    else this.saves.select(kind, index);
+    this.pendingMode = this.saves.sawPrologue(kind, index)
+      ? 'realm' : 'prologue';
+    if (this.net.isOnline && kind === 'solo') this.net.disconnect();
+    this._enterGame();
   }
 
   /** Show the pre-match lobby and keep its player count live. */
@@ -822,6 +973,13 @@ class Game {
       this.pendingMode = null;
       this.sessionMode = 'dungeon';
       await this._enterDungeon(loading, bar, label, frame, this._dungeonCheckpoints);
+      return;
+    }
+    // The opening: the heavenly battlefield, in its own scene.
+    if (this.pendingMode === 'prologue') {
+      this.pendingMode = null;
+      this.sessionMode = 'prologue';
+      await this._enterPrologue(loading, bar, label, frame);
       return;
     }
     // The open world builds its own realm, in its own scene.
@@ -1293,6 +1451,22 @@ class Game {
     this.hud.show(true);
     this.hud.setRoom('', 'The Realm', false);
 
+    /**
+     * DID THIS FILE LIVE THROUGH THE OPENING?
+     *
+     * The flashbacks read `progress.prologue` and refuse to fire without it,
+     * because a memory of a scene the player was never shown is not a reveal.
+     * It is set from the SAVE FILE rather than from the blob so that the very
+     * first entry after the prologue — where the blob is still null — already
+     * knows, and it is written straight back into the blob by the save the
+     * overworld does on start.
+     */
+    if (this.saves.active) {
+      const a = this.saves.active;
+      if (this.saves.sawPrologue(a.kind, a.index)) {
+        this.overworld.progress.prologue = true;
+      }
+    }
     this.overworld.start(this.player);
     this.followCam.snapTo(this.player.pos);
 
@@ -1304,6 +1478,285 @@ class Game {
     Audio.stopMenuMusic();
     this.hud.toast('TAB bag · M map · E reach out and talk', 8);
     this._resize();
+  }
+
+  // ═══════════════════════════════════════════════════════════ the prologue ══
+
+  /**
+   * THE OPENING: build heaven, put an army at each end of it, and start.
+   *
+   * Its own scene, like the dungeon and the realm, and it is thrown away
+   * completely the moment the player hits the ground below — nothing from
+   * this level is ever needed again until the final fight, which rebuilds it.
+   */
+  async _enterPrologue(loading, bar, label, frame) {
+    this.isPrologue = true;
+    this.scene = new THREE.Scene();
+    // A very long far plane: the whole point of the level is that you can
+    // see the mountains on the far side of the sky.
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight,
+      CFG.camera.near, 5200);
+    this.effects = new Effects(this.scene, this.camera);
+
+    const level = new HeavenLevel(this.scene);
+    const tasks = level.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 94) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+    this.heaven = level;
+    this.world = { collision: level.collision, update: () => {} };
+    this.followCam = new FollowCamera(this.camera, level.collision);
+
+    /**
+     * The light up here.
+     *
+     * Golden, low, and from behind the far army, so the player is looking
+     * into the sun for the whole opening — which is what the reference is
+     * doing and it is most of why it reads as holy rather than as bright.
+     * The fog is pushed a very long way out; on a floating island the haze
+     * IS the distance, and a near fog would hide the armies.
+     */
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: 0,
+      cloudCount: Math.min(14, this.quality.clouds),
+      shadows: this.quality.shadows,
+      fogNear: 260, fogFar: 2600,
+      fogColor: 0xdfeaf6,
+      skyTop: 0x6ea8dc, skyMid: 0xa8cfec, skyBottom: 0xf6e6c0,
+    });
+    /**
+     * THE SUN GOES BEHIND HIS ARMY.
+     *
+     * Set on the light rather than passed as options, which is how the arena
+     * does it — Atmosphere reads sky and fog from its options and nothing
+     * else. Low and at +Z, so the player spends the whole opening looking
+     * into it down the length of the field: that is most of why the
+     * reference images read as holy rather than merely as bright.
+     */
+    if (this.atmo.sun) {
+      this.atmo.sun.color.setHex(0xfff0c4);
+      this.atmo.sun.intensity = 1.2;
+      this.atmo.sun.position.set(-80, 190, 520);
+      if (this.atmo.sun.target) this.atmo.sun.target.position.set(0, 0, 0);
+    }
+    if (this.atmo.hemi) {
+      this.atmo.hemi.color.setHex(0xbfd8f0);
+      this.atmo.hemi.intensity = 0.85;
+    }
+    this.renderer.setClearColor(0xdfeaf6);
+
+    this.kunaiSystem = new KunaiSystem(this.scene, level.collision, this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
+    this.pickups = null;
+    this.dummies = new DummyField(this.scene);
+
+    bar.style.width = '100%';
+    label.textContent = 'Drawing the legendary blade…';
+    await frame();
+
+    if (this.player) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    const prof = this.profile;
+    this.player = new Player({
+      id: 'local', name: prof.name, color: prof.color,
+      world: this.world, effects: this.effects, scene: this.scene,
+      kunai: this.kunaiSystem, pickups: null, skins: this.equippedSkins,
+    });
+    this.player.combatEnabled = true;
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.resetOverlays();
+    this.hud.show(false);
+
+    this.prologue = new Prologue({
+      scene: this.scene, camera: this.camera, effects: this.effects,
+      hud: this.hud, player: this.player, followCam: this.followCam,
+      level, onDone: () => this._prologueDone(),
+    });
+    this.prologue.begin();
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.stopMenuMusic();
+    this._resize();
+  }
+
+  /**
+   * One frame of the opening.
+   *
+   * Two halves. While the prologue `holdsPlayer` it owns the body and the
+   * camera and this loop does nothing but let it; during the fight it is an
+   * ordinary game loop with a boss in it, identical in every respect to the
+   * dungeon's. That is the point — the fight has to be a real fight, so it
+   * runs on the real fight code.
+   */
+  _updatePrologue(dt, t) {
+    const p = this.player;
+    const pro = this.prologue;
+    if (this.frozen || !pro) { this.renderer.render(this.scene, this.camera); return; }
+
+    // Slow motion lives here: everything downstream sees the scaled dt, so
+    // the boss, the effects and the level all slow together.
+    const sdt = dt * pro.timeScale;
+    const held = pro.holdsPlayer;
+
+    const targets = [];
+    if (!held && pro.boss && pro.boss.alive && pro.boss.fighting) {
+      const F = CFG.dungeon.frogath;
+      targets.push({
+        id: 'frogath', pos: pro.boss.pos, dead: false, isDummy: false,
+        hitbox: {
+          bodyOffset: 3.0, bodyRadius: 5.0,
+          headOffset: 8.0, headRadius: 2.6,
+          // He floats: without a tall vertical the katana's slice would never
+          // reach him and the fight would be kunai-only.
+          vertical: 14,
+        },
+        onHit: (dmg, o) => {
+          const before = pro.boss.health;
+          pro.boss.takeDamage(dmg, o || {});
+          if (pro.boss.health < before) pro.noteHit(before - pro.boss.health);
+          else pro.noteDeflect();
+        },
+      });
+    }
+
+    if (!held) {
+      const look = this.input.takeLook();
+      if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+      p.update(sdt, this.input, this.followCam, targets);
+      this._voidGuard(p, sdt, VOID_Y, HEAVEN.playerAt);
+      this.kunaiSystem.update(sdt, targets);
+      if (p.deathPending) p.deathPending = false;
+      // The katana's hits are queued events; this is where they land.
+      for (const ev of p.events) {
+        if (ev.t === 'hit') {
+          const before = pro.boss ? pro.boss.health : 0;
+          if (pro.boss) pro.boss.takeDamage(ev.dmg, { head: ev.c === 2 });
+          if (pro.boss && pro.boss.health < before) {
+            pro.noteHit(before - pro.boss.health);
+          }
+          this.hud.hitmarker(ev.c === 2);
+        }
+      }
+      p.events.length = 0;
+    } else {
+      // A cinematic still drains the queue, or a swing thrown on the last
+      // frame of the fight lands during the conversation after it.
+      p.events.length = 0;
+      this.input.takeLook();
+    }
+
+    pro.update(sdt, this.input, (dmg, from) => this._prologueHit(dmg, from));
+    this.effects.update(sdt);
+    this.heaven.update(sdt);
+
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    if (!held && !p.cinematic) {
+      this.followCam.update(p.renderPos, speed, sdt, {
+        dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        sprinting: p.sprinting,
+      });
+    }
+    this.atmo.update(sdt, this.camera.position);
+    if (!held) this._updateHud(sdt, speed);
+    this._updateAudioListener();
+    Audio.updateAmbient(sdt);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Frogath hitting the player, during the opening fight. */
+  _prologueHit(damage, from) {
+    const p = this.player;
+    if (!p || p.health.dead || p.health.protected || p.dashTimer > 0) return;
+    if (p.parrying) {
+      p.justParried = 0.2;
+      p._parryTook();
+      this.hud.toast('PARRIED', 0.5);
+      Audio.parry(p.pos);
+      this.followCam.shake(0.25);
+      if (this.prologue) {
+        Cine.say('frogath', 'Turned. Good.', { id: 'parried', secs: 2.6 });
+      }
+      return;
+    }
+    p.health.damage(damage, 'frogath');
+    _v3.set(p.pos.x, p.pos.y + 1.2, p.pos.z);
+    this.effects.damageNumber(_v3, damage, damage > 40);
+    this.hud.damageFlash(clamp(damage / 60, 0.3, 1));
+    this.followCam.shake(clamp(damage / 40, 0.3, 1.1));
+    Audio.hurt(p.pos);
+    if (this.prologue) this.prologue.noteHurt();
+    /**
+     * DYING IN THE OPENING IS NOT AN ENDING.
+     *
+     * The player is meant to win this fight — the whole scene is built on
+     * their having won it — so losing puts them back on their feet at full
+     * health with Frogath reset to the health he had at the start of the
+     * phase. It is still a real fight; it is just one you cannot fail out of
+     * a story you have already lived.
+     */
+    if (p.health.dead) {
+      p.health.current = p.health.max;
+      p.deathPending = false;
+      p.spawn(HEAVEN.playerAt);
+      p.pos.y = this.heaven.heightAt(HEAVEN.playerAt.x, HEAVEN.playerAt.z) + 0.4;
+      this.followCam.snapTo(p.pos);
+      this.hud.announce('YOUR ARMY PULLS YOU BACK UP', 'good', false);
+      Cine.say('frogath', 'They keep picking you up. Why?',
+        { id: 'pickup', secs: 3.6 });
+    }
+  }
+
+  /**
+   * The fall has landed. Throw heaven away and wake up in the Croaklands.
+   *
+   * `mode` has to come off 'playing' FIRST. `_enterGame` refuses outright
+   * while a game is running — which is correct, it is what stops a second
+   * click on Play from building a second world — and without this the fall
+   * would end on a black screen with nothing loading and no way back.
+   *
+   * Everything here is synchronous up to `_enterGame`'s first await, and
+   * this is called from inside the prologue's own update, so no frame can
+   * run between dropping the island and the loading screen going up.
+   */
+  _prologueDone() {
+    this.saves.markPrologueSeen();
+    this.mode = 'menu';
+    this.sessionMode = null;
+    this._dropPrologue();
+    this.pendingMode = 'realm';
+    this._enterGame();
+  }
+
+  _dropPrologue() {
+    if (this.prologue) this.prologue.dispose();
+    this.prologue = null;
+    if (this.heaven) this.heaven.dispose();
+    this.heaven = null;
+    if (this.player && this.scene) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.isPrologue = false;
+    this.player = null;
+    this.scene = null;
+    this.world = null;
+    this.atmo = null;
+    this.effects = null;
+    this.kunaiSystem = null;
+    this.followCam = null;
+    this.dummies = null;
+    Cine.cancel();
+    Audio.stopTheme();
+    Audio.stopBossMusic();
   }
 
   /**
@@ -1399,20 +1852,14 @@ class Game {
     const p = this.player;
     if (!p || p.health.dead || p.health.protected || p.dashTimer > 0) return;
     if (p.parrying) {
-      p.parryHits++;
       p.justParried = 0.2;
-      const dx = p.pos.x - (from ? from.x : p.pos.x);
-      const dz = p.pos.z - (from ? from.z : p.pos.z);
-      const len = Math.hypot(dx, dz) || 1;
-      if (p.parryHits >= CFG.story.parry.knockdownAfter) {
-        p._breakParry(dx / len, dz / len);
-        this.hud.toast('GUARD BROKEN', 1.2);
-        this.followCam.shake(0.6);
-      } else {
-        this.hud.toast('PARRIED', 0.5);
-        Audio.parry(p.pos);
-        this.followCam.shake(0.25);
-      }
+      // The blow is turned; the guard comes down for `afterHit` seconds. The
+      // toast says so, because a guard that silently stopped answering is the
+      // most confusing thing a fight can do.
+      p._parryTook();
+      this.hud.toast('PARRIED', 0.5);
+      Audio.parry(p.pos);
+      this.followCam.shake(0.25);
       return;
     }
     const dealt = Math.round(this.overworld.progress.damageTaken(damage));
@@ -1715,23 +2162,14 @@ class Game {
     const p = this.player;
     if (p.health.dead || p.health.protected || p.dashTimer > 0) return;
     // Parrying turns a blow aside — routed through the player's own guard so
-    // the cooldown and the broken-guard lockout apply here exactly as they do
+    // the lockout after a turned blow applies here exactly as it does
     // everywhere else, rather than this path keeping its own softer copy.
     if (p.parrying) {
-      p.parryHits++;
       p.justParried = 0.2;
-      const dx = p.pos.x - (from ? from.x : p.pos.x);
-      const dz = p.pos.z - (from ? from.z : p.pos.z);
-      const len = Math.hypot(dx, dz) || 1;
-      if (p.parryHits >= CFG.story.parry.knockdownAfter) {
-        p._breakParry(dx / len, dz / len);
-        this.hud.toast('GUARD BROKEN', 1.2);
-        this.followCam.shake(0.6);
-      } else {
-        this.hud.toast('PARRIED', 0.5);
-        Audio.parry(p.pos);
-        this.followCam.shake(0.25);
-      }
+      p._parryTook();
+      this.hud.toast('PARRIED', 0.5);
+      Audio.parry(p.pos);
+      this.followCam.shake(0.25);
       return;
     }
     p.health.damage(damage, 'boss');
@@ -2024,6 +2462,15 @@ class Game {
     // three branches below, so quitting an ordinary arena match while
     // swimming left the whole game tinted blue.
     this._clearUnderwater();
+    // The played time on the open file, and then the file is closed.
+    this.saves.flush();
+    // The opening owns heaven, and quitting out of it abandons the scene
+    // rather than finishing the fall — so the file has NOT seen the prologue
+    // and will play it again next time, which is the right answer.
+    if (this.isPrologue) {
+      this._dropPrologue();
+      this.saves.deselect();
+    }
     // The judgment arena owns its own scene as well.
     if (this.isJudgment) {
       if (this.judgment) this.judgment.dispose();
@@ -2061,6 +2508,7 @@ class Game {
       this.kunaiSystem = null;
       this.effects = null;
       this.followCam = null;
+      this.saves.deselect();
     }
     this.net.disconnect();
     for (const r of this.remotes.values()) r.dispose();
@@ -2183,10 +2631,26 @@ class Game {
       this._flushPendingJoins();
 
       // Each mode is its own loop; they share the renderer and nothing else.
-      if (this.isJudgment) this._updateJudgment(dt, t);
+      if (this.isPrologue) this._updatePrologue(dt, t);
+      else if (this.isJudgment) this._updateJudgment(dt, t);
       else if (this.isRealm) this._updateRealm(dt, t);
       else if (this.isDungeon) this._updateDungeon(dt, t);
       else this._updateGame(dt, t);
+
+      /**
+       * Playtime, on the open save file.
+       *
+       * Counted for the Croaklands and its opening only — the arena, the
+       * dungeon and the judgment are not part of anybody's adventure, and
+       * counting them would make a save file's hours a lie.
+       */
+      if (this.saves.active && (this.isRealm || this.isPrologue)) {
+        this._playAccum = (this._playAccum || 0) + dt;
+        if (this._playAccum >= 1) {
+          this.saves.tick(this._playAccum);
+          this._playAccum = 0;
+        }
+      }
     } else {
       this._updateMenu(dt);
     }

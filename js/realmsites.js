@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
-import { mulberry32, clamp } from './util.js?v=v87';
-import { SEA } from './regions.js?v=v87';
-import { buildLandmark } from './landmarks.js?v=v87';
-import { ROADS } from './roads.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
+import { mulberry32, clamp } from './util.js?v=v88';
+import { SEA } from './regions.js?v=v88';
+import { buildLandmark } from './landmarks.js?v=v88';
+import { ROADS } from './roads.js?v=v88';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -104,6 +104,34 @@ const SETTLE = {
   village: { houses: 8, ring: 0.62, well: true, market: 0, wall: false, big: 0 },
   town: { houses: 15, ring: 0.68, well: true, market: 5, wall: false, big: 1 },
   city: { houses: 28, ring: 0.74, well: true, market: 9, wall: true, big: 3 },
+};
+
+/**
+ * THE SIGNATURE — the one thing you remember a settlement by.
+ *
+ * A ring of houses round a well is a settlement. It is not a PLACE. What
+ * makes somewhere memorable is a single silhouette you can see from outside
+ * it and can name afterwards — the great frog at Croakhollow, Harrowmead's
+ * mill, the fallen king lying across the square in Anurath — so every
+ * settlement in the country gets one, and no two get the same one.
+ *
+ * Each entry names a method on Sites. They are built from the same primitives
+ * as the houses and flattened with the rest of the site, so a signature costs
+ * a few hundred triangles and not one extra draw call.
+ */
+const SIGNATURE = {
+  croakhollow: '_sigFrog',            // the great frog, mossy, lantern in mouth
+  'harrowmead-town': '_sigMill',      // the mill, and its sails turn
+  'the-stilts': '_sigRopeRing',       // the walkway that IS the village
+  'anurath-city': '_sigFallenKing',   // a colossus face-down across the square
+  'low-quarter': '_sigCanal',         // the canal, the punts, the waterwheel
+  'cutters-rest': '_sigSawmill',      // the great saw and the log stacks
+  glasshook: '_sigDryingRacks',       // nets, racks, and the hook light
+  sandreed: '_sigOasis',              // the pool and the bazaar lane
+  lakewatch: '_sigPier',              // the long pier and the drowned bell
+  moonwatch: '_sigObservatory',       // the dome and the brass ring
+  'hollow-market': '_sigEmptyStalls', // a thousand awnings and nobody
+  lumen: '_sigLightFields',           // terraces of grown light
 };
 
 /**
@@ -234,6 +262,16 @@ export class Sites {
     this.arenas = new Map();
     /** The huge things, keyed by region id. */
     this.landmarks = new Map();
+    /**
+     * Everything in a settlement that turns: a mill's sails, the Low
+     * Quarter's wheel, Cutter's Rest's saw.
+     *
+     * One moving part is worth a dozen static ones for making a place read as
+     * inhabited, and it is the cheapest movement in the game — a `rotation.z`
+     * on a group `flatten` was told to leave alone. Only spun while the site
+     * it belongs to is actually drawn.
+     */
+    this.spins = [];
     /**
      * The merged geometries, which are the only ones this class owns.
      *
@@ -486,6 +524,12 @@ export class Sites {
     g.visible = false;
     // Two hundred meshes of buildings become one per material. See `flatten`.
     this.merged += flatten(g, this.owned);
+    // Whatever survived the merge because it turns. See `this.spins`.
+    for (const c of g.children) {
+      if (c.isGroup && c.userData.spin) {
+        this.spins.push({ site: g, hub: c, rate: c.userData.rate || 0.4 });
+      }
+    }
     this.root.add(g);
     /**
      * Which guardian's death this settlement is waiting on.
@@ -625,6 +669,832 @@ export class Sites {
     this._solid(g, 2.0, 0.6, 0.8, x, 1.0, z + 0.7, 'stall');
   }
 
+  // ----------------------------------------------- what makes a place lived-in
+
+  /**
+   * One paving stone, laid flat on whatever the ground is doing under it.
+   *
+   * Individually placed rather than being one big slab, which is the whole
+   * trick: a hundred separate stones follow a hillside exactly, and after
+   * `flatten` they are one mesh anyway, so the ground-hugging is free.
+   */
+  _tile(g, x, z, s, mat) {
+    return this._put(g, G.box, mat, s, 0.32, s, x, this._gy(g, x, z) - 0.1, z);
+  }
+
+  /**
+   * A PAVED SQUARE at the middle of a settlement.
+   *
+   * Worn, gapped and not quite square — stones missing where a cart wore a
+   * rut, a different colour where somebody patched it. A perfect disc of one
+   * material reads as a texture; a bad one reads as a place with a history.
+   */
+  _plaza(g, r, rnd, mat = 'stonePale') {
+    // Three units: big enough that a square is a couple of hundred triangles
+    // rather than a couple of thousand, small enough that the stones still
+    // step down a slope instead of tilting through it.
+    const step = 3.0;
+    for (let x = -r; x <= r; x += step) {
+      for (let z = -r; z <= r; z += step) {
+        const d = Math.hypot(x, z);
+        if (d > r || d < 2.2) continue;
+        // Fewer stones towards the edge: paving frays into dirt, it does not
+        // stop at a line.
+        if (rnd() < 0.10 + 0.5 * (d / r) ** 3) continue;
+        this._tile(g, x + (rnd() - 0.5) * 0.5, z + (rnd() - 0.5) * 0.5,
+          step * (0.78 + rnd() * 0.2), rnd() < 0.24 ? 'stone' : mat);
+      }
+    }
+  }
+
+  /** A worn path of trodden stones between two points. */
+  _path(g, x0, z0, x1, z1, rnd, w = 1.7) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const n = Math.max(2, Math.round(len / 2.3));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      if (rnd() < 0.12) continue;
+      this._tile(g,
+        x0 + (x1 - x0) * t + (rnd() - 0.5) * w,
+        z0 + (z1 - z0) * t + (rnd() - 0.5) * w,
+        w * (0.65 + rnd() * 0.55), rnd() < 0.3 ? 'stoneDark' : 'stone');
+    }
+  }
+
+  /** A kitchen garden: four furrows of something green behind a low rail. */
+  _garden(g, x, z, a, rnd) {
+    const c = Math.cos(a), s = Math.sin(a);
+    const at = (ox, oz) => [x + ox * c - oz * s, z + ox * s + oz * c];
+    for (let i = 0; i < 4; i++) {
+      const [fx, fz] = at(0, -1.9 + i * 1.25);
+      this._putOn(g, G.box, 'wood', 4.2, 0.34, 0.7, fx, fz, a);
+      for (let k = 0; k < 5; k++) {
+        const [cx, cz] = at(-1.7 + k * 0.85, -1.9 + i * 1.25);
+        if (rnd() < 0.18) continue;
+        this._putOn(g, G.low, rnd() < 0.45 ? 'leafPale' : 'leaf',
+          0.3, 0.55, 0.3, cx, cz);
+      }
+    }
+    for (const sg of [-1, 1]) {
+      const [rx, rz] = at(0, sg * 2.9);
+      this._put(g, G.box, 'plank', 5.0, 0.14, 0.12,
+        rx, this._gy(g, rx, rz) + 0.75, rz, a);
+      for (const e of [-1, 1]) {
+        const [px, pz] = at(e * 2.4, sg * 2.9);
+        this._putOn(g, G.cyl, 'woodDark', 0.09, 1.0, 0.09, px, pz);
+      }
+    }
+  }
+
+  /** Two posts, a line, and somebody's washing on it. */
+  _washline(g, x0, z0, x1, z1, rnd) {
+    const y0 = this._gy(g, x0, z0), y1 = this._gy(g, x1, z1);
+    this._put(g, G.cyl, 'woodDark', 0.11, 4.4, 0.11, x0, y0 + 2.2, z0);
+    this._put(g, G.cyl, 'woodDark', 0.11, 4.4, 0.11, x1, y1 + 2.2, z1);
+    const a = Math.atan2(z1 - z0, x1 - x0);
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    this._put(g, G.box, 'rope', len, 0.07, 0.07,
+      (x0 + x1) * 0.5, (y0 + y1) * 0.5 + 4.3, (z0 + z1) * 0.5, -a);
+    for (let i = 1; i < 5; i++) {
+      const t = i / 5;
+      const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+      const y = y0 + (y1 - y0) * t;
+      const h = 0.9 + rnd() * 0.8;
+      this._put(g, G.box, rnd() < 0.5 ? 'cloth' : 'clothBlue',
+        0.9 + rnd() * 0.5, h, 0.06, x, y + 4.25 - h * 0.5, z, -a);
+    }
+  }
+
+  /**
+   * A STRING OF LANTERNS between two posts.
+   *
+   * The cheapest thing in the game that changes how a place feels. Lamps are
+   * an unlit basic material, so a line of them across a square is the thing
+   * you can see from the treeline at dusk, and it is what says somebody is
+   * still living here.
+   */
+  _lanternLine(g, x0, z0, x1, z1, n = 5) {
+    const y0 = this._gy(g, x0, z0), y1 = this._gy(g, x1, z1);
+    const a = Math.atan2(z1 - z0, x1 - x0);
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    this._put(g, G.box, 'rope', len, 0.06, 0.06,
+      (x0 + x1) * 0.5, (y0 + y1) * 0.5 + 5.0, (z0 + z1) * 0.5, -a);
+    for (let i = 1; i <= n; i++) {
+      const t = i / (n + 1);
+      const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+      const y = y0 + (y1 - y0) * t + 5.0;
+      // The line sags, so the middle lanterns hang lower.
+      const sag = Math.sin(t * Math.PI) * 0.55;
+      this._put(g, G.cyl, 'woodDark', 0.03, 0.5, 0.03, x, y - sag - 0.25, z);
+      this._put(g, G.low, 'lamp', 0.26, 0.34, 0.26, x, y - sag - 0.7, z);
+    }
+  }
+
+  /** Barrels, crates, a bucket and a stack of firewood — somebody's yard. */
+  _clutter(g, x, z, rnd) {
+    const n = 2 + Math.floor(rnd() * 3);
+    for (let i = 0; i < n; i++) {
+      const ox = x + (rnd() - 0.5) * 2.6, oz = z + (rnd() - 0.5) * 2.6;
+      const roll = rnd();
+      if (roll < 0.45) {
+        this._putOn(g, G.cyl, 'wood', 0.42, 1.0, 0.42, ox, oz);
+        // The iron band, as a short wider drum rather than a torus: at this
+        // size it reads identically and costs a tenth of the triangles.
+        this._put(g, G.cyl, 'iron', 0.45, 0.14, 0.45,
+          ox, this._gy(g, ox, oz) + 0.62, oz);
+      } else if (roll < 0.8) {
+        this._putOn(g, G.box, 'plank', 0.9, 0.8, 0.9, ox, oz, rnd() * 1.5);
+      } else {
+        this._putOn(g, G.low, 'thatch', 0.7, 0.5, 0.7, ox, oz);
+      }
+    }
+    // Firewood, cut and stacked. Four rows of three.
+    const fy = this._gy(g, x + 2.2, z - 1.6);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        this._put(g, G.cyl, 'woodDark', 0.17, 1.6, 0.17,
+          x + 2.2 + c * 0.38, fy + 0.2 + r * 0.36, z - 1.6, 0)
+          .rotation.z = Math.PI / 2;
+      }
+    }
+  }
+
+  /** A signpost at the road, with the name of the place pointing back. */
+  _signpost(g, x, z, a) {
+    this._putOn(g, G.cyl, 'woodDark', 0.14, 3.6, 0.14, x, z);
+    const y = this._gy(g, x, z);
+    for (let i = 0; i < 2; i++) {
+      this._put(g, G.box, 'plank', 2.2, 0.42, 0.14,
+        x + Math.cos(a) * 0.9, y + 3.0 - i * 0.62, z + Math.sin(a) * 0.9,
+        -a + (i ? 0.9 : 0));
+    }
+    this._put(g, G.cone, 'woodDark', 0.24, 0.4, 0.24, x, y + 3.8, z);
+  }
+
+  /**
+   * A RAIL FENCE round the outside, with a gap where the road comes in.
+   *
+   * The edge of a settlement matters as much as the middle of one: a ring of
+   * houses standing in open grass reads as props on a table, and the same
+   * houses inside a fence read as a place with an inside and an outside.
+   */
+  _fenceRun(g, r, rnd, gaps = []) {
+    const seg = Math.max(16, Math.round(r * 0.5));
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * Math.PI * 2;
+      if (gaps.some((ga) => Math.abs(((a - ga + Math.PI * 3)
+        % (Math.PI * 2)) - Math.PI) < 0.34)) continue;
+      if (rnd() < 0.08) continue;                    // a panel somebody took
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const y = this._gy(g, x, z);
+      this._put(g, G.cyl, 'woodDark', 0.12, 1.9, 0.12, x, y + 0.95, z);
+      const a2 = a + (Math.PI * 2) / seg;
+      const x2 = Math.cos(a2) * r, z2 = Math.sin(a2) * r;
+      const mx = (x + x2) * 0.5, mz = (z + z2) * 0.5;
+      const len = Math.hypot(x2 - x, z2 - z);
+      const my = (y + this._gy(g, x2, z2)) * 0.5;
+      for (const h of [0.65, 1.35]) {
+        this._put(g, G.box, 'plank', len, 0.14, 0.09,
+          mx, my + h, mz, -Math.atan2(z2 - z, x2 - x));
+      }
+    }
+  }
+
+  // ---------------------------------------------------------- the signatures
+
+  /** Build whatever this particular settlement is known for. See SIGNATURE. */
+  _signature(g, spec, R, rnd, style, ring, spots) {
+    const fn = SIGNATURE[spec.id];
+    if (fn && this[fn]) this[fn](g, spec, R, rnd, style, ring, spots);
+  }
+
+  /**
+   * CROAKHOLLOW — THE GREAT FROG.
+   *
+   * Old, mossy, twice the height of a house, sitting on a plinth in the
+   * square with a lantern held in its mouth. It is the first landmark of the
+   * game and it has to do two jobs: be a thing you can point at from the
+   * treeline, and tell you what the people here think they are.
+   */
+  _sigFrog(g, spec, R, rnd, style, ring) {
+    const x = -ring * 0.42, z = -ring * 0.28;
+    const y = this._gy(g, x, z);
+    // Plinth: three courses, each a little smaller.
+    for (let i = 0; i < 3; i++) {
+      this._put(g, G.box, i === 1 ? 'stoneDark' : 'stone',
+        6.4 - i * 0.9, 0.8, 5.6 - i * 0.9, x, y + 0.4 + i * 0.8, z);
+    }
+    const base = y + 2.4;
+    // Body, haunches, head. All one animal, in six spheres.
+    this._put(g, G.low, 'stoneDark', 3.1, 2.5, 3.6, x, base + 2.2, z);
+    for (const s of [-1, 1]) {
+      this._put(g, G.low, 'stoneDark', 1.5, 1.3, 2.0, x + s * 2.5, base + 1.2, z - 0.4);
+      // Front legs, straight down, the way a sitting frog holds them.
+      this._put(g, G.cyl, 'stoneDark', 0.55, 3.0, 0.55, x + s * 1.7, base + 1.5, z + 2.6);
+      this._put(g, G.low, 'stoneDark', 0.85, 0.4, 1.2, x + s * 1.7, base + 0.2, z + 3.2);
+    }
+    this._put(g, G.low, 'stoneDark', 2.3, 1.9, 2.0, x, base + 3.8, z + 2.0);
+    for (const s of [-1, 1]) {
+      this._put(g, G.low, 'stone', 0.75, 0.75, 0.75, x + s * 1.1, base + 5.0, z + 2.2);
+      this._put(g, G.low, 'obsidian', 0.34, 0.34, 0.34, x + s * 1.1, base + 5.2, z + 2.8);
+    }
+    // The lantern in its mouth, and the moss four hundred years put on it.
+    this._put(g, G.cyl, 'iron', 0.09, 1.2, 0.09, x, base + 3.0, z + 3.5);
+    this._put(g, G.low, 'lamp', 0.5, 0.62, 0.5, x, base + 2.3, z + 3.6);
+    for (let i = 0; i < 9; i++) {
+      const a = rnd() * Math.PI * 2, r = 1.6 + rnd() * 1.6;
+      this._put(g, G.low, 'leaf', 0.5 + rnd() * 0.5, 0.18, 0.5 + rnd() * 0.5,
+        x + Math.cos(a) * r, base + 1.4 + rnd() * 2.6, z + Math.sin(a) * r);
+    }
+    this._solid(g, 3.2, 4.0, 3.2, x, y + 4, z, 'statue');
+    this._anchor(g, x, base + 5.4, z + 2.2, 2.2);
+    // Offerings at its feet: somebody still comes here.
+    for (let i = 0; i < 5; i++) {
+      const a = rnd() * Math.PI * 2;
+      this._putOn(g, G.low, i % 2 ? 'leafPale' : 'lamp', 0.3, 0.3, 0.3,
+        x + Math.cos(a) * 4.6, z + Math.sin(a) * 4.6);
+    }
+  }
+
+  /**
+   * HARROWMEAD — THE MILL, and its sails turn.
+   *
+   * Movement is what makes a silhouette stick. The sail hub is its own group
+   * marked `spin`, which is the one thing `flatten` leaves standing so it can
+   * keep turning after the rest of the town is merged into eight meshes.
+   */
+  _sigMill(g, spec, R, rnd, style, ring) {
+    const x = ring * 0.86, z = -ring * 0.62;
+    const y = this._gy(g, x, z);
+    for (let i = 0; i < 2; i++) {
+      this._put(g, G.box, 'stone', 8.2 - i * 0.8, 0.7, 8.2 - i * 0.8,
+        x, y + 0.35 + i * 0.7, z);
+    }
+    this._put(g, G.taper, 'stonePale', 3.5, 13, 3.5, x, y + 8.0, z);
+    this._put(g, G.cone, 'tileDark', 3.4, 3.4, 3.4, x, y + 16.2, z);
+    // The stage the miller walks round to reef the sails.
+    this._put(g, G.disc, 'plank', 4.6, 0.3, 4.6, x, y + 6.4, z);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      this._put(g, G.cyl, 'woodDark', 0.08, 1.0, 0.08,
+        x + Math.cos(a) * 4.4, y + 6.9, z + Math.sin(a) * 4.4);
+    }
+    this._solid(g, 3.2, 8, 3.2, x, y + 8, z, 'mill');
+    this._anchor(g, x, y + 14, z, 2.6);
+
+    const hub = new THREE.Group();
+    hub.userData.spin = true;
+    hub.userData.rate = 0.34;
+    hub.position.set(x, y + 12.6, z + 3.6);
+    g.add(hub);
+    g.userData.spin = hub;
+    this._put(hub, G.cyl, 'ironDark', 0.4, 1.2, 0.4, 0, 0, 0).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 4; i++) {
+      const ang = (i / 4) * Math.PI * 2;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      const arm = this._put(hub, G.box, 'woodDark', 9.5, 0.4, 0.3,
+        c * 4.7, s * 4.7, 0);
+      arm.rotation.z = ang;
+      const sail = this._put(hub, G.box, 'cloth', 7.0, 2.1, 0.12,
+        c * 5.6 - s * 1.0, s * 5.6 + c * 1.0, 0.28);
+      sail.rotation.z = ang;
+    }
+    // Grain: the reason the mill is here at all.
+    for (let i = 0; i < 7; i++) {
+      const a = rnd() * Math.PI * 2, r = 6 + rnd() * 3;
+      this._putOn(g, G.cyl, 'thatch', 0.55, 1.3, 0.55,
+        x + Math.cos(a) * r, z + Math.sin(a) * r);
+    }
+    this._signpost(g, x - 8, z + 6, Math.PI);
+  }
+
+  /**
+   * THE STILTS — THE ROPE RING.
+   *
+   * Nine huts and a rope, says the blurb, so the rope had better be the
+   * village. A plank walkway on posts joins every hut in a ring above the
+   * water, with rope handrails and lanterns, and it carries `deck` colliders
+   * so you can actually walk it.
+   */
+  _sigRopeRing(g, spec, R, rnd, style, ring) {
+    const rad = ring * 0.9;
+    const deck = (SEA + 3.0) - g.position.y;
+    const seg = 20;
+    for (let i = 0; i < seg; i++) {
+      const a = (i / seg) * Math.PI * 2;
+      const a2 = ((i + 1) / seg) * Math.PI * 2;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      const x2 = Math.cos(a2) * rad, z2 = Math.sin(a2) * rad;
+      const mx = (x + x2) * 0.5, mz = (z + z2) * 0.5;
+      const len = Math.hypot(x2 - x, z2 - z) * 1.1;
+      const face = -Math.atan2(z2 - z, x2 - x);
+      this._put(g, G.box, 'plank', len, 0.3, 2.4, mx, deck, mz, face);
+      this._solid(g, len * 0.5, 0.25, 1.2, mx, deck, mz, 'deck');
+      // Posts down into the water, and the rail above.
+      const gy = this._gy(g, x, z);
+      this._put(g, G.cyl, 'woodDark', 0.18, deck - gy + 1, 0.18,
+        x, (deck + gy) * 0.5, z);
+      this._put(g, G.cyl, 'woodDark', 0.11, 1.5, 0.11, x, deck + 0.9, z);
+      this._put(g, G.box, 'rope', len, 0.08, 0.08, mx, deck + 1.5, mz, face);
+      if (i % 4 === 0) {
+        this._put(g, G.low, 'lamp', 0.28, 0.34, 0.28, x, deck + 1.8, z);
+        this._anchor(g, x, deck + 1.8, z, 1.6);
+      }
+      // A spur inward, so the ring is not a dead loop.
+      if (i % 5 === 0) {
+        this._put(g, G.box, 'plank', rad * 0.7, 0.3, 1.8,
+          Math.cos(a) * rad * 0.64, deck, Math.sin(a) * rad * 0.64, -a);
+        this._solid(g, rad * 0.35, 0.25, 0.9,
+          Math.cos(a) * rad * 0.64, deck, Math.sin(a) * rad * 0.64, 'deck');
+      }
+    }
+    // Fish drying, and the boats they were caught from.
+    for (let i = 0; i < 4; i++) {
+      const a = i * 1.6 + 0.4;
+      const x = Math.cos(a) * rad * 0.55, z = Math.sin(a) * rad * 0.55;
+      this._put(g, G.cyl, 'woodDark', 0.1, 3.0, 0.1, x - 1.4, deck + 1.5, z);
+      this._put(g, G.cyl, 'woodDark', 0.1, 3.0, 0.1, x + 1.4, deck + 1.5, z);
+      this._put(g, G.box, 'rope', 3.0, 0.06, 0.06, x, deck + 2.8, z);
+      for (let k = 0; k < 5; k++) {
+        this._put(g, G.low, 'bone', 0.16, 0.42, 0.1,
+          x - 1.1 + k * 0.55, deck + 2.4, z);
+      }
+      const bx = Math.cos(a) * rad * 1.16, bz = Math.sin(a) * rad * 1.16;
+      this._put(g, G.low, 'plank', 2.4, 0.5, 0.9, bx, SEA + 0.3 - g.position.y, bz, a);
+    }
+  }
+
+  /**
+   * ANURATH — THE FALLEN KING.
+   *
+   * A colossus of the old crown, face-down across what used to be the parade
+   * square, snapped at the waist. Nobody in the city will tell you who pulled
+   * it down. It is the largest single object in any settlement and it is the
+   * image the capital is meant to leave you with.
+   */
+  _sigFallenKing(g, spec, R, rnd, style, ring) {
+    const x = -ring * 0.2, z = ring * 0.5;
+    const y = this._gy(g, x, z);
+    const a = 0.5;
+    const c = Math.cos(a), s = Math.sin(a);
+    const at = (ox, oz) => [x + ox * c - oz * s, z + ox * s + oz * c];
+    // The body, in three pieces, with the break between the first two.
+    const parts = [[-9, 7.5], [1.5, 8.5], [12.5, 5.5]];
+    for (let i = 0; i < parts.length; i++) {
+      const [ox, len] = parts[i];
+      const [px, pz] = at(ox, 0);
+      this._put(g, G.box, 'marble', len, 4.4, 6.2, px, y + 2.0 + i * 0.15, pz, -a);
+    }
+    // The head, half-buried, turned to look at you.
+    const [hx, hz] = at(-14.5, 1.2);
+    this._put(g, G.low, 'marble', 3.4, 3.0, 3.4, hx, y + 1.9, hz);
+    this._put(g, G.torus, 'gold', 3.0, 3.0, 3.0, hx, y + 3.1, hz)
+      .rotation.set(Math.PI / 2, 0.4, 0);
+    for (const e of [-1, 1]) {
+      const [ex, ez] = at(-16.0, 1.2 + e * 1.2);
+      this._put(g, G.low, 'marbleDark', 0.6, 0.5, 0.6, ex, y + 2.4, ez);
+    }
+    // An arm flung out, and the hand that came off it.
+    const [ax, az] = at(-3, -6.5);
+    this._put(g, G.cyl, 'marble', 1.5, 11, 1.5, ax, y + 1.4, az, 0)
+      .rotation.set(Math.PI / 2, 0, a + 0.9);
+    const [fx, fz] = at(-2, -13);
+    this._put(g, G.low, 'marble', 2.0, 1.2, 2.4, fx, y + 1.0, fz);
+    for (let i = 0; i < 4; i++) {
+      this._put(g, G.cyl, 'marble', 0.32, 2.2, 0.32,
+        fx + (i - 1.5) * 0.9, y + 0.9, fz - 1.6, 0).rotation.x = 1.3;
+    }
+    // Rubble, and the weeds that got in afterwards.
+    for (let i = 0; i < 16; i++) {
+      const [rx, rz] = at(-18 + rnd() * 34, (rnd() - 0.5) * 14);
+      this._putOn(g, rnd() < 0.4 ? G.octa : G.low,
+        rnd() < 0.75 ? 'marbleDark' : 'leaf',
+        0.5 + rnd() * 1.1, 0.4 + rnd() * 0.8, 0.5 + rnd() * 1.1, rx, rz,
+        rnd() * 3);
+    }
+    for (const [ox, len] of parts) {
+      const [px, pz] = at(ox, 0);
+      this._solid(g, len * 0.5, 2.2, 3.1, px, y + 2.2, pz, 'colossus');
+    }
+    this._anchor(g, x, y + 5.5, z, 3.0);
+  }
+
+  /**
+   * THE LOW QUARTER — THE CANAL.
+   *
+   * The part of the capital that was always underwater, so the streets are
+   * water: a channel straight through the middle of it, punts tied along the
+   * bank, stepping stones where a bridge used to be, and a wheel that has not
+   * stopped turning because nobody knows how to stop it.
+   */
+  _sigCanal(g, spec, R, rnd, style, ring) {
+    const wy = (SEA + 0.15) - g.position.y;
+    const len = ring * 2.0;
+    // The channel: water down the middle, quay walls either side.
+    this._put(g, G.box, 'water', len, 0.3, 9.0, 0, wy, 0, 0.35);
+    for (const s of [-1, 1]) {
+      const zz = s * 5.4;
+      const x0 = Math.cos(0.35) * 0, z0 = zz;
+      this._put(g, G.box, 'stoneDark', len, 2.6, 1.6,
+        -Math.sin(0.35) * zz, wy + 1.0, z0 * Math.cos(0.35), 0.35);
+      for (let i = -4; i <= 4; i++) {
+        const t = i / 4;
+        const px = Math.cos(0.35) * t * len * 0.45 - Math.sin(0.35) * zz;
+        const pz = Math.sin(0.35) * t * len * 0.45 + Math.cos(0.35) * zz;
+        this._put(g, G.cyl, 'woodDark', 0.16, 2.6, 0.16, px, wy + 1.3, pz);
+        if (i % 2 === 0) this._put(g, G.low, 'lamp', 0.26, 0.3, 0.26, px, wy + 2.7, pz);
+      }
+    }
+    // Punts, tied up along the quay.
+    for (let i = 0; i < 5; i++) {
+      const t = (i / 4 - 0.5) * 0.8;
+      const s = i % 2 ? 1 : -1;
+      const px = Math.cos(0.35) * t * len - Math.sin(0.35) * s * 3.2;
+      const pz = Math.sin(0.35) * t * len + Math.cos(0.35) * s * 3.2;
+      this._put(g, G.low, 'plank', 3.0, 0.45, 1.0, px, wy + 0.35, pz, 0.35);
+      this._put(g, G.cyl, 'woodDark', 0.07, 3.4, 0.07, px + 1.0, wy + 1.7, pz)
+        .rotation.z = 0.3;
+    }
+    // Stepping stones where the bridge came down.
+    for (let i = 0; i < 5; i++) {
+      const zz = -5 + i * 2.5;
+      this._put(g, G.disc, 'stone', 1.1, 0.9, 1.1,
+        -Math.sin(0.35) * zz + ring * 0.3, wy + 0.35, Math.cos(0.35) * zz);
+      this._solid(g, 1.0, 0.5, 1.0,
+        -Math.sin(0.35) * zz + ring * 0.3, wy + 0.4, Math.cos(0.35) * zz, 'deck');
+    }
+    // The wheel nobody can stop.
+    const wx = -ring * 0.62, wz = ring * 0.34;
+    const wgy = this._gy(g, wx, wz);
+    for (const s of [-1, 1]) {
+      this._put(g, G.box, 'woodDark', 0.7, 9.0, 0.7, wx + s * 3.2, wgy + 4.5, wz);
+    }
+    const hub = new THREE.Group();
+    hub.userData.spin = true;
+    hub.userData.rate = 0.42;
+    hub.position.set(wx, wgy + 6.4, wz);
+    g.add(hub);
+    if (!g.userData.spin) g.userData.spin = hub;
+    this._put(hub, G.cyl, 'ironDark', 0.3, 6.6, 0.3, 0, 0, 0).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 10; i++) {
+      const ang = (i / 10) * Math.PI * 2;
+      const c = Math.cos(ang), s = Math.sin(ang);
+      this._put(hub, G.box, 'plank', 9.6, 0.3, 0.24, 0, 0, 0).rotation.z = ang;
+      this._put(hub, G.box, 'plank', 1.2, 1.6, 2.6, c * 4.6, s * 4.6, 0)
+        .rotation.z = ang;
+    }
+    this._anchor(g, wx, wgy + 9.5, wz, 2.4);
+  }
+
+  /**
+   * CUTTER'S REST — THE SAW.
+   *
+   * They still work it and nobody knows why, so the mill has to look like it
+   * is still working: a great blade on a driven shaft, a log deck feeding it,
+   * and more cut timber stacked around than anybody could ever have a use for.
+   */
+  _sigSawmill(g, spec, R, rnd, style, ring) {
+    const x = ring * 0.7, z = ring * 0.55;
+    const y = this._gy(g, x, z);
+    // The open shed: six posts and a long roof, no walls.
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 0, 1]) {
+        this._put(g, G.cyl, 'woodDark', 0.32, 7.0, 0.32,
+          x + sx * 6.0, y + 3.5, z + sz * 5.0);
+      }
+    }
+    this._put(g, G.box, 'plank', 14.0, 0.5, 12.0, x, y + 7.2, z);
+    this._put(g, G.box, 'tileDark', 15.0, 0.4, 6.6, x, y + 8.4, z)
+      .rotation.z = 0.22;
+    this._put(g, G.box, 'plank', 12.0, 0.4, 3.4, x, y + 0.4, z - 1.0);
+    this._solid(g, 6.5, 3.5, 6.0, x, y + 3.5, z, 'shed');
+    // The blade, on a shaft, mid-cut through a log.
+    const hub = new THREE.Group();
+    hub.userData.spin = true;
+    hub.userData.rate = 5.5;
+    hub.position.set(x + 1.2, y + 2.6, z + 1.2);
+    g.add(hub);
+    if (!g.userData.spin) g.userData.spin = hub;
+    this._put(hub, G.disc, 'iron', 2.6, 0.14, 2.6, 0, 0, 0)
+      .rotation.x = Math.PI / 2;
+    for (let i = 0; i < 14; i++) {
+      const ang = (i / 14) * Math.PI * 2;
+      this._put(hub, G.box, 'iron', 0.5, 0.5, 0.12,
+        Math.cos(ang) * 2.7, Math.sin(ang) * 2.7, 0).rotation.z = ang + 0.4;
+    }
+    this._put(g, G.cyl, 'bark', 0.8, 6.0, 0.8, x + 1.2, y + 1.2, z + 1.2, 0)
+      .rotation.z = Math.PI / 2;
+    // Log stacks, and the sawdust under them.
+    for (let s = 0; s < 3; s++) {
+      const lx = x - 11 - s * 3.6, lz = z + (s - 1) * 5;
+      const ly = this._gy(g, lx, lz);
+      for (let r = 0; r < 3; r++) {
+        for (let c2 = 0; c2 < 3 - r; c2++) {
+          this._put(g, G.cyl, 'bark', 0.62, 8.0, 0.62,
+            lx + (c2 - (2 - r) * 0.5) * 1.3, ly + 0.6 + r * 1.1, lz, 0)
+            .rotation.x = Math.PI / 2;
+        }
+      }
+      this._putOn(g, G.disc, 'thatch', 4.0, 0.14, 4.0, lx, lz + 4.5);
+    }
+    this._signpost(g, x - 9, z - 7, 2.4);
+  }
+
+  /**
+   * GLASSHOOK — THE RACKS, AND THE HOOK.
+   *
+   * Fishermen who will not say what they catch, so what is on the racks is
+   * deliberately not fish-shaped. The hook itself is the silhouette: a
+   * leaning iron mast with a lamp swung out over the water on a chain.
+   */
+  _sigDryingRacks(g, spec, R, rnd, style, ring) {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.3;
+      const rad = ring * 0.72;
+      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+      const y = this._gy(g, x, z);
+      // An A-frame with three lines strung across it.
+      for (const s of [-1, 1]) {
+        this._put(g, G.cyl, 'woodDark', 0.13, 5.0, 0.13,
+          x + Math.cos(a + 1.57) * s * 2.4, y + 2.4,
+          z + Math.sin(a + 1.57) * s * 2.4).rotation.z = s * 0.18;
+      }
+      for (let k = 0; k < 3; k++) {
+        this._put(g, G.box, 'rope', 4.8, 0.06, 0.06, x, y + 2.0 + k * 1.1, z,
+          -(a + 1.57));
+        for (let n = 0; n < 4; n++) {
+          const t = (n / 3 - 0.5) * 4.0;
+          this._put(g, G.low, n % 2 ? 'bone' : 'boneDark', 0.18, 0.5, 0.12,
+            x + Math.cos(a + 1.57) * t, y + 1.7 + k * 1.1,
+            z + Math.sin(a + 1.57) * t);
+        }
+      }
+      // A net over the frame.
+      if (i % 2 === 0) {
+        this._put(g, G.box, 'rope', 5.0, 2.6, 0.08, x, y + 3.4, z, -(a + 1.57));
+      }
+    }
+    // THE HOOK: a leaning mast with the light out on the end of it.
+    const hx = ring * 0.1, hz = -ring * 1.0;
+    const hy = this._gy(g, hx, hz);
+    for (let i = 0; i < 3; i++) {
+      this._put(g, G.box, 'stone', 5.0 - i, 0.9, 5.0 - i, hx, hy + 0.45 + i * 0.9, hz);
+    }
+    this._put(g, G.cyl, 'ironDark', 0.34, 15.0, 0.34, hx, hy + 10.2, hz)
+      .rotation.z = 0.13;
+    this._put(g, G.cyl, 'ironDark', 0.24, 6.0, 0.24, hx - 2.4, hy + 17.0, hz, 0)
+      .rotation.z = 1.15;
+    this._put(g, G.torus, 'ironDark', 1.3, 1.3, 1.3, hx - 5.0, hy + 16.0, hz)
+      .rotation.y = Math.PI / 2;
+    this._put(g, G.cyl, 'rope', 0.05, 2.2, 0.05, hx - 5.0, hy + 14.6, hz);
+    this._put(g, G.low, 'lamp', 0.9, 1.1, 0.9, hx - 5.0, hy + 13.2, hz);
+    this._solid(g, 1.4, 8, 1.4, hx, hy + 8, hz, 'mast');
+    this._anchor(g, hx - 5.0, hy + 13.6, hz, 2.6);
+  }
+
+  /**
+   * SANDREED — THE OASIS.
+   *
+   * The pool is the entire reason a town is here, so it is in the middle and
+   * everything faces it: a stone rim, palms leaning over it, and a covered
+   * bazaar lane running down one side under striped awnings.
+   */
+  _sigOasis(g, spec, R, rnd, style, ring) {
+    const px = -ring * 0.5, pz = ring * 0.35;
+    const py = this._gy(g, px, pz);
+    this._put(g, G.disc, 'water', 9.0, 0.4, 9.0, px, py - 0.35, pz);
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2;
+      const x = px + Math.cos(a) * 9.4, z = pz + Math.sin(a) * 9.4;
+      this._put(g, G.box, 'sandDark', 3.6, 0.9, 1.6,
+        x, this._gy(g, x, z) + 0.25, z, a + Math.PI / 2);
+    }
+    // Steps down to the water on one side, so it is a place people use.
+    for (let i = 0; i < 3; i++) {
+      this._put(g, G.box, 'sandDark', 6.0, 0.4, 1.4,
+        px, py - 0.1 - i * 0.4, pz + 9.6 - i * 1.4);
+    }
+    // Palms, leaning the way palms do.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.7;
+      const x = px + Math.cos(a) * 12, z = pz + Math.sin(a) * 12;
+      const y = this._gy(g, x, z);
+      const h = 8 + rnd() * 5;
+      const lean = 0.16 + rnd() * 0.12;
+      this._put(g, G.taper, 'bark', 0.42, h, 0.42, x, y + h * 0.5, z)
+        .rotation.z = Math.cos(a) * lean;
+      const tx = x - Math.cos(a) * lean * h * 0.9;
+      for (let k = 0; k < 6; k++) {
+        const fa = (k / 6) * Math.PI * 2;
+        const f = this._put(g, G.box, 'leaf', 4.6, 0.16, 0.9,
+          tx + Math.cos(fa) * 2.0, y + h - 0.3, z + Math.sin(fa) * 2.0, -fa);
+        f.rotation.z = 0.34;
+      }
+      this._put(g, G.low, 'gold', 0.5, 0.6, 0.5, tx, y + h - 0.9, z);
+      this._anchor(g, tx, y + h, z, 2.0);
+    }
+    // The bazaar lane: awnings on posts, all the way down one side.
+    for (let i = 0; i < 7; i++) {
+      const x = px + 15 + i * 0.4, z = pz - 12 + i * 4.0;
+      const y = this._gy(g, x, z);
+      for (const s of [-1, 1]) {
+        this._put(g, G.cyl, 'woodDark', 0.12, 3.6, 0.12, x + s * 3.0, y + 1.8, z);
+      }
+      this._put(g, G.box, i % 2 ? 'cloth' : 'clothBlue', 7.0, 0.14, 3.8,
+        x, y + 3.7, z, 0.1);
+      for (let k = 0; k < 3; k++) {
+        this._putOn(g, G.low, rnd() < 0.5 ? 'gold' : 'leafPale',
+          0.34, 0.34, 0.34, x - 1.4 + k * 1.4, z + 0.9);
+      }
+    }
+  }
+
+  /**
+   * LAKEWATCH — THE PIER.
+   *
+   * They row out at night and will not say why, so the pier goes a long way
+   * out and there is a bell at the end of it. Lamps the whole length, boats
+   * tied along it, and the thing they ring when one does not come back.
+   */
+  _sigPier(g, spec, R, rnd, style, ring) {
+    const wy = (SEA + 1.4) - g.position.y;
+    const a = -1.1;
+    const c = Math.cos(a), s = Math.sin(a);
+    const len = ring * 1.9;
+    for (let i = 0; i < 16; i++) {
+      const t = ring * 0.3 + (i / 15) * len;
+      const x = c * t, z = s * t;
+      this._put(g, G.box, 'plank', 3.2, 0.34, 3.4, x, wy, z, -a);
+      this._solid(g, 1.6, 0.25, 1.7, x, wy, z, 'deck');
+      for (const sd of [-1, 1]) {
+        const bx = x - s * sd * 1.5, bz = z + c * sd * 1.5;
+        this._put(g, G.cyl, 'woodDark', 0.17, 4.0, 0.17, bx, wy - 1.8, bz);
+      }
+      if (i % 4 === 2) {
+        this._lamppost(g, x - s * 1.7, z + c * 1.7, 3.4);
+        // A boat, tied on.
+        this._put(g, G.low, 'plank', 3.2, 0.55, 1.1,
+          x + s * 3.4, wy - 1.1, z - c * 3.4, -a);
+      }
+    }
+    // The bell at the end, in its frame.
+    const ex = c * (ring * 0.3 + len), ez = s * (ring * 0.3 + len);
+    for (const sd of [-1, 1]) {
+      this._put(g, G.cyl, 'woodDark', 0.26, 6.0, 0.26,
+        ex - s * sd * 1.8, wy + 3.0, ez + c * sd * 1.8);
+    }
+    this._put(g, G.box, 'woodDark', 4.4, 0.4, 0.4, ex, wy + 6.1, ez, -a + Math.PI / 2);
+    this._put(g, G.taper, 'gold', 1.4, 2.2, 1.4, ex, wy + 4.7, ez);
+    this._put(g, G.low, 'gold', 0.3, 0.4, 0.3, ex, wy + 3.4, ez);
+    this._anchor(g, ex, wy + 6.1, ez, 2.4);
+    this._solid(g, 1.6, 1.2, 1.6, ex, wy + 4.7, ez, 'bell');
+  }
+
+  /**
+   * MOONWATCH — THE OBSERVATORY.
+   *
+   * Astronomers who have not slept in years, and the reason is on the roof: a
+   * dome, a brass ring big enough to walk through, and a tube pointed at
+   * whatever it is they are watching. It leans north, which is where the
+   * Ashen Throne is.
+   */
+  _sigObservatory(g, spec, R, rnd, style, ring) {
+    const x = ring * 0.25, z = -ring * 0.8;
+    const y = this._gy(g, x, z);
+    for (let i = 0; i < 3; i++) {
+      this._put(g, G.disc, 'stonePale', 7.4 - i * 0.8, 0.8, 7.4 - i * 0.8,
+        x, y + 0.4 + i * 0.8, z);
+    }
+    this._put(g, G.cyl, 'stonePale', 4.6, 14, 4.6, x, y + 9.4, z);
+    // Windows, all the way round, all of them lit.
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      this._put(g, G.box, 'lamp', 0.7, 1.4, 0.3,
+        x + Math.cos(a) * 4.6, y + 8.0 + (i % 3) * 2.2, z + Math.sin(a) * 4.6, -a);
+    }
+    // The dome, and the slot cut in it.
+    this._put(g, G.low, 'iron', 5.2, 3.4, 5.2, x, y + 16.4, z);
+    this._put(g, G.box, 'obsidian', 1.6, 3.6, 5.4, x, y + 17.4, z, 0.4);
+    // The great brass ring, tilted the way an armillary is.
+    this._put(g, G.torus, 'gold', 6.4, 6.4, 6.4, x, y + 17.0, z)
+      .rotation.set(0.9, 0.4, 0);
+    this._put(g, G.torus, 'gold', 5.4, 5.4, 5.4, x, y + 17.0, z)
+      .rotation.set(1.9, 1.1, 0);
+    // The tube, pointed north.
+    const tube = this._put(g, G.taper, 'ironDark', 0.9, 9.0, 0.9,
+      x, y + 19.5, z - 2.2);
+    tube.rotation.x = -0.95;
+    this._put(g, G.torus, 'gold', 1.0, 1.0, 1.0, x, y + 22.4, z - 4.6)
+      .rotation.x = 0.6;
+    this._solid(g, 4.2, 7, 4.2, x, y + 7, z, 'tower');
+    this._anchor(g, x, y + 16, z, 3.0);
+    // Charts pinned up outside, and the ladder they left leaning.
+    for (let i = 0; i < 4; i++) {
+      const a = 2.2 + i * 0.5;
+      this._put(g, G.box, 'bone', 1.6, 2.0, 0.08,
+        x + Math.cos(a) * 5.0, y + 2.6, z + Math.sin(a) * 5.0, -a);
+    }
+    this._put(g, G.box, 'plank', 0.3, 9.0, 0.3, x + 5.4, y + 4.4, z + 1.0)
+      .rotation.z = 0.24;
+  }
+
+  /**
+   * THE HOLLOW MARKET — THE STALLS, AND NOBODY.
+   *
+   * Stalls, awnings, prices chalked up, says the blurb. So the signature is
+   * scale: forty-odd stalls in rows with the goods still on them, every
+   * awning intact, and one enormous bell in the middle that nobody rang. An
+   * empty market is far more frightening than a ruined one.
+   */
+  _sigEmptyStalls(g, spec, R, rnd, style, ring) {
+    for (let row = -3; row <= 3; row++) {
+      for (let col = -3; col <= 3; col++) {
+        if (Math.abs(row) < 1 && Math.abs(col) < 1) continue;
+        const x = col * 9.5 + (rnd() - 0.5) * 1.4;
+        const z = row * 8.5 + (rnd() - 0.5) * 1.4;
+        if (Math.hypot(x, z) > ring * 1.05) continue;
+        this._stall(g, x, z, (row + col) % 2 ? 0 : Math.PI / 2, rnd);
+        // The chalked price board, still legible.
+        this._putOn(g, G.box, 'obsidian', 1.2, 1.5, 0.1, x + 2.6, z - 1.4, 0.4);
+        if (rnd() < 0.4) this._clutter(g, x - 3.0, z + 2.4, rnd);
+      }
+    }
+    // THE BELL. Nobody rang it, and that is the whole story of the place.
+    const y = this._gy(g, 0, 0);
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        this._put(g, G.cyl, 'woodDark', 0.5, 13.0, 0.5,
+          sx * 3.4, y + 6.5, sz * 3.4).rotation.z = -sx * 0.1;
+      }
+    }
+    this._put(g, G.box, 'woodDark', 8.0, 0.7, 0.7, 0, y + 12.6, 0);
+    this._put(g, G.box, 'woodDark', 0.7, 0.7, 8.0, 0, y + 12.6, 0);
+    this._put(g, G.cone, 'tileDark', 6.4, 3.0, 6.4, 0, y + 14.4, 0);
+    this._put(g, G.taper, 'gold', 3.2, 5.4, 3.2, 0, y + 9.2, 0);
+    this._put(g, G.low, 'gold', 0.8, 1.0, 0.8, 0, y + 6.2, 0);
+    this._solid(g, 3.0, 3.0, 3.0, 0, y + 9.0, 0, 'bell');
+    this._anchor(g, 0, y + 12.6, 0, 3.2);
+  }
+
+  /**
+   * LUMEN — THE LIGHT FIELDS.
+   *
+   * They grow the light and they will show you how. Terraces stepping up the
+   * slope, each one a bed of something that glows, with tall stalks at the
+   * back and glass frames over the young ones. In the Rimefang's dark it is
+   * visible from a very long way off, which is the point.
+   */
+  _sigLightFields(g, spec, R, rnd, style, ring) {
+    for (let t = 0; t < 4; t++) {
+      const rad = ring * (0.5 + t * 0.22);
+      const lift = t * 1.5;
+      // The retaining wall of the terrace.
+      const seg = 18 + t * 4;
+      for (let i = 0; i < seg; i++) {
+        const a = (i / seg) * Math.PI * 2 - 0.9;
+        if (a > 0.5 && a < 1.3) continue;                 // the way up
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+        const y = this._gy(g, x, z);
+        this._put(g, G.box, 'stoneDark', rad * 0.42, 1.6 + lift, 1.2,
+          x, y + (1.6 + lift) * 0.5 - 0.5, z, a + Math.PI / 2);
+      }
+      // The crop: rows of glowing bulbs, brighter the higher you go.
+      const beds = 20 + t * 6;
+      for (let i = 0; i < beds; i++) {
+        const a = (i / beds) * Math.PI * 2 + t * 0.2;
+        const r2 = rad - 3.2 - rnd() * 2.4;
+        const x = Math.cos(a) * r2, z = Math.sin(a) * r2;
+        const y = this._gy(g, x, z) + lift * 0.7;
+        this._put(g, G.cyl, 'bark', 0.12, 1.3 + rnd() * 0.8, 0.12, x, y + 0.7, z);
+        this._put(g, G.low, t >= 2 ? 'glow' : 'green',
+          0.34 + rnd() * 0.2, 0.4, 0.34, x, y + 1.6, z);
+      }
+      // Glass frames over the young beds.
+      if (t < 2) {
+        for (let i = 0; i < 3; i++) {
+          const a = 2.0 + i * 1.1 + t;
+          const x = Math.cos(a) * (rad - 6), z = Math.sin(a) * (rad - 6);
+          const y = this._gy(g, x, z) + lift * 0.7;
+          this._put(g, G.box, 'crystal', 3.4, 0.1, 2.6, x, y + 1.2, z, a)
+            .rotation.z = 0.2;
+          for (const sx of [-1, 1]) {
+            this._put(g, G.cyl, 'plank', 0.09, 1.2, 0.09, x + sx * 1.5, y + 0.6, z);
+          }
+        }
+      }
+    }
+    // The tall stalks at the top: the thing you see from the pass.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.4;
+      const x = Math.cos(a) * ring * 0.28, z = Math.sin(a) * ring * 0.28;
+      const y = this._gy(g, x, z);
+      const h = 9 + rnd() * 5;
+      this._put(g, G.taper, 'bark', 0.3, h, 0.3, x, y + h * 0.5, z);
+      this._put(g, G.low, 'glow', 1.3, 1.7, 1.3, x, y + h + 0.7, z);
+      this._anchor(g, x, y + h, z, 2.0);
+    }
+  }
+
   // -------------------------------------------------------- settlement kinds
 
   /**
@@ -663,6 +1533,8 @@ export class Sites {
     g.userData.mend = mend;
     const ring = spec.r * cfg.ring;
     const n = cfg.houses;
+    /** Where every front door is, in the group's own coordinates. */
+    const doors = [];
     for (let i = 0; i < n; i++) {
       // Two rings for a city, one for anything smaller — a single ring of
       // twenty-eight houses is a fence, not a city.
@@ -677,6 +1549,7 @@ export class Sites {
       const h = 2.6 + rnd() * 1.4;
       this._house(g, x, z, w, d, h, a + Math.PI, style, drop + stilt);
       spots.push({ x: g.position.x + x * 0.72, z: g.position.z + z * 0.72 });
+      doors.push({ x: x * 0.78, z: z * 0.78, a, w, d });
     }
 
     // The centre: a well, a fire, and the lamps that make it findable at dusk.
@@ -737,6 +1610,58 @@ export class Sites {
         spots.push({ x: g.position.x + x + 4, z: g.position.z + z + 2.4 });
       }
     }
+
+    /**
+     * ---- WHAT TURNS A RING OF HOUSES INTO SOMEWHERE PEOPLE LIVE ----
+     *
+     * Everything below this line is dressing, and dressing is most of what a
+     * village IS. A house is a box with a roof on it wherever you build it;
+     * what tells you somebody lives in that box is the path worn to its door,
+     * the washing on the line beside it, the garden it eats out of and the
+     * firewood stacked against its wall.
+     *
+     * All of it hugs the terrain — every paving stone, rail and post asks
+     * `_gy` where the ground is — and all of it is merged into the same eight
+     * meshes as the houses by `flatten`, so a village that reads as lived-in
+     * costs the same number of draw calls as one that reads as a diagram.
+     */
+    this._plaza(g, Math.min(19, ring * 0.44), rnd);
+    for (const d of doors) {
+      // The path in from the square, and the yard round the door.
+      this._path(g, Math.cos(d.a) * ring * 0.3, Math.sin(d.a) * ring * 0.3,
+        d.x, d.z, rnd);
+      const out = d.a + Math.PI;
+      const side = d.a + 1.9;
+      if (rnd() < 0.55) {
+        this._garden(g, d.x + Math.cos(side) * 5.4, d.z + Math.sin(side) * 5.4,
+          d.a, rnd);
+      }
+      if (rnd() < 0.6) {
+        this._clutter(g, d.x + Math.cos(out) * 2.6 + Math.cos(side) * 2.2,
+          d.z + Math.sin(out) * 2.6 + Math.sin(side) * 2.2, rnd);
+      }
+    }
+    // Washing between every second pair of neighbours, and lanterns strung
+    // across the square. Both are lines rather than objects, which is why
+    // they read from a distance: they cross the gaps the houses leave.
+    for (let i = 0; i < doors.length; i += 2) {
+      const a2 = doors[(i + 1) % doors.length];
+      const d = doors[i];
+      if (Math.hypot(a2.x - d.x, a2.z - d.z) > ring * 0.9) continue;
+      this._washline(g, d.x, d.z, a2.x, a2.z, rnd);
+    }
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI + 0.4;
+      const r2 = ring * 0.46;
+      this._lanternLine(g, Math.cos(a) * r2, Math.sin(a) * r2,
+        Math.cos(a + Math.PI) * r2, Math.sin(a + Math.PI) * r2, 6);
+    }
+    // The road in, named, and a fence with a gap for it. A city has a wall
+    // instead, so it does not get one.
+    this._signpost(g, ring * 0.94, ring * 0.24, 0.25);
+    if (!cfg.wall) this._fenceRun(g, spec.r * 0.88, rnd, [0.25, 0.25 + Math.PI]);
+    // And the one thing this place, and only this place, is known for.
+    this._signature(g, spec, R, rnd, style, ring, spots);
 
     // ---- boarded up, or rebuilding ----
     {
@@ -854,6 +1779,8 @@ export class Sites {
    */
   _treeVillage(g, spec, R, rnd, style) {
     const spots = [];
+    /** Every platform, so the bridges and the lantern lines can find them. */
+    const decks = [];
     for (let i = 0; i < 11; i++) {
       const a = i * 0.86;
       const y = 6 + i * 6.5;
@@ -871,14 +1798,83 @@ export class Sites {
       }
       this._lamppost(g, x + 2, z + 2, 3.0);
       this._anchor(g, x, y + 2, z, 2.0);
+      decks.push({ x, z, y, a });
+      // A rail round the outside edge, because eleven platforms with no rails
+      // read as scaffolding rather than as somebody's balcony.
+      for (let k = 0; k < 6; k++) {
+        const ra = a + (k / 6 - 0.5) * 1.5;
+        const rx = Math.cos(ra) * (rad + 3.2), rz = Math.sin(ra) * (rad + 3.2);
+        this._put(g, G.cyl, 'woodDark', 0.08, 1.1, 0.08, rx, y + 0.8, rz);
+      }
+      // Bunting and lanterns strung out to the branch above.
+      this._put(g, G.box, 'rope', 0.08, 6.5, 0.08, x, y + 3.4, z);
+      this._put(g, G.low, 'lamp', 0.3, 0.38, 0.3, x + 1.6, y + 2.2, z + 1.6);
     }
-    // The ground floor: a market round the roots.
+    /**
+     * THE ROPE BRIDGES.
+     *
+     * The thing that makes Roothome read as one village rather than eleven
+     * sheds nailed to a tree: every platform is joined to the next one round
+     * the spiral, so from the ground it is a web of walkways going up into the
+     * canopy with lanterns hanging off all of them.
+     */
+    for (let i = 0; i < decks.length - 1; i++) {
+      const A = decks[i], B = decks[i + 1];
+      const mx = (A.x + B.x) * 0.5, mz = (A.z + B.z) * 0.5;
+      const my = (A.y + B.y) * 0.5;
+      const len = Math.hypot(B.x - A.x, B.z - A.z);
+      const face = -Math.atan2(B.z - A.z, B.x - A.x);
+      const deck = this._put(g, G.box, 'plank', len, 0.28, 1.7, mx, my, mz, face);
+      deck.rotation.z = 0;
+      this._solid(g, len * 0.4, 0.3, 0.85, mx, my, mz, 'deck');
+      for (const s of [-1, 1]) {
+        const rx = mx - Math.sin(-face) * s * 0.9;
+        const rz = mz - Math.cos(-face) * s * 0.9;
+        this._put(g, G.box, 'rope', len, 0.07, 0.07, rx, my + 1.1, rz, face);
+      }
+      for (let k = 1; k < 4; k++) {
+        const t = k / 4;
+        this._put(g, G.low, 'lamp', 0.22, 0.28, 0.22,
+          A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t + 1.0,
+          A.z + (B.z - A.z) * t);
+      }
+      this._anchor(g, mx, my + 1.2, mz, 2.0);
+    }
+    /**
+     * THE GREAT LANTERN.
+     *
+     * Hung in the middle of the spiral on four chains, three metres across.
+     * It is the only thing in the Hollowroot you can see from outside the
+     * treeline at night, and it is what Roothome means.
+     */
+    const gy = 44;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      this._put(g, G.cyl, 'rope', 0.07, 16, 0.07,
+        Math.cos(a) * 5.0, gy + 10, Math.sin(a) * 5.0).rotation.z = Math.cos(a) * 0.28;
+    }
+    this._put(g, G.cone, 'tileDark', 3.6, 1.8, 3.6, 0, gy + 3.2, 0);
+    this._put(g, G.taper, 'lamp', 2.6, 4.4, 2.6, 0, gy, 0);
+    this._put(g, G.torus, 'gold', 2.9, 2.9, 2.9, 0, gy - 2.0, 0)
+      .rotation.x = Math.PI / 2;
+    this._put(g, G.low, 'gold', 0.5, 0.9, 0.5, 0, gy - 2.9, 0);
+    this._anchor(g, 0, gy, 0, 3.4);
+    // The ground floor: a market round the roots, paved, under lantern lines.
+    this._plaza(g, 26, rnd, 'plank');
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * Math.PI * 2 + 0.5;
       this._stall(g, Math.cos(a) * 34, Math.sin(a) * 34, a + Math.PI, rnd);
       spots.push({ x: g.position.x + Math.cos(a) * 30, z: g.position.z + Math.sin(a) * 30 });
+      this._lanternLine(g, Math.cos(a) * 30, Math.sin(a) * 30,
+        Math.cos(a + Math.PI * 0.5) * 30, Math.sin(a + Math.PI * 0.5) * 30, 5);
+      this._clutter(g, Math.cos(a + 0.4) * 22, Math.sin(a + 0.4) * 22, rnd);
+    }
+    for (let i = 0; i < 3; i++) {
+      const a = i * 2.1 + 1.0;
+      this._garden(g, Math.cos(a) * 40, Math.sin(a) * 40, a, rnd);
     }
     this._fire(g, 0, 36, rnd);
+    this._signpost(g, 30, 30, 0.8);
     return spots;
   }
 
@@ -1954,6 +2950,10 @@ export class Sites {
     for (const [, L] of this.landmarks) {
       if (L.spin && L.group.visible) L.spin.rotation.z += dt * 0.4;
     }
+    // And the same for a settlement's own moving parts.
+    for (const s of this.spins) {
+      if (s.site.visible) s.hub.rotation.z += dt * s.rate;
+    }
   }
 
   /** The site whose trigger the player is standing in, or null. */
@@ -1966,6 +2966,26 @@ export class Sites {
       // trigger would be something you walk past.
       const reach = Math.max(14, s.r * 0.8);
       if (d < reach && d < bestD) { bestD = d; best = s; }
+    }
+    return best;
+  }
+
+  /**
+   * The settlement you are STANDING IN, or null for open country.
+   *
+   * Unlike `nearestSettlement`, which reaches out far enough to have the
+   * residents built before you can see them, this is the settlement's own
+   * footprint with a short apron round it — it is what the music asks, and
+   * the music should change as you come through the gate rather than a
+   * hundred and fifty units out in a field.
+   */
+  settlementAt(x, z) {
+    let best = null, bestD = Infinity;
+    for (const s of this.sites) {
+      if (!s.settlement) continue;
+      const d = Math.hypot(s.at.x - x, s.at.z - z);
+      if (d > s.r * 1.15 + 14 || d >= bestD) continue;
+      bestD = d; best = s;
     }
     return best;
   }

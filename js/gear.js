@@ -305,9 +305,23 @@ export function gearOfTier(tier, cat = null) {
  * guardian always yields one piece of equipment, where a camp yields
  * materials and food.
  */
-export function rollLoot(tier, boss, rnd = Math.random) {
+export function rollLoot(tier, boss, rnd = Math.random, opts = {}) {
   const out = [];
   const pick = (list) => list.length ? list[Math.floor(rnd() * list.length)] : null;
+  /**
+   * DEEP LOOT — the reward for going somewhere you did not have to.
+   *
+   * `opts.deep` rolls the table ONE TIER ABOVE where the player is standing.
+   * That is the entire mechanism behind "there is a hidden cave behind that
+   * waterfall and there is a legendary weapon in it": the cave is in a
+   * tier-two region, so its ordinary chests hold tier-two gear, and the one
+   * at the bottom of it holds tier-three — which is a piece of equipment the
+   * player cannot get from the main line yet.
+   *
+   * A whole tier is a big jump, and it is meant to be. A drop that is five
+   * per cent better is not worth walking behind a waterfall for.
+   */
+  if (opts.deep) tier = Math.min(5, tier + 1);
   if (boss) {
     const eq = pick([...gearOfTier(tier, 'weapon'), ...gearOfTier(tier, 'armour')]);
     if (eq) out.push({ id: eq.id, n: 1 });

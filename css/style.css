@@ -2956,3 +2956,311 @@ kbd {
   font-size: 21px;
   color: var(--parch);
 }
+/* ══════════════════════════════════════════════════ CINEMATIC DIALOGUE ══ */
+/*
+   The letterbox. Two bars that slide in from the edges — the cheapest
+   possible signal that the game has stopped being a game for a moment, and
+   the thing that makes a conversation read as a scene rather than as a
+   pop-up. See js/cinema.js.
+*/
+.cine-bar {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  height: 11vh;
+  background: #05070a;
+  z-index: 58;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+#cine-bar-top { top: 0; transform: translateY(-100%); }
+#cine-bar-bottom { bottom: 0; transform: translateY(100%); }
+.cine-bar.show { opacity: 1; transform: translateY(0); }
+
+#cinema {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 24px 5.5vh;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+#cinema.show { opacity: 1; transform: translateY(0); }
+
+.cine-box {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: min(1020px, 94vw);
+  min-height: 132px;
+  padding: 18px 22px 22px;
+  background: linear-gradient(180deg, rgba(10, 13, 18, 0.93), rgba(6, 8, 11, 0.97));
+  border: 2px solid rgba(255, 207, 92, 0.34);
+  border-radius: 4px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.7), inset 0 0 40px rgba(0, 0, 0, 0.5);
+}
+/* A gold hairline inside the border: it is a legend being told, after all. */
+.cine-box::before {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(255, 207, 92, 0.13);
+  pointer-events: none;
+}
+
+#cine-portrait {
+  flex: 0 0 auto;
+  width: 0;
+  overflow: hidden;
+  border: 2px solid rgba(255, 207, 92, 0.3);
+  background: #0a0e12;
+  transition: width 0.25s ease;
+}
+#cine-portrait.show { width: 92px; }
+#cine-portrait canvas { display: block; width: 92px; height: 92px; }
+
+.cine-words { flex: 1 1 auto; min-width: 0; }
+#cine-name {
+  display: block;
+  font-family: var(--font-px);
+  font-size: 13px;
+  letter-spacing: 2.5px;
+  color: var(--gold);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.8);
+}
+#cine-text {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 27px;
+  line-height: 1.32;
+  color: var(--parch);
+  /* Kept on one wrap so a long line does not bounce the box height about. */
+  min-height: 72px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85);
+}
+#cine-hint {
+  position: absolute;
+  right: 18px;
+  bottom: 10px;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  color: var(--parch-dim);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+#cine-hint.show { opacity: 1; animation: cine-blink 1.4s infinite; }
+#cine-hint b {
+  font-family: var(--font-px);
+  font-size: 11px;
+  color: var(--gold);
+  border: 1px solid var(--gold-dark);
+  padding: 3px 5px;
+  margin-right: 6px;
+}
+@keyframes cine-blink { 0%, 70% { opacity: 1; } 85% { opacity: 0.35; } 100% { opacity: 1; } }
+
+/*
+   BOSS BANTER.
+
+   Low, narrow and out of the way: it sits under the middle of the screen
+   where nothing important is drawn, it never has a portrait, and it has no
+   key prompt because there is nothing to press. It must be readable in the
+   corner of an eye during a dodge, which is why it is one line and bright.
+*/
+#banter {
+  position: fixed;
+  left: 50%;
+  bottom: 20vh;
+  transform: translate(-50%, 10px);
+  max-width: min(760px, 88vw);
+  padding: 8px 18px;
+  background: rgba(6, 8, 11, 0.72);
+  border-left: 3px solid rgba(255, 138, 92, 0.8);
+  font-family: var(--font-ui);
+  font-size: 24px;
+  color: var(--parch);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.9);
+  z-index: 46;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+#banter.show { opacity: 1; transform: translate(-50%, 0); }
+#banter b {
+  font-family: var(--font-px);
+  font-size: 11px;
+  letter-spacing: 2px;
+  margin-right: 12px;
+  vertical-align: 2px;
+}
+
+/*
+   A MEMORY SURFACING.
+
+   White, not black: a flashback is a thing coming back to you, and a wash to
+   white reads as remembering where a fade to black reads as passing out.
+*/
+#memory-wash {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 46%, rgba(233, 244, 255, 0.96),
+    rgba(176, 206, 232, 0.9) 55%, rgba(30, 44, 58, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 66;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+#memory-wash.show { opacity: 1; }
+#memory-wash.thin { opacity: 0.35; }
+#memory-wash .mw-label {
+  font-family: var(--font-px);
+  font-size: 17px;
+  letter-spacing: 6px;
+  color: #24303c;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.6s ease 0.25s, transform 0.8s ease 0.25s;
+}
+#memory-wash.show .mw-label { opacity: 1; transform: translateY(0); }
+
+@media (max-width: 720px) {
+  #cine-text { font-size: 22px; min-height: 60px; }
+  #cine-portrait.show { width: 66px; }
+  #cine-portrait canvas { width: 66px; height: 66px; }
+  #banter { font-size: 19px; bottom: 24vh; }
+}
+
+/*
+   LIGHTNING, during the fall. A single flash of the whole screen — the
+   cheapest possible storm, and at 90 milliseconds it reads as a strike
+   rather than as a bug.
+*/
+#storm-flash {
+  position: fixed;
+  inset: 0;
+  background: #eaf4ff;
+  opacity: 0;
+  z-index: 44;
+  pointer-events: none;
+  transition: opacity 0.28s ease-out;
+}
+#storm-flash.show { opacity: 0.62; transition: opacity 0.03s linear; }
+
+/* ══════════════════════════════════════════════════════════ SAVE FILES ══ */
+.card-wide { max-width: 760px; }
+
+.save-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+
+.save-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border: 2px solid var(--ink-3);
+  background: rgba(20, 20, 27, 0.72);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.save-row:hover { border-color: var(--gold-dark); background: rgba(32, 30, 24, 0.8); }
+.save-row.is-empty { border-style: dashed; }
+.save-row.is-active { border-color: var(--gold); }
+
+/* The whole row is the load button; the bin is a separate hit area. */
+.save-pick {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 14px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.save-slotno {
+  flex: 0 0 auto;
+  font-family: var(--font-px);
+  font-size: 15px;
+  color: var(--gold);
+  width: 62px;
+}
+.save-body { flex: 1 1 auto; min-width: 0; }
+.save-title {
+  font-family: var(--font-px);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  color: var(--parch);
+  margin-bottom: 5px;
+}
+.save-row.is-empty .save-title { color: var(--parch-dim); }
+.save-facts {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  color: var(--parch-dim);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.save-facts b { color: var(--gold); font-weight: normal; }
+.save-facts .sep { opacity: 0.4; margin: 0 7px; }
+
+/* Progress along the main line, as a bar rather than a number. */
+.save-bar {
+  margin-top: 7px;
+  height: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--ink-3);
+}
+.save-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-dark), var(--gold));
+}
+
+.save-del {
+  flex: 0 0 auto;
+  width: 52px;
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--ink-3);
+  color: var(--parch-dim);
+  font-family: var(--font-px);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.save-del:hover { background: rgba(224, 90, 74, 0.22); color: var(--danger); }
+
+.erase-what {
+  border: 2px solid var(--danger);
+  background: rgba(224, 90, 74, 0.1);
+  padding: 14px;
+  margin: 6px 0 12px;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  color: var(--parch);
+  line-height: 1.4;
+}
+.erase-what b { font-family: var(--font-px); font-size: 12px; color: var(--gold); }
+.danger-note { color: var(--danger) !important; }
+.btn-danger { border-color: var(--danger) !important; }
+.btn-danger span { color: var(--danger) !important; }

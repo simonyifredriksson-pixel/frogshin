@@ -32,30 +32,35 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
-import { CFG } from './config.js?v=v87';
-import { clamp, damp, mulberry32 } from './util.js?v=v87';
-import { Realm } from './realm.js?v=v87';
-import { Scatter } from './scatter.js?v=v87';
-import { Sites } from './realmsites.js?v=v87';
-import { Camp } from './mobs.js?v=v87';
-import { DungeonBoss } from './dungeonboss.js?v=v87';
-import { Frogath } from './frogath.js?v=v87';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
+import { CFG } from './config.js?v=v88';
+import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v88';
+import { Realm } from './realm.js?v=v88';
+import { Scatter } from './scatter.js?v=v88';
+import { Sites } from './realmsites.js?v=v88';
+import { Camp } from './mobs.js?v=v88';
+import { DungeonBoss } from './dungeonboss.js?v=v88';
+import { Frogath } from './frogath.js?v=v88';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v88';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v87';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v87';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v87';
+  CONTENT_HALF } from './regions.js?v=v88';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v88';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v88';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v87';
-import { People, Life, Dialogue, Journal, grantReward,
-  disposeVillagerMats } from './realmquests.js?v=v87';
-import { disposeLandmarkMats } from './landmarks.js?v=v87';
-import { Props, disposePropMats } from './props.js?v=v87';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v87';
-import { Ambience } from './ambience.js?v=v87';
-import { Weather } from './weather.js?v=v87';
-import { Audio } from './audio.js?v=v87';
+  mainObjective } from './quests.js?v=v88';
+import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
+  disposeVillagerMats } from './realmquests.js?v=v88';
+import { disposeLandmarkMats } from './landmarks.js?v=v88';
+import { Props, disposePropMats } from './props.js?v=v88';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v88';
+import { Ambience } from './ambience.js?v=v88';
+import { Weather } from './weather.js?v=v88';
+import { Audio } from './audio.js?v=v88';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v88';
+import { Flashbacks, memoryStage, memoriesFound,
+  MEMORY_COUNT } from './flashbacks.js?v=v88';
+import { Cine } from './cinema.js?v=v88';
+import { recommendedFor, readiness } from './guardians.js?v=v88';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -97,12 +102,74 @@ function powerFor(tier, indexInRegion) {
 }
 
 /**
- * What the boss bar says when a guardian changes phase.
+ * THE OTHER HALF OF THE OPENING.
  *
- * Told, not hidden. A player who watches a fight suddenly get harder with no
- * explanation reads it as the game cheating; a line under the bar turns the
- * same moment into "right, that was round one".
+ * The player fought this exact frog in the first two minutes of the game and
+ * then forgot it. Everything here is written to be the SECOND half of that
+ * conversation: he refers to things the opening said, in the same order, and
+ * by the last phase he is saying the lines he said when he lost the first
+ * time. A player who has recovered their memories will recognise every one
+ * of them; a player who has not is about to.
+ *
+ * `mem` is the version for somebody who remembers. Both are kept because the
+ * game genuinely allows the player to reach the throne having found almost
+ * nothing, and "you finally remembered" said to a player who has not is the
+ * one thing that would break the whole arc.
  */
+const FROGATH_FINAL = {
+  open: {
+    cold: ['You came a very long way to be confused.',
+      'Do you even know what you are angry about?'],
+    mem: ['There it is. That is the face I remember.',
+      'You took your time coming back up.'],
+  },
+  hit: ['Still the same shoulder. Four years and still the same shoulder.',
+    'You have been practising. On my guardians, I assume.',
+    'That is the arm that used to hold a country together.'],
+  hurt: ['You are slower than the last time we did this.',
+    'Careful. I have already put you off this island once.',
+    'Your army is not behind you today.'],
+  phase: {
+    2: ['Enough of this. Enough playing.',
+      'You have forced my hand once already. Do you remember how that ended?'],
+    3: ['You took everything from me once. Not twice.',
+      'Why will you not stay DOWN?'],
+    4: ['I will not lose to you again.',
+      'Look at what you are making me do. Look at it.'],
+  },
+  low: {
+    cold: ['So this is how it goes. After everything we did together.',
+      'You do not even know what you are ending.'],
+    mem: ['So this is how it goes.',
+      '...Then you remember what happened. Good.',
+      'Finish it properly this time.'],
+  },
+};
+
+/**
+ * WHAT A GUARDIAN SAYS WHEN IT CHANGES SHAPE.
+ *
+ * Indexed by phase minus two, so the first entry is what it says entering
+ * phase two. They are written to be said by ANY of the forty-six guardians,
+ * which is why none of them names anything: a stone gate-keeper and a
+ * thirty-foot eel have to be able to deliver the same line.
+ *
+ * They also do the story's work. Every one of these implies the speaker knows
+ * who they are fighting, which is the drip-feed that makes the player start
+ * asking why — long before any flashback tells them.
+ */
+const GUARD_PHASE_LINES = [
+  ['You are not what the orders described.',
+    'He said you would be easier than this.',
+    'Enough. Let us do this properly.'],
+  ['I know that stance. Everything on this road knows that stance.',
+    'You have done this before. I can tell.',
+    'Why will you not stay down?'],
+  ['He warned us about you. Years ago. YEARS.',
+    'You should not be here. You fell.',
+    'I will not be the one who let you past.'],
+];
+
 /**
  * What kind of place holds what kind of thing.
  *
@@ -225,14 +292,55 @@ export class Overworld {
     this.lastOpen = null;
     this.sealedT = 0;
     this._sealedSaid = null;
+    /**
+     * A villager walking over to hand you a quest. See `_greet`.
+     *
+     * `_greetSite` is the settlement already greeted on this visit, cleared
+     * the moment you step back outside it, so a village greets you once per
+     * time you walk into it rather than once per frame.
+     */
+    this.greeting = null;
+    this._greetSite = null;
+    this._greetIn = 0;
+    /**
+     * THE MEMORIES.
+     *
+     * The player forgot the opening. This gives it back to them in pieces,
+     * fired from six places in this file — a region entered, a guardian down,
+     * a place examined, a carving read, a weapon found, a count reached — and
+     * it decides everything else itself. See js/flashbacks.js.
+     */
+    this.flash = new Flashbacks({
+      hud: this.hud,
+      onSave: () => this.save(),
+    });
+    /** Guardians whose readiness warning has already been given. */
+    this._warned = new Set();
   }
 
   get collision() { return this.realm.collision; }
 
-  /** True while a full-screen panel is holding the world still. */
+  /**
+   * True while a full-screen panel is holding the world still.
+   *
+   * A flashback counts: it takes the whole screen, it has a conversation in
+   * it, and a mob that kept swinging while the player was remembering
+   * something would be the worst possible place to lose a fight.
+   */
   get frozen() {
     return (this.inventory && this.inventory.isOpen)
-      || this.dialogue.open || this.journal.open;
+      || this.dialogue.open || this.journal.open
+      || (this.flash && this.flash.busy)
+      /**
+       * A CINEMATIC CONVERSATION, but not banter.
+       *
+       * `Cine.busy` is true only for a SCRIPT — the last words with Frogath,
+       * a flashback. It is never true for the mid-fight channel, which is
+       * the entire reason those are two channels: a boss saying something
+       * while it swings must not be able to stop the world, and the beat
+       * after the last fight in the game must.
+       */
+      || Cine.busy;
   }
 
   // ------------------------------------------------------------------ build
@@ -280,6 +388,12 @@ export class Overworld {
           region: R,
           tier: R.tier,
           power: powerFor(R.tier, i),
+          /**
+           * What the player ought to be carrying. A warning, never a gate —
+           * see the note on RECOMMENDED in guardians.js. Shown once, when
+           * they walk into the ring, and then never again.
+           */
+          wants: recommendedFor(spec.id, R.tier, i),
           at: arena.at,
           r: spec.r || spec.arena,
           final: !!spec.final,
@@ -353,6 +467,14 @@ export class Overworld {
     const woods = [0x6b4a2a, 0x59422a, 0x7a5a3a, 0x4a3822];
     P.wood = woods[Math.floor(rnd() * woods.length)];
     P.trim = tier >= 4 ? 0xd9b06a : tier >= 2 ? 0xc9a227 : 0x9a7d33;
+    /**
+     * WHAT KIND OF PLACE THIS IS STANDING IN.
+     *
+     * Carried on the prop so the payout can ask. A chest in a cave is worth
+     * more than a chest in a farmyard, and the only way for the payout to
+     * know that is for the prop to remember where it was put.
+     */
+    P.site = site ? site.kind : null;
     if (lore) {
       // A carving is worth exactly one thing: what it says.
       P.label = lore.kind === 'tome' ? 'Read it' : 'Read the carving';
@@ -448,7 +570,20 @@ export class Overworld {
       this.giveKunai(prize.n, 'from the chest');
     } else if (prize.what === 'loot') {
       const said = [];
-      for (const it of rollLoot(prize.tier, false)) {
+      /**
+       * WHAT YOU GET FOR GOING SOMEWHERE YOU DID NOT HAVE TO.
+       *
+       * A chest in a cave, a mine or a dungeon rolls one tier ABOVE the
+       * region it is in — see `deep` in rollLoot. Those are the three place
+       * kinds you have to deliberately go into and fight your way through,
+       * and they are exactly the places that should be holding equipment the
+       * main line has not offered you yet. A chest sitting in a village
+       * square does not get it.
+       */
+      const where = prop.spec.site;
+      const deep = prize.deep
+        || where === 'cave' || where === 'mine' || where === 'dungeon';
+      for (const it of rollLoot(prize.tier, false, Math.random, { deep })) {
         const g = GEAR_BY_ID.get(it.id);
         if (g && p.add(it.id, it.n) > 0) {
           said.push(`${g.name}${it.n > 1 ? ` ×${it.n}` : ''}`);
@@ -456,12 +591,15 @@ export class Overworld {
       }
       // A tier's worth of equipment as well, from anything on a stand.
       if (prop.kind === 'pedestal') {
-        for (const it of rollLoot(prize.tier, true)) {
+        for (const it of rollLoot(prize.tier, true, Math.random, { deep })) {
           const g = GEAR_BY_ID.get(it.id);
           if (g && p.add(it.id, it.n) > 0) said.push(g.name);
         }
       }
       this.hud.toast(said.length ? `Taken: ${said.join(', ')}.` : 'Nothing left in it.', 5);
+      if (deep && said.length) {
+        this.hud.announce('SOMETHING FROM DEEPER IN', 'good', false);
+      }
       this.applyStats();
     } else if (prize.what === 'shop') {
       /**
@@ -515,6 +653,14 @@ export class Overworld {
       lines.push(`— ${loreRead(p)} of ${LORE_COUNT} found.`);
       this.applyStats();
       this.save();
+      /**
+       * Two of the carvings bring a memory up with them.
+       *
+       * Queued rather than played now: the player is about to read the stone,
+       * and interrupting the words with a flashback about the words would be
+       * the wrong order. `_pendingMemory` fires when the dialogue closes.
+       */
+      this._pendingMemory = { kind: 'lore', key: id };
     } else {
       lines.push(`— ${loreRead(p)} of ${LORE_COUNT} found.`);
     }
@@ -654,6 +800,25 @@ export class Overworld {
     // The hotbar's meal follows the bag, and the bag changes at exactly the
     // moments this is called: a kill, a reward, a piece of gear swapped.
     this._syncMeal();
+    /**
+     * GETTING STRONGER IS ITSELF A STORY BEAT.
+     *
+     * Two memories hang off it: one on finding a real weapon for the first
+     * time — a sword your hands already know — and one on the player's own
+     * power crossing the point where they were, once. Both are queued rather
+     * than played, because this is called from the middle of a loot payout.
+     *
+     * Not fired on the very first call of a session: that one happens while
+     * the world is still loading, and a memory would land on a black screen.
+     */
+    if (this._statsOnce) {
+      const w = GEAR_BY_ID.get(this.progress.equipped.weapon);
+      this._pendingMemory = [
+        { kind: 'gear', key: w ? (w.tier || 0) : 0 },
+        { kind: 'power', key: this.progress.power },
+      ];
+    }
+    this._statsOnce = true;
   }
 
   /**
@@ -754,6 +919,39 @@ export class Overworld {
       // The bag, the map and a conversation all take the screen; the corner
       // map goes away until they are closed.
       this._miniVisible(false);
+      /**
+       * A memory takes precedence over the panels.
+       *
+       * It runs its own dialogue and it must NOT be interruptible by TAB or
+       * M — a flashback the player can escape by opening their bag is a
+       * flashback that gets left half-played and never comes back, since the
+       * id is already recorded.
+       */
+      /**
+       * THE AUTOSAVE RUNS BEHIND A PANEL TOO.
+       *
+       * It used to be at the bottom of the frame, past the early return, so
+       * anything that opened a panel suspended it — and that turned out to
+       * matter the moment villagers started walking over and opening
+       * conversations by themselves: a kill, a quest, a level, and then a
+       * frog says hello and the write never happens.
+       *
+       * A panel is not a pause on the player's PROGRESS. Whatever they have
+       * earned is already in `Progress`; there is no reason for reading a
+       * carving to be the thing that loses it.
+       */
+      this._autosave(dt);
+      if (this.flash && this.flash.busy) {
+        this.flash.update(dt, input);
+        return;
+      }
+      // A scripted conversation with nothing else behind it — the last words
+      // with Frogath. It owns the keyboard until it is finished.
+      if (Cine.busy) {
+        Cine.update(dt);
+        Cine.keys(input);
+        return;
+      }
       this._panelKeys(input);
       if (this.inventory) this.inventory.update(dt);
       // The map keeps drawing while it is open: the objective star pulses,
@@ -777,6 +975,7 @@ export class Overworld {
     this._gate(dt, player);
     this._encounters(dt, player, onHit);
     this._camps(dt, player, onHit);
+    this._greet(dt, player);
     this._interact(player, input);
     this._pit(dt, player);
     this._death(dt, player);
@@ -786,9 +985,72 @@ export class Overworld {
     this.ambience.update(dt);
     this._life(dt, player);
     this._banner(dt);
+    this._music(player);
+    this._memory();
+    // The banter channel runs whatever else is happening: it is the one bit
+    // of dialogue in the game that never takes control.
+    Cine.update(dt);
     this._mini(dt, player);
     this._syncKunai();
     this._autosave(dt);
+  }
+
+  /**
+   * A QUEUED MEMORY, once nothing else is holding the screen.
+   *
+   * Flashbacks are triggered by things that happen inside a conversation or a
+   * loot payout — reading a carving, examining a place, taking a sword — and
+   * every one of those is already showing the player something. So the
+   * trigger is recorded and fired here, on the first frame when the screen is
+   * free. One flashback ever waits, because two is a cutscene nobody asked
+   * for; a second one queued over the first simply replaces it, and the
+   * dropped trigger will come round again the next time its condition holds.
+   */
+  _memory() {
+    const q = this._pendingMemory;
+    if (!q || this.frozen || this.boss || this.frogath || this.greeting) return;
+    this._pendingMemory = null;
+    // A list is tried in order and the first match wins, so a guardian with
+    // a memory of its own beats the generic count threshold.
+    for (const t of (Array.isArray(q) ? q : [q])) {
+      if (this.flash.fire(t.kind, t.key, this.progress)) break;
+    }
+  }
+
+  /**
+   * WHAT IS PLAYING, AND WHY.
+   *
+   * Three answers, in order of who wins:
+   *
+   *   1. a guardian is awake      its own theme, or its rank's
+   *   2. you are inside a village its settlement theme — minor while the
+   *                               region's guardian is still standing
+   *   3. anywhere else            the region's theme
+   *
+   * Called every frame and almost always does nothing: `Audio.setTheme`
+   * compares the name of the piece and returns if it is already playing, so
+   * the cost of this is a distance check against the settlements in memory.
+   * Doing it here rather than at the moments things change is what makes a
+   * guardian dying, a border crossing and a gate opening all pick the right
+   * music without any of them having to know about the others.
+   */
+  _music(player) {
+    if (!this.region) return;
+    if (this.frogath) return;         // Frogath brings his own, from a file.
+    if (this.boss && this.boss.alive && this.boss.active && this.bossOf) {
+      const e = this.bossOf;
+      const rank = (e.spec && e.spec.rank) || Overworld.rankFor(e.tier);
+      Audio.setTheme(bossTheme(e.id, rank), `boss:${e.id}`);
+      return;
+    }
+    const s = this.sites.settlementAt(player.pos.x, player.pos.z);
+    if (s) {
+      const held = !!(s.freedBy && !this.progress.slain.has(s.freedBy));
+      Audio.setTheme(settlementTheme(s.kind, held),
+        `town:${held ? 'held' : s.kind}`);
+      return;
+    }
+    Audio.setTheme(regionTheme(this.region.id), `region:${this.region.id}`);
   }
 
   /**
@@ -1101,6 +1363,10 @@ export class Overworld {
     const first = open && !this.progress.seen.has(R.id);
     if (open) this.progress.seen.add(R.id);
     else this._sealedSaid = null;
+    // Walking somewhere for the first time is the commonest way a memory
+    // surfaces, because the place itself is the thing that triggers it.
+    this.progress.region = R.name || R.id;
+    if (first) this.flash.fire('region', R.id, this.progress);
 
     const el = $('region-banner');
     if (el) {
@@ -1210,10 +1476,18 @@ export class Overworld {
         if (!this.boss.active && d < e.r + 8) {
           this.boss.begin();
           this.hud.showBossBar(this.boss.name, 1, this.boss.blurb);
-          Audio.startBossMusic();
+          // The fight's music is picked by `_music` on the next frame, from
+          // the guardian's own theme. All that is wanted here is the sting.
+          Audio.cue(null);
+          this._readiness(e);
         }
         this.boss.update(dt, player, onHit);
         if (this.boss.active) this.hud.setBossBar(this.boss.fraction);
+        // A guardian at its last legs says so, once, without stopping.
+        if (this.boss.active && this.boss.fraction < 0.14) {
+          Cine.say('commander', 'No — not to you. Not again.',
+            { id: 'glow:' + e.id, secs: 3.6 });
+        }
       } else {
         // Let the body finish falling over, then tidy it away.
         this.boss.update(dt, player, onHit);
@@ -1307,6 +1581,55 @@ export class Overworld {
     this.hud.announce(n >= of ? 'NO MORE HOLDING BACK' : 'IT CHANGES',
       'divine', false);
     Audio.bossPhase(n);
+    /**
+     * AND THE GUARDIAN SAYS SOMETHING.
+     *
+     * On the banter channel, so the fight does not stop for a frame — it
+     * appears low on the screen while the guardian is already winding up
+     * whatever the new phase gave it. Which is the point: a boss that pauses
+     * the battle to announce its second phase has told the player that
+     * dialogue is an interruption.
+     */
+    const lines = GUARD_PHASE_LINES[Math.min(n - 2,
+      GUARD_PHASE_LINES.length - 1)] || [];
+    if (lines.length) {
+      Cine.say('commander', lines[Math.floor(Math.random() * lines.length)],
+        { id: `gphase${n}`, secs: 4.0, priority: 2 });
+    }
+  }
+
+  /**
+   * "AM I READY FOR THIS?", answered once, when you walk into the ring.
+   *
+   * The single most important thing about this is what it does NOT do: it
+   * does not stop the fight, weaken the guardian, or ask for a confirmation.
+   * The player walked in, the fight is on, and this is a line of text telling
+   * them which side of the curve they are standing on so that walking back
+   * out is an informed decision instead of a discovery.
+   *
+   * Said once per guardian per session. A warning repeated every time you
+   * re-enter the ring after retreating is a warning you stop reading, and
+   * retreating and coming back is exactly the loop this exists to support.
+   */
+  _readiness(e) {
+    if (!e || this._warned.has(e.id)) return;
+    this._warned.add(e.id);
+    const want = e.wants || recommendedFor(e.id, e.tier);
+    const r = readiness(this.progress.power, want);
+    this.hud.toast(
+      `${this.boss.name} — power ${want}, you are ${this.progress.power}. ${r.say}`,
+      r.band === 'under' || r.band === 'far' ? 9 : 5);
+    /**
+     * And, for the two bands where it matters, say the other half out loud:
+     * that leaving is allowed. A player who does not know a boss can be
+     * walked away from will grind their head against it instead of going and
+     * finding the sword that would have won it.
+     */
+    if (r.band === 'far' || r.band === 'under') {
+      this.hud.announce('YOU CAN WALK AWAY FROM THIS', 'danger', false);
+      this._pendingHint = 'Leave the ring and the fight resets. Come back'
+        + ' with better gear — there is always something better out there.';
+    }
   }
 
   _dropBoss() {
@@ -1316,6 +1639,13 @@ export class Overworld {
     this.deadFor = 0;
     this.hud.hideBossBar();
     Audio.stopBossMusic();
+    Cine.clearBanter();
+    // Said on the way OUT rather than on the way in: the player has just
+    // retreated, which is the moment the advice is actually useful.
+    if (this._pendingHint) {
+      this.hud.toast(this._pendingHint, 8);
+      this._pendingHint = null;
+    }
   }
 
   /**
@@ -1333,6 +1663,19 @@ export class Overworld {
     this.hud.hideBossBar();
     Audio.stopBossMusic();
     this.hud.announce(`${this.boss.name} FALLS`, 'divine', false);
+    /**
+     * WHAT PUTTING ONE DOWN SHAKES LOOSE.
+     *
+     * Two chances at a memory: this particular guardian may have one of its
+     * own — Arkos knew you, Grott had orders about you — and the COUNT may
+     * have crossed a threshold, which is how the big revelations are paced
+     * without caring which route through the country the player took.
+     * Whichever fires first wins, and the other comes round again.
+     */
+    this._pendingMemory = [
+      { kind: 'boss', key: e.id },
+      { kind: 'count', key: p.slain.size },
+    ];
     const said = [`${xp} experience.`];
     for (const it of rollLoot(e.tier, true)) {
       const g = GEAR_BY_ID.get(it.id);
@@ -1381,6 +1724,45 @@ export class Overworld {
    * it is the story's: twelve guardians, then Zehl, then him. Walk up early
    * and the ground tells you so rather than nothing happening.
    */
+  /**
+   * FROGATH, TALKING THROUGH THE LAST FIGHT IN THE GAME.
+   *
+   * All of it on the banter channel: he never stops swinging to speak, and
+   * the player never loses a frame of control to a line. Driven off what is
+   * actually happening — his phase, his health, whether he has just been hit
+   * — rather than off a timer, so the fight sounds like a conversation
+   * between two frogs with a history instead of a playlist.
+   */
+  _frogathTalk(dt, f, player) {
+    if (!f.fighting) return;
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    // Phase lines, read off his own phase so any route into it gets one.
+    if (f.phase !== this._fPhase) {
+      if (this._fPhase !== undefined) {
+        const lines = FROGATH_FINAL.phase[f.phase];
+        if (lines) {
+          Cine.say('frogath', pick(lines),
+            { id: 'f-phase' + f.phase, secs: 4.6, priority: 2 });
+        }
+      }
+      this._fPhase = f.phase;
+    }
+    // He notices the fight going either way.
+    if (f.fraction < 0.55) {
+      Cine.say('frogath', pick(FROGATH_FINAL.hit), { id: 'f-hit1', secs: 4.0 });
+    }
+    if (player.health.fraction < 0.4) {
+      Cine.say('frogath', pick(FROGATH_FINAL.hurt), { id: 'f-hurt1', secs: 4.0 });
+    }
+    // And the last of it, in the version the player has earned.
+    if (f.fraction < 0.12) {
+      const low = FROGATH_FINAL.low[this._frogathKnows ? 'mem' : 'cold'];
+      Cine.say('frogath', low[0], { id: 'f-low', secs: 4.6, priority: 2 });
+      if (low[1]) Cine.say('frogath', low[1], { id: 'f-low2', secs: 4.6 });
+      if (low[2]) Cine.say('frogath', low[2], { id: 'f-low3', secs: 4.6 });
+    }
+  }
+
   _maybeFrogath(e, d, player) {
     if (d > e.r + 10) return;
     if (!this.progress.slain.has('zehl')) {
@@ -1399,12 +1781,28 @@ export class Overworld {
     this._frogathTries = (this._frogathTries || 0) + 1;
     this.hud.showBossBar('FROGATH, THE FIRST CROAK',
       1, 'He has been waiting the whole time.');
+    /**
+     * AND HE PICKS UP WHERE HE LEFT OFF.
+     *
+     * The bar says "he has been waiting the whole time", and this is the
+     * line that makes that true: whichever of the two versions the player
+     * has earned, it is a reply to a conversation they had in the first two
+     * minutes of the game. See FROGATH_FINAL.
+     */
+    Cine.resetSaid();
+    const knows = this.progress.memories.has('fell')
+      || this.progress.memories.has('won');
+    const open = FROGATH_FINAL.open[knows ? 'mem' : 'cold'];
+    Cine.say('frogath', open[0], { id: 'f-open', secs: 5.0, priority: 3 });
+    Cine.say('frogath', open[1], { id: 'f-open2', secs: 5.0, priority: 3 });
+    this._frogathKnows = knows;
   }
 
   _updateFrogath(dt, player, onHit) {
     const f = this.frogath;
     f.update(dt, player, this.camera, onHit);
     this.hud.setBossBar(f.fraction);
+    this._frogathTalk(dt, f, player);
     if (f.justDied) {
       f.justDied = false;
       const p = this.progress;
@@ -1422,6 +1820,34 @@ export class Overworld {
       p.add('frogshin', 1);
       if (!p.isEquipped('frogshin')) p.equip('frogshin');
       this.hud.toast('FROGSHIN is yours.', 10);
+      this._pendingMemory = { kind: 'boss', key: 'frogath' };
+      /**
+       * AND THE OTHER END OF THE OPENING.
+       *
+       * The last conversation in the game, and it is deliberately the same
+       * shape as the first: he goes down, the field goes quiet, he says the
+       * line he said four years ago — and this time the player has the
+       * answer. Then it names the thing the whole adventure has been about,
+       * which is the one place in the story it is allowed to be said out
+       * loud, because the player has now earned it.
+       */
+      Cine.clearBanter();
+      const knew = this._frogathKnows;
+      Cine.play([
+        { wait: 1.6 },
+        { face: 'frogath', text: '...So you have finally done it.' },
+        { face: 'frogath', text: 'Again.' },
+        { wait: 0.8 },
+        knew
+          ? { face: 'player', text: 'I remember the island. I remember all of it.' }
+          : { face: 'player', text: 'I do not know what I have done. Only that it needed doing.' },
+        { face: 'frogath', text: 'Four years I held that door on my own.' },
+        { face: 'frogath', text: 'You are going to find out how heavy it is.' },
+        { face: 'player', text: 'Then I will not hold it on my own.' },
+        { wait: 0.9 },
+        { face: 'frogath', text: '...No. I suppose you would not.' },
+        { face: 'narrator', who: '', text: 'The banners come down all the way to the Lily Reach.' },
+      ], { onEnd: () => { this._paintObjectives(); this.save(); } });
       this.applyStats();
       this.hud.hideBossBar();
       this.hud.announce('THE FIRST CROAK FALLS', 'divine', true);
@@ -1642,6 +2068,132 @@ export class Overworld {
     this.markDirty();
   }
 
+  // ------------------------------------------------------ the quest-givers
+
+  /**
+   * WALKING INTO A VILLAGE IS HOW YOU GET WORK.
+   *
+   * The old arrangement was that quests existed on whichever frog happened to
+   * be carrying them, and finding that frog was the player's problem: thirty
+   * identical villagers, one of them with a small gold bang over their head,
+   * in a town you have never been to. In practice people walked straight
+   * through a settlement and out the other side without ever learning there
+   * was anything there.
+   *
+   * So the village comes to you. Stand inside one for a moment and, if
+   * somebody here has work you have not taken, THEY WALK OVER: the world
+   * holds still, the camera turns to them, they cross the square, and the
+   * conversation opens by itself. There is nothing to find and nothing to
+   * miss.
+   *
+   * Once per visit — the flag is cleared when you leave the settlement — so
+   * a town with three tasks in it greets you once, hands you one, and the
+   * other two are ordinary frogs with beacons over them.
+   */
+  _greet(dt, player) {
+    if (this.greeting) { this._runGreeting(dt, player); return; }
+    // Never mid-fight, mid-panel or mid-anything-else.
+    if (this.frozen || this.boss || this.frogath || player.health.dead) return;
+    const s = this.sites.settlementAt(player.pos.x, player.pos.z);
+    if (!s) { this._greetSite = null; this._greetIn = 0; return; }
+    if (this._greetSite === s.id) return;
+    this._greetIn = (this._greetIn || 0) + dt;
+    // A moment inside, so walking across a corner of the map does not do it.
+    if (this._greetIn < 1.0) return;
+    this._greetSite = s.id;
+    this._greetIn = 0;
+    const npc = this._questGiverIn(s, player);
+    if (npc) this._beginGreeting(npc, player);
+  }
+
+  /**
+   * Somebody in this settlement with a quest the player has not taken.
+   *
+   * Nearest first, so in a city it is whoever you actually walked past. The
+   * greeting is skipped for anyone already within talking distance: if you
+   * are standing on top of them, walking them towards you is nonsense, and
+   * the E prompt is already on screen.
+   */
+  _questGiverIn(site, player) {
+    let best = null, bestD = Infinity;
+    const reach = site.r * 1.3 + 20;
+    for (const npc of this.people.list) {
+      if (!npc.spec.gives || this.progress.quests.has(npc.spec.gives)) continue;
+      if (this.people.markFor(npc, this.progress) !== 'give') continue;
+      if (Math.hypot(npc.at.x - site.at.x, npc.at.z - site.at.z) > reach) continue;
+      const d = Math.hypot(npc.at.x - player.pos.x, npc.at.z - player.pos.z);
+      // Close enough to already be talking, or so far they would be walking
+      // for twenty seconds.
+      if (d < TALK_RANGE * 1.2 || d > 70) continue;
+      if (d < bestD) { bestD = d; best = npc; }
+    }
+    return best;
+  }
+
+  _beginGreeting(npc, player) {
+    // Where they stop: a few paces in front of the player, on their side of
+    // the gap, so the two of you end up facing each other.
+    const dx = npc.at.x - player.pos.x, dz = npc.at.z - player.pos.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const stop = {
+      x: player.pos.x + (dx / d) * 3.4,
+      z: player.pos.z + (dz / d) * 3.4,
+    };
+    this.people.script(npc, stop.x, stop.z, player.pos);
+    this.greeting = { npc, t: 0, hailed: false };
+    // The player is a spectator for the next few seconds: `cinematic` is the
+    // flag the player and the camera already understand.
+    player.cinematic = true;
+    player.vel.x = 0;
+    player.vel.z = 0;
+    this.hud.toast(`${npc.spec.name} is coming over.`, 2.4);
+    Audio.cue(null);
+  }
+
+  /**
+   * One frame of the greeting.
+   *
+   * The camera is driven by hand here because `main` hands it over the moment
+   * the player is `cinematic`: yaw damps round to look at whoever is walking
+   * up, and the rig is still asked to update so the shot stays framed on the
+   * player rather than freezing wherever it happened to be.
+   */
+  _runGreeting(dt, player) {
+    const G = this.greeting;
+    const npc = G.npc;
+    // Dying mid-greeting hands control straight back. Anything else would
+    // leave the player a cinematic spectator to their own corpse.
+    if (player.health.dead) { this._endGreeting(); return; }
+    G.t += dt;
+    const dx = npc.at.x - player.pos.x, dz = npc.at.z - player.pos.z;
+    // Both the camera and the player's own body measure yaw from -Z, so they
+    // want the same angle — which is not the atan2 the NPCs use to face each
+    // other, and getting those two confused points everybody backwards.
+    const want = Math.atan2(-dx, -dz);
+    if (this.followCam) {
+      this.followCam.yaw = dampAngle(this.followCam.yaw, want, 3.2, dt);
+      this.followCam.update(player.renderPos || player.pos, 0, dt, {});
+    }
+    player.visualYaw = dampAngle(player.visualYaw, want, 4, dt);
+    // A word as they arrive, then the conversation itself — which is exactly
+    // the conversation you would have had by walking up and pressing E, so
+    // there is only one place quests are actually handed over.
+    if ((npc.arrived || G.t > 9) && !G.hailed) {
+      G.hailed = true;
+      this._endGreeting();
+      this._talk(npc);
+    }
+  }
+
+  /** Hand control back and let the villager go about their day again. */
+  _endGreeting() {
+    const G = this.greeting;
+    if (!G) return;
+    this.greeting = null;
+    this.people.clearScript(G.npc);
+    if (this.player) this.player.cinematic = false;
+  }
+
   _talk(npc) {
     const p = this.progress;
     const lines = npcSays(npc.spec, p).slice();
@@ -1708,6 +2260,9 @@ export class Overworld {
   _examine(site) {
     const p = this.progress;
     const secret = SECRETS[site.id];
+    // Some places are a memory. Queued behind whatever the place itself has
+    // to say — see `_memory`.
+    this._pendingMemory = { kind: 'site', key: site.id };
     /**
      * A landmark is its own kind of find.
      *
@@ -1949,6 +2504,25 @@ export class Overworld {
       done: o.done,
       active: i === 0,
     }));
+    /**
+     * WHAT THE PLAYER CURRENTLY THINKS IS GOING ON.
+     *
+     * One row at the bottom of the panel, and its text is the whole mystery
+     * arc: it starts as a question about why they keep remembering things
+     * they never did, and it ends as "you were the leader of the rebellion —
+     * finish it". Shown as a row rather than as a toast so it is somewhere
+     * the player can go and LOOK at it, which is what a slow reveal needs.
+     */
+    const stage = memoryStage(this.progress);
+    if (stage) {
+      rows.push({
+        id: 'memory:' + stage,
+        text: `${stage}   (${memoriesFound(this.progress)} of ${MEMORY_COUNT} `
+          + 'memories)',
+        done: false,
+        active: false,
+      });
+    }
     this.hud.setObjectives(rows);
   }
 
@@ -1991,6 +2565,14 @@ export class Overworld {
     disposeLandmarkMats();
     disposePropMats();
     Audio.stopRegionMusic();
+    Audio.stopTheme();
+    // A greeting caught mid-walk must not leave the player cinematic on the
+    // way back to the menu, and a memory caught mid-sentence must not leave
+    // its white wash over the main screen.
+    this._endGreeting();
+    this._greetSite = null;
+    if (this.flash) this.flash.cancel();
+    Cine.cancel();
     this.realm.dispose();
     this.dialogue.close();
     this.journal.closeAll();

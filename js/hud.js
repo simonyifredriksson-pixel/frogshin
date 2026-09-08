@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v87';
-import { CFG } from './config.js?v=v87';
-import { staminaBand } from './stamina.js?v=v87';
-import { modeAvailable } from './rounds.js?v=v87';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v87';
-import { Audio } from './audio.js?v=v87';
-import { PX, setIcon } from './icons.js?v=v87';
+import { clamp } from './util.js?v=v88';
+import { CFG } from './config.js?v=v88';
+import { staminaBand } from './stamina.js?v=v88';
+import { modeAvailable } from './rounds.js?v=v88';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v88';
+import { Audio } from './audio.js?v=v88';
+import { PX, setIcon } from './icons.js?v=v88';
 
 const $ = (id) => document.getElementById(id);
 
@@ -204,6 +204,21 @@ export class HUD {
     this.setObjectives(null);
     this._objKey = null;
     this.setMinimap(false);
+    /**
+     * The cinematic layers, which also live outside #hud.
+     *
+     * The dialogue box, the letterbox, the banter line, the flashback wash
+     * and the storm flash. Every one of them belongs to a scene rather than
+     * to a mode, so any of them can be up at the instant a player quits —
+     * and a black letterbox left over the main menu is unrecoverable without
+     * a page refresh. Taken down by class rather than by asking the Cinema,
+     * so this file needs to know nothing about it.
+     */
+    for (const id of ['cinema', 'cine-bar-top', 'cine-bar-bottom', 'banter',
+      'memory-wash', 'storm-flash']) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('show');
+    }
   }
 
   /**

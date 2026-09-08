@@ -21,8 +21,8 @@
  * thing that makes a hard region become a familiar one.
  */
 
-import { GEAR_BY_ID, GEAR } from './gear.js?v=v87';
-import { clamp } from './util.js?v=v87';
+import { GEAR_BY_ID, GEAR } from './gear.js?v=v88';
+import { clamp } from './util.js?v=v88';
 
 /** Health per heart. Four hearts is the starting body. */
 export const HEART = 25;
@@ -76,6 +76,26 @@ export class Progress {
     this.seen = new Set();
     /** questId -> { stage, done } */
     this.quests = new Map();
+    /**
+     * MEMORIES RECOVERED, by flashback id.
+     *
+     * The player begins the game having forgotten the opening, and this is
+     * the record of how much of it has come back. It is a Set of ids rather
+     * than a counter because each flashback fires ONCE — a memory you keep
+     * having is not a memory, it is a bug — and because the story reveal is
+     * gated on WHICH ones have been seen, not how many. See js/flashbacks.js.
+     */
+    this.memories = new Set();
+    /**
+     * Whether the opening has been lived through at all.
+     *
+     * The save screen reads it to decide whether to play the heavenly
+     * battlefield, and the flashbacks read it because a memory of something
+     * you have not been shown yet is not a memory of anything.
+     */
+    this.prologue = false;
+    /** The region the player was last standing in, for the save screen. */
+    this.region = '';
     /** Where the player was standing when they last saved. */
     this.at = null;
     /**
@@ -180,6 +200,31 @@ export class Progress {
   }
 
   /**
+   * POWER — one number for how ready the player is for a fight.
+   *
+   * Every boss in the game carries a recommended power (see `RECOMMENDED` in
+   * guardians.js) and the approach warning compares this against it. It has
+   * to be a single number or it cannot be compared, and it has to be honest
+   * about what actually wins fights, so it is weighted the way the fights
+   * are: attack matters most, then health, then armour, and the level itself
+   * barely at all.
+   *
+   * Deliberately NOT a gate. Nothing in the game refuses to let a player
+   * walk into a fight because this number is low — it only warns them, and a
+   * good player can and should be able to ignore it. See the note on
+   * `RECOMMENDED`.
+   */
+  get power() {
+    const s = this.stats();
+    return Math.round(
+      (s.atk - BASE.atk) * 1.15         // what the weapon is worth
+      + (s.def - BASE.def) * 0.75       // what the armour is worth
+      + (this.hearts - 3) * 3.2         // what surviving a mistake is worth
+      + (this.level - 1) * 0.9          // and the levels, faintly
+      + 10);
+  }
+
+  /**
    * How much of a blow the player actually takes.
    *
    * Defence is a fraction, not a subtraction. Subtracting flat defence lets a
@@ -267,6 +312,13 @@ export class Progress {
       quests: [...this.quests].map(([id, q]) => [id, q.stage, q.done ? 1 : 0]),
       at: this.at,
       kunai: this.kunai,
+      memories: [...this.memories],
+      prologue: this.prologue,
+      region: this.region,
+      // Written for the SAVE SCREEN's benefit, which needs a one-glance
+      // summary without loading and interpreting the whole blob. Derived, so
+      // if it ever disagrees with the rest of this object the rest wins.
+      power: this.power,
     };
   }
 
@@ -310,6 +362,9 @@ export class Progress {
     set(this.camps, d.camps);
     set(this.found, d.found);
     set(this.seen, d.seen);
+    set(this.memories, d.memories);
+    this.prologue = !!d.prologue;
+    this.region = typeof d.region === 'string' ? d.region : '';
     this.quests.clear();
     if (Array.isArray(d.quests)) {
       for (const q of d.quests) {

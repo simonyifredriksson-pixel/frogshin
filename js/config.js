@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v87';
+export const BUILD = 'v88';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -152,15 +152,24 @@ export const CFG = {
     triggerRange: 17,        // how close to Toadel before the cutscene fires
     shakeTime: 0.5,          // screen shake when the fight begins
     brokenSwordMult: 1 / 3,  // your blade is broken: a third of normal damage
+    /**
+     * THE GUARD, AND THE ONLY THING THAT ENDS IT.
+     *
+     * You may raise it whenever you like and hold it as long as you like: a
+     * blade held up is not a resource, and a guard on a stopwatch made every
+     * fight about the stopwatch rather than about the fight.
+     *
+     * What costs you is USING it. The moment a blow is turned aside the
+     * guard drops, and it cannot go back up for `afterHit` seconds. That
+     * window is the attacker's answer to a raised blade, and it is why a
+     * combo still beats standing there — the first hit opens you for the
+     * second.
+     */
     parry: {
-      knockdownAfter: 2,     // hits absorbed in one parry before you go down
+      afterHit: 0.8,         // locked out this long once a blow is turned
       knockdownTime: 0.7,    // seconds on the floor, unable to act
       chipStagger: 0.18,     // brief hitstop when a blow is turned aside
-      // A raised guard used to cost nothing: you could hold it forever and
-      // simply never be hit. It is now a timed commitment.
-      cooldown: 1.5,         // seconds between one guard and the next
-      maxHold: 1.2,          // a guard drops on its own after this long
-      breakLock: 0.6,        // helpless after a guard is broken
+      breakLock: 0.6,        // helpless after a guard is broken outright
     },
     /**
      * Market fruit in the village. Cheap on purpose: it is the only healing

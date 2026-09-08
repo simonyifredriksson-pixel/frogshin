@@ -13,7 +13,7 @@
  * invent an unfair attack — it can only recombine fair ones.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
 
 const G = {
   sphere: new THREE.SphereGeometry(1, 12, 9),
@@ -453,6 +453,91 @@ export const GUARDIANS = [
  * that says a boss is dead has to still mean that boss.
  */
 export const GUARDIAN_BY_ID = new Map(GUARDIANS.map((g) => [g.id, g]));
+
+/**
+ * RECOMMENDED POWER, per guardian.
+ *
+ * ── what this is for ─────────────────────────────────────────────────────
+ * It is a WARNING, not a gate. Nothing in the game reads this number and
+ * refuses to let the player fight: the fight always starts, the boss always
+ * has the same health and the same patterns, and a good player carrying the
+ * wrong sword can absolutely still win. What it does is tell the player, at
+ * the moment they walk into the ring, which side of the curve they are on —
+ * so "I am not ready for this" is a decision they make with information
+ * rather than a discovery they make after three minutes of dying.
+ *
+ * ── and why that matters more than the number ────────────────────────────
+ * The whole design the user asked for lives on the player being ALLOWED to
+ * be underlevelled and being able to walk away: try the boss, get taken
+ * apart, leave, find a cave, come back. That loop only works if the game
+ * says "this is a tier above you" instead of silently scaling the boss to
+ * whatever you happen to be carrying. Scaled bosses make exploration
+ * pointless, because preparing changes nothing.
+ *
+ * ── the curve ────────────────────────────────────────────────────────────
+ * Compare against `Progress.power`, which starts at 10 with nothing equipped
+ * and reaches the high sixties in full late-game gear. The steps widen as
+ * they go: the first few are a few points apart because the player's early
+ * finds are small, and the last few are ten or twelve apart because by then
+ * a single weapon is worth that much.
+ */
+export const RECOMMENDED = {
+  // The teaching fight. A brand new frog with a stick can take it, and the
+  // number says so — it must never be the one that sends somebody away.
+  grott: 10,
+  silt: 13,
+  // The named ones the player will have heard about for hours. Each is a
+  // deliberate step ABOVE what its region would imply, because a fight with
+  // a name should be a fight you prepare for.
+  arkos: 44,
+  hollowking: 40,
+  gatewright: 52,
+  eelfather: 30,
+  stairwright: 34,
+  tithetaker: 36,
+  dunelord: 50,
+  emberthrone: 58,
+  rimeglass: 64,
+  hoarwarden: 62,
+  zehl: 72,
+  // And the one nobody is ever quite ready for.
+  frogath: 80,
+};
+
+/**
+ * What a guardian expects.
+ *
+ * A named entry wins; everything else is derived from where it stands, which
+ * is the honest answer — the fourth guardian of a tier-three region really
+ * is harder than the first, and the region's tier really is the game's own
+ * statement of how deep you are.
+ */
+export function recommendedFor(id, tier = 0, index = 0) {
+  const r = RECOMMENDED[id];
+  if (r !== undefined) return r;
+  return Math.round(11 + tier * 11.5 + index * 2.6);
+}
+
+/**
+ * HOW READY THE PLAYER IS, as something you can say out loud.
+ *
+ * Five bands, and the wording of each is doing a job. "You are ready" must
+ * not read as a promise the fight is easy, and "come back later" must not
+ * read as a refusal — the player can always try, and the game should sound
+ * like it expects some of them to.
+ */
+export function readiness(power, want) {
+  const d = power - want;
+  if (d >= 10) return { band: 'over', say: 'You are well past this one.' };
+  if (d >= 0) return { band: 'ready', say: 'You are ready for this.' };
+  if (d >= -8) return { band: 'close', say: 'A hard fight. You could take it.' };
+  if (d >= -18) {
+    return { band: 'under',
+      say: 'This is above you. Better gear would change the fight.' };
+  }
+  return { band: 'far',
+    say: 'This will take you apart. Find something better first.' };
+}
 
 /**
  * Build a guardian's body from its spec.

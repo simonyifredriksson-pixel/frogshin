@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v87';
+import { CFG } from './config.js?v=v88';
 
 export class Economy {
   constructor() {
@@ -62,6 +62,9 @@ export class Economy {
      * to load while the quest log does not.
      */
     this.realm = null;
+
+    /** Installed by SaveSlots. See `setRealm`. */
+    this.onRealmWrite = null;
 
     this.pending = [];          // award popups the HUD has not shown yet
     this._saveTimer = 0;
@@ -176,6 +179,19 @@ export class Economy {
    */
   setRealm(blob) {
     this.realm = blob;
+    /**
+     * The save-file layer, if one is installed.
+     *
+     * `SaveSlots` puts a hook here in its constructor so that every realm
+     * write in the game — and there are a dozen call sites — lands in whatever
+     * file the player actually has open, without any of those call sites
+     * having to know that save files exist. See js/saves.js.
+     */
+    if (this.onRealmWrite) {
+      try { this.onRealmWrite(blob); } catch (e) {
+        console.warn('[frogshin] save-file write failed:', e);
+      }
+    }
     this.save();
   }
 

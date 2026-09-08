@@ -118,6 +118,8 @@ export class AudioEngine {
     /** The open world's slow bed, and which mood it is playing. */
     this._region = null;
     this._mood = null;
+    /** The composed piece currently playing — see setTheme(). */
+    this._theme = null;
     this._birdTimer = 0;
     this._lastStep = 0;
     this._buffers = new Map();    // track name -> AudioBuffer | 'missing'
@@ -219,12 +221,19 @@ export class AudioEngine {
 
   // ------------------------------------------------------------ primitives
 
-  /** A pitched tone with an optional glide and a percussive envelope. */
+  /**
+   * A pitched tone with an optional glide and a percussive envelope.
+   *
+   * `cutoff`, when given, puts a lowpass in front of the envelope. That is
+   * what takes the edge off a sawtooth pad — the music engine leans on it
+   * heavily, because a theme's cutoff is most of what separates a warm
+   * village from the inside of a volcano.
+   */
   tone(opts) {
     if (!this.ready) return;
     const {
       freq = 440, to = null, dur = 0.2, type = 'sine', volume = 0.3,
-      pos = null, attack = 0.005, decay = null, detune = 0,
+      pos = null, attack = 0.005, decay = null, detune = 0, cutoff = null,
     } = opts;
     const chain = this._out(pos, volume, opts.bus);
     if (!chain) return;
@@ -234,7 +243,14 @@ export class AudioEngine {
     osc.frequency.setValueAtTime(freq, t);
     if (to !== null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
     osc.detune.value = detune;
-    osc.connect(chain.gain);
+    if (cutoff !== null) {
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = cutoff;
+      lp.Q.value = 0.5;
+      osc.connect(lp);
+      lp.connect(chain.gain);
+    } else osc.connect(chain.gain);
     const g = chain.gain.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(chain.vol, t + attack);
@@ -461,10 +477,11 @@ export class AudioEngine {
   }
 
   stopAmbient() {
-    // The open world's bed rides on the ambient wind, so it goes with it.
+    // The open world's music rides on the ambient wind, so it goes with it.
     // Leaving it playing meant the Frostmarch's theme following you into the
     // menu and then into an arena match.
     this.stopRegionMusic();
+    this.stopTheme();
     if (!this._ambient) return;
     const t = this.ctx.currentTime;
     this._ambient.g.gain.linearRampToValueAtTime(0, t + 0.6);
@@ -567,6 +584,10 @@ export class AudioEngine {
           M.wind, this.ctx.currentTime + 2.5);
       } catch (e) { /* a stopped node; harmless */ }
     }
+    // A composed theme outranks the bed. `setTheme` is what the open world
+    // actually uses now; the bed survives as the fallback for anywhere that
+    // sets a mood without naming a piece of music.
+    if (this._theme) return;
     this.stopRegionMusic();
     this._startRegionBed(M);
   }
@@ -630,6 +651,197 @@ export class AudioEngine {
       }, 1500);
     } catch (e) { /* context torn down */ }
     this._mood = null;
+  }
+
+  // ------------------------------------------------------------- the score
+
+  /**
+   * PLAY A PIECE OF MUSIC.
+   *
+   * `theme` is one of the objects in js/themes.js — a key, a scale, a chord
+   * per bar, a tempo and a level for each of the five voices. `id` names it,
+   * and asking for the piece that is already playing does nothing: the caller
+   * can hand this the same theme every frame, which is exactly what the open
+   * world does.
+   *
+   * Passing null stops the music.
+   */
+  setTheme(theme, id) {
+    if (!this.ready) return;
+    const key = id || (theme && theme.id) || 'theme';
+    if (this._theme && this._theme.id === key) return;
+    this.stopTheme();
+    if (!theme) return;
+    this._startTheme(theme, key);
+  }
+
+  /** Which piece is playing, or null. Cheap enough to poll. */
+  get themeId() { return this._theme ? this._theme.id : null; }
+
+  /**
+   * Build one theme and start its clock.
+   *
+   * The clock is a sixteenth-note grid: `bpm` gives the beat, a bar is four
+   * beats and a step is a sixteenth, so every voice can be written as "on
+   * these steps". Swing pushes every second sixteenth late — the difference
+   * between a village that trudges and one that has a market in it.
+   */
+  _startTheme(T, id) {
+    // Two beds at once would be mud, and the bed is the poorer of the two.
+    this.stopRegionMusic();
+    const t = this.ctx.currentTime;
+
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    gain.gain.linearRampToValueAtTime(1, t + 2.2);
+    gain.connect(this.musicBus);
+
+    // A sustained root underneath everything, so the gaps between bars are
+    // still the same place. Only the tonic and its octave — a fifth would
+    // fight the diminished chords the late regions are built on.
+    const droneGain = this.ctx.createGain();
+    droneGain.gain.value = 0;
+    droneGain.gain.linearRampToValueAtTime(T.pad * 0.5, t + 4);
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = Math.max(160, T.cutoff * 0.5);
+    lp.connect(droneGain);
+    droneGain.connect(gain);
+    const oscs = [];
+    for (const mult of [0.25, 0.5]) {
+      const o = this.ctx.createOscillator();
+      o.type = T.padWave;
+      o.frequency.value = T.root * mult;
+      o.detune.value = (Math.random() - 0.5) * 10;
+      o.connect(lp);
+      o.start(t);
+      oscs.push(o);
+    }
+
+    const stepSec = 60 / T.bpm / 4;
+    const leadBase = T.root * Math.pow(2, (T.octave || 4) - 3);
+    const motif = T.motif || '';
+
+    /** How long a lead note rings: until the next one, roughly. */
+    const leadLen = (at) => {
+      let n = 1;
+      while (n < 8 && motif[(at + n) % motif.length] === '-') n++;
+      return Math.min(T.hold, Math.max(0.18, n * stepSec * 0.92));
+    };
+
+    /** One sixteenth of the piece. */
+    const voice = (i) => {
+      if (!this._theme || this._theme.id !== id) return;
+      const s = i % 16;
+      const bar = Math.floor(i / 16);
+      const chord = T.chords[bar % T.chords.length];
+      const beat = stepSec * 4;
+
+      // pad — the chord, once a bar, breathing in slowly.
+      if (s === 0 && T.pad > 0) {
+        for (const c of chord) {
+          this.tone({
+            freq: T.root * Math.pow(2, c / 12), dur: T.hold, type: T.padWave,
+            volume: T.pad, bus: gain, attack: Math.min(1.2, T.hold * 0.35),
+            cutoff: T.cutoff,
+          });
+        }
+      }
+
+      // bass — the root of the chord. Twice a bar, four times if it drives.
+      if (T.bass > 0 && (s === 0 || s === 8
+        || (T.perc > 0 && (s === 6 || s === 14)))) {
+        this.tone({
+          freq: T.root * 0.5 * Math.pow(2, chord[0] / 12),
+          dur: beat * 0.85, type: T.bassWave, volume: T.bass, bus: gain,
+          attack: 0.012, cutoff: 520,
+        });
+      }
+
+      // lead — the tune. A digit is a degree of the scale, `-` is a rest,
+      // and a degree past the top of the scale wraps into the next octave.
+      const ch = motif[i % Math.max(1, motif.length)];
+      if (T.lead > 0 && ch >= '0' && ch <= '9') {
+        const d = +ch;
+        const sc = T.scale;
+        const semi = sc[d % sc.length] + 12 * Math.floor(d / sc.length);
+        this.tone({
+          freq: leadBase * Math.pow(2, semi / 12), dur: leadLen(i),
+          type: T.leadWave, volume: T.lead, bus: gain, attack: 0.02,
+          cutoff: T.cutoff * 2.2,
+        });
+      }
+
+      // pluck — an arpeggio through the chord, quieter under the tune than
+      // it is in the holes the tune leaves.
+      if (T.pluck > 0 && s % 2 === 1) {
+        const n = chord[Math.floor(i / 2) % chord.length];
+        this.tone({
+          freq: T.root * 2 * Math.pow(2, n / 12), dur: stepSec * 2.4,
+          type: T.pluckWave, volume: T.pluck * (ch === '-' ? 1 : 0.5),
+          bus: gain, attack: 0.006, cutoff: T.cutoff * 2.6,
+        });
+      }
+
+      // perc — kick, snare and a hat. Only where a place has a pulse.
+      if (T.perc > 0) {
+        if (s === 0 || s === 8) {
+          this.noise({
+            dur: 0.20, volume: T.perc * 1.4, filter: 230, filterTo: 55,
+            type: 'lowpass', bus: gain,
+          });
+        } else if (s === 4 || s === 12) {
+          this.noise({
+            dur: 0.16, volume: T.perc, filter: 1700, filterTo: 620, q: 1.1,
+            bus: gain,
+          });
+        } else if (s % 2 === 0) {
+          this.noise({
+            dur: 0.05, volume: T.perc * 0.32, filter: 7200, type: 'highpass',
+            q: 0.8, bus: gain,
+          });
+        }
+      }
+    };
+
+    /**
+     * The clock. Kept as a named closure because `bossPhase` re-arms the
+     * interval at a shorter period when a guardian changes shape.
+     */
+    const beat = () => {
+      const th = this._theme;
+      if (!th || th.id !== id) return;
+      const i = th.step++;
+      const sw = T.swing * stepSec * 500;
+      if (sw > 1 && i % 2 === 1) setTimeout(() => voice(i), sw);
+      else voice(i);
+    };
+
+    const period = Math.max(45, stepSec * 1000);
+    this._theme = {
+      id, T, gain, droneGain, oscs, beat, step: 0,
+      period, basePeriod: period, timer: null, phase: 1,
+    };
+    this._theme.timer = setInterval(beat, this._theme.period);
+    beat();
+  }
+
+  /** Fade the current piece out and let its tail ring. */
+  stopTheme(fade = 0.9) {
+    if (!this._theme) return;
+    const th = this._theme;
+    this._theme = null;
+    clearInterval(th.timer);
+    try {
+      const t = this.ctx.currentTime;
+      th.gain.gain.cancelScheduledValues(t);
+      th.gain.gain.setValueAtTime(th.gain.gain.value, t);
+      th.gain.gain.linearRampToValueAtTime(0, t + fade);
+    } catch (e) { /* context torn down */ }
+    setTimeout(() => {
+      for (const o of th.oscs) { try { o.stop(); } catch (e) { /* gone */ } }
+      try { th.gain.disconnect(); } catch (e) { /* gone */ }
+    }, Math.ceil(fade * 1000) + 300);
   }
 
   // ------------------------------------------------------------------ music
@@ -773,6 +985,16 @@ export class AudioEngine {
     this.noise({
       dur: 0.75, volume: 0.20, filter: 900, filterTo: 110, type: 'lowpass',
     });
+    // A composed fight tightens the same way: the grid speeds up by 7% a
+    // phase, so the theme you have been hearing gets harder rather than
+    // being swapped for a different one halfway through the fight.
+    if (this._theme) {
+      const th = this._theme;
+      th.phase = n;
+      clearInterval(th.timer);
+      th.period = Math.max(45, th.basePeriod * Math.pow(0.93, Math.max(0, n - 1)));
+      th.timer = setInterval(th.beat, th.period);
+    }
     if (!this._boss) return;
     this._boss.phase = n;
     clearInterval(this._boss.timer);

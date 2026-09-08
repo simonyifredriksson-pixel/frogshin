@@ -24,17 +24,17 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
 import { Citizen, pickCitizen, citizenHeight, disposeCitizenMats,
-  disposeCitizenGeos } from './citizen.js?v=v87';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v87';
+  disposeCitizenGeos } from './citizen.js?v=v88';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v88';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v87';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v87';
-import { ROADS, RIVERS } from './roads.js?v=v87';
-import { GEAR_BY_ID } from './gear.js?v=v87';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v87';
-import { LORE_COUNT, loreRead } from './lore.js?v=v87';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v88';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v88';
+import { ROADS, RIVERS } from './roads.js?v=v88';
+import { GEAR_BY_ID } from './gear.js?v=v88';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v88';
+import { LORE_COUNT, loreRead } from './lore.js?v=v88';
 
 const $ = (id) => document.getElementById(id);
 
@@ -44,11 +44,25 @@ export const TALK_RANGE = 7.5;
 const MARK = {
   give: new THREE.MeshBasicMaterial({ color: 0xffd76b }),
   turn: new THREE.MeshBasicMaterial({ color: 0x8fe86b }),
+  /**
+   * The beacon over somebody who has work for you.
+   *
+   * Transparent, additive and drawn without writing depth, so it goes up
+   * through the roof of whatever they are standing in and can be seen from
+   * the edge of the village. A gold bang over a frog's head is only useful
+   * once you are already looking at the frog; the point of this is to be
+   * what makes you look.
+   */
+  beam: new THREE.MeshBasicMaterial({
+    color: 0xffd76b, transparent: true, opacity: 0.3,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }),
 };
 const MARK_GEO = {
   bang: new THREE.BoxGeometry(0.3, 1.0, 0.3),
   dot: new THREE.BoxGeometry(0.3, 0.3, 0.3),
   ring: new THREE.TorusGeometry(0.5, 0.12, 5, 12),
+  beam: new THREE.CylinderGeometry(0.55, 0.9, 22, 7, 1, true),
 };
 
 /**
@@ -128,13 +142,42 @@ export class People {
     mark.add(bang, dot, ring);
     model.root.add(mark);
 
+    // The beacon. Its own child of the root rather than of the bobbing marker,
+    // because a column of light that bobs reads as a bug.
+    const beam = new THREE.Mesh(MARK_GEO.beam, MARK.beam);
+    beam.position.y = (citizenHeight(1) / model.scale) + 9.0;
+    beam.renderOrder = 2;
+    beam.visible = false;
+    model.root.add(beam);
+
     this.list.push({
-      spec, model, mark, bang, dot, ring, markY: mark.position.y,
+      spec, model, mark, bang, dot, ring, beam, markY: mark.position.y,
       home: spot, at: { x: spot.x, y: spot.y, z: spot.z },
       yaw: Math.random() * Math.PI * 2,
       wander: WANDERS.has(spec.role),
       goal: null, wait: Math.random() * 4, speed: 0,
+      /** Set while a greeting is walking them somewhere. See `script`. */
+      script: null, arrived: false,
     });
+  }
+
+  /**
+   * WALK THIS ONE SOMEWHERE AND HOLD THEM THERE.
+   *
+   * The quest-giver greeting uses it: rather than the player having to find
+   * the right frog in a village of thirty, the frog comes to them. While a
+   * script is set the NPC ignores its own wandering entirely, so it cannot
+   * wander off mid-cutscene, and `arrived` says when it has got there.
+   */
+  script(npc, x, z, faceAt) {
+    npc.script = { x, z, faceAt };
+    npc.arrived = false;
+  }
+
+  clearScript(npc) {
+    if (!npc) return;
+    npc.script = null;
+    npc.arrived = false;
   }
 
   /**
@@ -155,6 +198,14 @@ export class People {
   }
 
   update(dt, playerPos, p) {
+    /**
+     * How close the nearest lit beacon is.
+     *
+     * The beam material is shared by every NPC, so its fade is decided once,
+     * by whichever beacon you are closest to. That is also the right answer:
+     * the one you are walking towards is the one the fade is for.
+     */
+    let nearestBeacon = Infinity;
     for (const npc of this.list) {
       const dx = playerPos.x - npc.at.x, dz = playerPos.z - npc.at.z;
       const d = Math.hypot(dx, dz);
@@ -166,6 +217,31 @@ export class People {
       // The wanderers pace a short loop round wherever they belong, and stop
       // dead the moment you are close enough to talk to.
       let moving = false;
+      if (npc.script) {
+        // Being walked somewhere by a cutscene. Nothing else gets a say.
+        const gx = npc.script.x - npc.at.x, gz = npc.script.z - npc.at.z;
+        const gd = Math.hypot(gx, gz);
+        if (gd > 0.5) {
+          npc.yaw = dampAngle(npc.yaw, Math.atan2(gx, gz), 6, dt);
+          const step = Math.min(gd, 3.6 * dt);
+          npc.at.x += (gx / gd) * step;
+          npc.at.z += (gz / gd) * step;
+          npc.at.y = this.realm.heightAt(npc.at.x, npc.at.z);
+          npc.model.root.position.set(npc.at.x, npc.at.y, npc.at.z);
+          moving = true;
+        } else {
+          npc.arrived = true;
+          const f = npc.script.faceAt || playerPos;
+          npc.yaw = dampAngle(npc.yaw, Math.atan2(f.x - npc.at.x, f.z - npc.at.z), 6, dt);
+        }
+        npc.model.setFacing(npc.yaw);
+        npc.model.update(dt, { speed: moving ? 3.6 : 0, moving });
+        npc.bang.visible = false;
+        npc.dot.visible = false;
+        npc.ring.visible = false;
+        npc.beam.visible = false;
+        continue;
+      }
       if (npc.wander && d > TALK_RANGE * 1.6) {
         npc.wait -= dt;
         if (!npc.goal || npc.wait <= 0) {
@@ -196,6 +272,25 @@ export class People {
       npc.ring.visible = mark === 'turn';
       npc.mark.rotation.y += dt * 1.6;
       npc.mark.position.y = npc.markY + Math.sin(performance.now() / 400) * 0.12;
+      /**
+       * The beacon: only for somebody with work to GIVE, and only until you
+       * are standing in front of them.
+       *
+       * It fades out over the last few metres rather than switching off,
+       * because a column of light that vanishes as you approach reads as
+       * broken, and one that is still there while you are talking to them is
+       * in the way of the conversation.
+       */
+      const beacon = mark === 'give' && d > TALK_RANGE * 0.8;
+      npc.beam.visible = beacon;
+      if (beacon) {
+        npc.beam.scale.y = 1 + Math.sin(performance.now() / 700) * 0.05;
+        if (d < nearestBeacon) nearestBeacon = d;
+      }
+    }
+    if (nearestBeacon < Infinity) {
+      MARK.beam.opacity = 0.30
+        * clamp((nearestBeacon - TALK_RANGE * 0.8) / 8, 0, 1);
     }
   }
 

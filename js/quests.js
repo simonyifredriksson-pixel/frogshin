@@ -1410,6 +1410,102 @@ function applyOccupation() {
       { when: (p) => !p.slain.has(O.by), say: O.held });
   }
 }
+
+/**
+ * PEOPLE HALF-RECOGNISING YOU.
+ *
+ * The other half of the memory story, and the half that does not need the
+ * player to have found anything. Everybody in this country lived through the
+ * war. Some of them saw the frog who led it. So every third character has
+ * one line-set that is about YOU rather than about the region — and it comes
+ * out in three bands, as the player recovers more of themselves and stops
+ * being able to pretend they misheard.
+ *
+ * ── the rule these are written to ────────────────────────────────────────
+ * Nobody ever finishes the thought. Every one of these stops, changes the
+ * subject, or is interrupted. That is deliberate and it is the whole trick:
+ * a villager who says "you are the lost commander" has told the player the
+ * plot, and a villager who says "...never mind, forget I said anything" has
+ * made them go and find out.
+ *
+ * They are also the ONLY story content that fires before a single flashback,
+ * so a player who explores badly still gets the mystery.
+ */
+const RECOGNITION = {
+  /** Before the player has remembered anything at all. */
+  early: [
+    ['Sometimes I wonder what became of the commander. The one who',
+      'went up and never came back down.',
+      '...Sorry. You have a way of standing that put me in mind of it.'],
+    ['You are not from Mirefoot. Are you?',
+      'No — no, of course you are. Forget I asked.'],
+    ['My father marched under somebody. Never would say who.',
+      'He said you could tell them by the shoulders. Which is nonsense.',
+      '...Nonsense.'],
+    ['Funny. For a moment there I thought you were somebody else.',
+      'Somebody a good deal older than you, mind.'],
+  ],
+  /** Once a memory or two has surfaced. */
+  stirring: [
+    ['You have that look. The one the veterans get.',
+      'Which is odd, because you are far too young for it.'],
+    ['There was a name they used to shout. In the fen, in the bad year.',
+      'It will not come to me. It is on the tip of my — no. Gone.'],
+    ['You have been asking about the rebellion.',
+      'Everybody who asks about the rebellion was IN the rebellion, frog.'],
+    ['My aunt fought at the span. She described the one who led them.',
+      'She described you. I am going to go and sit down.'],
+  ],
+  /** And once the player has most of it back. */
+  known: [
+    ['It is you.',
+      'I am not going to say it out loud in the street. But it is you.'],
+    ['We thought you were dead. Four years we thought you were dead.',
+      'Where WERE you?'],
+    ['They still keep your seat at the hall in Anurath. Empty.',
+      'Nobody has had the nerve to sit in it.'],
+    ['Commander.',
+      '...Sorry. Force of habit. It is a hard one to break.'],
+  ],
+};
+
+function applyForeshadowing() {
+  let n = 0;
+  for (const npc of NPCS) {
+    // Every third character, so being recognised stays notable. If everybody
+    // in the country said it, it would be the weather rather than a clue.
+    if (n++ % 3 !== 0) continue;
+    const i = (n / 3) | 0;
+    const early = RECOGNITION.early[i % RECOGNITION.early.length];
+    const stir = RECOGNITION.stirring[i % RECOGNITION.stirring.length];
+    const known = RECOGNITION.known[i % RECOGNITION.known.length];
+    // Above the default line, below everything with a real condition — same
+    // slot the occupation moods use, and for the same reason: a character's
+    // quest dialogue must always win.
+    const at = Math.max(0, npc.lines.length - 1);
+    npc.lines.splice(at, 0,
+      { when: (p) => p.prologue && p.memories.size >= 8, say: known },
+      { when: (p) => p.prologue && p.memories.size >= 2, say: stir },
+      // The early band needs no memories at all — only that the player has
+      // lived the opening, which every new save has.
+      { when: (p) => p.prologue && Math.random() < 0.45, say: early });
+  }
+}
+
+/**
+ * ORDER MATTERS, AND THIS IS THE ORDER.
+ *
+ * Foreshadowing goes in FIRST, which puts it ABOVE the occupation moods in
+ * every character's line list — so it wins. That is deliberate: "it is you,
+ * we thought you were dead" is a rarer and more important thing for a
+ * character to say than "the west field is being worked again", and a player
+ * who has recovered most of themselves should be hearing about it rather
+ * than getting the weather report.
+ *
+ * Both still lose to anything with a real condition on it, because both are
+ * spliced above the DEFAULT line and below every quest-driven one.
+ */
+applyForeshadowing();
 applyOccupation();
 
 export const NPC_BY_ID = new Map(NPCS.map((n) => [n.id, n]));

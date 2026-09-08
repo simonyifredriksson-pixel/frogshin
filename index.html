@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v87" />
+<link rel="stylesheet" href="css/style.css?v=v88" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -161,6 +161,48 @@
 
         <div id="play-status" class="status"></div>
         <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+    <!--
+      SAVE FILES.
+
+      Five solo and five multiplayer, entirely independent of one another.
+      The rows are built in JS from js/saves.js; this is only the frame and
+      the delete confirmation, which is deliberately a separate step with the
+      slot's own name in it — a permanent delete behind one click is a bug
+      whatever the button says.
+    -->
+    <div class="panel" id="panel-saves">
+      <div class="card card-wide">
+        <h2 class="card-title">THE CROAKLANDS — CHOOSE A FILE</h2>
+
+        <div class="divider"><span>SOLO</span></div>
+        <div id="saves-solo" class="save-list"></div>
+
+        <div class="divider"><span>MULTIPLAYER</span></div>
+        <div id="saves-mp" class="save-list"></div>
+        <p class="note">A multiplayer file is your own progress through a
+           shared adventure — your guardians, your gear, your memories. It is
+           kept apart from your solo files and from everybody else's, so
+           nothing another player does can write over it.</p>
+
+        <div id="save-status" class="status"></div>
+        <button class="btn btn-back"><span>◀ BACK</span></button>
+      </div>
+    </div>
+
+    <!-- Deleting a file. Its own screen, with the file named on it. -->
+    <div class="panel" id="panel-erase">
+      <div class="card">
+        <h2 class="card-title">DELETE THIS FILE?</h2>
+        <div id="erase-what" class="erase-what"></div>
+        <p class="note danger-note">This cannot be undone. Nothing else is
+           touched — your other files stay exactly as they are.</p>
+        <div class="btn-row">
+          <button class="btn btn-danger" id="btn-erase-yes"><span>DELETE FOREVER</span></button>
+          <button class="btn btn-quiet" id="btn-erase-no"><span>KEEP IT</span></button>
+        </div>
       </div>
     </div>
 
@@ -618,6 +660,17 @@
   <div id="combo"></div>
   <div id="toast"></div>
 
+  <!--
+    BOSS BANTER — a line thrown out mid-fight.
+
+    Deliberately NOT inside the cinematic box: this one never takes control,
+    never waits for a key and never covers the middle of the screen, because
+    it is up while the player is dodging. See js/cinema.js.
+  -->
+  <div id="banter">
+    <b id="banter-name"></b><span id="banter-text"></span>
+  </div>
+
   <!-- scoreboard (hold TAB) -->
   <div id="scoreboard">
     <div class="sb-head"><span></span><span>NINJA</span><span>K</span><span>D</span></div>
@@ -632,6 +685,30 @@
     <div class="rs-sub">respawning…</div>
   </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════ CINEMATIC DIALOGUE ══ -->
+<!--
+  Outside #hud on purpose: cutscenes play in the prologue, in flashbacks and
+  in the open world, and the HUD is hidden for two of those three.
+-->
+<div id="cine-bar-top" class="cine-bar"></div>
+<div id="cine-bar-bottom" class="cine-bar"></div>
+<div id="cinema">
+  <div class="cine-box">
+    <div id="cine-portrait"></div>
+    <div class="cine-words">
+      <b id="cine-name"></b>
+      <p id="cine-text"></p>
+    </div>
+    <div id="cine-hint"><b>E</b> continue</div>
+  </div>
+</div>
+
+<!-- A memory surfacing. Fades over everything, then hands back. -->
+<div id="memory-wash"><div class="mw-label">MEMORY RECOVERED</div></div>
+
+<!-- Lightning, during the fall out of heaven. -->
+<div id="storm-flash"></div>
 
 <!-- ══════════════════════════════════════════════════════════ VOTE SCREEN ══ -->
 <div id="vote">
@@ -874,6 +951,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v87"></script>
+<script type="module" src="js/main.js?v=v88"></script>
 </body>
 </html>

@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v87';
-import { CFG } from './config.js?v=v87';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v87';
-import { FrogModel } from './frog.js?v=v87';
-import { Grapple, GrappleState } from './grapple.js?v=v87';
-import { Combat, Health } from './combat.js?v=v87';
-import { Stamina } from './stamina.js?v=v87';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v87';
-import { Audio } from './audio.js?v=v87';
+import * as THREE from '../lib/three.module.js?v=v88';
+import { CFG } from './config.js?v=v88';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v88';
+import { FrogModel } from './frog.js?v=v88';
+import { Grapple, GrappleState } from './grapple.js?v=v88';
+import { Combat, Health } from './combat.js?v=v88';
+import { Stamina } from './stamina.js?v=v88';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v88';
+import { Audio } from './audio.js?v=v88';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1307,16 +1307,12 @@ export class Player {
     if (this.health.dead || this.health.protected) return false;
 
     // A raised guard turns the blow aside — same rule everywhere, including
-    // the arena: the second hit absorbed inside one parry breaks it.
+    // the arena. Turning one aside is what ends the guard: see `_parryTook`.
     if (this.parrying) {
       const len = Math.hypot(kx, kz) || 1;
       const nx = kx / len, nz = kz / len;
-      this.parryHits++;
       this.justParried = 0.2;
-      if (this.parryHits >= CFG.story.parry.knockdownAfter) {
-        this._breakParry(nx, nz);
-        return false;
-      }
+      this._parryTook();
       this.vel.x += nx * 7;
       this.vel.z += nz * 7;
       this.combat.hitstop = CFG.story.parry.chipStagger;
@@ -1386,14 +1382,10 @@ export class Player {
     const nx = dirX / len, nz = dirZ / len;
 
     if (this.parrying) {
-      this.parryHits++;
       this.justParried = 0.2;
-      // Absorbing a second blow inside one parry breaks your guard.
-      if (this.parryHits >= S.parry.knockdownAfter) {
-        this._knockDown(nx, nz);
-        return;
-      }
-      // Turned aside: sparks, a shove, no damage.
+      // Turned aside: sparks, a shove, no damage — and the guard comes down
+      // for `afterHit` seconds, which is Toadel's whole opening.
+      this._parryTook();
       this.vel.x += nx * 7;
       this.vel.z += nz * 7;
       this.combat.hitstop = S.parry.chipStagger;
@@ -1429,26 +1421,31 @@ export class Player {
   }
 
   /**
-   * The guard.
+   * THE GUARD.
    *
-   * Holding right mouse used to be free: the block never dropped, never ran
-   * out and never had to be timed, so against anything that telegraphs you
-   * could simply stand there. It is now a commitment — a short window, on a
-   * cooldown, that punishes you badly if it breaks.
+   * Hold right mouse and the blade stays up, for as long as you hold it.
+   * There is no timer on it and no cost to raising it — a guard that expired
+   * on its own turned every exchange into a stopwatch problem, and a guard
+   * you had to pay for meant the safe play was never to raise it at all.
+   *
+   * The price is on the OTHER side. Turning a blow aside drops the guard and
+   * locks it for `afterHit` seconds (see `_parryTook`), so blocking the first
+   * hit of a combo is what opens you to the second. Standing behind a raised
+   * blade is free; standing behind it while somebody is actually swinging is
+   * not.
    */
   _updateParry(dt, held) {
-    const P = CFG.story.parry;
     if (this.parryCooldown > 0) this.parryCooldown -= dt;
 
     if (this.parrying) {
       this.parryHeld += dt;
-      // Drops on its own, so a held button is never a permanent shield.
-      if (!held || this.parryHeld >= P.maxHold) this._dropParry();
+      // Only letting go lowers it. Nothing else does, except being hit.
+      if (!held) this._dropParry();
       return;
     }
     if (!held || this.parryCooldown > 0) {
-      // A cue the first time you try to guard too soon, rate-limited so it
-      // cannot spam while the button is held down.
+      // A cue the first time you try to guard inside the lockout, rate-limited
+      // so it cannot spam while the button is held down.
       if (held && (!this._parryCue || this._parryCue <= 0)) {
         this._parryCue = 0.5;
         Audio.uiBack();
@@ -1461,28 +1458,43 @@ export class Player {
     Audio.uiHover();
   }
 
-  /** Lower the guard and start its cooldown. */
+  /**
+   * A blow was turned aside: the guard comes down and stays down.
+   *
+   * This is the entire cost of parrying, and it is the same everywhere — the
+   * arena, the open world and the Toadel fight all route their absorbed hits
+   * through here rather than each counting to two on their own.
+   */
+  _parryTook() {
+    this.parrying = false;
+    this.parryHits = 0;
+    this.parryHeld = 0;
+    this.parryCooldown = CFG.story.parry.afterHit;
+    this._parryCue = 0.5;    // no "too soon" bark for the hit that caused it
+  }
+
+  /** Lower the guard because the button came up. Costs nothing. */
   _dropParry() {
     if (!this.parrying) return;
     this.parrying = false;
     this.parryHits = 0;
     this.parryHeld = 0;
-    this.parryCooldown = CFG.story.parry.cooldown;
   }
 
   /**
-   * A guard broken by a second blow.
+   * A guard broken outright.
    *
-   * Rather than the story's full knockdown, this is a short total lockout:
-   * you cannot move, attack, dash or guard for `breakLock` seconds. Greedy
-   * blocking has to cost something, and it is the same cost everywhere.
+   * Not what an ordinary turned blow does any more — that is `_parryTook` —
+   * but kept for the few attacks that are built to go THROUGH a guard, where
+   * the point of the move is that blocking it is not an answer. A short total
+   * lockout: no moving, attacking, dashing or guarding for `breakLock`.
    */
   _breakParry(nx, nz) {
     const P = CFG.story.parry;
     this.parrying = false;
     this.parryHits = 0;
     this.parryHeld = 0;
-    this.parryCooldown = P.cooldown;
+    this.parryCooldown = P.afterHit;
     this.knockdown = Math.max(this.knockdown, P.breakLock);
     this.justKnockedDown = true;
     this.combat.reset();
