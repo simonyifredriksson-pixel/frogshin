@@ -32,36 +32,36 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v91';
-import { CFG } from './config.js?v=v91';
-import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v91';
-import { Realm } from './realm.js?v=v91';
-import { Scatter } from './scatter.js?v=v91';
-import { Sites } from './realmsites.js?v=v91';
-import { Camp } from './mobs.js?v=v91';
-import { DungeonBoss } from './dungeonboss.js?v=v91';
-import { Frogath } from './frogath.js?v=v91';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v91';
+import * as THREE from '../lib/three.module.js?v=v92';
+import { CFG } from './config.js?v=v92';
+import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v92';
+import { Realm } from './realm.js?v=v92';
+import { Scatter } from './scatter.js?v=v92';
+import { Sites } from './realmsites.js?v=v92';
+import { Camp } from './mobs.js?v=v92';
+import { DungeonBoss } from './dungeonboss.js?v=v92';
+import { Frogath } from './frogath.js?v=v92';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v92';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v91';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v91';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v91';
+  CONTENT_HALF } from './regions.js?v=v92';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v92';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v92';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v91';
+  mainObjective } from './quests.js?v=v92';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v91';
-import { disposeLandmarkMats } from './landmarks.js?v=v91';
-import { Props, disposePropMats } from './props.js?v=v91';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v91';
-import { Ambience } from './ambience.js?v=v91';
-import { Weather } from './weather.js?v=v91';
-import { Audio } from './audio.js?v=v91';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v91';
+  disposeVillagerMats } from './realmquests.js?v=v92';
+import { disposeLandmarkMats } from './landmarks.js?v=v92';
+import { Props, disposePropMats } from './props.js?v=v92';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v92';
+import { Ambience } from './ambience.js?v=v92';
+import { Weather } from './weather.js?v=v92';
+import { Audio } from './audio.js?v=v92';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v92';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v91';
-import { Cine } from './cinema.js?v=v91';
-import { recommendedFor, readiness } from './guardians.js?v=v91';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v91';
+  MEMORY_COUNT } from './flashbacks.js?v=v92';
+import { Cine } from './cinema.js?v=v92';
+import { recommendedFor, readiness } from './guardians.js?v=v92';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v92';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();

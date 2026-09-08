@@ -5,42 +5,42 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v91';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v91';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v91';
-import { Input } from './input.js?v=v91';
-import { Audio } from './audio.js?v=v91';
-import { World } from './world.js?v=v91';
-import { Effects } from './effects.js?v=v91';
-import { Atmosphere } from './atmosphere.js?v=v91';
-import { FollowCamera } from './camera.js?v=v91';
-import { Player } from './player.js?v=v91';
-import { RemotePlayer } from './remote.js?v=v91';
-import { HUD } from './hud.js?v=v91';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v91';
-import { FrogModel } from './frog.js?v=v91';
-import { DummyField } from './dummy.js?v=v91';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v91';
-import { ToadModel } from './npc.js?v=v91';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v91';
-import { DungeonRun } from './dungeon.js?v=v91';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v91';
-import { JudgmentRun } from './judgment.js?v=v91';
-import { COMBO_NAMES } from './ascended.js?v=v91';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v91';
-import { MenuScene } from './menu.js?v=v91';
-import { Economy } from './economy.js?v=v91';
-import { Shop } from './shop.js?v=v91';
-import { Network, NetRole } from './net.js?v=v91';
-import { Overworld } from './overworld.js?v=v91';
-import { InventoryScreen } from './inventoryui.js?v=v91';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v91';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v91';
-import { Cine } from './cinema.js?v=v91';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v91';
-import { MEMORIES } from './flashbacks.js?v=v91';
-import { GUARDIANS } from './guardians.js?v=v91';
-import { gearOfTier } from './gear.js?v=v91';
+import * as THREE from '../lib/three.module.js?v=v92';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v92';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v92';
+import { Input } from './input.js?v=v92';
+import { Audio } from './audio.js?v=v92';
+import { World } from './world.js?v=v92';
+import { Effects } from './effects.js?v=v92';
+import { Atmosphere } from './atmosphere.js?v=v92';
+import { FollowCamera } from './camera.js?v=v92';
+import { Player } from './player.js?v=v92';
+import { RemotePlayer } from './remote.js?v=v92';
+import { HUD } from './hud.js?v=v92';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v92';
+import { FrogModel } from './frog.js?v=v92';
+import { DummyField } from './dummy.js?v=v92';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v92';
+import { ToadModel } from './npc.js?v=v92';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v92';
+import { DungeonRun } from './dungeon.js?v=v92';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v92';
+import { JudgmentRun } from './judgment.js?v=v92';
+import { COMBO_NAMES } from './ascended.js?v=v92';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v92';
+import { MenuScene } from './menu.js?v=v92';
+import { Economy } from './economy.js?v=v92';
+import { Shop } from './shop.js?v=v92';
+import { Network, NetRole } from './net.js?v=v92';
+import { Overworld } from './overworld.js?v=v92';
+import { InventoryScreen } from './inventoryui.js?v=v92';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v92';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v92';
+import { Cine } from './cinema.js?v=v92';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v92';
+import { MEMORIES } from './flashbacks.js?v=v92';
+import { GUARDIANS } from './guardians.js?v=v92';
+import { gearOfTier } from './gear.js?v=v92';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2378,32 +2378,85 @@ class Game {
     $('cheat-endgame').onclick = () => {
       const ow = this.overworld;
       if (!ow) return this._cheatNote('Only in the Croaklands.');
-      const p = ow.progress;
-      /**
-       * The best of everything, equipped.
-       *
-       * Walked down from tier five so a slot always ends up with the best
-       * thing that exists for it, rather than with whatever the top tier
-       * happened to include.
-       */
-      for (const slot of ['weapon', 'head', 'body', 'legs']) {
-        let best = null;
-        for (let t = 5; t >= 0 && !best; t--) {
-          const list = gearOfTier(t).filter((g) => g.slot === slot);
-          if (list.length) best = list[list.length - 1];
-        }
-        if (!best) continue;
-        p.add(best.id, 1);
-        if (!p.isEquipped(best.id)) p.equip(best.id);
-      }
-      p.hearts = 10;
-      p.level = Math.max(p.level, 14);
-      p.kunai = 60;
-      ow.applyStats();
-      if (this.player) this.player.inventory.setKunai(p.kunai);
+      this._giveEndgameKit();
       ow.save();
-      this._cheatNote(`Endgame kit equipped. Power ${p.power}.`);
+      this._cheatNote(`Endgame kit equipped. Power ${ow.progress.power}.`);
     };
+
+    /**
+     * SKIP TO FROGATH — THE FINAL BOSS.
+     *
+     * The last fight in the game is gated on Zehl being down, which is
+     * gated on every region north of the Lily Reach being open, which is
+     * gated on thirty-odd guardians. Reaching it honestly is a full
+     * playthrough, so this does the whole endgame in one press: every
+     * guardian marked down, the best equipment in the game equipped, and
+     * the player put on the dais with him about to build.
+     *
+     * It does NOT spawn him directly. The player is placed inside the
+     * throne's trigger and `Overworld._encounters` builds him on the next
+     * frame exactly as it would for a real player walking up — so this
+     * tests the actual entry path, the actual gate, the actual boss bar and
+     * the actual opening banter rather than a special case that only the
+     * dev menu can reach.
+     */
+    $('cheat-final-frogath').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      const e = ow.encounters.find((x) => x.id === 'frogath');
+      if (!e) return this._cheatNote('There is no throne in this world.');
+      const p = ow.progress;
+
+      // Everything that gates the last fight. He is the one left standing.
+      for (const g of GUARDIANS) p.slain.add(g.id);
+      p.slain.delete('frogath');
+      p.prologue = true;
+      ow.sites.setFreed(p.slain);
+      this._giveEndgameKit();
+
+      // Drop whatever was live, so nothing is half-built on the dais.
+      if (ow.boss) ow._dropBoss();
+      if (ow.frogath) {
+        ow.frogath.dispose();
+        ow.frogath = null;
+        ow.frogathOf = null;
+      }
+      ow._frogathTries = 0;
+      ow._toldAboutZehl = true;
+      if (ow.flash) ow.flash.cancel();
+      Cine.clearBanter();
+      Cine.cancel();
+
+      /**
+       * Standing just inside the ring, not on top of him.
+       *
+       * `e.r + 10` is the trigger, so a little inside that is where a
+       * player would be when he wakes — and it leaves the whole arena in
+       * front of them rather than behind.
+       */
+      const back = Math.min(e.r * 0.7, 22);
+      const px = e.at.x;
+      const pz = e.at.z - back;
+      const p2 = this.player;
+      p2.pos.set(px, ow.realm.heightAt(px, pz) + 1.5, pz);
+      p2.vel.set(0, 0, 0);
+      p2.health.current = p2.health.max;
+      p2.visualYaw = Math.PI;                 // facing the throne
+      // The region has to be re-evaluated, or the gate pushes them back out
+      // of a region the save now says is open.
+      ow.region = null;
+      ow.lastOpen = { x: px, z: pz };
+      ow.home = { x: px, y: p2.pos.y, z: pz };
+      this.followCam.yaw = Math.PI;
+      this.followCam.snapTo(p2.pos);
+      ow._paintObjectives();
+      ow.save();
+
+      this._cheatNote(`${GUARDIANS.length} guardians down, power ${p.power}. `
+        + 'Walk forward — he is waiting.');
+      this._toggleCheats(false);
+    };
+
     $('cheat-crystal').onclick = () => {
       this.economy.crystal = true;
       this.economy.save();
@@ -2505,6 +2558,40 @@ class Game {
   }
 
   _cheatNote(msg) { $('cheat-note').textContent = msg; }
+
+  /**
+   * THE BEST OF EVERYTHING, EQUIPPED.
+   *
+   * Walked DOWN from tier five so a slot always ends up with the best thing
+   * that exists for it, rather than with whatever the top tier happened to
+   * include — there is no tier-five hat, and asking only tier five for one
+   * would have left the player bare-headed in the last fight.
+   *
+   * Shared by the endgame-loadout button and the skip-to-Frogath button,
+   * because "put me at the end of the game" and "give me the gear from the
+   * end of the game" are the same operation twice.
+   */
+  _giveEndgameKit() {
+    const ow = this.overworld;
+    if (!ow) return null;
+    const p = ow.progress;
+    for (const slot of ['weapon', 'head', 'body', 'legs']) {
+      let best = null;
+      for (let t = 5; t >= 0 && !best; t--) {
+        const list = gearOfTier(t).filter((g) => g.slot === slot);
+        if (list.length) best = list[list.length - 1];
+      }
+      if (!best) continue;
+      p.add(best.id, 1);
+      if (!p.isEquipped(best.id)) p.equip(best.id);
+    }
+    p.hearts = 10;
+    p.level = Math.max(p.level, 14);
+    p.kunai = 60;
+    ow.applyStats();
+    if (this.player) this.player.inventory.setKunai(p.kunai);
+    return p.power;
+  }
 
   /** Keep the toggles showing what is actually on. */
   _cheatRefresh() {

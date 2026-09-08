@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v91" />
+<link rel="stylesheet" href="css/style.css?v=v92" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -814,6 +814,17 @@
       <button class="cheat-btn" id="cheat-slay-all">SLAY EVERY GUARDIAN</button>
       <button class="cheat-btn" id="cheat-endgame">ENDGAME LOADOUT</button>
     </div>
+    <!--
+      The whole endgame in one press: every guardian down, the best gear in
+      the game equipped, and the player standing on the Ashen Throne with
+      Frogath about to build. Testing the last fight otherwise means an
+      eight-hour playthrough.
+    -->
+    <div class="cheat-row">
+      <button class="cheat-btn wide" id="cheat-final-frogath">
+        SKIP TO FROGATH — THE FINAL BOSS
+      </button>
+    </div>
 
     <div class="cheat-sep"><span>DUNGEON</span></div>
     <div id="cheat-rooms"></div>
@@ -977,6 +988,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v91"></script>
+<script type="module" src="js/main.js?v=v92"></script>
 </body>
 </html>
