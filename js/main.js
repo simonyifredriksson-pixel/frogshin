@@ -5,39 +5,42 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v88';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v88';
-import { Input } from './input.js?v=v88';
-import { Audio } from './audio.js?v=v88';
-import { World } from './world.js?v=v88';
-import { Effects } from './effects.js?v=v88';
-import { Atmosphere } from './atmosphere.js?v=v88';
-import { FollowCamera } from './camera.js?v=v88';
-import { Player } from './player.js?v=v88';
-import { RemotePlayer } from './remote.js?v=v88';
-import { HUD } from './hud.js?v=v88';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v88';
-import { FrogModel } from './frog.js?v=v88';
-import { DummyField } from './dummy.js?v=v88';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v88';
-import { ToadModel } from './npc.js?v=v88';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v88';
-import { DungeonRun } from './dungeon.js?v=v88';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v88';
-import { JudgmentRun } from './judgment.js?v=v88';
-import { COMBO_NAMES } from './ascended.js?v=v88';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v88';
-import { MenuScene } from './menu.js?v=v88';
-import { Economy } from './economy.js?v=v88';
-import { Shop } from './shop.js?v=v88';
-import { Network, NetRole } from './net.js?v=v88';
-import { Overworld } from './overworld.js?v=v88';
-import { InventoryScreen } from './inventoryui.js?v=v88';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v88';
-import { Prologue } from './prologue.js?v=v88';
-import { Cine } from './cinema.js?v=v88';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v89';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v89';
+import { Input } from './input.js?v=v89';
+import { Audio } from './audio.js?v=v89';
+import { World } from './world.js?v=v89';
+import { Effects } from './effects.js?v=v89';
+import { Atmosphere } from './atmosphere.js?v=v89';
+import { FollowCamera } from './camera.js?v=v89';
+import { Player } from './player.js?v=v89';
+import { RemotePlayer } from './remote.js?v=v89';
+import { HUD } from './hud.js?v=v89';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v89';
+import { FrogModel } from './frog.js?v=v89';
+import { DummyField } from './dummy.js?v=v89';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v89';
+import { ToadModel } from './npc.js?v=v89';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v89';
+import { DungeonRun } from './dungeon.js?v=v89';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v89';
+import { JudgmentRun } from './judgment.js?v=v89';
+import { COMBO_NAMES } from './ascended.js?v=v89';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v89';
+import { MenuScene } from './menu.js?v=v89';
+import { Economy } from './economy.js?v=v89';
+import { Shop } from './shop.js?v=v89';
+import { Network, NetRole } from './net.js?v=v89';
+import { Overworld } from './overworld.js?v=v89';
+import { InventoryScreen } from './inventoryui.js?v=v89';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v89';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v89';
+import { Cine } from './cinema.js?v=v89';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v89';
+import { MEMORIES } from './flashbacks.js?v=v89';
+import { GUARDIANS } from './guardians.js?v=v89';
+import { gearOfTier } from './gear.js?v=v89';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1491,6 +1494,17 @@ class Game {
    */
   async _enterPrologue(loading, bar, label, frame) {
     this.isPrologue = true;
+    /**
+     * THERE IS NO WATER ON A FLOATING ISLAND.
+     *
+     * The swimming check reads `CFG.world.waterLevel` globally and the arena
+     * leaves it at 2.2, which is ABOVE the heavenly battlefield's floor — so
+     * the player spent the whole opening treading water in mid-air. Pushed
+     * below the void and put back on the way out, exactly as the Croaklands
+     * does with its own sea.
+     */
+    this._savedWater = CFG.world.waterLevel;
+    CFG.world.waterLevel = VOID_Y - 100;
     this.scene = new THREE.Scene();
     // A very long far plane: the whole point of the level is that you can
     // see the mountains on the far side of the sky.
@@ -1687,31 +1701,46 @@ class Game {
       }
       return;
     }
-    p.health.damage(damage, 'frogath');
+    /**
+     * THE ARMOUR, WHICH IS ABSURD ON PURPOSE.
+     *
+     * A blow from a god arrives at an eighth of its weight. See the note on
+     * HERO_LOADOUT: the scene is about how strong this frog used to be, and
+     * the shortest way to say that is to let them shrug him off.
+     */
+    const dealt = Math.max(1, Math.round(damage * HERO_LOADOUT.armour));
+    p.health.damage(dealt, 'frogath');
     _v3.set(p.pos.x, p.pos.y + 1.2, p.pos.z);
-    this.effects.damageNumber(_v3, damage, damage > 40);
-    this.hud.damageFlash(clamp(damage / 60, 0.3, 1));
-    this.followCam.shake(clamp(damage / 40, 0.3, 1.1));
+    this.effects.damageNumber(_v3, dealt, false);
+    this.hud.damageFlash(clamp(dealt / 60, 0.2, 0.6));
+    this.followCam.shake(clamp(dealt / 40, 0.2, 0.7));
     Audio.hurt(p.pos);
     if (this.prologue) this.prologue.noteHurt();
     /**
-     * DYING IN THE OPENING IS NOT AN ENDING.
+     * DYING IN THE OPENING IS NOT AN ENDING — THE FIGHT STARTS OVER.
      *
-     * The player is meant to win this fight — the whole scene is built on
-     * their having won it — so losing puts them back on their feet at full
-     * health with Frogath reset to the health he had at the start of the
-     * phase. It is still a real fight; it is just one you cannot fail out of
-     * a story you have already lived.
+     * The player is meant to win this one; the whole rest of the game is
+     * built on their having won it. So going down restarts the whole
+     * confrontation rather than ending anything: full health, and Frogath
+     * put back to full health in phase one with his hazards cleared.
+     *
+     * Resetting HIM matters as much as reviving the player. Reviving alone
+     * would drop somebody back in against a phase-four god on his last few
+     * per cent, which is the hardest possible version of the fight handed
+     * out as a punishment for losing the easiest one.
      */
     if (p.health.dead) {
       p.health.current = p.health.max;
       p.deathPending = false;
       p.spawn(HEAVEN.playerAt);
       p.pos.y = this.heaven.heightAt(HEAVEN.playerAt.x, HEAVEN.playerAt.z) + 0.4;
+      p.visualYaw = 0;
+      this.followCam.yaw = Math.PI;
       this.followCam.snapTo(p.pos);
-      this.hud.announce('YOUR ARMY PULLS YOU BACK UP', 'good', false);
-      Cine.say('frogath', 'They keep picking you up. Why?',
-        { id: 'pickup', secs: 3.6 });
+      if (this.prologue) this.prologue.restartFight();
+      this.hud.announce('THE LINE HOLDS — GO AGAIN', 'good', false);
+      Cine.say('frogath', 'Get up. We are not finished.',
+        { id: 'again', secs: 3.6, priority: 2 });
     }
   }
 
@@ -1737,6 +1766,12 @@ class Game {
   }
 
   _dropPrologue() {
+    // The arena's waterline, back the way we found it.
+    if (this._savedWater !== null && this._savedWater !== undefined) {
+      CFG.world.waterLevel = this._savedWater;
+      this._savedWater = null;
+    }
+    this._clearUnderwater();
     if (this.prologue) this.prologue.dispose();
     this.prologue = null;
     if (this.heaven) this.heaven.dispose();
@@ -2235,6 +2270,126 @@ class Game {
         ? 'Boss killed.' : 'Nothing is fighting you right now.');
     };
     $('cheat-frogath').onclick = () => this._cheatJump(CFG.dungeon.rooms - 1);
+
+    // ---------------------------------------------------------- the story
+    /**
+     * THE OPENING, AND THE MEMORIES.
+     *
+     * The opening is two and a half minutes of boss fight and twenty seconds
+     * of falling. Everything downstream of it — the amnesia, the flashbacks,
+     * the way people talk to you — is only reachable through it, so testing
+     * any of that without these buttons costs three minutes a go.
+     */
+    $('cheat-kill-frogath').onclick = () => {
+      // The opening fight first, then the one at the end of the game.
+      if (this.prologue && this.prologue.boss) {
+        this.prologue.boss.takeDamage(1e9, {});
+        this._cheatNote('Frogath down. The aftermath plays out from here.');
+        this._toggleCheats(false);
+        return;
+      }
+      const ow = this.overworld;
+      if (ow && ow.frogath) {
+        ow.frogath.takeDamage(1e9, {});
+        this._cheatNote('Frogath down.');
+        this._toggleCheats(false);
+        return;
+      }
+      this._cheatNote('Nothing of his is standing in front of you.');
+    };
+    $('cheat-skip-open').onclick = () => {
+      if (!this.prologue) return this._cheatNote('Only during the opening.');
+      // Straight past the fight and the aftermath to the blow and the fall.
+      if (this.prologue.boss) this.prologue.boss.health = 0;
+      this.prologue._betray();
+      this._cheatNote('Skipping to the fall.');
+      this._toggleCheats(false);
+    };
+    $('cheat-skip-prologue').onclick = () => {
+      if (this.prologue) {
+        // Already in it: end it here and wake up in the Croaklands.
+        this._cheatNote('Waking up in the Croaklands.');
+        this._toggleCheats(false);
+        this._prologueDone();
+        return;
+      }
+      const a = this.saves.active;
+      if (!a) return this._cheatNote('Open a save file first.');
+      this.saves.markPrologueSeen();
+      if (this.overworld) {
+        this.overworld.progress.prologue = true;
+        this.overworld.save();
+      }
+      this._cheatNote(`File ${a.index + 1} will skip the opening from now on.`);
+    };
+    $('cheat-replay-prologue').onclick = () => {
+      const a = this.saves.active;
+      if (!a) return this._cheatNote('Open a save file first.');
+      const s = this.saves.slot(a.kind, a.index);
+      if (s && s.meta) { s.meta.prologue = false; this.saves._write(); }
+      if (this.overworld) {
+        this.overworld.progress.prologue = false;
+        this.overworld.save();
+      }
+      this._cheatNote(`File ${a.index + 1} will play the opening again on entry.`);
+    };
+    $('cheat-memories').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      ow.progress.prologue = true;
+      for (const m of MEMORIES) ow.progress.memories.add(m.id);
+      ow._paintObjectives();
+      ow.save();
+      this._cheatNote(`All ${MEMORIES.length} memories recovered. `
+        + 'Everybody will recognise you now.');
+    };
+    $('cheat-forget').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      ow.progress.memories.clear();
+      ow._paintObjectives();
+      ow.save();
+      this._cheatNote('Memories cleared. The flashbacks will fire again.');
+    };
+    $('cheat-slay-all').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      for (const g of GUARDIANS) ow.progress.slain.add(g.id);
+      ow.sites.setFreed(ow.progress.slain);
+      ow._paintObjectives();
+      ow.save();
+      this._cheatNote(`${GUARDIANS.length} guardians marked down. `
+        + 'Every region is open and every village is rebuilding.');
+    };
+    $('cheat-endgame').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      const p = ow.progress;
+      /**
+       * The best of everything, equipped.
+       *
+       * Walked down from tier five so a slot always ends up with the best
+       * thing that exists for it, rather than with whatever the top tier
+       * happened to include.
+       */
+      for (const slot of ['weapon', 'head', 'body', 'legs']) {
+        let best = null;
+        for (let t = 5; t >= 0 && !best; t--) {
+          const list = gearOfTier(t).filter((g) => g.slot === slot);
+          if (list.length) best = list[list.length - 1];
+        }
+        if (!best) continue;
+        p.add(best.id, 1);
+        if (!p.isEquipped(best.id)) p.equip(best.id);
+      }
+      p.hearts = 10;
+      p.level = Math.max(p.level, 14);
+      p.kunai = 60;
+      ow.applyStats();
+      if (this.player) this.player.inventory.setKunai(p.kunai);
+      ow.save();
+      this._cheatNote(`Endgame kit equipped. Power ${p.power}.`);
+    };
     $('cheat-crystal').onclick = () => {
       this.economy.crystal = true;
       this.economy.save();

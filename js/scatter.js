@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { mulberry32 } from './util.js?v=v88';
-import { SEA } from './regions.js?v=v88';
-import { CHUNK } from './realm.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { mulberry32 } from './util.js?v=v89';
+import { SEA } from './regions.js?v=v89';
+import { CHUNK } from './realm.js?v=v89';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

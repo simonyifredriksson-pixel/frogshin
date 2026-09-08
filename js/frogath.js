@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { CFG } from './config.js?v=v88';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v88';
-import { Audio } from './audio.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { CFG } from './config.js?v=v89';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v89';
+import { Audio } from './audio.js?v=v89';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -248,6 +248,49 @@ export class Frogath {
     this.justDied = false;
     this.began = false;
     this.bob = 0;
+    /**
+     * HOW FAST HE FIGHTS, as two multipliers.
+     *
+     * Both are 1 for the dungeon fight, which is the one that is meant to be
+     * punishing. The prologue turns them up so the same patterns arrive at a
+     * pace a player who has never held the controls before can read — see
+     * `_restTime` and `_warn`.
+     */
+    this.restScale = 1;
+    this.warnScale = 1;
+  }
+
+  /**
+   * PUT THE WHOLE FIGHT BACK TO THE START.
+   *
+   * Health, phase, hazards, and whatever he was in the middle of swinging.
+   * Used when the player goes down in the prologue: that scene is one the
+   * player is meant to win, so losing it restarts the fight rather than
+   * ending anything — and a restart that left him on 4% health in phase four
+   * would not be a restart.
+   */
+  resetFight() {
+    this.health = this.maxHealth;
+    this.phase = 1;
+    this.justDied = false;
+    this._clearHazards();
+    this.attackName = '';
+    this.attackStep = 0;
+    this.attackT = 0;
+    this.attackTimer = 2.2;
+    this.swingT = 0;
+    // `vulnerable` and `committed` are derived from `attackName` and
+    // `attackTimer`, which the two lines above have already put right —
+    // there is nothing to assign, and assigning would throw.
+    this._deflects = 0;
+    this._forceClose = false;
+    this.hoverTarget = null;
+    this.state = STATE.FIGHT;
+    this.t = 0;
+    this.pos.set(this.center.x,
+      this.center.y + CFG.dungeon.frogath.hoverHeight, this.center.z);
+    this.rig.root.position.copy(this.pos);
+    this.rig.root.visible = true;
   }
 
   get fraction() { return clamp(this.health / this.maxHealth, 0, 1); }
@@ -652,9 +695,25 @@ export class Frogath {
     }
   }
 
-  /** How long he rests after an attack — the player's whole opening. */
+  /**
+   * How long he rests after an attack — the player's whole opening.
+   *
+   * `restScale` and `warnScale` are the two dials the PROLOGUE turns. That
+   * fight is the first two minutes anybody plays and it is a scene the player
+   * is meant to WIN, so its Frogath swings at a fraction of the speed of the
+   * dungeon's: the patterns are identical, the telegraphs are far longer and
+   * the gaps between them are enormous. Nothing else in the game touches
+   * them, so the dungeon fight is exactly as brutal as it was.
+   */
   _restTime() {
-    return [1.35, 1.05, 0.8, 0.55][this.phase - 1] || 0.8;
+    const base = [1.35, 1.05, 0.8, 0.55][this.phase - 1] || 0.8;
+    return base * (this.restScale || 1);
+  }
+
+  /** A telegraph, lengthened by `warnScale` and never shorter than the floor. */
+  _warn(secs) {
+    return Math.max(CFG.dungeon.frogath.minWarning * (this.warnScale || 1),
+      secs * (this.warnScale || 1));
   }
 
   _hover(dt, player) {
@@ -783,7 +842,7 @@ export class Frogath {
     // Close in on the player, staying airborne.
     this._dashToPlayer(player);
 
-    const warn = Math.max(F.minWarning, [0.75, 0.6, 0.5, 0.42][this.phase - 1]);
+    const warn = this._warn([0.75, 0.6, 0.5, 0.42][this.phase - 1]);
     const reach = 13;
     _tmp.set(player.pos.x, this.center.y + 0.1, player.pos.z);
     this.effects.ring(_tmp, 1.5, reach, warn, GOLD_HOT, true);
@@ -826,7 +885,7 @@ export class Frogath {
    */
   _spawnStars(player, count, predictive) {
     const F = CFG.dungeon.frogath;
-    const warn = Math.max(F.minWarning, 1.0 - this.phase * 0.1);
+    const warn = this._warn(1.0 - this.phase * 0.1);
     for (let i = 0; i < count; i++) {
       let tx, tz;
       if (predictive && i % 2 === 1) {
@@ -946,7 +1005,7 @@ export class Frogath {
    */
   _chargeBeam(player, sweep) {
     const F = CFG.dungeon.frogath;
-    const warn = Math.max(F.minWarning, 1.15 - this.phase * 0.12);
+    const warn = this._warn(1.15 - this.phase * 0.12);
     const yaw = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
     const beam = {
       yaw, warn, life: sweep ? 2.2 : 1.0, t: 0,

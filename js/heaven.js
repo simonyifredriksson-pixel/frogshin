@@ -27,9 +27,9 @@
  *      -Z  [ your army ]  ...  YOU  ...  <fight>  ...  FROGATH  [ his ]  +Z
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v88';
-import { Terrain, CollisionWorld } from './collision.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v89';
+import { Terrain, CollisionWorld } from './collision.js?v=v89';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

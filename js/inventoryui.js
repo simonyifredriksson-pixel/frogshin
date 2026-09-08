@@ -24,12 +24,12 @@
  * there is exactly one selected thing and one code path that acts on it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { CATS, GEAR_BY_ID } from './gear.js?v=v88';
-import { gearIcon, catIcon } from './gearicons.js?v=v88';
-import { HEART } from './progression.js?v=v88';
-import { FrogModel } from './frog.js?v=v88';
-import { clamp } from './util.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { CATS, GEAR_BY_ID } from './gear.js?v=v89';
+import { gearIcon, catIcon } from './gearicons.js?v=v89';
+import { HEART } from './progression.js?v=v89';
+import { FrogModel } from './frog.js?v=v89';
+import { clamp } from './util.js?v=v89';
 
 const $ = (id) => document.getElementById(id);
 

@@ -29,14 +29,14 @@
  * boss code.
  */
 
-import * as THREE from '../lib/three.module.js?v=v88';
-import { CFG } from './config.js?v=v88';
-import { clamp, lerp, damp, smoothstep, dampAngle } from './util.js?v=v88';
-import { Frogath } from './frogath.js?v=v88';
-import { HEAVEN, VOID_Y } from './heaven.js?v=v88';
-import { Audio } from './audio.js?v=v88';
-import { Cine } from './cinema.js?v=v88';
-import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v88';
+import * as THREE from '../lib/three.module.js?v=v89';
+import { CFG } from './config.js?v=v89';
+import { clamp, lerp, damp, smoothstep, dampAngle } from './util.js?v=v89';
+import { Frogath } from './frogath.js?v=v89';
+import { HEAVEN, VOID_Y } from './heaven.js?v=v89';
+import { Audio } from './audio.js?v=v89';
+import { Cine } from './cinema.js?v=v89';
+import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v89';
 
 const _v = new THREE.Vector3();
 const _look = new THREE.Vector3();
@@ -51,19 +51,49 @@ const _look = new THREE.Vector3();
  * LASTS — this is much the shorter of the two.
  *
  * Worked: a three-hit combo is about 3×22 base, times the 3.4 multiplier, so
- * roughly 225 a combo; a player in this fight lands a combo about every four
- * seconds once his telegraphs and his hover are accounted for. 8600 puts that
- * at two minutes thirty of swinging, which is the brief.
+ * roughly 225 a combo. He rests 2.6× longer than the dungeon Frogath between
+ * patterns (see HERO_LOADOUT.rest), which leaves the player swinging most of
+ * the fight — call it a combo every two and a half seconds. 10400 puts that
+ * at about two minutes, which is the brief: a fight that takes a while and
+ * that the player is never really in danger of losing.
  */
-export const PROLOGUE_HEALTH = 8600;
+export const PROLOGUE_HEALTH = 10400;
 
-/** What the player is carrying for this one fight. */
+/**
+ * WHAT THE PLAYER IS CARRYING FOR THIS ONE FIGHT.
+ *
+ * The brief for the scene is that the player looks like somebody who has
+ * spent an entire adventure preparing for this exact morning, so the gear is
+ * not "good" — it is absurd, and it is meant to feel absurd. The armour in
+ * particular: `armour` is the fraction of an incoming blow that actually
+ * lands, so at 0.12 a hit from a god takes about a twentieth of the player's
+ * health. Frogath can connect eight times and the player is still standing.
+ *
+ * That is the point. This is the one fight in the game the player is meant
+ * to win, in a scene about how strong they used to be, and the fastest way
+ * to say "you were unstoppable" is to let them BE unstoppable for two
+ * minutes. None of it survives the fall — the Croaklands starts them in rags
+ * with three hearts, which is what makes the rest of the game a game.
+ */
 export const HERO_LOADOUT = {
   damageMultiplier: 3.4,
   hearts: 14,                 // HEART is 20, so 280 health
   kunai: 40,
   /** Every kunai is a legendary one: they hit far harder than a found blade. */
   kunaiMultiplier: 3.0,
+  /** Fraction of an incoming blow that gets through. Deliberately tiny. */
+  armour: 0.12,
+  /**
+   * And how slowly he swings, here only.
+   *
+   * `rest` multiplies the gap between his attacks and `warn` multiplies every
+   * telegraph. At these values his phase-one sword combo announces itself for
+   * nearly two seconds and he waits three and a half between patterns, which
+   * is a fight that takes a while and cannot really be lost. His actual
+   * MOVES are untouched — the dungeon Frogath is exactly as brutal as he was.
+   */
+  rest: 2.6,
+  warn: 2.4,
 };
 
 // ═════════════════════════════════════════════════════════════ the shots ══
@@ -299,6 +329,9 @@ export class Prologue {
       this.followCam);
     this.boss.maxHealth = PROLOGUE_HEALTH;
     this.boss.health = PROLOGUE_HEALTH;
+    // He swings at a fraction of the dungeon pace. See HERO_LOADOUT.
+    this.boss.restScale = HERO_LOADOUT.rest;
+    this.boss.warnScale = HERO_LOADOUT.warn;
     // Straight to standing-and-waiting: skip the dungeon's sky entrance.
     this.boss.pos.set(at.x, at.y + CFG.dungeon.frogath.hoverHeight, at.z);
     this.boss.rig.root.position.copy(this.boss.pos);
@@ -415,6 +448,29 @@ export class Prologue {
 
   /** A thrown blade was turned aside. */
   noteDeflect() { this._banter('ranged', 'ranged1'); }
+
+  /**
+   * THE WHOLE CONFRONTATION, FROM THE TOP.
+   *
+   * Called when the player goes down. Frogath goes back to full health in
+   * phase one with his hazards cleared, the boss bar is rebuilt, and his
+   * one-shot lines are forgotten so the second attempt does not play out in
+   * silence. The conversation before the fight is NOT replayed — the player
+   * has read it, and making them read it again to retry is how a scene
+   * becomes a chore.
+   */
+  restartFight() {
+    if (!this.boss) return;
+    this.boss.resetFight();
+    this._lastPhase = this.boss.phase;
+    this._said.hits = 0;
+    this._said.taken = 0;
+    this._banterCool = 2.0;
+    Cine.resetSaid();
+    this.hud.showBossBar(CFG.dungeon.frogath.name, 1,
+      `${CFG.dungeon.frogath.title}   ·   THE HEAVENLY BATTLEFIELD`);
+    Audio.startBossMusic();
+  }
 
   _banter(key, id) {
     const list = BANTER[key];

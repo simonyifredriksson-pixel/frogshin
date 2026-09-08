@@ -37,9 +37,9 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v88';
-import { Audio } from './audio.js?v=v88';
-import { Cine } from './cinema.js?v=v88';
+import { MEMORY_THEME } from './themes.js?v=v89';
+import { Audio } from './audio.js?v=v89';
+import { Cine } from './cinema.js?v=v89';
 
 const $ = (id) => document.getElementById(id);
 

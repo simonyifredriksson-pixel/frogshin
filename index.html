@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v88" />
+<link rel="stylesheet" href="css/style.css?v=v89" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -789,6 +789,32 @@
       <button class="cheat-btn" id="cheat-kunai">REFILL KUNAI</button>
     </div>
 
+    <!--
+      THE STORY: the opening, and the memories.
+
+      Everything here is for getting AT the story without playing through it.
+      The opening is a two-and-a-half-minute boss fight followed by a
+      twenty-second fall, and testing anything downstream of it should not
+      cost three minutes every time.
+    -->
+    <div class="cheat-sep"><span>STORY</span></div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-kill-frogath">KILL FROGATH NOW</button>
+      <button class="cheat-btn" id="cheat-skip-open">SKIP TO THE FALL</button>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-skip-prologue">SKIP THE OPENING</button>
+      <button class="cheat-btn" id="cheat-replay-prologue">PLAY THE OPENING</button>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-memories">RECOVER ALL MEMORIES</button>
+      <button class="cheat-btn" id="cheat-forget">FORGET EVERYTHING</button>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-slay-all">SLAY EVERY GUARDIAN</button>
+      <button class="cheat-btn" id="cheat-endgame">ENDGAME LOADOUT</button>
+    </div>
+
     <div class="cheat-sep"><span>DUNGEON</span></div>
     <div id="cheat-rooms"></div>
     <div class="cheat-row">
@@ -951,6 +977,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v88"></script>
+<script type="module" src="js/main.js?v=v89"></script>
 </body>
 </html>
