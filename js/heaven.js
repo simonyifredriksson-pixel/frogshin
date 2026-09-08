@@ -27,9 +27,10 @@
  *      -Z  [ your army ]  ...  YOU  ...  <fight>  ...  FROGATH  [ his ]  +Z
  */
 
-import * as THREE from '../lib/three.module.js?v=v89';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v89';
-import { Terrain, CollisionWorld } from './collision.js?v=v89';
+import * as THREE from '../lib/three.module.js?v=v90';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep,
+  lookYaw } from './util.js?v=v90';
+import { Terrain, CollisionWorld } from './collision.js?v=v90';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -201,9 +202,17 @@ export class HeavenLevel {
           spike: new Batch(new THREE.ConeGeometry(1, 1, 6, 1), this.mats.rock),
           orb: new Batch(new THREE.SphereGeometry(1, 7, 5), this.mats.gold),
         };
+        /**
+         * FOUR SHAPES, FOUR HUNDRED AND THIRTY-TWO FROGS.
+         *
+         * Every part of every soldier in both armies is one of these, which
+         * is what keeps the whole muster at four draw calls. `body` is a
+         * squat ellipsoid rather than a cylinder — a frog is wider than it
+         * is tall and the silhouette has to say so at fifty units.
+         */
         this.soldierBatches = {
-          body: new Batch(new THREE.CylinderGeometry(0.42, 0.55, 1, 6), this.mats.cloth),
-          head: new Batch(new THREE.SphereGeometry(1, 6, 5), this.mats.cloth),
+          body: new Batch(new THREE.SphereGeometry(1, 7, 5), this.mats.cloth),
+          head: new Batch(new THREE.SphereGeometry(1, 7, 5), this.mats.cloth),
           arm: new Batch(new THREE.BoxGeometry(1, 1, 1), this.mats.cloth),
           shaft: new Batch(new THREE.CylinderGeometry(1, 1, 1, 4), this.mats.rock),
         };
@@ -683,6 +692,91 @@ export class HeavenLevel {
    * spears at slightly different angles is the single most army-looking thing
    * there is.
    */
+  /**
+   * ONE SOLDIER, AND IT IS A FROG.
+   *
+   * The first version of this was a cylinder with a ball on top, which at
+   * four hundred copies read as a crowd of chess pieces. A frog is a
+   * specific silhouette and it is the silhouette this entire game is built
+   * on, so it gets its actual anatomy: a wide low body that is broader than
+   * it is tall, a head that is a separate wider dome sitting FORWARD of the
+   * shoulders rather than on top of them, the two eye-humps, a throat, long
+   * folded hind legs with the knees ABOVE the hip, and short front arms.
+   *
+   * Eleven instanced parts each. At four hundred and thirty-two frogs that
+   * is still four draw calls, because every one of them shares the same four
+   * geometries — see the `soldierBatches` note in the build tasks.
+   *
+   * @param fz  which way is forward for this frog, as -1 or +1 on Z. Limbs
+   *            have to be put IN FRONT of a body, and which way that is
+   *            depends on which army it belongs to.
+   */
+  _frog(x, y, z, sc, face, fz, skin, cloth, trim, boss, R) {
+    const S = this.soldierBatches;
+    const belly = 0x9fc47a;
+    // ---- body: wide, low, and leaning forward the way a frog stands ----
+    S.body.add(x, y + 0.72 * sc, z, 1.16 * sc, 1.28 * sc, 1.04 * sc, cloth, face);
+    // The throat, paler, and the one part that says "frog" from behind.
+    S.head.add(x, y + 0.62 * sc, z + fz * 0.44 * sc,
+      0.48 * sc, 0.34 * sc, 0.3 * sc, belly, face);
+    // ---- hind legs: folded, knees high and out to the sides ----
+    for (const sx of [-1, 1]) {
+      // Thigh, angled up and out.
+      S.arm.add(x + sx * 0.5 * sc, y + 0.66 * sc, z - fz * 0.2 * sc,
+        0.34 * sc, 0.74 * sc, 0.44 * sc, skin, face, 0, sx * 0.42);
+      // Shin, coming back down and forward to the foot.
+      S.arm.add(x + sx * 0.62 * sc, y + 0.26 * sc, z + fz * 0.14 * sc,
+        0.26 * sc, 0.52 * sc, 0.3 * sc, skin, face, 0, -sx * 0.3);
+      // And the long foot, flat on the ground.
+      S.arm.add(x + sx * 0.56 * sc, y + 0.06 * sc, z + fz * 0.46 * sc,
+        0.3 * sc, 0.12 * sc, 0.66 * sc, skin, face);
+    }
+    // ---- head: a separate dome, forward of the shoulders ----
+    const hy = y + 1.5 * sc;
+    S.head.add(x, hy, z + fz * 0.16 * sc,
+      0.62 * sc, 0.44 * sc, 0.66 * sc, skin, face);
+    // The mouth line, as a slightly paler wedge across the front.
+    S.arm.add(x, hy - 0.14 * sc, z + fz * 0.5 * sc,
+      0.86 * sc, 0.12 * sc, 0.2 * sc, belly, face);
+    // The eye-humps, up and out — the whole read of the species.
+    for (const sx of [-1, 1]) {
+      S.head.add(x + sx * 0.34 * sc, hy + 0.3 * sc, z - fz * 0.02 * sc,
+        0.26 * sc, 0.24 * sc, 0.26 * sc, skin, face);
+      // A dark pupil facing the enemy, so a rank of them reads as looking.
+      S.head.add(x + sx * 0.34 * sc, hy + 0.32 * sc, z + fz * 0.2 * sc,
+        0.12 * sc, 0.12 * sc, 0.1 * sc, 0x1a1a14, face);
+    }
+    // ---- what they are wearing, and what they are holding ----
+    if (boss) {
+      // A commander: a crested helm and a sword held out across the body.
+      S.head.add(x, hy + 0.42 * sc, z, 0.6 * sc, 0.3 * sc, 0.64 * sc, trim, face);
+      S.arm.add(x, hy + 0.66 * sc, z, 0.1 * sc, 0.36 * sc, 0.8 * sc, trim, face);
+      S.arm.add(x, y + 1.06 * sc, z, 1.3 * sc, 0.26 * sc, 1.1 * sc, trim, face);
+      S.shaft.add(x + 0.62 * sc, y + 1.0 * sc, z + fz * 1.1 * sc,
+        0.08, 2.4 * sc, 0.08, 0xbfc8d4, face, 1.3, 0);
+      // The arm holding it, reaching forward.
+      S.arm.add(x + 0.5 * sc, y + 1.0 * sc, z + fz * 0.42 * sc,
+        0.2 * sc, 0.2 * sc, 0.7 * sc, skin, face);
+    } else {
+      // A helm, a shoulder plate, and a spear held upright at the shoulder.
+      S.head.add(x, hy + 0.38 * sc, z, 0.56 * sc, 0.26 * sc, 0.6 * sc, trim, face);
+      S.arm.add(x, y + 1.06 * sc, z, 1.24 * sc, 0.22 * sc, 1.06 * sc, trim, face);
+      // Front arms: short, and held up in front of the chest.
+      for (const sx of [-1, 1]) {
+        S.arm.add(x + sx * 0.56 * sc, y + 0.86 * sc, z + fz * 0.3 * sc,
+          0.2 * sc, 0.44 * sc, 0.24 * sc, skin, face, 0, sx * 0.2);
+      }
+      // The spear, leaning by its own small amount — a forest of shafts at
+      // slightly different angles is the most army-looking thing there is.
+      const tilt = (R() - 0.5) * 0.34 - fz * 0.1;
+      const hx = x + 0.56 * sc;
+      S.shaft.add(hx, y + 2.4 * sc, z + fz * 0.3 * sc,
+        0.06, 5.4 * sc, 0.06, 0x6b4a2a, 0, 0, tilt);
+      S.shaft.add(hx - Math.sin(tilt) * 2.7 * sc, y + 5.15 * sc,
+        z + fz * 0.3 * sc, 0.1, 0.7, 0.1, 0xbfc8d4, 0, 0, tilt);
+    }
+  }
+
   _army(side) {
     const R = this.rnd;
     const S = this.soldierBatches;
@@ -706,33 +800,23 @@ export class HeavenLevel {
         const z = z0 + side * (r * depth + bow) + (R() - 0.5) * 1.2;
         const y = this.heightAt(x, z);
         if (y < -8) continue;
-        const face = side < 0 ? 0 : Math.PI;
+        /**
+         * FACING THE OTHER ARMY.
+         *
+         * `lookYaw` is the rule everywhere in this game: a model's forward is
+         * (-sin y, 0, -cos y), so a frog at -Z looking at +Z wants yaw π, not
+         * yaw zero. Getting this backwards is what had both armies — and both
+         * leaders — standing back to back at the start of the game.
+         */
+        const face = lookYaw(x, z, x, -side * 200);
         const scale = 0.92 + R() * 0.2;
         // Commanders in the front rank: bigger, and no spear — a sword.
         const boss = r === 0 && (f === 3 || f === 12);
         const sc = boss ? scale * 1.28 : scale;
-
-        S.body.add(x, y + 0.95 * sc, z, 1.0 * sc, 1.9 * sc, 1.0 * sc, cloth, face);
-        S.head.add(x, y + 2.15 * sc, z, 0.52 * sc, 0.46 * sc, 0.5 * sc, skin, face);
-        // The eye-humps, so even at this size they are frogs and not people.
-        for (const sx of [-1, 1]) {
-          S.head.add(x + sx * 0.26 * sc, y + 2.42 * sc, z,
-            0.2 * sc, 0.18 * sc, 0.2 * sc, skin, face);
-        }
-        // A shoulder plate and the arm holding the shaft.
-        S.arm.add(x, y + 1.65 * sc, z, 1.24 * sc, 0.3 * sc, 1.14 * sc, trim, face);
-        const hx = x + 0.6 * sc;
-        if (boss) {
-          // A sword held out, pointing at the other side.
-          S.shaft.add(hx, y + 1.5 * sc, z - side * 1.2,
-            0.09, 2.6 * sc, 0.09, 0xbfc8d4, 0, 1.35, 0);
-        } else {
-          const tilt = (R() - 0.5) * 0.34 - 0.14;
-          S.shaft.add(hx, y + 2.5 * sc, z, 0.07, 6.2 * sc, 0.07,
-            0x6b4a2a, 0, 0, tilt);
-          S.shaft.add(hx + Math.sin(tilt) * -3.1 * sc, y + 5.6 * sc, z,
-            0.11, 0.8, 0.11, 0xbfc8d4, 0, 0, tilt);
-        }
+        // Which way is "forward" for this frog, so limbs can be put in front
+        // of it rather than beside it.
+        const fz = -side;
+        this._frog(x, y, z, sc, face, fz, skin, cloth, trim, boss, R);
         if (r === 0) front.push({ x, z });
         // The front two ranks are solid, so the player cannot walk into the
         // army — and the rest are not, because nothing will ever reach them.

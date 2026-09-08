@@ -1432,40 +1432,53 @@ function applyOccupation() {
  * so a player who explores badly still gets the mystery.
  */
 const RECOGNITION = {
-  /** Before the player has remembered anything at all. */
+  /**
+   * Before the player has remembered anything at all.
+   *
+   * These fire from the very first village, because the player needs to be
+   * unsettled before they have any information at all. Every one of them is
+   * about the MARK on the player's clothes or the way they stand, and every
+   * one of them stops short.
+   */
   early: [
-    ['Sometimes I wonder what became of the commander. The one who',
-      'went up and never came back down.',
+    ['That mark on your collar. Where did you get that?',
+      '...No. Never mind. It is nothing. Forget I asked.'],
+    ['Sometimes I wonder what became of the last Emperor. The one who',
+      'went up into the sky and never came back down.',
       '...Sorry. You have a way of standing that put me in mind of it.'],
-    ['You are not from Mirefoot. Are you?',
-      'No — no, of course you are. Forget I asked.'],
+    ['You are not from round here. Are you?',
+      'No — no, of course you are. Of course you are.'],
     ['My father marched under somebody. Never would say who.',
       'He said you could tell them by the shoulders. Which is nonsense.',
       '...Nonsense.'],
-    ['Funny. For a moment there I thought you were somebody else.',
-      'Somebody a good deal older than you, mind.'],
   ],
   /** Once a memory or two has surfaced. */
   stirring: [
-    ['You have that look. The one the veterans get.',
-      'Which is odd, because you are far too young for it.'],
-    ['There was a name they used to shout. In the fen, in the bad year.',
+    ['You have that look. The one the old soldiers get.',
+      'Which is strange, because you are far too young for it.'],
+    ['There was a title they used to shout. In the bad year, at the fords.',
       'It will not come to me. It is on the tip of my — no. Gone.'],
     ['You have been asking about the rebellion.',
       'Everybody who asks about the rebellion was IN the rebellion, frog.'],
     ['My aunt fought at the span. She described the one who led them.',
-      'She described you. I am going to go and sit down.'],
+      'She described you. I am going to go and sit down now.'],
   ],
-  /** And once the player has most of it back. */
+  /**
+   * And once the player has most of it back.
+   *
+   * This is where the game stops hinting. They kneel, they use the title,
+   * and one of them says the thing the whole first act has been avoiding.
+   */
   known: [
     ['It is you.',
-      'I am not going to say it out loud in the street. But it is you.'],
-    ['We thought you were dead. Four years we thought you were dead.',
+      'Get up — no. No, YOU do not get up. I do.',
+      '...Majesty.'],
+    ['We thought you were dead. Eleven years we thought you were dead.',
       'Where WERE you?'],
     ['They still keep your seat at the hall in Anurath. Empty.',
-      'Nobody has had the nerve to sit in it.'],
-    ['Commander.',
-      '...Sorry. Force of habit. It is a hard one to break.'],
+      'Nobody has had the nerve to sit in it. Not even him.'],
+    ['Emperor.',
+      '...Sorry. Force of habit. It is a hard one to break after this long.'],
   ],
 };
 

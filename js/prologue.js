@@ -29,14 +29,14 @@
  * boss code.
  */
 
-import * as THREE from '../lib/three.module.js?v=v89';
-import { CFG } from './config.js?v=v89';
-import { clamp, lerp, damp, smoothstep, dampAngle } from './util.js?v=v89';
-import { Frogath } from './frogath.js?v=v89';
-import { HEAVEN, VOID_Y } from './heaven.js?v=v89';
-import { Audio } from './audio.js?v=v89';
-import { Cine } from './cinema.js?v=v89';
-import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v89';
+import * as THREE from '../lib/three.module.js?v=v90';
+import { CFG } from './config.js?v=v90';
+import { clamp, lerp, damp, smoothstep, dampAngle, lookYaw } from './util.js?v=v90';
+import { Frogath } from './frogath.js?v=v90';
+import { HEAVEN, VOID_Y } from './heaven.js?v=v90';
+import { Audio } from './audio.js?v=v90';
+import { Cine } from './cinema.js?v=v90';
+import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v90';
 
 const _v = new THREE.Vector3();
 const _look = new THREE.Vector3();
@@ -144,33 +144,31 @@ function openingScript(P) {
     { face: 'narrator', who: '', text: 'Every frog still willing to fight is standing on this island.' },
     { act: () => P._cam(2), wait: 0.5 },
     { face: 'frogath', text: 'So. You came all this way after all.' },
-    { face: 'frogath', text: 'I had a wager with myself that you would not.' },
-    { face: 'frogath', text: 'I am glad to have lost it. Truly.' },
+    { face: 'frogath', text: 'Majesty.' },
+    { face: 'frogath', text: 'I had a wager with myself that you would not. I am glad to have lost it.' },
     { act: () => P._cam(3), wait: 0.4 },
-    { face: 'player', text: 'This ends today, Frogath.' },
+    { face: 'player', text: 'It ends today, Frogath.' },
     { face: 'frogath', text: 'It ends today. You have said that four times now.' },
     { face: 'frogath', text: 'At the ford. At the span. On the stair.' },
-    { face: 'frogath', text: 'And once in a room with a very good door, which I still miss.' },
-    { face: 'player', text: 'You will not talk your way out of this one either.' },
+    { face: 'frogath', text: 'And once across a table, with a map on it, when we were on the same side.' },
+    { face: 'player', text: 'We were never on the same side. Not once you went under the throne.' },
     { act: () => P._cam(4), wait: 0.5 },
-    { face: 'frogath', text: 'Look behind you. Go on — look.' },
-    { face: 'frogath', text: 'Every one of them walked up here because you asked them to.' },
-    { face: 'frogath', text: 'Not one of them will go back down.' },
-    { face: 'player', text: 'They walked up here because you burned their homes.' },
-    { face: 'frogath', text: 'I ended a thousand small wars and gave them one large peace.' },
-    { face: 'frogath', text: 'You are the only frog alive who calls that a crime.' },
-    { face: 'player', text: 'Then I will be the only one who ends it.' },
+    { face: 'frogath', text: 'Look behind you. Go on — look at them.' },
+    { face: 'frogath', text: 'Seven kingdoms. Every banner you ever gave out.' },
+    { face: 'frogath', text: 'I used to stand at the front of that. On your right.' },
+    { face: 'player', text: 'You did.' },
+    { face: 'frogath', text: 'And I would still be standing there if you had listened to me ONCE.' },
     { act: () => P._cam(5), wait: 0.4 },
-    { face: 'frogath', text: 'You still believe you can save them.' },
-    { face: 'player', text: 'I do not have to believe anything.' },
-    { face: 'player', text: 'I know.' },
-    { face: 'frogath', text: 'That is the difference between us, and it always was.' },
-    { face: 'frogath', text: 'I have been under this country. I have SEEN what is down there.' },
-    { face: 'frogath', text: 'And you would rather be right than be careful.' },
-    { face: 'player', text: 'I would rather they were free.' },
-    { face: 'frogath', text: '...Then come and be certain.' },
+    { face: 'frogath', text: 'You built an empire and then you could not hold it.' },
+    { face: 'frogath', text: 'So I held it. That is all I have ever done.' },
+    { face: 'player', text: 'You held it the way a fist holds water.' },
+    { face: 'frogath', text: 'They are ALIVE. Every one of them is alive.' },
+    { face: 'frogath', text: 'You would rather they were free than breathing.' },
+    { face: 'player', text: 'I would rather they were both.' },
+    { face: 'player', text: 'And I am not the Emperor who let it happen. Not any more.' },
+    { face: 'frogath', text: '...Then come up here and prove it.' },
     { act: () => P._muster(), wait: 1.6 },
-    { face: 'frogath', text: 'Let us finish this.' },
+    { face: 'frogath', text: 'One of us goes off this island. Let us find out which.' },
   ];
 }
 
@@ -190,14 +188,15 @@ function defeatScript(P) {
     { face: 'frogath', text: 'Over.' },
     { act: () => P._kneelShot(1), wait: 0.9 },
     { face: 'frogath', text: 'You never did understand what is under this country.' },
-    { face: 'frogath', text: 'I only held the door. Somebody has to hold the door.' },
-    { face: 'player', text: 'Then let go of it.' },
-    { face: 'frogath', text: 'And who takes it? You?' },
-    { face: 'frogath', text: 'You could not even carry a rumour without telling somebody.' },
-    { face: 'player', text: 'We will hold it together. All of us. That was the whole idea.' },
+    { face: 'frogath', text: 'I only held the door. Somebody had to hold the door.' },
+    { face: 'player', text: 'Then let go of it. I will carry it.' },
+    { face: 'frogath', text: 'You. Carry it.' },
+    { face: 'frogath', text: 'You are the one who told me to CONSIDER it, Majesty.' },
+    { face: 'player', text: '...I know what I said.' },
+    { face: 'player', text: 'And I have had four years to be sorry for it.' },
     { act: () => P._kneelShot(2), wait: 1.1 },
-    { face: 'frogath', text: 'Together.' },
-    { face: 'frogath', text: 'You always did have a gift for the impossible sentence.' },
+    { face: 'frogath', text: 'Four years.' },
+    { face: 'frogath', text: 'It has had me for eleven.' },
     { face: 'frogath', text: 'No.' },
     { face: 'frogath', text: 'No — it has only begun.' },
     { act: () => P._betray(), wait: 0.1 },
@@ -318,7 +317,16 @@ export class Prologue {
     p.cinematic = true;
     p.spawn(HEAVEN.playerAt);
     p.pos.y = this.level.heightAt(HEAVEN.playerAt.x, HEAVEN.playerAt.z) + 0.4;
-    p.visualYaw = 0;                     // looking down the field at him
+    /**
+     * FACING HIM. Which is not yaw zero.
+     *
+     * A model's forward is (-sin y, 0, -cos y) — see `lookYaw` in util.js —
+     * so yaw zero faces -Z. The player stands at -Z and Frogath at +Z, so
+     * yaw zero pointed the player AWAY from him and the two leaders opened
+     * the game back to back.
+     */
+    p.visualYaw = lookYaw(HEAVEN.playerAt.x, HEAVEN.playerAt.z,
+      HEAVEN.frogathAt.x, HEAVEN.frogathAt.z);
 
     // Frogath, standing at the far end. Not descending from anywhere: he is
     // already here, in front of his own army, and has been all morning.
@@ -339,7 +347,9 @@ export class Prologue {
     this.boss.state = 'stare';
     this.boss.t = -1e9;                  // never advances out of it on its own
     this.boss.began = true;
-    this.boss.yaw = Math.PI;
+    // And he faces the player, by the same rule.
+    this.boss.yaw = lookYaw(at.x, at.z, HEAVEN.playerAt.x, HEAVEN.playerAt.z);
+    this.boss.rig.root.rotation.y = this.boss.yaw;
 
     this.phase = 'open';
     this.t = 0;

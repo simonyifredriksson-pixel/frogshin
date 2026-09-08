@@ -37,9 +37,9 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v89';
-import { Audio } from './audio.js?v=v89';
-import { Cine } from './cinema.js?v=v89';
+import { MEMORY_THEME } from './themes.js?v=v90';
+import { Audio } from './audio.js?v=v90';
+import { Cine } from './cinema.js?v=v90';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,61 +54,128 @@ const $ = (id) => document.getElementById(id);
 const M = (id, trig, key, o) => Object.assign({ id, trig, key }, o);
 
 export const MEMORIES = [
-  // ── the first three: something is wrong with you ──
-  M('blade', 'gear', '2', {
-    title: 'A SWORD YOU HAVE HELD BEFORE',
+  // ══ ACT ONE: something is wrong with you ══════════════════════════════
+  /**
+   * THE FIRST ONE, and it is the whole game in four lines.
+   *
+   * Fired by the stone in the glade the player wakes up in — see
+   * `wakewood.js`. It arrives inside the first two minutes of play and it
+   * is deliberately the biggest reveal of the early game, because a mystery
+   * the player cannot NAME is not a mystery, it is confusion. They are told
+   * "you were the Emperor" almost immediately, and then they spend the next
+   * eight hours finding out what that meant and why nobody has one.
+   */
+  M('crown', 'prop', 'wakewood:stone', {
+    title: 'ALL HAIL THE EMPEROR',
     after: [],
     lines: [
-      { face: 'memory', text: 'Your hand closes on the grip and knows the weight of it.' },
-      { face: 'memory', text: 'You have never seen this sword before in your life.' },
-      { face: 'player', text: '...I have held this.' },
+      { face: 'memory', text: 'Your hand touches the mark and the wood goes white.' },
+      { face: 'memory', text: 'A hall. Thousands of frogs, shoulder to shoulder, all the way to the doors.' },
+      { face: 'memory', text: 'Somebody is wearing royal plate and a crown you could not lift.' },
+      { face: 'memory', text: 'Every frog in that hall goes down on one knee at the same moment.' },
+      { face: 'soldier', text: 'ALL HAIL THE EMPEROR!' },
+      { face: 'memory', text: 'The wood comes back. Birds. Water. Your own hands, empty.' },
+      { face: 'player', text: '...That was me.' },
+      { face: 'player', text: 'That was ME.' },
     ],
-    note: 'A sword your hands already knew.',
+    note: 'A crowd kneeling, and a crown. You were the Emperor of this country.',
   }),
   M('ranks', 'region', 'harrowmead', {
-    title: 'THOUSANDS OF THEM',
+    title: 'AN ARMY IN A CORNFIELD',
     after: [],
     lines: [
-      { face: 'memory', text: 'Grain, and the smell of it, and a field — but the field is full of frogs in armour.' },
+      { face: 'memory', text: 'Grain, and the smell of it — and then the field is full of frogs in armour.' },
       { face: 'memory', text: 'Rank on rank of them, all facing the same way. All facing you.' },
-      { face: 'memory', text: 'Every one of them waiting for you to say something.' },
-      { face: 'player', text: 'Waiting for me?' },
+      { face: 'memory', text: 'Waiting. Every one of them waiting for you to say something.' },
+      { face: 'player', text: 'They were waiting for ME to speak.' },
     ],
-    note: 'A field of soldiers, waiting for someone to speak.',
+    note: 'An army standing in a field, waiting on your word.',
   }),
-  M('burnt', 'site', 'mirefoot', {
-    title: 'THE MORNING AFTER',
+  M('blade', 'gear', '2', {
+    title: 'A SWORD YOUR HANDS KNEW',
     after: [],
     lines: [
-      { face: 'memory', text: 'You have stood in this square with the roofs still burning.' },
-      { face: 'memory', text: 'Black banners at the well. A pale eye on every one of them.' },
-      { face: 'memory', text: 'You remember being angry in a way you have not been since.' },
+      { face: 'memory', text: 'Your hand closes on the grip and knows the weight of it exactly.' },
+      { face: 'memory', text: 'The turn. The guard. Where the point wants to go.' },
+      { face: 'memory', text: 'You have never seen this sword before in your life.' },
+      { face: 'player', text: 'Somebody taught me this. Somebody good.' },
     ],
-    note: 'You were here the morning it burned.',
+    note: 'Your hands know things you do not.',
   }),
 
-  // ── then: you were somebody ──
+  // ══ ACT TWO: Frogath was not the enemy ═══════════════════════════════
+  /**
+   * THE TURN OF THE WHOLE STORY.
+   *
+   * The player has spent hours being told Frogath is a monster. This is
+   * where the game tells them he was their closest friend, and it is put on
+   * the FIRST MAJOR BOSS so that it lands early enough to recolour
+   * everything afterwards.
+   */
+  M('ally', 'boss', 'grott', {
+    title: 'HE STOOD ON MY RIGHT',
+    after: ['crown'],
+    lines: [
+      { face: 'memory', text: 'The gate-keeper falls, and something falls loose in your head with it.' },
+      { face: 'memory', text: 'A younger frog in pale cloth, no crown, standing at your right shoulder.' },
+      { face: 'memory', text: 'Laughing at something you have just said. Both of you filthy from a march.' },
+      { face: 'frogathPure', text: 'I will hold your empire together until my last breath. You know that.' },
+      { face: 'player', text: '...Frogath.' },
+      { face: 'player', text: 'Frogath was my COMMANDER.' },
+    ],
+    note: 'Frogath was not your enemy. He was your closest commander.',
+  }),
   M('statue', 'site', 'listening-stone', {
     title: 'THE FACE ON THE STONE',
-    after: ['ranks'],
+    after: ['crown'],
     lines: [
       { face: 'memory', text: 'The carving is worn almost flat, but the shape of the head is right.' },
-      { face: 'memory', text: 'The set of the shoulders is right. The stance is right.' },
-      { face: 'elder', text: 'They cut that four years ago, frog. Before the banners came.' },
+      { face: 'memory', text: 'The shoulders are right. The stance is right. The mark on the breast is YOURS.' },
+      { face: 'elder', text: 'They cut that a long time ago, frog. Long before the banners came.' },
+      { face: 'elder', text: 'It is meant to be the last Emperor. Nobody remembers his face.' },
       { face: 'elder', text: '...You have gone very quiet.' },
     ],
-    note: 'A carving of somebody who stood the way you stand.',
+    note: 'They carve statues of you here. Nobody remembers your face.',
   }),
-  M('bridge', 'boss', 'arkos', {
-    title: 'THE WARDEN, AGAIN',
-    after: [],
+  M('throne', 'lore', 'lore-heart4', {
+    title: 'THE ARTEFACT, AND WHAT I SAID ABOUT IT',
+    after: ['ally'],
     lines: [
-      { face: 'commander', text: 'You. It IS you. You came over this span the first time too.' },
-      { face: 'memory', text: 'You remember the span. You remember it under a different sky.' },
-      { face: 'commander', text: 'You went across it with four hundred behind you. Where are they now?' },
-      { face: 'player', text: 'I do not know.' },
+      { face: 'memory', text: 'A throne room. You are sitting in it. He is standing beside you.' },
+      { face: 'memory', text: 'There is something on the table between you that hurts to look at.' },
+      { face: 'frogathPure', text: 'That power should never be used. Not by you. Not by anyone.' },
+      { face: 'player', text: 'If it can protect our people, we have to at least consider it.' },
+      { face: 'memory', text: 'He looks at you for a long moment, and then he says nothing at all.' },
+      { face: 'player', text: '...Did I do this?' },
+      { face: 'player', text: 'Did I put that idea in his head?' },
     ],
-    note: 'Arkos knew you. He fought you before.',
+    note: 'You told him to consider it. He warned you not to. You may have started this.',
+  }),
+  M('corrupt', 'lore', 'lore-end3', {
+    title: 'WHAT IT DID TO HIM',
+    after: ['throne'],
+    lines: [
+      { face: 'memory', text: 'He comes up from under the Ashen Throne with his hands shaking.' },
+      { face: 'frogathPure', text: 'It is awake down there. It has been awake the whole time.' },
+      { face: 'frogathPure', text: 'Somebody has to be strong enough to hold the door. Somebody has to.' },
+      { face: 'memory', text: 'You told him not to go back down. You remember telling him not to.' },
+      { face: 'memory', text: 'You remember him going back down anyway.' },
+    ],
+    note: 'He took the power to guard the country. It took him instead.',
+  }),
+
+  // ══ ACT THREE: the empire, and the rebellion ═════════════════════════
+  M('capital', 'site', 'anurath-city', {
+    title: 'THIS WAS MINE',
+    after: ['crown'],
+    lines: [
+      { face: 'memory', text: 'You know the way through these streets without looking up.' },
+      { face: 'memory', text: 'Which stair. Which arch. Which gate is always stuck in the wet.' },
+      { face: 'memory', text: 'There are broken statues in the square and every one of them is you.' },
+      { face: 'player', text: 'I ruled here.' },
+      { face: 'player', text: 'And I could not hold it.' },
+    ],
+    note: 'Anurath was your capital. The statues in the square are you.',
   }),
   M('field', 'site', 'bonepit', {
     title: 'AN OLD BATTLEFIELD',
@@ -116,102 +183,86 @@ export const MEMORIES = [
     lines: [
       { face: 'memory', text: 'Spear shafts, all of them broken at the same height.' },
       { face: 'memory', text: 'You know what happened here without being told.' },
-      { face: 'memory', text: 'You were standing about forty paces that way, shouting.' },
-      { face: 'player', text: 'We held. We held here.' },
+      { face: 'memory', text: 'You were standing about forty paces that way. Shouting.' },
+      { face: 'player', text: 'We held. We held HERE.' },
     ],
-    note: 'A battle you remember giving orders at.',
+    note: 'A battle you remember giving the orders at.',
   }),
-
-  // ── then: who you were fighting, and why ──
-  M('banner', 'boss', 'grott', {
-    title: 'THE GATE-KEEPER\'S ORDERS',
-    after: ['burnt'],
-    lines: [
-      { face: 'memory', text: 'The gate-keeper had a name for you. It used it before it swung.' },
-      { face: 'memory', text: 'Not your name. A title.' },
-      { face: 'memory', text: 'Something that ended in "of the rebellion".' },
-    ],
-    note: 'It called you a title, not a name.',
-  }),
-  M('pure', 'lore', 'lore-warrior', {
-    title: 'HE WAS NOT ALWAYS THIS',
-    after: ['burnt'],
-    lines: [
-      { face: 'memory', text: 'A green frog in pale cloth, on a step, laughing at something you said.' },
-      { face: 'memory', text: 'The same jaw. The same eyes. No crown.' },
-      { face: 'frogathPure', text: 'You worry too much. Nothing under this country can get out.' },
-      { face: 'player', text: '...Frogath.' },
-    ],
-    note: 'Frogath, before the crown. You knew him.',
-  }),
-  M('door', 'lore', 'lore-end3', {
-    title: 'WHAT HE MEANT BY THE DOOR',
-    after: ['pure'],
-    lines: [
-      { face: 'memory', text: 'He came back up from under the Ashen Throne with his hands shaking.' },
-      { face: 'frogathPure', text: 'Somebody has to hold it shut. It has to be somebody strong.' },
-      { face: 'memory', text: 'You told him not to. You remember telling him not to.' },
-    ],
-    note: 'He went under the throne, and something came back with him.',
-  }),
-
-  // ── then: you led it ──
   M('oath', 'count', '12', {
-    title: 'WHAT YOU PROMISED THEM',
-    after: ['ranks', 'field'],
+    title: 'WHAT I PROMISED THEM',
+    after: ['crown', 'ally'],
     lines: [
-      { face: 'memory', text: 'A hall full of frogs from every region, and you at the end of it.' },
-      { face: 'player', text: 'Then we take the sky from him, and we do it before the winter.' },
-      { face: 'memory', text: 'They shouted for a long time.' },
-      { face: 'memory', text: 'You remember thinking: I have just promised them something I cannot give.' },
+      { face: 'memory', text: 'A hall full of frogs from every one of the seven kingdoms.' },
+      { face: 'memory', text: 'Not kneeling this time. Arguing. Frightened. And looking at you.' },
+      { face: 'player', text: 'He has taken the sky. So we take it back, and we do it before the winter.' },
+      { face: 'memory', text: 'They shouted for a very long time.' },
+      { face: 'memory', text: 'And you remember thinking: I have promised them something I may not be able to give.' },
     ],
-    note: 'You promised them the sky. Twelve regions of them.',
+    note: 'You did not just fight the rebellion. You called it.',
   }),
   M('name', 'power', '46', {
-    title: 'THEY KNEW WHAT TO CALL YOU',
+    title: 'WHAT THEY CALLED ME AT THE END',
     after: ['oath'],
     lines: [
-      { face: 'soldier', text: 'Commander — the left is holding. The LEFT is holding!' },
-      { face: 'memory', text: 'You turn to answer and the memory stops there, every time.' },
-      { face: 'player', text: 'Commander.' },
+      { face: 'soldier', text: 'Majesty — the left is holding. The LEFT IS HOLDING!' },
+      { face: 'memory', text: 'You turn to answer, and the memory stops there. It always stops there.' },
+      { face: 'player', text: 'Majesty.' },
+      { face: 'player', text: 'By the end they were still calling me that. With no empire left to have.' },
     ],
-    note: 'Commander. That was the word.',
+    note: 'They kept the title long after the empire was gone.',
   }),
+  M('bridge', 'boss', 'arkos', {
+    title: 'THE WARDEN REMEMBERS ME',
+    after: ['ally'],
+    lines: [
+      { face: 'commander', text: 'It IS you. You came over this span the first time as well.' },
+      { face: 'memory', text: 'You remember the span. You remember it under a different sky.' },
+      { face: 'commander', text: 'You went across with four hundred behind you, Majesty.' },
+      { face: 'commander', text: 'Where are they now?' },
+      { face: 'player', text: 'I do not know.' },
+      { face: 'player', text: 'I am going to find out.' },
+    ],
+    note: 'Arkos fought you before, and he knew your title.',
+  }),
+
+  // ══ ACT FOUR: the island, and the fall ═══════════════════════════════
   M('island', 'count', '20', {
     title: 'ABOVE THE CLOUDS',
     after: ['oath'],
     lines: [
-      { face: 'memory', text: 'An island. Waterfalls going off the edge of it into nothing.' },
+      { face: 'memory', text: 'An island. Waterfalls going off the edge of it into nothing at all.' },
       { face: 'memory', text: 'Two armies, and the whole width of the sky between them.' },
-      { face: 'memory', text: 'You are at the front of one of them. You are ALONE at the front of one of them.' },
-      { face: 'player', text: 'I have been there. I have been up there.' },
+      { face: 'memory', text: 'You are at the front of one. Alone, in front of thousands.' },
+      { face: 'memory', text: 'And there is a shape at the front of the other one that you know.' },
+      { face: 'player', text: 'I have been up there. That was not a dream. I was UP THERE.' },
     ],
-    note: 'A battlefield above the clouds. You stood at the front of it.',
+    note: 'A battlefield above the clouds — and you led one side of it.',
   }),
-
-  // ── and finally: you won, and then you lost ──
   M('won', 'count', '28', {
-    title: 'YOU WON',
+    title: 'I WON',
     after: ['island'],
     lines: [
-      { face: 'memory', text: 'He is on one knee in front of you and the field has gone quiet.' },
+      { face: 'memory', text: 'He is on one knee in front of you and the whole field has gone quiet.' },
       { face: 'frogath', text: '...So you have finally done it.' },
       { face: 'memory', text: 'You remember how it felt. You remember it being over.' },
+      { face: 'player', text: 'I beat him. I had already beaten him.' },
     ],
-    note: 'You beat him. You had already beaten him.',
+    note: 'You did not lose that war. You had already won it.',
   }),
   M('fell', 'boss', 'zehl', {
-    title: 'AND THEN YOU FELL',
+    title: 'AND THEN I FELL',
     after: ['won'],
     lines: [
-      { face: 'memory', text: 'He stands up.' },
+      { face: 'memory', text: 'He stands back up.' },
       { face: 'frogath', text: 'No. It has only begun.' },
       { face: 'memory', text: 'The sky turns over. The island gets smaller and smaller above you.' },
-      { face: 'memory', text: 'You fall for a very long time.' },
-      { face: 'player', text: 'That is why I am here.' },
-      { face: 'player', text: 'I have to finish what I started.' },
+      { face: 'memory', text: 'You fall for a very long time, and somewhere in it you lose your name.' },
+      { face: 'memory', text: 'And then a wood, and a stone with your own mark on it, and nothing else.' },
+      { face: 'player', text: 'I remember. All of it. Every part of it.' },
+      { face: 'player', text: 'I did not come back for a throne.' },
+      { face: 'player', text: 'I came back to finish what I started.' },
     ],
-    note: 'He put you off the island. THIS is the fight you came back for.',
+    note: 'You are the Emperor of the Croaklands, and this war is not over.',
   }),
 ];
 
@@ -232,10 +283,17 @@ export function memoriesFound(progress) {
  */
 export function memoryStage(progress) {
   const has = (id) => progress.memories.has(id);
-  if (has('fell')) return 'You were the leader of the rebellion. Finish it.';
-  if (has('island') || has('won')) return 'You have fought Frogath before. Above the clouds.';
-  if (has('oath') || has('name')) return 'You led them. You promised them something.';
-  if (has('pure') || has('door')) return 'Frogath was not always this. Something changed him.';
+  // Read bottom-up: the last thing the player learned is what they are
+  // currently thinking about.
+  if (has('fell')) return 'You are the Emperor. Finish the war you already won.';
+  if (has('won')) return 'You BEAT him up there. So how are you down here?';
+  if (has('island')) return 'You have been above the clouds. You led one side of it.';
+  if (has('oath') || has('name')) return 'You did not join the rebellion. You called it.';
+  if (has('corrupt') || has('throne')) {
+    return 'The power under the country took him. You may have pointed him at it.';
+  }
+  if (has('ally')) return 'Frogath was your commander. What happened to him?';
+  if (has('crown')) return 'You were the Emperor of this country. Nobody knows you.';
   if (memoriesFound(progress) > 0) return 'Why do you keep remembering things you never did?';
   return '';
 }

@@ -8,8 +8,8 @@
  * without becoming a long dead stop.
  */
 
-import { CFG } from './config.js?v=v89';
-import { clamp } from './util.js?v=v89';
+import { CFG } from './config.js?v=v90';
+import { clamp } from './util.js?v=v90';
 
 export class Stamina {
   constructor(max = CFG.stamina.max) {

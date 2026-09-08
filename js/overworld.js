@@ -32,35 +32,36 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v89';
-import { CFG } from './config.js?v=v89';
-import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v89';
-import { Realm } from './realm.js?v=v89';
-import { Scatter } from './scatter.js?v=v89';
-import { Sites } from './realmsites.js?v=v89';
-import { Camp } from './mobs.js?v=v89';
-import { DungeonBoss } from './dungeonboss.js?v=v89';
-import { Frogath } from './frogath.js?v=v89';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v89';
+import * as THREE from '../lib/three.module.js?v=v90';
+import { CFG } from './config.js?v=v90';
+import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v90';
+import { Realm } from './realm.js?v=v90';
+import { Scatter } from './scatter.js?v=v90';
+import { Sites } from './realmsites.js?v=v90';
+import { Camp } from './mobs.js?v=v90';
+import { DungeonBoss } from './dungeonboss.js?v=v90';
+import { Frogath } from './frogath.js?v=v90';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v90';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v89';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v89';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v89';
+  CONTENT_HALF } from './regions.js?v=v90';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v90';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v90';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v89';
+  mainObjective } from './quests.js?v=v90';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v89';
-import { disposeLandmarkMats } from './landmarks.js?v=v89';
-import { Props, disposePropMats } from './props.js?v=v89';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v89';
-import { Ambience } from './ambience.js?v=v89';
-import { Weather } from './weather.js?v=v89';
-import { Audio } from './audio.js?v=v89';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v89';
+  disposeVillagerMats } from './realmquests.js?v=v90';
+import { disposeLandmarkMats } from './landmarks.js?v=v90';
+import { Props, disposePropMats } from './props.js?v=v90';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v90';
+import { Ambience } from './ambience.js?v=v90';
+import { Weather } from './weather.js?v=v90';
+import { Audio } from './audio.js?v=v90';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v90';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v89';
-import { Cine } from './cinema.js?v=v89';
-import { recommendedFor, readiness } from './guardians.js?v=v89';
+  MEMORY_COUNT } from './flashbacks.js?v=v90';
+import { Cine } from './cinema.js?v=v90';
+import { recommendedFor, readiness } from './guardians.js?v=v90';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v90';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -293,6 +294,14 @@ export class Overworld {
     this.sealedT = 0;
     this._sealedSaid = null;
     /**
+     * THE WAKEWOOD — where a new game actually begins. See js/wakewood.js.
+     *
+     * Its own module rather than a site kind, because it is the one place in
+     * the country that is hand-built rather than generated from a table: it
+     * is the first thirty seconds anybody plays and it is worth the file.
+     */
+    this.wood = null;
+    /**
      * A villager walking over to hand you a quest. See `_greet`.
      *
      * `_greetSite` is the settlement already greeted on this visit, cleared
@@ -363,6 +372,38 @@ export class Overworld {
       this.props = new Props(this.scene, this.realm.collision);
       this.props.onPay = (p) => this._propPay(p);
       this._placeProps();
+    }]);
+    /**
+     * The Wakewood, before the bake.
+     *
+     * It registers a couple of hundred colliders — every trunk, every root,
+     * every stepping stone — and the broadphase only ever looks at boxes
+     * that were in it when `bake` ran, so building this after that line
+     * would give the player a forest they walk straight through.
+     */
+    this.wood = new Wakewood(this.scene, this.realm);
+    for (const t of this.wood.buildTasks()) tasks.push(t);
+    /**
+     * THE STONE IN THE GLADE, as a thing you can put your hand on.
+     *
+     * The Wakewood builds the carving; this makes it touchable. It is the
+     * first interactive object in the game and the first flashback, and it
+     * has to come after the wood's own build steps because it needs to know
+     * where the wood decided to put its pedestal.
+     */
+    tasks.push(['Reading the mark', () => {
+      const p = this.wood.pedestal;
+      if (!p || !this.props) return;
+      this.props.add({
+        kind: 'pedestal', id: 'wakewood:stone',
+        at: { x: p.x, y: p.y + 0.2, z: p.z }, yaw: 0,
+        label: 'Touch the mark', usedLabel: 'Touch it again',
+        look: null, prizeLook: null,
+        trim: 0xffd76b, wood: 0x8b8578,
+        prize: { what: 'memory' },
+        repeat: true,
+        site: 'wakewood',
+      });
     }]);
     /**
      * The broadphase is baked LAST, once, with every site's collider already
@@ -615,6 +656,16 @@ export class Overworld {
       } else {
         this.hud.toast('You cannot afford that.', 3);
       }
+    } else if (prize.what === 'memory') {
+      /**
+       * A THING THAT IS ONLY A MEMORY.
+       *
+       * The stone in the Wakewood: it holds no loot, opens no door and pays
+       * no experience. Touching it is the first flashback in the game and
+       * that is the entire reward, which is why it needs its own prize kind
+       * rather than being dressed up as a chest with a story in it.
+       */
+      this._pendingMemory = { kind: 'prop', key: prop.id };
     } else if (prize.what === 'lore') {
       this._read(prize.id, true);
     } else if (prize.what === 'open') {
@@ -714,21 +765,27 @@ export class Overworld {
     }
     if (!spot) {
       /**
-       * A new game starts in the ashes of the player's own village.
+       * A NEW GAME BEGINS ON THE FLOOR OF THE WAKEWOOD.
        *
-       * Not in Croakhollow, which is where it used to start. The difference
-       * is the whole opening: you wake up in Mirefoot, which is yours, with
-       * the roofs gone and one of Frogath's banners standing in the square,
-       * and the first thing the game asks you to do is walk to the next
-       * village and find out what happened. Nothing is explained; it is all
-       * in front of you.
+       * Not in a village. The player has just been thrown off an island four
+       * miles up and has lost every single thing they owned, including their
+       * name, and waking up in somebody's tidy square would say none of that.
+       * They wake in a wood they have never seen, nine paces from a stone
+       * carrying the mark that is on their own clothes, and the first thing
+       * the game does is let them turn round and look at it.
+       *
+       * See js/wakewood.js. The village comes second, and somebody walks
+       * them there.
        */
+      const wake = this.wood && this.wood.wakeAt;
       const start = this.sites.sites.find((s) => s.id === 'mirefoot')
         || this.sites.sites.find((s) => s.id === 'croakhollow');
-      spot = start
-        ? { x: start.at.x, y: start.at.y + 1, z: start.at.z + start.r * 0.7 }
-        : { x: 430, y: 0, z: 1900 };
+      if (wake) spot = { x: wake.x, y: wake.y + 1, z: wake.z };
+      else if (start) {
+        spot = { x: start.at.x, y: start.at.y + 1, z: start.at.z + start.r * 0.7 };
+      } else spot = { x: 430, y: 0, z: 1900 };
       spot.y = this.realm.heightAt(spot.x, spot.z) + 1;
+      this._justWoke = true;
     }
     this.home = { x: spot.x, y: spot.y, z: spot.z };
     this.lastOpen = { x: spot.x, z: spot.z };
@@ -984,6 +1041,7 @@ export class Overworld {
       this.atmo ? this.atmo.windDir : null);
     this.ambience.update(dt);
     this._life(dt, player);
+    this._wood(dt, player);
     this._banner(dt);
     this._music(player);
     this._memory();
@@ -993,6 +1051,30 @@ export class Overworld {
     this._mini(dt, player);
     this._syncKunai();
     this._autosave(dt);
+  }
+
+  /**
+   * THE WAKEWOOD, shown and animated only when it is worth it.
+   *
+   * The wood is one of the densest things in the country — two thousand
+   * growing things, a hundred and twenty fog cards, four instanced swarms
+   * and eighteen creatures — so it is drawn on the same rule as a city and
+   * its LIVING layer is stepped only when the player is actually inside it.
+   *
+   * Two radii, not one. It is visible from well outside because nine
+   * hundred-unit trees are a landmark and the whole point of a landmark is
+   * that you can see it from a distance; the creatures and the motes are
+   * updated only within earshot, because nobody can see a hopping thing the
+   * size of a loaf from two hundred units away.
+   */
+  _wood(dt, player) {
+    const w = this.wood;
+    if (!w || !w.at) return;
+    const d = Math.hypot(w.at.x - player.pos.x, w.at.z - player.pos.z);
+    const show = d < WOOD_R + 420;
+    if (w.root.visible !== show) w.root.visible = show;
+    if (!show) return;
+    w.update(dt, player.pos, d < WOOD_R + 40);
   }
 
   /**
@@ -2553,6 +2635,7 @@ export class Overworld {
     if (this.life) this.life.dispose();
     if (this.people) this.people.dispose();
     if (this.sites) this.sites.dispose();
+    if (this.wood) this.wood.dispose();
     if (this.props) this.props.dispose();
     this._levers.length = 0;
     this._gates.length = 0;

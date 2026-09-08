@@ -5,42 +5,42 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v89';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v89';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v89';
-import { Input } from './input.js?v=v89';
-import { Audio } from './audio.js?v=v89';
-import { World } from './world.js?v=v89';
-import { Effects } from './effects.js?v=v89';
-import { Atmosphere } from './atmosphere.js?v=v89';
-import { FollowCamera } from './camera.js?v=v89';
-import { Player } from './player.js?v=v89';
-import { RemotePlayer } from './remote.js?v=v89';
-import { HUD } from './hud.js?v=v89';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v89';
-import { FrogModel } from './frog.js?v=v89';
-import { DummyField } from './dummy.js?v=v89';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v89';
-import { ToadModel } from './npc.js?v=v89';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v89';
-import { DungeonRun } from './dungeon.js?v=v89';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v89';
-import { JudgmentRun } from './judgment.js?v=v89';
-import { COMBO_NAMES } from './ascended.js?v=v89';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v89';
-import { MenuScene } from './menu.js?v=v89';
-import { Economy } from './economy.js?v=v89';
-import { Shop } from './shop.js?v=v89';
-import { Network, NetRole } from './net.js?v=v89';
-import { Overworld } from './overworld.js?v=v89';
-import { InventoryScreen } from './inventoryui.js?v=v89';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v89';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v89';
-import { Cine } from './cinema.js?v=v89';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v89';
-import { MEMORIES } from './flashbacks.js?v=v89';
-import { GUARDIANS } from './guardians.js?v=v89';
-import { gearOfTier } from './gear.js?v=v89';
+import * as THREE from '../lib/three.module.js?v=v90';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v90';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v90';
+import { Input } from './input.js?v=v90';
+import { Audio } from './audio.js?v=v90';
+import { World } from './world.js?v=v90';
+import { Effects } from './effects.js?v=v90';
+import { Atmosphere } from './atmosphere.js?v=v90';
+import { FollowCamera } from './camera.js?v=v90';
+import { Player } from './player.js?v=v90';
+import { RemotePlayer } from './remote.js?v=v90';
+import { HUD } from './hud.js?v=v90';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v90';
+import { FrogModel } from './frog.js?v=v90';
+import { DummyField } from './dummy.js?v=v90';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v90';
+import { ToadModel } from './npc.js?v=v90';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v90';
+import { DungeonRun } from './dungeon.js?v=v90';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v90';
+import { JudgmentRun } from './judgment.js?v=v90';
+import { COMBO_NAMES } from './ascended.js?v=v90';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v90';
+import { MenuScene } from './menu.js?v=v90';
+import { Economy } from './economy.js?v=v90';
+import { Shop } from './shop.js?v=v90';
+import { Network, NetRole } from './net.js?v=v90';
+import { Overworld } from './overworld.js?v=v90';
+import { InventoryScreen } from './inventoryui.js?v=v90';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v90';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v90';
+import { Cine } from './cinema.js?v=v90';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v90';
+import { MEMORIES } from './flashbacks.js?v=v90';
+import { GUARDIANS } from './guardians.js?v=v90';
+import { gearOfTier } from './gear.js?v=v90';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1669,6 +1669,18 @@ class Game {
     }
 
     pro.update(sdt, this.input, (dmg, from) => this._prologueHit(dmg, from));
+    /**
+     * THE FALL CAN END INSIDE THAT CALL.
+     *
+     * `_updateFall` runs `onDone` on its last frame, which is `_prologueDone`
+     * — and that throws the whole island away: the effects, the level, the
+     * scene and the player all become null before this function has finished
+     * running. Everything below here would then be called on nothing.
+     *
+     * This is not a hypothetical. It is exactly the crash the fall ended on:
+     * "Cannot read properties of null (reading 'update')".
+     */
+    if (!this.isPrologue || !this.heaven || !this.effects) return;
     this.effects.update(sdt);
     this.heaven.update(sdt);
 
@@ -1734,7 +1746,9 @@ class Game {
       p.deathPending = false;
       p.spawn(HEAVEN.playerAt);
       p.pos.y = this.heaven.heightAt(HEAVEN.playerAt.x, HEAVEN.playerAt.z) + 0.4;
-      p.visualYaw = 0;
+      // Facing him again — yaw zero would put their back to him. See the
+      // note in Prologue.begin.
+      p.visualYaw = Math.PI;
       this.followCam.yaw = Math.PI;
       this.followCam.snapTo(p.pos);
       if (this.prologue) this.prologue.restartFight();
