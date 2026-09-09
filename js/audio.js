@@ -27,6 +27,14 @@
  * `ascension` is also used, cut short, for the Frogath-skin transformation,
  * so it wants to be recognisable in its first two seconds.
  */
+
+/**
+ * The theme defaults, so a partial theme cannot reach Web Audio. See
+ * `setTheme` — this is the one import this file has, and it is here to stop
+ * a missing field becoming a NaN becoming a thrown TypeError.
+ */
+import { asTheme } from './themes.js?v=v97';
+
 const TRACKS = {
   phase1: 'audio/frogath-phase1.mp3',
   ascension: 'audio/frogath-ascension.mp3',
@@ -672,7 +680,32 @@ export class AudioEngine {
     if (this._theme && this._theme.id === key) return;
     this.stopTheme();
     if (!theme) return;
-    this._startTheme(theme, key);
+    /**
+     * ═══ AND NOTHING HERE MAY THROW ════════════════════════════════════════
+     *
+     * Two guards, because music failing is never worth breaking a game over.
+     *
+     * `asTheme` fills in every field from the defaults in js/themes.js. A
+     * theme missing one is not a quieter theme — the numbers go straight
+     * into Web Audio, `undefined * 0.5` is NaN, and an `AudioParam` handed a
+     * non-finite value throws a TypeError.
+     *
+     * And the try/catch is the backstop, because of where that throw landed
+     * the one time it happened. The coronation was built with a hand-written
+     * theme object of the wrong shape; `linearRampToValueAtTime(NaN)` threw
+     * inside `Flashbacks.scene` AFTER it had set `busy`, raised the wash and
+     * taken the camera, and BEFORE it started the dialogue whose ending hook
+     * gives all three back. The last scene in the game froze on a white
+     * screen with no way out of it.
+     *
+     * A cutscene must not be able to be killed by its own soundtrack.
+     */
+    try {
+      this._startTheme(asTheme(theme), key);
+    } catch (e) {
+      this._theme = null;
+      console.warn('[frogshin] theme failed to start:', key, e && e.message);
+    }
   }
 
   /** Which piece is playing, or null. Cheap enough to poll. */

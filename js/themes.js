@@ -417,6 +417,51 @@ export const MEMORY_THEME = T({
   pluckWave: 'sine', cutoff: 2600, hold: 5.6,
 });
 
+/**
+ * THE CORONATION.
+ *
+ * The last piece of music in the game, and the only one that resolves.
+ *
+ * Deliberately the prologue's key and nearly its chords: the opening was
+ * lydian major sevenths at fifty-two beats, an emperor in heaven with an
+ * army behind them. This is the same key at the same tempo with the sevenths
+ * taken out and the fourth turned into a plain major — the same music, come
+ * back, without the thing in it that made it sound like it was about to go
+ * wrong. Everything else in the last four regions is diminished or modal;
+ * this is a major cadence, once, at the very end.
+ *
+ * The percussion is a single low hit on the downbeat, which is a hall full of
+ * frogs standing still rather than an army marching.
+ */
+export const CORONATION_THEME = T({
+  root: 98, scale: S.home, bpm: 52,
+  chords: [maj(0), maj(5), maj(7), maj(0)],
+  motif: '0---4---7---4---', pad: 0.075, bass: 0.055, lead: 0.055,
+  pluck: 0.03, perc: 0.018, padWave: 'triangle', leadWave: 'sine',
+  pluckWave: 'sine', cutoff: 1800, hold: 5.4, octave: 4,
+});
+
+/**
+ * A THEME, FROM WHATEVER A CALLER HAPPENED TO WRITE.
+ *
+ * Every field filled in from the defaults above. This exists because a
+ * partial theme is not a quiet theme — it is a crash: `audio.js` feeds these
+ * numbers straight into Web Audio, and `undefined * 0.5` is NaN, and an
+ * `AudioParam` handed a non-finite value throws.
+ *
+ * That is not hypothetical. The coronation shipped with a hand-written theme
+ * object of the wrong shape entirely — `{ bpm, wave, bass: [...], lead: [...],
+ * swell }` — and `linearRampToValueAtTime(NaN)` threw inside the flashback
+ * machinery AFTER it had raised the wash and taken the camera but BEFORE it
+ * started the dialogue that would eventually put them back. The result was
+ * the ending of the game freezing on a white screen with no way out.
+ *
+ * So: anything that reaches the audio goes through here first.
+ */
+export function asTheme(o) {
+  return T(o || {});
+}
+
 /** The theme for one guardian: its own if it has one, else its rank's. */
 export function bossTheme(id, rank) {
   return BOSS_THEMES[id] || BOSS_THEMES[rank] || BOSS_THEMES.major;

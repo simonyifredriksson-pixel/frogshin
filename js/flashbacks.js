@@ -37,10 +37,10 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v96';
-import { Audio } from './audio.js?v=v96';
-import { Cine } from './cinema.js?v=v96';
-import { MemoryScene, STAGE } from './memoryscene.js?v=v96';
+import { MEMORY_THEME } from './themes.js?v=v97';
+import { Audio } from './audio.js?v=v97';
+import { Cine } from './cinema.js?v=v97';
+import { MemoryScene, STAGE } from './memoryscene.js?v=v97';
 
 const $ = (id) => document.getElementById(id);
 
@@ -403,10 +403,20 @@ export class Flashbacks {
     this._acted = !!acted;
     this._lifted = false;
 
-    Audio.stopTheme();
-    Audio.setTheme(MEMORY_THEME, 'memory:' + m.id);
-    Audio.cue(null);
-    if (this.hud) this.hud.announce('MEMORY RECOVERED', 'divine', false);
+    /**
+     * Guarded, for the same reason `scene` is: `busy` is already set and the
+     * camera already taken, and only the dialogue's ending hook gives them
+     * back. A flashback that plays in silence is a small loss; one that
+     * never starts is the world frozen for good.
+     */
+    try {
+      Audio.stopTheme();
+      Audio.setTheme(MEMORY_THEME, 'memory:' + m.id);
+      Audio.cue(null);
+      if (this.hud) this.hud.announce('MEMORY RECOVERED', 'divine', false);
+    } catch (e) {
+      console.warn('[frogshin] memory audio failed:', m.id, e && e.message);
+    }
     /**
      * A beat before anybody speaks, so the title is read and the first
      * camera move has started — and a `next()` cue on every third line, so
@@ -473,9 +483,32 @@ export class Flashbacks {
     this._acted = !!acted;
     this._lifted = false;
     this._sceneEnd = spec.onEnd || null;
-    Audio.stopTheme();
-    if (spec.theme) Audio.setTheme(spec.theme, 'scene:' + spec.id);
-    Audio.cue(null);
+    /**
+     * ═══ THE DRESSING IS GUARDED. THE DIALOGUE IS NOT OPTIONAL ═══════════
+     *
+     * Everything above this line has already taken something the player
+     * needs back: `busy` freezes the world, the wash covers the screen and
+     * the camera has been moved a mile into the sky. The ONLY thing that
+     * gives all three back is `_end`, and the only thing that calls `_end`
+     * is the dialogue finishing.
+     *
+     * So nothing between here and `Cine.play` is allowed to stop it being
+     * reached. The music and the HUD are decoration; a scene that plays in
+     * silence is a small disappointment, and a scene that never starts is
+     * the end of the game locking up on a white screen.
+     *
+     * Which is exactly what happened: the coronation's theme was the wrong
+     * shape, `audio.js` handed NaN to an `AudioParam`, and the TypeError
+     * came out of this function between `busy = true` and `Cine.play`.
+     * Nothing was left that could ever clear it.
+     */
+    try {
+      Audio.stopTheme();
+      if (spec.theme) Audio.setTheme(spec.theme, 'scene:' + spec.id);
+      Audio.cue(null);
+    } catch (e) {
+      console.warn('[frogshin] scene audio failed:', spec.id, e && e.message);
+    }
     Cine.play(spec.lines, { bars: true, onEnd: () => this._end() });
     return true;
   }

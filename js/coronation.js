@@ -36,16 +36,21 @@
  * of inputs that leaves a player permanently unable to dash.
  */
 
-import { Cine } from './cinema.js?v=v96';
-
-/** The theme the coronation plays under. Warm, slow, and in a major key. */
-const CORONATION_THEME = {
-  bpm: 66,
-  wave: 'triangle',
-  bass: [0, 0, 5, 5, 3, 3, 7, 7],
-  lead: [12, 14, 15, 14, 12, 10, 12, 0],
-  swell: true,
-};
+import { Cine } from './cinema.js?v=v97';
+/**
+ * THE MUSIC IT PLAYS UNDER, and it comes from js/themes.js like all of it.
+ *
+ * It was hand-written here, as `{ bpm, wave, bass: [...], lead: [...],
+ * swell }` — an object of entirely the wrong shape, invented rather than
+ * looked up. `audio.js` wants a root, a scale, chords, a motif, five voice
+ * levels and four waveforms; it read `T.pad`, got `undefined`, multiplied
+ * it, and handed `NaN` to an `AudioParam`, which throws.
+ *
+ * It threw inside `Flashbacks.scene` after the wash was up and the camera
+ * taken and before the dialogue started, so the last scene in the game
+ * locked solid on a white screen. Music now lives where music lives.
+ */
+import { CORONATION_THEME } from './themes.js?v=v97';
 
 /**
  * THE SCRIPT.

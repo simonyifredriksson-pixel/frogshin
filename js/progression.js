@@ -21,8 +21,8 @@
  * thing that makes a hard region become a familiar one.
  */
 
-import { GEAR_BY_ID, GEAR } from './gear.js?v=v96';
-import { clamp } from './util.js?v=v96';
+import { GEAR_BY_ID, GEAR } from './gear.js?v=v97';
+import { clamp } from './util.js?v=v97';
 
 /** Health per heart. Four hearts is the starting body. */
 export const HEART = 25;
