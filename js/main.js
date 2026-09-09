@@ -5,43 +5,43 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v97';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v97';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v97';
-import { Input } from './input.js?v=v97';
-import { Audio } from './audio.js?v=v97';
-import { World } from './world.js?v=v97';
-import { Effects } from './effects.js?v=v97';
-import { Atmosphere } from './atmosphere.js?v=v97';
-import { FollowCamera } from './camera.js?v=v97';
-import { Player } from './player.js?v=v97';
-import { RemotePlayer } from './remote.js?v=v97';
-import { HUD } from './hud.js?v=v97';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v97';
-import { FrogModel } from './frog.js?v=v97';
-import { DummyField } from './dummy.js?v=v97';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v97';
-import { ToadModel } from './npc.js?v=v97';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v97';
-import { DungeonRun } from './dungeon.js?v=v97';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v97';
-import { JudgmentRun } from './judgment.js?v=v97';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v97';
-import { COMBO_NAMES } from './ascended.js?v=v97';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v97';
-import { MenuScene } from './menu.js?v=v97';
-import { Economy } from './economy.js?v=v97';
-import { Shop } from './shop.js?v=v97';
-import { Network, NetRole } from './net.js?v=v97';
-import { Overworld } from './overworld.js?v=v97';
-import { InventoryScreen } from './inventoryui.js?v=v97';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v97';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v97';
-import { Cine } from './cinema.js?v=v97';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v97';
-import { MEMORIES } from './flashbacks.js?v=v97';
-import { GUARDIANS } from './guardians.js?v=v97';
-import { gearOfTier } from './gear.js?v=v97';
+import * as THREE from '../lib/three.module.js?v=v98';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v98';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v98';
+import { Input } from './input.js?v=v98';
+import { Audio } from './audio.js?v=v98';
+import { World } from './world.js?v=v98';
+import { Effects } from './effects.js?v=v98';
+import { Atmosphere } from './atmosphere.js?v=v98';
+import { FollowCamera } from './camera.js?v=v98';
+import { Player } from './player.js?v=v98';
+import { RemotePlayer } from './remote.js?v=v98';
+import { HUD } from './hud.js?v=v98';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v98';
+import { FrogModel } from './frog.js?v=v98';
+import { DummyField } from './dummy.js?v=v98';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v98';
+import { ToadModel } from './npc.js?v=v98';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v98';
+import { DungeonRun } from './dungeon.js?v=v98';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v98';
+import { JudgmentRun } from './judgment.js?v=v98';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v98';
+import { COMBO_NAMES } from './ascended.js?v=v98';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v98';
+import { MenuScene } from './menu.js?v=v98';
+import { Economy } from './economy.js?v=v98';
+import { Shop } from './shop.js?v=v98';
+import { Network, NetRole } from './net.js?v=v98';
+import { Overworld } from './overworld.js?v=v98';
+import { InventoryScreen } from './inventoryui.js?v=v98';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v98';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v98';
+import { Cine } from './cinema.js?v=v98';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v98';
+import { MEMORIES } from './flashbacks.js?v=v98';
+import { GUARDIANS } from './guardians.js?v=v98';
+import { gearOfTier } from './gear.js?v=v98';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -3034,13 +3034,21 @@ class Game {
     const three = ['Digit3', 'Numpad3'];
     const held = (k('F3') && k('KeyJ') && k('KeyL'))
       || (k('KeyL') && k('KeyJ') && k('KeyM') && this.input.downAny(three));
+    /**
+     * Taken UNCONDITIONALLY, and that is the point.
+     *
+     * `takeChord` clears the flag whether or not it is acted on, so a chord
+     * that completes on the same frame the held version fires is thrown
+     * away rather than toggling the panel straight back shut.
+     *
+     * The typed chord now lives in js/input.js, which SWALLOWS the keys as
+     * they go past — so typing it no longer also opens the map and selects
+     * hotbar slot three on the way.
+     */
+    const typed = this.input.takeChord();
     if (held && !this._chordHeld) this._toggleCheats(!this.cheatsOpen);
+    else if (!held && typed) this._toggleCheats(!this.cheatsOpen);
     this._chordHeld = held;
-
-    if (!held && this.input.sequenceDone(['KeyJ', 'KeyL', 'KeyM', three])) {
-      this.input.clearSequence();
-      this._toggleCheats(!this.cheatsOpen);
-    }
   }
 
   _toggleCheats(open) {
@@ -3050,6 +3058,25 @@ class Game {
     $('cheats').classList.toggle('show', open);
     this._cheatRefresh();
     if (open) {
+      /**
+       * ═══ AND IT TAKES THE SCREEN FROM THE WORLD'S OWN PANELS ═══════════
+       *
+       * The map and the bag are closed on the way in, because while this is
+       * open the game is frozen — `_updateRealm` returns before the
+       * overworld updates at all — and the overworld is the only thing that
+       * reads their close keys. A map left up sat on top of the developer
+       * panel and no key on the keyboard could shift it.
+       *
+       * The chord swallowing its own `M` (see js/input.js) stops the map
+       * being opened by the chord in the first place. This is the other
+       * half: a map the player opened deliberately, a moment before, must
+       * not become a thing they are stuck behind either.
+       */
+      const ow = this.overworld;
+      if (ow) {
+        if (ow.journal && ow.journal.closeAll) ow.journal.closeAll();
+        if (ow.inventory && ow.inventory.isOpen) ow.inventory.close();
+      }
       // Needs the mouse. The lock-change handler checks `cheatsOpen` so this
       // does not trip the pause menu on the way out.
       this.input.releaseLock();

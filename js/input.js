@@ -22,6 +22,31 @@ const CHORD_KEYS = new Set([
   'Digit3', 'Numpad3',
 ]);
 
+/**
+ * ═══ THE CHORD, TYPED — J then L then M then 3 ═══════════════════════════
+ *
+ * Tracked HERE rather than by the caller, and that matters: a key that
+ * advances the chord is SWALLOWED, so it never also fires as a game action.
+ *
+ * It used to be recognised after the fact, by looking back over the recent
+ * presses — which meant every key in it did its normal job on the way past.
+ * Two of the four have one. `M` opens the map and `3` selects a hotbar slot,
+ * so typing the chord in the open world opened the developer panel AND the
+ * map, in that order.
+ *
+ * And that was a trap rather than an annoyance: with the developer panel
+ * open the game is frozen, `Game._updateRealm` returns before the overworld
+ * updates at all, and the map's own close key is never read. The map sat on
+ * top of the panel and no key could shift it.
+ *
+ * `J` and `L` are bound to nothing, so swallowing them costs nothing. `M`
+ * is only swallowed once J and L are already in, and `3` only once M is
+ * too — so a lone M still opens the map and a lone 3 still selects a slot.
+ */
+const CHORD_SEQ = [['KeyJ'], ['KeyL'], ['KeyM'], ['Digit3', 'Numpad3']];
+/** How long a chord may take between keys before it lapses. */
+const CHORD_GAP = 1.6;
+
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -37,6 +62,11 @@ export class Input {
     this._mousePressed = false;
     this.onLockChange = null;
     this.recent = [];               // recent presses, for sequence chords
+    /** How much of the typed developer chord is in. See `CHORD_SEQ`. */
+    this._chordAt = 0;
+    this._chordT = 0;
+    /** Set when the chord completes; taken and cleared by `takeChord`. */
+    this._chordReady = false;
 
     this._bind();
   }
@@ -60,7 +90,14 @@ export class Input {
       if (typing && !CHORD_KEYS.has(code)) return;
 
       if (!this.keys.has(code) && !typing) {
-        this.pressed.add(code);
+        /**
+         * The typed developer chord gets first refusal on the press.
+         *
+         * A key that advances it is NOT added to `pressed`, so it cannot
+         * also fire whatever it is normally bound to — which for `M` is the
+         * map and for `3` is a hotbar slot. See `CHORD_SEQ`.
+         */
+        if (!this._chordKey(code)) this.pressed.add(code);
         // Recent presses, for chords entered as a SEQUENCE rather than held
         // together. See `sequenceDone`.
         this.recent.push({ code, t: this._now() });
@@ -177,6 +214,57 @@ export class Input {
 
   /** Forget the press history — call after acting on a sequence. */
   clearSequence() { this.recent.length = 0; }
+
+  /**
+   * ONE KEY, AGAINST THE TYPED CHORD.
+   *
+   * @returns true if the press was part of the chord and has been SWALLOWED
+   *
+   * The rule is strictly positional. A press only counts if it is the next
+   * key the chord wants and it arrived within `CHORD_GAP` of the last one;
+   * anything else drops the chord back to nothing — except a fresh `J`,
+   * which starts it again, because somebody who mistypes will just start
+   * over rather than pausing first.
+   *
+   * The consequence worth stating: `M` and `3` are only ever swallowed with
+   * `J` and `L` already behind them, so the map key and the hotbar keys
+   * behave completely normally the rest of the time.
+   */
+  _chordKey(code) {
+    const now = this._now();
+    const want = CHORD_SEQ[this._chordAt];
+    const lapsed = this._chordAt > 0 && now - this._chordT > CHORD_GAP;
+    if (!lapsed && want.indexOf(code) !== -1) {
+      this._chordAt++;
+      this._chordT = now;
+      if (this._chordAt >= CHORD_SEQ.length) {
+        this._chordAt = 0;
+        this._chordReady = true;
+      }
+      return true;
+    }
+    // Wrong key, or too slow. Start over — and a `J` starts over AT ONE.
+    if (CHORD_SEQ[0].indexOf(code) !== -1) {
+      this._chordAt = 1;
+      this._chordT = now;
+      return true;
+    }
+    this._chordAt = 0;
+    return false;
+  }
+
+  /**
+   * Has the typed chord completed since this was last asked? Clears it.
+   *
+   * Always clears, even when the caller ignores the answer, so a chord
+   * finished on the same frame the HELD version fired cannot toggle the
+   * panel a second time and close it again.
+   */
+  takeChord() {
+    const r = this._chordReady;
+    this._chordReady = false;
+    return r;
+  }
 
   /** True exactly once per physical press. */
   consume(code) {
