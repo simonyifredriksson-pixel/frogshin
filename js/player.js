@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v99';
-import { CFG } from './config.js?v=v99';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v99';
-import { FrogModel } from './frog.js?v=v99';
-import { Grapple, GrappleState } from './grapple.js?v=v99';
-import { Combat, Health } from './combat.js?v=v99';
-import { Stamina } from './stamina.js?v=v99';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v99';
-import { Audio } from './audio.js?v=v99';
+import * as THREE from '../lib/three.module.js?v=v100';
+import { CFG } from './config.js?v=v100';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v100';
+import { FrogModel } from './frog.js?v=v100';
+import { Grapple, GrappleState } from './grapple.js?v=v100';
+import { Combat, Health } from './combat.js?v=v100';
+import { Stamina } from './stamina.js?v=v100';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v100';
+import { Audio } from './audio.js?v=v100';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -163,6 +163,18 @@ export class Player {
     this.airTime = 0;
     this.peakFallSpeed = 0;
 
+    /**
+     * --- catching an edge ---
+     *
+     * `ledge` is null or `{ hx, hy, hz, tx, ty, tz, t }`: where the frog
+     * hangs, where it ends up on top, and how long it has been holding on.
+     * See `_updateLedge`, and CFG.ledge for why any of this exists.
+     */
+    this.ledge = null;
+    this.ledgeCooldown = 0;
+    /** 1 the frame an edge is caught, decaying. Drives the hang pose. */
+    this.hanging = 0;
+
     // --- dash ---
     this.dashTimer = 0;
     this.dashCooldown = 0;
@@ -198,6 +210,7 @@ export class Player {
     this.combat.reset();
     this.stamina.reset();
     this.grapple.cancel();
+    this.ledge = null;
     this.dashTimer = 0;
     this.dashCooldown = 0;
     this.dashCharges = CFG.dash.airCharges;
@@ -677,6 +690,15 @@ export class Player {
     // A charging leap IS the jump — Space must not quietly cancel it by
     // lifting the toad off the ground mid-wind-up.
     if (this.leapCharge > 0) { this.jumpBuffer = 0; return; }
+
+    /**
+     * Holding an edge: Space means "pull up now" rather than "jump".
+     *
+     * Deliberately ABOVE the stamina check. Being winded while hanging off
+     * a lip must not be able to strand you there — the catch is a mercy and
+     * it would be a strange one that could leave you stuck.
+     */
+    if (this.ledge) { this._mantle(); this.jumpBuffer = 0; return; }
 
     // Exhausted means no jumping at all until stamina is back to 70%.
     // Checked once up front so every branch below is covered.
@@ -1376,6 +1398,7 @@ export class Player {
     this.deathPending = true;
     this.combat.reset();
     this.grapple.cancel();
+    this.ledge = null;
     this.dashTimer = 0;
     this.effects.deathBurst(this.pos, this.color);
     Audio.death(this.pos);
@@ -1525,6 +1548,7 @@ export class Player {
     this.justKnockedDown = true;
     this.combat.reset();
     this.grapple.cancel();
+    this.ledge = null;
     this.dashTimer = 0;
     this.vel.x += nx * 9;
     this.vel.z += nz * 9;
@@ -1541,6 +1565,7 @@ export class Player {
     this.justKnockedDown = true;
     this.combat.reset();
     this.grapple.cancel();
+    this.ledge = null;
     this.dashTimer = 0;
     this.vel.x += nx * 13;
     this.vel.y = Math.max(this.vel.y, 0) + 5;
@@ -1562,6 +1587,7 @@ export class Player {
   _makeHelpless(input) {
     if (input) input.flush();
     if (this.grapple.active) this.grapple.cancel();
+    this.ledge = null;
     this.dashTimer = 0;
     this.sprinting = false;
     this.parrying = false;
@@ -1662,6 +1688,9 @@ export class Player {
           _tmp.set(this.pos.x, this.pos.y + 0.7, this.pos.z), 1, 0.6, 0xcccccc);
       }
     }
+
+    // Catching the lip of something you fell just short of.
+    this._updateLedge(dt);
 
     // Landing.
     if (this.landedThisFrame) {
@@ -1772,14 +1801,20 @@ export class Player {
       throwT: this.throwT > 0 ? this.throwT / 0.26 : 0,
       grappling: this.grapple.visible,
       tongueTo: this.grapple.visible ? this.grapple.tip : null,
-      wallSliding: this.wallSliding,
+      /**
+       * A frog holding on to a lip is drawn with the wall-hug pose and the
+       * climb reach on top of it, which between them is exactly what
+       * hanging off an edge looks like. Reusing the two poses the rig
+       * already has beats inventing a third for a state that lasts 0.42s.
+       */
+      wallSliding: this.wallSliding || !!this.ledge,
       sprinting: this.sprinting,
       swimming: this.inWater,
       swimPitch: this.inWater ? clamp(this.vel.y / 10, -1, 1) : 0,
       parrying: this.parrying,
       dead: this.health.dead,
       // Drives the climb: the rig reaches for the step it is walking onto.
-      climbing: this.climbing,
+      climbing: Math.max(this.climbing, this.hanging),
       /**
        * Reaching out to touch something.
        *
@@ -1818,6 +1853,151 @@ export class Player {
    * separate because the pose wants to persist across the gap between one
    * step and the next, while the position offset must not.
    */
+  /**
+   * ═══ CATCHING AN EDGE ═══════════════════════════════════════════════════
+   *
+   * Falling past the lip of something with your hands within reach of it
+   * catches it. You hang for a moment and pull up.
+   *
+   * This is here for the broken roads (js/traverse.js): a crossing made of
+   * the piers of a fallen bridge is only worth attempting if a jump judged
+   * a little short costs a second rather than the whole crossing. The rest
+   * of that mercy is the shelf underneath every one of those sites — this
+   * saves the jump that was nearly right, the shelf saves the rest.
+   *
+   * Runs from `_postMove`, so `onWall`, `wallNormal` and `pos` are this
+   * frame's resolved values. While holding on, the frog is PINNED: pos is
+   * reassigned and velocity zeroed every frame, which is why gravity
+   * accumulating in `update` beforehand does not matter.
+   */
+  _updateLedge(dt) {
+    const L = CFG.ledge;
+    if (this.ledgeCooldown > 0) this.ledgeCooldown -= dt;
+    this.hanging = Math.max(0, this.hanging - dt / 0.3);
+
+    if (this.ledge) {
+      // Something took the ledge away — went in the water, got launched by a
+      // grapple, teleported. Let go rather than hanging off nothing.
+      if (this.inWater || this.grapple.attached) { this.releaseLedge(); return; }
+      this.pos.set(this.ledge.hx, this.ledge.hy, this.ledge.hz);
+      this.vel.set(0, 0, 0);
+      // The fall is over: it must not land as a hard landing after the
+      // mantle, and the camera must not shake for a fall you caught.
+      this.peakFallSpeed = 0;
+      this.wallSliding = false;
+      this.hanging = 1;
+      this.ledge.t += dt;
+      if (this.ledge.t >= L.hold) this._mantle();
+      return;
+    }
+
+    if (this.grounded || this.inWater) return;
+    if (this.grapple.attached || this.dashTimer > 0) return;
+    if (this.ledgeCooldown > 0) return;
+    if (this.vel.y > L.minFall || this.airTime < L.minAir) return;
+    // Only against a surface we are actually touching.
+    if (!this.onWall && this.wallCoyote <= 0) return;
+    const found = this._findLedge();
+    if (found) this._grabLedge(found);
+  }
+
+  /**
+   * The highest catchable lip in front of the frog, or null.
+   *
+   * Probes ONE point: a little way into the wall the frog is against, at
+   * its own height. A box containing that point whose top is between the
+   * chest and just over the head is a lip. Anything standing on that top
+   * disqualifies it — an overhang is not a ledge, and catching one would
+   * mantle the frog into solid rock.
+   */
+  _findLedge() {
+    const L = CFG.ledge;
+    const r = CFG.move.radius, h = CFG.move.height;
+    // The wall normal points away from the surface, so we probe against it.
+    const n = this.onWall && this.wallNormal.lengthSq() > 0.1
+      ? this.wallNormal : this.wallCoyoteNormal;
+    const nx = n.x, nz = n.z;
+    if (nx === 0 && nz === 0) return null;
+    const px = this.pos.x - nx * (r + L.reach);
+    const pz = this.pos.z - nz * (r + L.reach);
+    const cand = this._ledgeCand || (this._ledgeCand = []);
+    this.collision.query(px - 0.5, pz - 0.5, px + 0.5, pz + 0.5, cand);
+
+    let best = null;
+    for (let i = 0; i < cand.length; i++) {
+      const b = cand[i];
+      if (px < b.minX || px > b.maxX || pz < b.minZ || pz > b.maxZ) continue;
+      const top = b.maxY;
+      if (top < this.pos.y + L.low || top > this.pos.y + L.high) continue;
+      if (best && top <= best.maxY) continue;
+      best = b;
+    }
+    if (!best) return null;
+    // Refuse a lip with something sitting on it.
+    for (let i = 0; i < cand.length; i++) {
+      const b = cand[i];
+      if (b === best) continue;
+      if (px < b.minX || px > b.maxX || pz < b.minZ || pz > b.maxZ) continue;
+      if (b.minY < best.maxY + h && b.maxY > best.maxY + 0.05) return null;
+    }
+    /**
+     * Where the mantle puts you: the probe point, pulled far enough in from
+     * the box's own edges to stand there. A piece thinner than the frog —
+     * a beam, a rope, one cube of a chain — has no such room, so those use
+     * the middle, which is what standing on a beam means anyway.
+     */
+    const inset = (lo, hi, p) => (hi - lo >= r * 2.2
+      ? clamp(p, lo + r, hi - r) : (lo + hi) * 0.5);
+    return {
+      hx: this.pos.x, hy: best.maxY - L.hangDrop, hz: this.pos.z,
+      tx: inset(best.minX, best.maxX, px),
+      ty: best.maxY,
+      tz: inset(best.minZ, best.maxZ, pz),
+      tag: best.tag,
+      t: 0,
+    };
+  }
+
+  _grabLedge(g) {
+    this.ledge = g;
+    this.hanging = 1;
+    this.vel.set(0, 0, 0);
+    this.peakFallSpeed = 0;
+    this.pos.set(g.hx, g.hy, g.hz);
+    this.effects.dustPuff(
+      _tmp.set(g.tx, g.ty + 0.1, g.tz), 5, 1.6, 0xcfc0a0);
+    Audio.land(this.pos, false);
+    this.events.push({ t: 'ledge', x: g.tx, y: g.ty, z: g.tz });
+  }
+
+  /** Pull up onto the lip. Drawn as a step-up, so it reads as a climb. */
+  _mantle() {
+    const g = this.ledge;
+    if (!g) return;
+    const rise = Math.max(0, g.ty - this.pos.y);
+    this.pos.set(g.tx, g.ty, g.tz);
+    this.vel.set(0, 0, 0);
+    this.ledge = null;
+    this.ledgeCooldown = CFG.ledge.cooldown;
+    this.grounded = true;
+    this.groundTag = g.tag || 'stone';
+    this.airTime = 0;
+    this.doubleJumpLeft = 1;
+    this.dashCharges = CFG.dash.airCharges;
+    // Borrow the ledge-step smoothing so the lift is drawn as a rise rather
+    // than as a teleport. Capped there at one stepHeight, which is fine —
+    // it only has to cover the moment; the pose does the rest.
+    this._absorbStep(rise, 0);
+    this.climbing = 1;
+  }
+
+  /** Let go and fall. Also how a jump off a held edge is answered. */
+  releaseLedge() {
+    if (!this.ledge) return;
+    this.ledge = null;
+    this.ledgeCooldown = CFG.ledge.cooldown;
+  }
+
   _absorbStep(stepUp, dt) {
     const cap = CFG.move.stepHeight;
     if (stepUp > 0) {

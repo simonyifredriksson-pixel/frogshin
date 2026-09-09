@@ -32,39 +32,40 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v99';
-import { CFG } from './config.js?v=v99';
-import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v99';
+import * as THREE from '../lib/three.module.js?v=v100';
+import { CFG } from './config.js?v=v100';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v100';
 import { coronationScript, CarpetWalk, CORONATION_THEME }
-  from './coronation.js?v=v99';
-import { Realm } from './realm.js?v=v99';
-import { Scatter } from './scatter.js?v=v99';
-import { Sites } from './realmsites.js?v=v99';
-import { Camp } from './mobs.js?v=v99';
-import { DungeonBoss } from './dungeonboss.js?v=v99';
-import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v99';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v99';
+  from './coronation.js?v=v100';
+import { Realm } from './realm.js?v=v100';
+import { Scatter } from './scatter.js?v=v100';
+import { Traversals } from './traverse.js?v=v100';
+import { Sites } from './realmsites.js?v=v100';
+import { Camp } from './mobs.js?v=v100';
+import { DungeonBoss } from './dungeonboss.js?v=v100';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v100';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v100';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v99';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v99';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v99';
+  CONTENT_HALF } from './regions.js?v=v100';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v100';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v100';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v99';
+  mainObjective } from './quests.js?v=v100';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v99';
-import { disposeLandmarkMats } from './landmarks.js?v=v99';
-import { Props, disposePropMats } from './props.js?v=v99';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v99';
-import { Ambience } from './ambience.js?v=v99';
-import { Weather } from './weather.js?v=v99';
-import { Audio } from './audio.js?v=v99';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v99';
+  disposeVillagerMats } from './realmquests.js?v=v100';
+import { disposeLandmarkMats } from './landmarks.js?v=v100';
+import { Props, disposePropMats } from './props.js?v=v100';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v100';
+import { Ambience } from './ambience.js?v=v100';
+import { Weather } from './weather.js?v=v100';
+import { Audio } from './audio.js?v=v100';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v100';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v99';
-import { Cine } from './cinema.js?v=v99';
-import { recommendedFor, readiness } from './guardians.js?v=v99';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v99';
-import { ThroneArena } from './throne.js?v=v99';
+  MEMORY_COUNT } from './flashbacks.js?v=v100';
+import { Cine } from './cinema.js?v=v100';
+import { recommendedFor, readiness } from './guardians.js?v=v100';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v100';
+import { ThroneArena } from './throne.js?v=v100';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -463,6 +464,18 @@ export class Overworld {
       });
     }]);
     /**
+     * THE BROKEN ROADS — also before the bake, and for the same reason.
+     *
+     * Eight places where the way through is gone: a bridge in the river, a
+     * mile of windfall over the Wood Road, a hole in the Sunderway. They
+     * are placed ON the road network at its own graded heights, which is
+     * what makes them roads that broke rather than obstacles that were
+     * put somewhere. See js/traverse.js.
+     */
+    this.traverse = new Traversals(this.scene, this.realm);
+    for (const t of this.traverse.buildTasks()) tasks.push(t);
+    tasks.push(['Rewarding the climb', () => this._placeSpurs()]);
+    /**
      * The broadphase is baked LAST, once, with every site's collider already
      * in it. The collision world hashes its boxes into a grid at bake time
      * and nothing looks at a box added afterwards, so a structure built after
@@ -484,8 +497,13 @@ export class Overworld {
     tasks.push(['Clearing the squares', () => {
       if (!this.scatter || !this.sites) return;
       const wood = this.wood;
+      const tv = this.traverse;
       this.scatter.keepClear = (x, z) => {
         if (this.sites.insideSite(x, z)) return true;
+        // Nor anything solid inside a broken crossing. Those are built to be
+        // climbed on a measured line, and a streamed boulder dropped into
+        // the gap between two piers changes the crossing without saying so.
+        if (tv && tv.siteAt(x, z)) return true;
         // And nothing solid within reach of a Wakewood path. The wood spends
         // its whole build keeping its paths walkable (see PATH_CLEAR) and a
         // streamed boulder dropped on one afterwards would undo that.
@@ -579,6 +597,52 @@ export class Overworld {
             x, y, z, a + Math.PI, tier, s, rnd);
         }
       }
+    }
+  }
+
+  /**
+   * WHAT IS AT THE END OF AN OPTIONAL CLIMB.
+   *
+   * Five of the eight broken crossings have a spur — a harder line off the
+   * route, visible from it, that nothing on the critical path needs. This
+   * puts something real at the end of each: a strongbox lashed to a fallen
+   * span, a garrison's pay-chest on a floor nobody cleared, a shrine in the
+   * dry chamber behind a waterfall.
+   *
+   * The chests roll `deep`, so they pay a tier ABOVE their region — the
+   * same allowance a chest at the bottom of a mine gets, and for the same
+   * reason: you had to choose to go there. The Old Mountain Route's spur is
+   * a shortcut instead, and a shortcut's reward is that it is a shortcut.
+   *
+   * Before the bake, like every other prop. See `_placeProps`.
+   */
+  _placeSpurs() {
+    if (!this.traverse || !this.props) return;
+    for (const sp of this.traverse.spurs()) {
+      if (sp.what === 'shortcut') continue;
+      const R = REGION_BY_ID.get(sp.site.spec.region);
+      const tier = R ? R.tier : 0;
+      const P = {
+        kind: sp.what === 'shrine' ? 'pedestal' : 'chest',
+        id: sp.id,
+        at: { x: sp.at.x, y: sp.at.y + 0.05, z: sp.at.z },
+        yaw: sp.yaw,
+        wood: 0x6b4a2a,
+        trim: 0xffd76b,
+        site: 'dungeon',
+      };
+      if (sp.what === 'shrine') {
+        P.label = 'Take the offering';
+        P.look = 'relic';
+        P.prizeLook = null;
+        P.prize = { what: 'loot', tier: Math.min(5, tier + 1), deep: true };
+      } else {
+        P.label = 'Open the strongbox';
+        P.usedLabel = 'Empty';
+        P.prizeLook = 'relic';
+        P.prize = { what: 'loot', tier, deep: true };
+      }
+      this.props.add(P);
     }
   }
 
@@ -1122,6 +1186,12 @@ export class Overworld {
     this.ambience.update(dt);
     this._life(dt, player);
     this._wood(dt, player);
+    // The broken crossings: one distance check each, and only the one you
+    // are near submits any draw calls. See js/traverse.js.
+    if (this.traverse) {
+      this.traverse.update(dt, player.pos.x, player.pos.z);
+      this._traverse(player);
+    }
     // The last arena: four group rotations and one opacity pulse, and it
     // hides itself past four hundred and twenty units. See js/throne.js.
     if (this.throne) this.throne.update(dt, player.pos.x, player.pos.z);
@@ -1160,6 +1230,46 @@ export class Overworld {
     if (w.root.visible !== show) w.root.visible = show;
     if (!show) return;
     w.update(dt, player.pos, d < WOOD_R + 40);
+  }
+
+  /**
+   * ARRIVING AT A BROKEN CROSSING.
+   *
+   * The one thing the geometry cannot say for itself: WHY. Each site has a
+   * `why` — a sentence about what happened to the road — and it is shown
+   * once, on arrival, alongside the name of the place.
+   *
+   * This is not decoration. The whole difference between a broken bridge
+   * and a parkour course is whether the player has a reason for it, and a
+   * player who arrives at a gap and has to guess is looking at a parkour
+   * course however carefully it was modelled. The hoarding at the near end
+   * carries the same line for anyone who arrives from the other direction
+   * or comes back later.
+   *
+   * Once per site per session: told twice it stops being information.
+   */
+  _traverse(player) {
+    /**
+     * A ROPE THAT HAS JUST BEEN CUT.
+     *
+     * Said out loud once, because a beam coming down forty units away
+     * behind you is easy to miss, and a mechanism the player does not
+     * realise they triggered teaches nothing.
+     */
+    for (const L of this.traverse.lashings()) {
+      if (!L.cut || L.told) continue;
+      L.told = true;
+      this.hud.toast('The rope parts and the beam comes down across the gap.',
+        5);
+    }
+    const site = this.traverse.siteAt(player.pos.x, player.pos.z);
+    if (!site) { this._atCrossing = null; return; }
+    if (this._atCrossing === site.spec.id) return;
+    this._atCrossing = site.spec.id;
+    const told = this._toldCrossings || (this._toldCrossings = new Set());
+    if (told.has(site.spec.id)) return;
+    told.add(site.spec.id);
+    this.hud.toast(`${site.spec.name} — ${site.spec.why}`, 9);
   }
 
   /**
@@ -2217,6 +2327,15 @@ export class Overworld {
     for (const c of this.camps) {
       if (c.live) c.targets(list, (m) => this._mobDown(m));
     }
+    /**
+     * And the ropes holding up the spare beams at the broken crossings.
+     *
+     * They go through `targets` rather than through a mechanism of their
+     * own so that a thrown kunai and a katana swing both reach them by the
+     * one path everything else in the game uses. See Lashing in
+     * js/traverse.js.
+     */
+    if (this.traverse) this.traverse.targets(list);
     return list;
   }
 
@@ -2486,9 +2605,44 @@ export class Overworld {
     if (this.player) this.player.cinematic = false;
   }
 
+  /**
+   * WHAT THE LOCALS SAY ABOUT THE ROAD BEING SHUT.
+   *
+   * A broken crossing within a few hundred units gets talked about by the
+   * frogs who live near it — "That was the road between the kingdoms,
+   * once", "The Wood Road is shut, windfall, a mile of it". It is the line
+   * that turns an obstacle into a piece of local history, and it is the
+   * reason a player arrives at the Old Mountain Route already knowing what
+   * they are looking at.
+   *
+   * Not everybody, and always the SAME everybody: a hash of the speaker's
+   * own id decides, so one villager in three mentions it and it is the same
+   * one every time you come back. All of them saying it would read as a
+   * notice board rather than as a village.
+   */
+  _crossingTalk(npc) {
+    if (!this.traverse) return null;
+    let best = null, bestD = 620;
+    for (const s of this.traverse.sites) {
+      if (!s.spec.said) continue;
+      const d = Math.hypot(s.at.x - npc.at.x, s.at.z - npc.at.z);
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    if (!best) return null;
+    let h = 2166136261;
+    const id = String(npc.spec.id || npc.spec.name || '');
+    for (let i = 0; i < id.length; i++) {
+      h = (h ^ id.charCodeAt(i)) * 16777619 >>> 0;
+    }
+    if (h % 3 !== 0) return null;
+    return best.spec.said;
+  }
+
   _talk(npc) {
     const p = this.progress;
     const lines = npcSays(npc.spec, p).slice();
+    const road = this._crossingTalk(npc);
+    if (road) lines.push(road);
     const turns = npc.spec.turns;
     const gives = npc.spec.gives;
     const q = turns ? QUEST_BY_ID.get(turns) : null;

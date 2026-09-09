@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v99';
-import { mulberry32 } from './util.js?v=v99';
-import { SEA } from './regions.js?v=v99';
-import { CHUNK } from './realm.js?v=v99';
+import * as THREE from '../lib/three.module.js?v=v100';
+import { mulberry32 } from './util.js?v=v100';
+import { SEA } from './regions.js?v=v100';
+import { CHUNK } from './realm.js?v=v100';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -263,7 +263,14 @@ export class Scatter {
    * distance to a polyline, so a wide paved approach is as clear as a track.
    */
   _solid(x, y, z, hx, hy, hz) {
-    const net = this.realm && this.realm.net;
+    /**
+     * `realm.network`, NOT `realm.net` — there is no `net` on a Realm, so
+     * this test was reading undefined and skipping itself entirely. Every
+     * solid boulder and trunk the scatter produced was allowed to stand in
+     * the middle of a road, collider and all: roads blocked by scenery,
+     * which is a strange thing to find while building the broken ones.
+     */
+    const net = this.realm && this.realm.network;
     if (net && net.roadAt(x, z) > 0.12) return;
     if (this.keepClear && this.keepClear(x, z)) return;
     this.solids.push([x, y, z, hx, hy, hz, 'stone']);

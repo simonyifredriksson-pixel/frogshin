@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v99';
+export const BUILD = 'v100';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -118,6 +118,49 @@ export const CFG = {
      * than in it; lower it toward 0 if the toes start disappearing.
      */
     footSink: 0.05,
+  },
+
+  /**
+   * ═══ CATCHING THE EDGE ═════════════════════════════════════════════════
+   *
+   * Fall short of a ledge and, if your hands come within reach of its lip,
+   * you catch it and pull yourself up instead of dropping.
+   *
+   * This exists for the broken roads in js/traverse.js. A crossing made of
+   * the piers of a bridge that fell is only enjoyable if a jump judged
+   * slightly short costs you a second rather than the whole crossing —
+   * otherwise it is a thing players learn to walk around. Every one of
+   * those sites also has a shelf underneath it to land on, so this is the
+   * SECOND mercy rather than the only one: the edge catch saves the jump
+   * that was nearly right, and the shelf saves the one that was not.
+   *
+   * `low` and `high` are measured from the FEET (`pos.y` is the soles; the
+   * head is at `pos.y + move.height`, 1.75). So a lip anywhere between the
+   * chest and a little over the head is catchable, and one at knee height
+   * is not — that one is a step, and stepHeight already has it.
+   *
+   * It is deliberately not free of consequence: `cooldown` stops a held
+   * approach from re-grabbing the same lip over and over as a way of
+   * hovering, and a grab does NOT refund a used dash the way landing does
+   * until the mantle actually completes.
+   */
+  ledge: {
+    /** How far beyond the collision radius the hands reach. */
+    reach: 0.85,
+    /** Lowest catchable lip, above the soles — about chest height. */
+    low: 1.00,
+    /** Highest catchable lip — a little above the top of the head. */
+    high: 2.00,
+    /** How long the frog hangs before it pulls itself up. */
+    hold: 0.42,
+    /** How far below the lip the soles hang while holding on. */
+    hangDrop: 1.35,
+    /** No second catch for this long after letting go or topping out. */
+    cooldown: 0.30,
+    /** Minimum air time first, so it cannot fire on the frame you jump. */
+    minAir: 0.10,
+    /** Only when actually falling this fast or faster. */
+    minFall: -1.0,
   },
 
   // -------------------------------------------------------------- stamina
