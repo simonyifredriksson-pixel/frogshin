@@ -38,8 +38,8 @@
  * villager it replaces was nine draw calls with nine.
  */
 
-import * as THREE from '../lib/three.module.js?v=v98';
-import { clamp, damp, lerp } from './util.js?v=v98';
+import * as THREE from '../lib/three.module.js?v=v99';
+import { clamp, damp, lerp } from './util.js?v=v99';
 
 /** Source geometry. Everything below is built out of these five. */
 const S = {
@@ -518,26 +518,41 @@ export class Citizen {
       }
       case 'robe': {
         /**
-         * ═══ IT FALLS FROM THE SHOULDERS TO THE GROUND ══════════════════
+         * ═══ A SKIRT TO THE GROUND, AND YOU CAN STILL SEE THE FROG ══════
+         *
+         * This has been wrong in two opposite directions and both are worth
+         * writing down, because the second was the reaction to the first.
          *
          * `S.cone` is a unit cone centred on its own origin — apex at +y,
          * base at −y — so scaled to 0.62·h it spans ±0.31·h about wherever
-         * it is put. It used to be put at y 0.02, which means it ran from
+         * it is put. It was originally put at y 0.02, which ran it from
          * −0.29·h to +0.33·h: nearly a third of it BELOW the villager's
-         * feet, reaching only as high as their belly, and pointed end up.
+         * feet with the wide end buried and the point at their belly. On
+         * the grey-robed roles — the elder, the monk, the healer — that is
+         * a grey cone rim sticking out of the grass around their feet, and
+         * from a player's eye height it reads exactly as a conical hat
+         * lying on the ground underneath them. Which is what it was
+         * reported as.
          *
-         * That reads as a conical straw hat lying on the ground underneath
-         * them. Which is precisely what it looked like, on all seven roles
-         * that wear a robe — the merchant, the priest, the king, the queen,
-         * the monk, the trader and the noble.
+         * Moving it to 0.31·h put the hem on the ground, and then the
+         * problem was the other way about: 0.34·w is WIDER than the 0.30·w
+         * torso and 0.62·h reaches the shoulders, so the cone swallowed the
+         * haunches, the arms and most of the body. A priest came out as a
+         * featureless white traffic cone with a head on it, and a trader as
+         * a magenta one — which is what "the trader has become invisible"
+         * meant. It was not invisible. It was a cone.
          *
-         * At 0.31·h it spans 0 to 0.62·h: hem on the ground, narrow end at
-         * the shoulders, legs hidden. Which is a robe.
+         * So: hem ON the ground, top at the CHEST rather than the
+         * shoulders, and narrower than the torso — 0.26·w against 0.30·w —
+         * so the shoulders, the arms and the pale belly all still read and
+         * it is a frog in a robe rather than a robe with a frog's head.
          */
-        const r = put(this.body, S.cone, M.cloth, 0, 0.31 * B.h, 0);
-        r.scale.set(0.34 * B.w, 0.62 * B.h, 0.32 * B.w);
-        const y = put(this.body, S.sphere, M.cloth, 0, 0.58 * B.h, 0);
-        y.scale.set(0.27 * B.w, 0.16 * B.h, 0.25 * B.w);
+        const r = put(this.body, S.cone, M.cloth, 0, 0.235 * B.h, 0);
+        r.scale.set(0.26 * B.w, 0.47 * B.h, 0.25 * B.w);
+        // A yoke over the shoulders, which is what ties the skirt to the
+        // frog rather than leaving it standing beside one.
+        const y = put(this.body, S.sphere, M.cloth, 0, 0.60 * B.h, 0);
+        y.scale.set(0.245 * B.w, 0.13 * B.h, 0.225 * B.w);
         break;
       }
       case 'wrap': {
@@ -573,14 +588,29 @@ export class Citizen {
         break;
       }
       case 'hood':
-        put(h, S.sphere, M.cloth, 0, 0.16, -0.03)
-          .scale.set(0.29, 0.22, 0.27);
-        put(h, S.cone, M.cloth, 0, 0.28, -0.12)
-          .scale.set(0.14, 0.22, 0.14);
+        /**
+         * ═══ A HOOD IS ROUND THE BACK OF A HEAD, NOT OVER THE FRONT ══════
+         *
+         * It was a 0.29-wide sphere at y 0.16 — wider than the 0.25 skull
+         * and centred on it — which engulfed the whole head including both
+         * eyes. A priest rendered as a smooth white egg with a mouth. In a
+         * game whose entire identity is that everybody in it is a frog, a
+         * garment that hides the face is the one thing it must not do.
+         *
+         * So: pushed BACK behind the eye humps, narrowed to just inside the
+         * skull's own width, and raised so it caps the head rather than
+         * wrapping it. The eyes stand clear in front of it, which is what a
+         * real hood on a real frog would look like.
+         */
+        put(h, S.sphere, M.cloth, 0, 0.20, -0.11)
+          .scale.set(0.245, 0.185, 0.215);
+        // And the point of it, hanging down the back of the neck.
+        put(h, S.cone, M.cloth, 0, 0.19, -0.235)
+          .scale.set(0.115, 0.20, 0.115);
         break;
       case 'cap':
-        put(h, S.sphere, M.cloth, 0, 0.22, 0)
-          .scale.set(0.24, 0.11, 0.22);
+        put(h, S.sphere, M.cloth, 0, 0.235, -0.035)
+          .scale.set(0.225, 0.10, 0.20);
         break;
       case 'crown': {
         const c = put(h, S.ring, M.gold, 0, 0.30, 0, Math.PI / 2);
@@ -593,27 +623,51 @@ export class Citizen {
         break;
       }
       case 'helm':
-        put(h, S.sphere, M.metal, 0, 0.20, -0.01)
-          .scale.set(0.26, 0.15, 0.24);
-        put(h, S.box, M.metal, 0, 0.14, 0.19)
-          .scale.set(0.06, 0.14, 0.04);
+        /**
+         * A KETTLE HELM: a shallow bowl and a brim, BEHIND the eyes.
+         *
+         * The old one was a 0.26-wide dome centred on the skull, which — as
+         * with the hood — swallowed both eye humps and left a guard with no
+         * face. A frog's eyes are on top of its head, so a helmet has to
+         * sit behind them and let them through, and the nasal bar has to
+         * stop short of the eyeline rather than running down between them.
+         */
+        put(h, S.sphere, M.metal, 0, 0.235, -0.075)
+          .scale.set(0.235, 0.125, 0.20);
+        // The brim, wide and thin, which is what makes it read as armour
+        // rather than as a bald patch.
+        put(h, S.cyl, M.metal, 0, 0.20, -0.075)
+          .scale.set(0.265, 0.02, 0.24);
         break;
       case 'band': {
         /**
-         * A HEADBAND, BEHIND THE EYES AND ABOVE THEM.
+         * A HEADBAND, ROUND THE SKULL BEHIND THE EYES.
          *
-         * It was at y 0.16, which on this skull is level with the eyeballs
-         * — a ninja wearing a blindfold. A frog's eyes are on humps on top
-         * of its head, so a band goes round the skull BEHIND them: back a
-         * little in z, up a little in y, and with two tails trailing off
-         * the knot at the back, which is the whole read of the thing.
+         * Twice wrong before this. At y 0.16 it was level with the eyeballs
+         * — a ninja in a blindfold. Raised to 0.215 and left 0.50 wide and
+         * 0.38 deep, it became a flat slab lying across the top of the
+         * head: a frog in a mortarboard.
+         *
+         * A band is a THIN LOOP, so: no wider than the skull, shallow, and
+         * dropped to skim the back of it rather than sitting on top — with
+         * the knot and two tails at the back, which is the whole read.
          */
-        put(h, S.box, M.cloth, 0, 0.215, -0.045)
-          .scale.set(0.50, 0.055, 0.38);
+        /**
+         * At 0.205, not 0.185.
+         *
+         * The `young` build's eyes bulge 1.24× and reach y 0.2195 — a band
+         * whose top sat at 0.217 cleared them by two thousandths of a unit,
+         * which is not a clearance, it is a coincidence.
+         */
+        put(h, S.cyl, M.cloth, 0, 0.205, -0.085)
+          .scale.set(0.235, 0.032, 0.205);
+        // The knot, and the tails off it.
+        put(h, S.low, M.cloth, 0, 0.195, -0.215)
+          .scale.set(0.045, 0.045, 0.045);
         for (const sx of [-1, 1]) {
-          const tail = put(h, S.box, M.cloth, sx * 0.045, 0.14, -0.20);
-          tail.scale.set(0.05, 0.20, 0.03);
-          tail.rotation.x = -0.4;
+          const tail = put(h, S.box, M.cloth, sx * 0.035, 0.09, -0.235);
+          tail.scale.set(0.04, 0.19, 0.022);
+          tail.rotation.x = -0.35;
         }
         break;
       }
