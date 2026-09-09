@@ -36,7 +36,7 @@
  * of inputs that leaves a player permanently unable to dash.
  */
 
-import { Cine } from './cinema.js?v=v93';
+import { Cine } from './cinema.js?v=v94';
 
 /** The theme the coronation plays under. Warm, slow, and in a major key. */
 const CORONATION_THEME = {

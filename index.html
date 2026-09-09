@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v93" />
+<link rel="stylesheet" href="css/style.css?v=v94" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -156,7 +156,19 @@
         <p class="note">Fifteen guardians, each harder than the last, and
            something far worse at the bottom. Solo.</p>
 
+        <!--
+          THE FIRST ISLAND.
+
+          It plays itself the very first time the game is opened, so this
+          button is here for the second time onward: somebody coming back
+          after a month, somebody who skipped it, or somebody who wants to
+          practise a parry without a guardian in front of them.
+        -->
         <div class="divider"><span>OR</span></div>
+        <button class="btn btn-quiet" id="btn-tutorial"><span>THE FIRST ISLAND — HOW TO PLAY</span></button>
+        <p class="note">The beach you woke up on. Nine courses — jumping,
+           dashing, the tongue, the blade, the guard — and nothing on it can
+           kill you. About ten minutes.</p>
         <button class="btn btn-quiet" id="btn-solo"><span>ARENA PRACTICE (OFFLINE)</span></button>
 
         <div id="play-status" class="status"></div>
@@ -806,6 +818,23 @@
       <button class="cheat-btn" id="cheat-skip-prologue">SKIP THE OPENING</button>
       <button class="cheat-btn" id="cheat-replay-prologue">PLAY THE OPENING</button>
     </div>
+    <!--
+      THE FIRST ISLAND.
+
+      The first button plays it from the beach. The second is for testing one
+      station out of nine without walking the seven hundred units in front of
+      it, and the third clears the first-run flag so the next reload opens on
+      the island exactly as a new player's would.
+    -->
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-island">PLAY THE FIRST ISLAND</button>
+      <button class="cheat-btn" id="cheat-island-next">NEXT ISLAND STATION</button>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn wide" id="cheat-island-reset">
+        FORGET THE TUTORIAL (NEXT RELOAD OPENS ON THE ISLAND)
+      </button>
+    </div>
     <div class="cheat-row">
       <button class="cheat-btn" id="cheat-memories">RECOVER ALL MEMORIES</button>
       <button class="cheat-btn" id="cheat-forget">FORGET EVERYTHING</button>
@@ -998,6 +1027,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v93"></script>
+<script type="module" src="js/main.js?v=v94"></script>
 </body>
 </html>

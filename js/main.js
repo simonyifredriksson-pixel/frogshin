@@ -5,42 +5,43 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v93';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v93';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v93';
-import { Input } from './input.js?v=v93';
-import { Audio } from './audio.js?v=v93';
-import { World } from './world.js?v=v93';
-import { Effects } from './effects.js?v=v93';
-import { Atmosphere } from './atmosphere.js?v=v93';
-import { FollowCamera } from './camera.js?v=v93';
-import { Player } from './player.js?v=v93';
-import { RemotePlayer } from './remote.js?v=v93';
-import { HUD } from './hud.js?v=v93';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v93';
-import { FrogModel } from './frog.js?v=v93';
-import { DummyField } from './dummy.js?v=v93';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v93';
-import { ToadModel } from './npc.js?v=v93';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v93';
-import { DungeonRun } from './dungeon.js?v=v93';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v93';
-import { JudgmentRun } from './judgment.js?v=v93';
-import { COMBO_NAMES } from './ascended.js?v=v93';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v93';
-import { MenuScene } from './menu.js?v=v93';
-import { Economy } from './economy.js?v=v93';
-import { Shop } from './shop.js?v=v93';
-import { Network, NetRole } from './net.js?v=v93';
-import { Overworld } from './overworld.js?v=v93';
-import { InventoryScreen } from './inventoryui.js?v=v93';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v93';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v93';
-import { Cine } from './cinema.js?v=v93';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v93';
-import { MEMORIES } from './flashbacks.js?v=v93';
-import { GUARDIANS } from './guardians.js?v=v93';
-import { gearOfTier } from './gear.js?v=v93';
+import * as THREE from '../lib/three.module.js?v=v94';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v94';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v94';
+import { Input } from './input.js?v=v94';
+import { Audio } from './audio.js?v=v94';
+import { World } from './world.js?v=v94';
+import { Effects } from './effects.js?v=v94';
+import { Atmosphere } from './atmosphere.js?v=v94';
+import { FollowCamera } from './camera.js?v=v94';
+import { Player } from './player.js?v=v94';
+import { RemotePlayer } from './remote.js?v=v94';
+import { HUD } from './hud.js?v=v94';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v94';
+import { FrogModel } from './frog.js?v=v94';
+import { DummyField } from './dummy.js?v=v94';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v94';
+import { ToadModel } from './npc.js?v=v94';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v94';
+import { DungeonRun } from './dungeon.js?v=v94';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v94';
+import { JudgmentRun } from './judgment.js?v=v94';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v94';
+import { COMBO_NAMES } from './ascended.js?v=v94';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v94';
+import { MenuScene } from './menu.js?v=v94';
+import { Economy } from './economy.js?v=v94';
+import { Shop } from './shop.js?v=v94';
+import { Network, NetRole } from './net.js?v=v94';
+import { Overworld } from './overworld.js?v=v94';
+import { InventoryScreen } from './inventoryui.js?v=v94';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v94';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v94';
+import { Cine } from './cinema.js?v=v94';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v94';
+import { MEMORIES } from './flashbacks.js?v=v94';
+import { GUARDIANS } from './guardians.js?v=v94';
+import { gearOfTier } from './gear.js?v=v94';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -117,6 +118,26 @@ class Game {
 
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+
+    /**
+     * ═══ THE FIRST TIME ANYBODY OPENS THIS ═════════════════════════════════
+     *
+     * Straight to the island. No menu, no name field, no map picker — you
+     * wake up on a beach and an old frog tells you which key jumps.
+     *
+     * The flag lives in `settings`, which is the one thing that already
+     * round-trips through localStorage on its own, so a returning player
+     * never sees it again — and neither does one who skipped it, because a
+     * skip is a decision and asking again would be the game arguing.
+     *
+     * Audio and pointer lock both need a gesture the player has not made
+     * yet, which is fine: the island builds, the click-to-play prompt comes
+     * up over it, and the first click starts both. See `_syncClickToPlay`.
+     */
+    if (!this.settings.tutorialDone) {
+      this.pendingMode = 'tutorial';
+      this._enterGame();
+    }
   }
 
   // ------------------------------------------------------------- renderer
@@ -316,6 +337,21 @@ class Game {
       this._connect('quick', CFG.net.publicRoom);
     };
     $('btn-solo').onclick = () => { this.pendingMode = 'arena'; this._connect('solo', null); };
+
+    /**
+     * --- THE FIRST ISLAND: the tutorial, on demand ---
+     *
+     * It plays itself the first time the game is ever opened, so this is for
+     * the second time onward. Offline and connectionless, like the dungeon:
+     * there is nobody else on the island.
+     */
+    $('btn-tutorial').onclick = () => {
+      Audio.uiClick();
+      Audio.init(); Audio.resume();
+      if (this.net.isOnline) this.net.disconnect();
+      this.pendingMode = 'tutorial';
+      this._enterGame();
+    };
 
     /**
      * --- THE CROAKLANDS: the main game ---
@@ -997,6 +1033,13 @@ class Game {
       this.pendingMode = null;
       this.sessionMode = 'judgment';
       await this._enterJudgment(loading, bar, label, frame);
+      return;
+    }
+    // The first island — the tutorial. See js/tutorial.js.
+    if (this.pendingMode === 'tutorial') {
+      this.pendingMode = null;
+      this.sessionMode = 'tutorial';
+      await this._enterTutorial(loading, bar, label, frame);
       return;
     }
     this.pendingMode = null;
@@ -2023,6 +2066,258 @@ class Game {
     this._resize();
   }
 
+  /**
+   * ═══ THE FIRST ISLAND ═══════════════════════════════════════════════════
+   *
+   * The tutorial. Same shape as the judgment arena's entry — its own scene,
+   * its own box-built level, its own collision world — with two differences
+   * that matter:
+   *
+   *   there is real water in view, so `CFG.world.waterLevel` is pushed far
+   *   below the island and put back on the way out. The swimming check reads
+   *   that global, and an island with a visible sea whose player is
+   *   permanently mid-stroke is not the first impression to make.
+   *
+   *   combat is on and the kunai are NOT unlimited-but-free: the island
+   *   hands over twelve, which is enough to learn the throw with and few
+   *   enough that the lesson "these run out" arrives here rather than in the
+   *   Croaklands.
+   */
+  async _enterTutorial(loading, bar, label, frame) {
+    this.isTutorial = true;
+    this._waterWas = CFG.world.waterLevel;
+    CFG.world.waterLevel = TUTORIAL_WATER;
+    this._clearUnderwater();
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(
+      CFG.camera.fov, window.innerWidth / window.innerHeight,
+      CFG.camera.near, CFG.camera.far);
+    this.effects = new Effects(this.scene, this.camera);
+
+    this.tutorial = new TutorialIsland({
+      scene: this.scene, effects: this.effects, hud: this.hud,
+      camera: this.camera, followCam: null,
+      onDone: (why) => this._tutorialDone(why),
+    });
+
+    const tasks = this.tutorial.buildTasks();
+    for (let i = 0; i < tasks.length; i++) {
+      label.textContent = tasks[i][0] + '…';
+      bar.style.width = ((i / tasks.length) * 94) + '%';
+      await frame();
+      tasks[i][1]();
+    }
+
+    this.world = { collision: this.tutorial.collision, update: () => {} };
+    this.followCam = new FollowCamera(this.camera, this.tutorial.collision);
+    this.tutorial.followCam = this.followCam;
+
+    // A bright blue morning. The least moody sky in the project, on purpose:
+    // it is the first thing anybody ever sees of this game.
+    this.atmo = new Atmosphere(this.scene, this.renderer, {
+      leafCount: 0, cloudCount: 26, shadows: this.quality.shadows,
+      fogNear: 180, fogFar: 900, fogColor: 0xcfe9f5,
+      skyTop: 0x2f8fd4, skyMid: 0x86c8ee, skyBottom: 0xe8f4ff,
+    });
+    this.atmo.sun.color.setHex(0xfff4e0);
+    this.atmo.sun.intensity = 1.1;
+    this.atmo.hemi.color.setHex(0xdff0ff);
+    this.atmo.hemi.groundColor.setHex(0x6f8f4a);
+    this.renderer.setClearColor(0x86c8ee);
+
+    this.dummies = new DummyField(this.scene);
+    this.kunaiSystem = new KunaiSystem(this.scene, this.tutorial.collision,
+      this.effects);
+    this.kunaiSystem.resolveTarget = (id, out) => this._resolveAimTarget(id, out);
+    this.pickups = null;
+
+    bar.style.width = '100%';
+    await frame();
+
+    const prof = this.profile;
+    if (this.player) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.player = new Player({
+      id: 'local', name: prof.name, color: prof.color,
+      world: this.world, effects: this.effects, scene: this.scene,
+      kunai: this.kunaiSystem, pickups: null, skins: this.equippedSkins,
+    });
+    this.player.combatEnabled = true;
+    this.player.inventory.setAbilities(this.shop.equippedAbilities());
+    /**
+     * TWELVE KUNAI, not unlimited.
+     *
+     * The yard needs one throw and gives you eleven spare, which is enough
+     * that missing does not matter and few enough that the number in the
+     * corner going down teaches the thing the Croaklands is built on: blades
+     * do not come back.
+     */
+    this.player.inventory.setUnlimitedKunai(false);
+    if (this.player.inventory.setKunai) this.player.inventory.setKunai(12);
+
+    this.hud.buildHotbar(this.player.inventory);
+    this.hud.onSlotClick = (i) => {
+      const slot = this.player.inventory.slots[i];
+      if (slot && slot.item.ability) this.player._useAbility(slot.item.id);
+      else if (this.player.inventory.select(i)) Audio.uiClick();
+    };
+    this.hud.resetOverlays();
+    this.hud.show(true);
+    this.hud.setRoom('', 'The First Island', false);
+
+    this.tutorial.start(this.player);
+    this.followCam.snapTo(this.player.pos);
+
+    loading.classList.remove('show');
+    this.mode = 'playing';
+    this.input.flush();
+    this.input.requestLock();
+    Audio.stopMenuMusic();
+    Audio.startAmbient();
+    this.hud.setFade(0, 0.9);
+    this._resize();
+  }
+
+  /**
+   * ONE FRAME OF THE ISLAND.
+   *
+   * Deliberately the same shape as `_updateJudgment`: the player controller,
+   * the kunai, the katana's queued hit events, the level, the camera. The
+   * tutorial is not a special mode with its own physics — it is the real
+   * game with a level that explains itself, which is the only way a tutorial
+   * can teach anything true about what comes after it.
+   */
+  _updateTutorial(dt, t) {
+    const p = this.player;
+    const isle = this.tutorial;
+    if (this.frozen || !isle) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+
+    const look = this.input.takeLook();
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
+
+    const targets = isle.targets([]);
+    p.update(dt, this.input, this.followCam, targets);
+    // Under the island entirely — a seam, or a very determined player.
+    this._voidGuard(p, dt, isle.voidY, isle.spawnPoint);
+    this.kunaiSystem.update(dt, targets);
+    if (p.deathPending) p.deathPending = false;
+    /**
+     * The katana queues its hits as EVENTS, because in the arena they have
+     * to travel to the victim's client. Nothing here is networked, so this
+     * is where they land — and the island's own targets have already
+     * applied the damage through their `onHit`, so all that is left is the
+     * hitmarker.
+     */
+    for (const ev of p.events) {
+      if (ev.t === 'hit') this.hud.hitmarker(ev.c === 2);
+    }
+    p.events.length = 0;
+
+    isle.update(dt, p, { skip: this.input.down('Backspace') });
+
+    this.effects.update(dt);
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    if (!p.cinematic) {
+      this.followCam.update(p.renderPos, speed, dt, {
+        dashing: p.dashTimer > 0, grappling: p.grapple.attached,
+        sprinting: p.sprinting,
+      });
+    }
+    this.atmo.update(dt, this.camera.position);
+    this._updateHud(dt, speed);
+    this._updateAudioListener();
+    Audio.updateAmbient(dt);
+    Cine.update(dt);
+    this.renderer.render(this.scene, this.camera);
+    void t;
+  }
+
+  /**
+   * THE ISLAND IS OVER — finished or skipped, and it makes no difference.
+   *
+   * The flag is written either way. A player who skips the tutorial has
+   * decided they do not need it, and asking them again next time they open
+   * the game would be the game arguing with them.
+   *
+   * Then straight to the save files, because that is what the player came
+   * for and the island was the thing in the way.
+   */
+  _tutorialDone(why) {
+    if (this._tutorialEnding) return;
+    this._tutorialEnding = true;
+    this.settings.tutorialDone = true;
+    this.saveSettings();
+    if (why === 'finished') {
+      this.economy.award(CFG.economy.roundWinReward, 'THE FIRST ISLAND');
+      this.economy.save();
+    }
+    this.hud.setFade(1, 1.0);
+    setTimeout(() => {
+      this._tutorialEnding = false;
+      this._leaveTutorial();
+      this.hud.setFade(0, 0.6);
+      this._showSaves();
+      this.hud.toast(why === 'skipped'
+        ? 'The island is on the main menu whenever you want it.'
+        : 'Pick a file. The Croaklands are waiting.', 8);
+    }, 1100);
+  }
+
+  /**
+   * Tear the island down and go back to the menu.
+   *
+   * `mode` comes off 'playing' FIRST, exactly as `_dropPrologue` does — the
+   * menu's own update loop refuses to run while a match is nominally live,
+   * and the result is a permanent black screen.
+   */
+  _leaveTutorial() {
+    // The sea goes back to wherever the rest of the game keeps it.
+    if (this._waterWas !== undefined) {
+      CFG.world.waterLevel = this._waterWas;
+      this._waterWas = undefined;
+    }
+    this._clearUnderwater();
+    if (this.tutorial) { this.tutorial.dispose(); this.tutorial = null; }
+    /**
+     * The atmosphere is the only one of these with a `dispose`.
+     *
+     * `Effects` and `KunaiSystem` do not have one, and the whole scene is
+     * being thrown away anyway — the same reason `_dropPrologue` nulls them
+     * rather than calling something. Reaching for a method that is not
+     * there would throw on the way out of the island, which is the one
+     * moment nobody would be able to recover from.
+     */
+    if (this.atmo && this.atmo.dispose) this.atmo.dispose();
+    if (this.player && this.scene) {
+      this.scene.remove(this.player.model.root);
+      this.player.model.dispose();
+    }
+    this.isTutorial = false;
+    this.player = null;
+    this.scene = null;
+    this.world = null;
+    this.atmo = null;
+    this.effects = null;
+    this.kunaiSystem = null;
+    this.followCam = null;
+    this.dummies = null;
+    this.mode = 'menu';
+    this.sessionMode = null;
+    this.hud.show(false);
+    this.hud.resetOverlays();
+    this.input.releaseLock();
+    $('menu').classList.add('show');
+    Cine.cancel();
+    Audio.stopAmbient();
+    Audio.startMenuMusic();
+  }
+
   /** One frame of the judgment fight. */
   /**
    * The void.
@@ -2347,6 +2642,52 @@ class Game {
       }
       this._cheatNote(`File ${a.index + 1} will play the opening again on entry.`);
     };
+    /**
+     * ═══ THE FIRST ISLAND ═════════════════════════════════════════════════
+     *
+     * Three buttons. Play it, jump a station, and clear the first-run flag.
+     */
+    $('cheat-island').onclick = () => {
+      this._toggleCheats(false);
+      if (this.net.isOnline) this.net.disconnect();
+      this.pendingMode = 'tutorial';
+      this._enterGame();
+    };
+    /**
+     * NEXT STATION.
+     *
+     * Runs the island's own `_advance`, so the door sinks, the objective
+     * repaints and the next station's mobs spawn exactly as they would for
+     * a player who had earned it — rather than teleporting past the state
+     * machine and leaving half of it behind.
+     */
+    $('cheat-island-next').onclick = () => {
+      const isle = this.tutorial;
+      if (!isle) return this._cheatNote('Only on the First Island.');
+      const s = isle.station;
+      if (!s) return this._cheatNote('Every station is behind you already.');
+      isle._advance(this.player);
+      const next = isle.station;
+      if (next) {
+        // And stand the player on the new station, or they are still
+        // seven hundred units west of the thing they wanted to look at.
+        const p = this.player;
+        p.pos.set(isle.at.x + next.checkpoint[0],
+          isle.at.y + next.checkpoint[1] + 1.4,
+          isle.at.z + next.checkpoint[2]);
+        p.vel.set(0, 0, 0);
+        p.health.revive();
+        this.followCam.snapTo(p.pos);
+      }
+      this._cheatNote(next ? `On to ${next.title}.` : 'The gate is open.');
+    };
+    $('cheat-island-reset').onclick = () => {
+      this.settings.tutorialDone = false;
+      this.saveSettings();
+      this._cheatNote('Forgotten. The next reload will open on the beach, '
+        + 'exactly as a new player\'s would.');
+    };
+
     $('cheat-memories').onclick = () => {
       const ow = this.overworld;
       if (!ow) return this._cheatNote('Only in the Croaklands.');
@@ -2936,6 +3277,7 @@ class Game {
 
       // Each mode is its own loop; they share the renderer and nothing else.
       if (this.isPrologue) this._updatePrologue(dt, t);
+      else if (this.isTutorial) this._updateTutorial(dt, t);
       else if (this.isJudgment) this._updateJudgment(dt, t);
       else if (this.isRealm) this._updateRealm(dt, t);
       else if (this.isDungeon) this._updateDungeon(dt, t);

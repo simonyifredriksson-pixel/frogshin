@@ -54,7 +54,7 @@
  * the sea you woke up in.
  */
 
-import { clamp, smoothstep } from './util.js?v=v93';
+import { clamp, smoothstep } from './util.js?v=v94';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 5120;

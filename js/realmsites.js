@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v93';
-import { mulberry32, clamp } from './util.js?v=v93';
-import { SEA } from './regions.js?v=v93';
-import { buildLandmark } from './landmarks.js?v=v93';
-import { ROADS } from './roads.js?v=v93';
+import * as THREE from '../lib/three.module.js?v=v94';
+import { mulberry32, clamp } from './util.js?v=v94';
+import { SEA } from './regions.js?v=v94';
+import { buildLandmark } from './landmarks.js?v=v94';
+import { ROADS } from './roads.js?v=v94';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
