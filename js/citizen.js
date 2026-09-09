@@ -38,8 +38,8 @@
  * villager it replaces was nine draw calls with nine.
  */
 
-import * as THREE from '../lib/three.module.js?v=v95';
-import { clamp, damp, lerp } from './util.js?v=v95';
+import * as THREE from '../lib/three.module.js?v=v96';
+import { clamp, damp, lerp } from './util.js?v=v96';
 
 /** Source geometry. Everything below is built out of these five. */
 const S = {
@@ -444,12 +444,29 @@ export class Citizen {
       put(g, G.arm, M.skin);
       this.arms.push({ g, side: sx });
     }
+    /**
+     * THE LEGS — and the feet reach the ground on every build.
+     *
+     * The hip is at `0.30 · B.h`, which moves with the build, and the leg
+     * geometry's own length does not: its lowest point is a fixed 0.263
+     * below its origin. So the taller builds hung in the air — six
+     * centimetres on `slim` and eleven on `lanky`, which is four to six per
+     * cent of a villager's height and reads as a hover.
+     *
+     * The scale below is exactly what lands the foot on y 0: the hip height
+     * divided by how far the leg actually reaches once the bow-legged tilt
+     * has shortened it. Which also means a lanky frog now has genuinely
+     * longer legs than a stout one, rather than the same legs and a gap.
+     */
     this.legs = [];
+    const drop = 0.263 * Math.cos(0.30 * B.squat);
+    const legScale = (0.30 * B.h) / drop;
     for (const sx of [-1, 1]) {
       const g = new THREE.Group();
       // Out to the sides: the bow-legged stance is half the silhouette.
       g.position.set(sx * 0.24 * B.w, 0.30 * B.h, -0.02);
       g.rotation.z = sx * 0.30 * B.squat;
+      g.scale.y = legScale;
       this.body.add(g);
       put(g, G.leg, M.skin);
       this.legs.push({ g, side: sx });
@@ -500,8 +517,24 @@ export class Citizen {
         break;
       }
       case 'robe': {
-        // Falls from the shoulders to the ground and hides the legs.
-        const r = put(this.body, S.cone, M.cloth, 0, 0.02, 0);
+        /**
+         * ═══ IT FALLS FROM THE SHOULDERS TO THE GROUND ══════════════════
+         *
+         * `S.cone` is a unit cone centred on its own origin — apex at +y,
+         * base at −y — so scaled to 0.62·h it spans ±0.31·h about wherever
+         * it is put. It used to be put at y 0.02, which means it ran from
+         * −0.29·h to +0.33·h: nearly a third of it BELOW the villager's
+         * feet, reaching only as high as their belly, and pointed end up.
+         *
+         * That reads as a conical straw hat lying on the ground underneath
+         * them. Which is precisely what it looked like, on all seven roles
+         * that wear a robe — the merchant, the priest, the king, the queen,
+         * the monk, the trader and the noble.
+         *
+         * At 0.31·h it spans 0 to 0.62·h: hem on the ground, narrow end at
+         * the shoulders, legs hidden. Which is a robe.
+         */
+        const r = put(this.body, S.cone, M.cloth, 0, 0.31 * B.h, 0);
         r.scale.set(0.34 * B.w, 0.62 * B.h, 0.32 * B.w);
         const y = put(this.body, S.sphere, M.cloth, 0, 0.58 * B.h, 0);
         y.scale.set(0.27 * B.w, 0.16 * B.h, 0.25 * B.w);
@@ -565,10 +598,25 @@ export class Citizen {
         put(h, S.box, M.metal, 0, 0.14, 0.19)
           .scale.set(0.06, 0.14, 0.04);
         break;
-      case 'band':
-        put(h, S.box, M.cloth, 0, 0.16, 0)
-          .scale.set(0.52, 0.05, 0.46);
+      case 'band': {
+        /**
+         * A HEADBAND, BEHIND THE EYES AND ABOVE THEM.
+         *
+         * It was at y 0.16, which on this skull is level with the eyeballs
+         * — a ninja wearing a blindfold. A frog's eyes are on humps on top
+         * of its head, so a band goes round the skull BEHIND them: back a
+         * little in z, up a little in y, and with two tails trailing off
+         * the knot at the back, which is the whole read of the thing.
+         */
+        put(h, S.box, M.cloth, 0, 0.215, -0.045)
+          .scale.set(0.50, 0.055, 0.38);
+        for (const sx of [-1, 1]) {
+          const tail = put(h, S.box, M.cloth, sx * 0.045, 0.14, -0.20);
+          tail.scale.set(0.05, 0.20, 0.03);
+          tail.rotation.x = -0.4;
+        }
         break;
+      }
       default: break;
     }
     void B;

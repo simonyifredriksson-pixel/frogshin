@@ -25,8 +25,8 @@
  * silhouette, or the region behind it becomes unreachable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v95';
-import { mulberry32 } from './util.js?v=v95';
+import * as THREE from '../lib/three.module.js?v=v96';
+import { mulberry32 } from './util.js?v=v96';
 
 const G = {
   box: new THREE.BoxGeometry(1, 1, 1),

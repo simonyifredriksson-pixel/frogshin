@@ -29,14 +29,14 @@
  * boss code.
  */
 
-import * as THREE from '../lib/three.module.js?v=v95';
-import { CFG } from './config.js?v=v95';
-import { clamp, lerp, damp, smoothstep, dampAngle, lookYaw } from './util.js?v=v95';
-import { Frogath } from './frogath.js?v=v95';
-import { HEAVEN, VOID_Y } from './heaven.js?v=v95';
-import { Audio } from './audio.js?v=v95';
-import { Cine } from './cinema.js?v=v95';
-import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v95';
+import * as THREE from '../lib/three.module.js?v=v96';
+import { CFG } from './config.js?v=v96';
+import { clamp, lerp, damp, smoothstep, dampAngle, lookYaw } from './util.js?v=v96';
+import { Frogath } from './frogath.js?v=v96';
+import { HEAVEN, VOID_Y } from './heaven.js?v=v96';
+import { Audio } from './audio.js?v=v96';
+import { Cine } from './cinema.js?v=v96';
+import { PROLOGUE_THEME, FALL_THEME } from './themes.js?v=v96';
 
 const _v = new THREE.Vector3();
 const _look = new THREE.Vector3();
