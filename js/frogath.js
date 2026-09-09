@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v92';
-import { Audio } from './audio.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v93';
+import { Audio } from './audio.js?v=v93';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();
@@ -44,7 +44,19 @@ const GOLD_DEEP = 0xc9922a;
  */
 const BACK_BIAS = 0.20;
 
-/** The speech, exactly as scripted, one screen at a time. */
+/**
+ * WHAT HE SAYS, one screen at a time.
+ *
+ * `turn` is the beat where he stops addressing the room and turns to face
+ * you; `eyes` is where the light comes up in them. Both used to be found by
+ * searching the text for the phrase "little mortal" and by counting to
+ * eight, which meant a rewrite of the speech silently broke his staging —
+ * so they are flags on the data now.
+ *
+ * ── the dungeon speech ───────────────────────────────────────────────────
+ * For the Ascended Vault: fourteen guardians, fourteen graves, and a god at
+ * the bottom of a hole who has never met you.
+ */
 export const FROGATH_SPEECH = [
   { t: 2.2, line: '“...So.”' },
   { t: 3.0, line: '“You are the first.”' },
@@ -52,12 +64,48 @@ export const FROGATH_SPEECH = [
   { t: 5.0, line: '“Fourteen guardians. Fourteen graves. Every warrior who entered this place believed they were worthy.”' },
   { t: 3.4, line: '“None of them reached this throne.”' },
   { t: 3.6, line: '“And yet you stand before me.”' },
-  { t: 3.0, line: '“Tell me, little mortal...”' },
-  { t: 3.4, line: '“Did you come here believing you were strong?”' },
+  { t: 3.0, line: '“Tell me, little mortal...”', turn: true },
+  { t: 3.4, line: '“Did you come here believing you were strong?”', eyes: true },
   { t: 5.6, line: '“...or have you simply not realized that everything you have defeated was merely protecting you from me?”' },
   { t: 3.2, line: '“You have conquered fourteen monsters.”' },
   { t: 2.4, line: '“Now...”' },
   { t: 3.2, line: '“...conquer death.”' },
+];
+
+/**
+ * ── AND THE SPEECH FOR THE ASCENDED THRONE ───────────────────────────────
+ *
+ * The dungeon speech is wrong for the last fight of the story and has been
+ * since the story existed. He is not a god at the bottom of a vault meeting
+ * a stranger; he is your own commander, standing in a piece of heaven he
+ * tore down and put a chair in, watching the emperor he threw off an island
+ * walk up the marble on their own two feet.
+ *
+ * So nothing in here is about guardians or about being worthy. It is about
+ * the two of them, it names the place, and — the thing the dungeon speech
+ * cannot do — it turns, halfway through, from contempt into the fact that
+ * he is frightened, because you came back. That is the only note that
+ * matters: he does not want to be a god, he wants to have been right.
+ *
+ * The last four lines are deliberately short. He has run out of speech.
+ */
+export const FROGATH_THRONE_SPEECH = [
+  { t: 2.4, line: '“...You walked here.”' },
+  { t: 3.4, line: '“Up my own steps. On your own feet.”' },
+  { t: 2.4, line: '' },
+  { t: 5.2, line: '“Do you know what I had to break to bring this place down with me? A mile of heaven. I carried it on my back.”' },
+  { t: 4.0, line: '“And I set my chair in the middle of it, and I waited.”' },
+  { t: 3.6, line: '“Sixty years. Nobody came.”' },
+  { t: 3.2, line: '“And now you.”', turn: true },
+  { t: 4.4, line: '“Look at the floor, commander. Look at what is under my feet.”', eyes: true },
+  { t: 4.6, line: '“Your mark. Your ring, your bar, your three rays. I sit on it every day.”' },
+  { t: 3.0, line: '“It never once got easier.”' },
+  { t: 4.2, line: '“I told myself you were dead. I told myself I had been right.”' },
+  { t: 3.4, line: '“Then the villages started saying your name again.”' },
+  { t: 2.8, line: '“So say it. Say you remember me.”' },
+  { t: 3.0, line: '“...No. Do not.”' },
+  { t: 2.4, line: '“I would rather you did not.”' },
+  { t: 2.6, line: '“Get up here.”' },
 ];
 
 const PHASE_NAMES = ['', 'THE GOD STIRS', 'THE GOD DESCENDS', 'A DYING STAR'];
@@ -210,8 +258,20 @@ const STATE = {
 };
 
 export class Frogath {
-  constructor(center, scene, effects, hud, followCam) {
+  constructor(center, scene, effects, hud, followCam, opts) {
     const F = CFG.dungeon.frogath;
+    const O = opts || {};
+    /**
+     * WHICH SPEECH HE GIVES.
+     *
+     * The dungeon one by default. The last fight of the story passes
+     * `FROGATH_THRONE_SPEECH`, because "fourteen guardians, fourteen graves"
+     * is nonsense said to somebody standing in a heavenly arena who has
+     * never been near the Ascended Vault.
+     */
+    this.speech = O.speech || FROGATH_SPEECH;
+    /** What the subtitle calls him. The story fight uses his own name. */
+    this.speakerName = O.name || F.name;
     this.scene = scene;
     this.effects = effects;
     this.hud = hud;
@@ -543,15 +603,15 @@ export class Frogath {
     this.speechTimer -= dt;
     if (this.speechTimer > 0) return;
 
-    if (this.speechIndex >= FROGATH_SPEECH.length) {
+    if (this.speechIndex >= this.speech.length) {
       this.state = STATE.RAISE;
       this.t = 0;
       this.hud.setSubtitle('');
       return;
     }
-    const s = FROGATH_SPEECH[this.speechIndex++];
+    const s = this.speech[this.speechIndex++];
     this.speechTimer = s.t;
-    this.hud.setSubtitle(s.line, s.line ? CFG.dungeon.frogath.name : '');
+    this.hud.setSubtitle(s.line, s.line ? this.speakerName : '');
     if (s.line) {
       // A low, calm voice. He is not shouting; he does not need to.
       Audio.tone({
@@ -559,15 +619,18 @@ export class Frogath {
         volume: 0.2, pos: this.pos,
       });
     }
-    // "Tell me, little mortal..." is the moment he stops addressing the room
-    // and starts addressing YOU — so that is where he turns to face you.
-    if (s.line.indexOf('little mortal') !== -1) {
+    /**
+     * The beat where he stops addressing the room and addresses YOU. Flagged
+     * on the line rather than found by searching the text for a phrase, so a
+     * rewrite of either speech cannot silently lose the staging.
+     */
+    if (s.turn) {
       this.turningToPlayer = true;
       this.effects.ring(this.pos, 1, 14, 0.8, GOLD, false, { x: 0, y: 1, z: 0 });
       Audio.tone({ freq: 200, to: 90, dur: 0.9, type: 'sine', volume: 0.14, pos: this.pos });
     }
-    // His eyes come up as he asks whether you thought you were strong.
-    if (this.speechIndex === 8) this.eyesHot = true;
+    // And where the light comes up in his eyes.
+    if (s.eyes) this.eyesHot = true;
   }
 
   /** He raises the sword; the arena floods with light; the bar appears. */
@@ -698,22 +761,36 @@ export class Frogath {
   /**
    * How long he rests after an attack — the player's whole opening.
    *
-   * `restScale` and `warnScale` are the two dials the PROLOGUE turns. That
-   * fight is the first two minutes anybody plays and it is a scene the player
-   * is meant to WIN, so its Frogath swings at a fraction of the speed of the
-   * dungeon's: the patterns are identical, the telegraphs are far longer and
-   * the gaps between them are enormous. Nothing else in the game touches
-   * them, so the dungeon fight is exactly as brutal as it was.
+   * `restScale` and `warnScale` are the two dials the other two fights turn.
+   * The PROLOGUE turns them UP: that is the first two minutes anybody plays
+   * and it is a scene the player is meant to win, so its Frogath swings at a
+   * fraction of the dungeon's speed. The ASCENDED THRONE turns them DOWN:
+   * that is the last fight in the game and it is meant to be the hardest
+   * thing in it. The patterns are identical in all three.
    */
   _restTime() {
     const base = [1.35, 1.05, 0.8, 0.55][this.phase - 1] || 0.8;
     return base * (this.restScale || 1);
   }
 
-  /** A telegraph, lengthened by `warnScale` and never shorter than the floor. */
+  /**
+   * A telegraph, scaled by `warnScale` — and NEVER below the floor.
+   *
+   * Note which side of the `max` the scale is on. Scaling up lifts the floor
+   * with the windup, so the prologue's telegraphs are luxurious. Scaling
+   * DOWN shortens the authored windup but leaves `minWarning` where it is,
+   * so the throne fight lands its blows much sooner after showing them and
+   * still cannot land one that was on screen for under 0.45 seconds.
+   *
+   * That distinction is the whole of "much stronger and faster, but still
+   * beatable by dashing, attacking and dodging": difficulty comes out of the
+   * pace and the pressure, and never out of a hitbox the player could not
+   * have seen coming.
+   */
   _warn(secs) {
-    return Math.max(CFG.dungeon.frogath.minWarning * (this.warnScale || 1),
-      secs * (this.warnScale || 1));
+    const k = this.warnScale || 1;
+    const floor = CFG.dungeon.frogath.minWarning * Math.max(1, k);
+    return Math.max(floor, secs * k);
   }
 
   _hover(dt, player) {

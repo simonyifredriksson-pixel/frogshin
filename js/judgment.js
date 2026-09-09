@@ -11,12 +11,12 @@
  * standing, so cover would only make his patterns unreadable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { clamp, lerp } from './util.js?v=v92';
-import { Terrain, CollisionWorld } from './collision.js?v=v92';
-import { Ascended } from './ascended.js?v=v92';
-import { Audio } from './audio.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { clamp, lerp } from './util.js?v=v93';
+import { Terrain, CollisionWorld } from './collision.js?v=v93';
+import { Ascended } from './ascended.js?v=v93';
+import { Audio } from './audio.js?v=v93';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -330,12 +330,39 @@ export class JudgmentRun {
       B.box.add(x, ORIGIN.y + h + 1, z, 5.2, 2, 5.2, 0x1c1928, a);
       this._collision.addBox(x, ORIGIN.y + h / 2, z, 2.2, h / 2, 2.2, 'stone');
     }
-    // And a wall of barriers just past the floor, so the arena is closed.
+    /**
+     * ═══ AND THE WALL, WHICH IS NOW A WALL ═════════════════════════════════
+     *
+     * The arena has to be closed — this is the one fight in the game the
+     * player is not allowed to walk away from, because there is nowhere to
+     * walk to; the floor is a disc in a void.
+     *
+     * It used to be closed with sixty-four colliders and NOTHING TO SEE.
+     * That is an invisible wall in the worst place for one: it sat four and
+     * a half units INSIDE the ring of broken pillars, so the player could
+     * see the pillars, aim for the gap between two of them, and bounce off
+     * thin air a stride short of it.
+     *
+     * Now every barrier has a slab of black basalt standing in it. Same
+     * ring, same radius, same count — the difference is that the thing
+     * stopping you is the thing you can see. It is deliberately as dark and
+     * as plain as the floor so it reads as the arena's own edge rather than
+     * as scenery: a wall of upright stones, waist to head height at the
+     * bottom and rising, with the gold seal running along the base.
+     */
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2;
-      this._collision.addBox(
-        ORIGIN.x + Math.cos(a) * (R + 2.5), ORIGIN.y + 14, ORIGIN.z + Math.sin(a) * (R + 2.5),
-        3.0, 14, 3.0, 'barrier');
+      const x = ORIGIN.x + Math.cos(a) * (R + 2.5);
+      const z = ORIGIN.z + Math.sin(a) * (R + 2.5);
+      // The slab. Alternating heights, so the rim has a broken top edge
+      // rather than reading as a fence panel.
+      const h = 9 + (i % 3) * 2.6;
+      B.box.add(x, ORIGIN.y + h * 0.5, z, 3.4, h, 3.0, 0x0e0d16, a);
+      // A gold course along the foot of it, tying it to the floor's inlay.
+      B.box.add(x, ORIGIN.y + 0.5, z, 3.6, 0.7, 3.4, 0x6a5210, a);
+      // And a cap, so the top of the wall catches his light.
+      B.box.add(x, ORIGIN.y + h + 0.4, z, 3.8, 0.8, 3.4, 0x241f34, a);
+      this._collision.addBox(x, ORIGIN.y + 14, z, 3.0, 14, 3.0, 'barrier');
     }
   }
 

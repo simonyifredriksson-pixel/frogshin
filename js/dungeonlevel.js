@@ -12,11 +12,11 @@
  * Layout runs along +x: room i is centred at origin.x + i * roomSpacing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { mulberry32, clamp, lerp } from './util.js?v=v92';
-import { Terrain, CollisionWorld } from './collision.js?v=v92';
-import { lanternGlowTexture } from './world.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { mulberry32, clamp, lerp } from './util.js?v=v93';
+import { Terrain, CollisionWorld } from './collision.js?v=v93';
+import { lanternGlowTexture } from './world.js?v=v93';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -62,6 +62,24 @@ export class DungeonLevel {
     this.time = 0;
     this.lanterns = [];
     this.glows = [];
+    /**
+     * ═══ THE PORTCULLISES ════════════════════════════════════════════════
+     *
+     * Every door barrier in this dungeon used to be a collider and nothing
+     * else. Both of a room's doorways are GAPS in the wall ring — there is
+     * no mesh in a doorway at all — so during a guardian fight the player
+     * was looking at two open archways, one of which was solid air, and
+     * after the fight the one behind them stayed solid air forever.
+     *
+     * That is the purest form of the thing the no-clip complaint is the
+     * other half of: geometry that lies about whether it is there.
+     *
+     * So each barrier now has an iron grate that drops across the doorway
+     * when it seals and lifts when it opens. Nine bars per gate in one
+     * InstancedMesh, hidden unless its barrier is on, which means the whole
+     * dungeon's worth of doors costs at most two draw calls at a time.
+     */
+    this.gates = [];
     this.rooms = [];
     const o = CFG.dungeon.origin;
     this.origin = new THREE.Vector3(o.x, o.y, o.z);
@@ -232,6 +250,8 @@ export class DungeonLevel {
         c.x + sx * (R + 1.6), c.y + WALL_H / 2, c.z,
         2.6, WALL_H / 2, DOOR_W / 2 + 1.5, 'barrier');
       b.disabled = true;
+      // And the grate that stands in it, so the barrier is visible.
+      b.gate = this._gate(c.x + sx * (R + 1.6), c.y, c.z, P);
       doors.push(b);
       if (sx < 0) backDoor = b; else frontDoor = b;
     }
@@ -317,10 +337,19 @@ export class DungeonLevel {
         1.4, 0.06, 1.4, 0x8a6f1a, a);
     }
 
-    // The way in seals behind you. There is no leaving this room.
+    /**
+     * The way in seals behind you. There is no leaving this room — and you
+     * can now SEE that there is no leaving this room, which is a better
+     * version of the same beat than bouncing off nothing.
+     *
+     * Wider and taller than a room's grate, and gold rather than iron: it
+     * is his door, and it is the last one.
+     */
     const door = this.collision.addBox(
       c.x - (R + 2), c.y + 12, c.z, 3.0, 12, DOOR_W / 2 + 2, 'barrier');
     door.disabled = true;
+    door.gate = this._gate(c.x - (R + 2), c.y, c.z,
+      { trim: 0xc9a227, wall: 0x14111c }, DOOR_W + 4, 15);
 
     this.throne = {
       center: c,
@@ -331,16 +360,71 @@ export class DungeonLevel {
   }
 
   /**
+   * AN IRON GRATE ACROSS A DOORWAY.
+   *
+   * Seven uprights and two crossbars, as nine instances of one box in one
+   * InstancedMesh, so a gate is a single draw call and only when it is
+   * down. Built hidden; `setDoors` and `openExit` show and hide it in step
+   * with the collider it belongs to, and nothing else ever touches it.
+   *
+   * @param w  the doorway's width; @param h how tall the grate is
+   */
+  _gate(x, y, z, P, w = DOOR_W + 1.0, h = 11) {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const bars = [];
+    // Uprights, spaced across the opening. A frog can see through it, which
+    // is the point of a portcullis rather than a slab: you can watch the
+    // room you cannot get back to.
+    for (let i = 0; i < 7; i++) {
+      const t = (i / 6 - 0.5) * (w - 0.8);
+      bars.push([0, h * 0.5, t, 0.55, h, 0.42, P.trim || 0x8a7a4a]);
+    }
+    // Two crossbars, and a heavy foot rail.
+    bars.push([0, h * 0.82, 0, 0.62, 0.6, w, P.wall || 0x3a3a44]);
+    bars.push([0, h * 0.38, 0, 0.62, 0.6, w, P.wall || 0x3a3a44]);
+    const mesh = new THREE.InstancedMesh(geo, mat, bars.length);
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const v = new THREE.Vector3();
+    const s = new THREE.Vector3();
+    const col = new THREE.Color();
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      v.set(x + b[0], y + b[1], z + b[2]);
+      s.set(b[3], b[4], b[5]);
+      m.compose(v, q, s);
+      mesh.setMatrixAt(i, m);
+      mesh.setColorAt(i, col.setHex(b[6]));
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.visible = false;
+    this.scene.add(mesh);
+    this.gates.push(mesh);
+    return mesh;
+  }
+
+  /**
    * Seal or open a room's doorways.
    *
    * The boxes are created up front and merely switched, so the broadphase is
    * never rebuilt mid-fight — re-baking every time a door moved would be a
-   * visible hitch at exactly the wrong moment.
+   * visible hitch at exactly the wrong moment. The grate is switched with
+   * it: a barrier and its portcullis are never allowed to disagree, which
+   * is the whole reason the mesh hangs off the box rather than being kept
+   * in a list of its own.
    */
   setDoors(room, sealed) {
     const r = (room === CFG.dungeon.rooms - 1) ? this.throne : this.rooms[room];
     if (!r || !r.doors) return;
-    for (const d of r.doors) d.disabled = !sealed;
+    for (const d of r.doors) {
+      d.disabled = !sealed;
+      if (d.gate) d.gate.visible = !!sealed;
+    }
   }
 
   /**
@@ -353,19 +437,35 @@ export class DungeonLevel {
   openExit(room) {
     const r = this.rooms[room];
     if (!r) return;
-    if (r.frontDoor) r.frontDoor.disabled = true;    // open
-    if (r.backDoor) r.backDoor.disabled = false;     // stays shut
+    if (r.frontDoor) {
+      r.frontDoor.disabled = true;                   // open
+      if (r.frontDoor.gate) r.frontDoor.gate.visible = false;
+    }
+    if (r.backDoor) {
+      r.backDoor.disabled = false;                   // stays shut
+      // And it stays VISIBLY shut. This is the one that used to be an
+      // invisible wall for the rest of the run.
+      if (r.backDoor.gate) r.backDoor.gate.visible = true;
+    }
     if (r.exitGlow) { r.exitGlow.visible = true; r.exitGlow.userData.on = true; }
   }
 
   /** Open every door in the dungeon — used when a run resets. */
   openAllDoors() {
     for (const r of this.rooms) {
-      if (r.doors) for (const d of r.doors) d.disabled = true;
+      if (r.doors) {
+        for (const d of r.doors) {
+          d.disabled = true;
+          if (d.gate) d.gate.visible = false;
+        }
+      }
       if (r.exitGlow) { r.exitGlow.visible = false; r.exitGlow.userData.on = false; }
     }
     if (this.throne && this.throne.doors) {
-      for (const d of this.throne.doors) d.disabled = true;
+      for (const d of this.throne.doors) {
+        d.disabled = true;
+        if (d.gate) d.gate.visible = false;
+      }
     }
   }
 
@@ -410,5 +510,11 @@ export class DungeonLevel {
       g.geometry.dispose();
     }
     this.glows.length = 0;
+    for (const g of this.gates) {
+      this.scene.remove(g);
+      g.material.dispose();
+      g.geometry.dispose();
+    }
+    this.gates.length = 0;
   }
 }

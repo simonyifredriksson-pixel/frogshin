@@ -29,13 +29,13 @@
  * thing that must never stream is the thing the simulation depends on.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v92';
-import { Terrain, CollisionWorld } from './collision.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v93';
+import { Terrain, CollisionWorld } from './collision.js?v=v93';
 import { REGIONS, REGION_BY_ID, REALM_SIZE, REALM_HALF, SEA,
-  regionWeights, regionAt } from './regions.js?v=v92';
-import { Network } from './roads.js?v=v92';
+  regionWeights, regionAt } from './regions.js?v=v93';
+import { Network } from './roads.js?v=v93';
 
 const _scratch = [];
 const _col = new THREE.Color();
@@ -183,6 +183,21 @@ export class Realm {
       this.terrain = new Terrain(REALM_SIZE, grid, () => 0);
       this.collision = new CollisionWorld(this.terrain);
       this.collision.climbLimitY = Infinity;
+      /**
+       * THE SAME 0.86, AND THE SAME METRIC.
+       *
+       * `heightAt` raises the mountain rim from `max(|x|, |z|) / REALM_HALF`
+       * crossing 0.86, and this refuses steep climbs past the same number —
+       * but it used to measure a CIRCLE, and the two disagree everywhere
+       * except on the axes. On a diagonal the circle bit at 0.61 of the
+       * Chebyshev distance, which is roughly a quarter of the map inside the
+       * mountains you can see, and the player got a slope that silently
+       * would not be climbed with nothing there to explain it.
+       *
+       * One word, and the refusal now happens exactly where the mountains
+       * are. See `climbLimitShape` in js/collision.js.
+       */
+      this.collision.climbLimitShape = 'square';
       this.collision.climbLimitRadius = REALM_HALF * 0.86;
     }]);
     /**

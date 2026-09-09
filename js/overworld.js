@@ -32,36 +32,39 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { clamp, damp, dampAngle, mulberry32 } from './util.js?v=v92';
-import { Realm } from './realm.js?v=v92';
-import { Scatter } from './scatter.js?v=v92';
-import { Sites } from './realmsites.js?v=v92';
-import { Camp } from './mobs.js?v=v92';
-import { DungeonBoss } from './dungeonboss.js?v=v92';
-import { Frogath } from './frogath.js?v=v92';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v93';
+import { coronationScript, CarpetWalk, CORONATION_THEME }
+  from './coronation.js?v=v93';
+import { Realm } from './realm.js?v=v93';
+import { Scatter } from './scatter.js?v=v93';
+import { Sites } from './realmsites.js?v=v93';
+import { Camp } from './mobs.js?v=v93';
+import { DungeonBoss } from './dungeonboss.js?v=v93';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v93';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v93';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v92';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v92';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v92';
+  CONTENT_HALF } from './regions.js?v=v93';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v93';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v93';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v92';
+  mainObjective } from './quests.js?v=v93';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v92';
-import { disposeLandmarkMats } from './landmarks.js?v=v92';
-import { Props, disposePropMats } from './props.js?v=v92';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v92';
-import { Ambience } from './ambience.js?v=v92';
-import { Weather } from './weather.js?v=v92';
-import { Audio } from './audio.js?v=v92';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v92';
+  disposeVillagerMats } from './realmquests.js?v=v93';
+import { disposeLandmarkMats } from './landmarks.js?v=v93';
+import { Props, disposePropMats } from './props.js?v=v93';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v93';
+import { Ambience } from './ambience.js?v=v93';
+import { Weather } from './weather.js?v=v93';
+import { Audio } from './audio.js?v=v93';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v93';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v92';
-import { Cine } from './cinema.js?v=v92';
-import { recommendedFor, readiness } from './guardians.js?v=v92';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v92';
+  MEMORY_COUNT } from './flashbacks.js?v=v93';
+import { Cine } from './cinema.js?v=v93';
+import { recommendedFor, readiness } from './guardians.js?v=v93';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v93';
+import { ThroneArena } from './throne.js?v=v93';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -117,6 +120,15 @@ function powerFor(tier, indexInRegion) {
  * nothing, and "you finally remembered" said to a player who has not is the
  * one thing that would break the whole arc.
  */
+/**
+ * THE NUMBERS FOR THE LAST FIGHT. See `_maybeFrogath` for why they exist.
+ *
+ * Exported so a test can assert the two dials point the OPPOSITE way from
+ * the prologue's — that is the one property of this table that matters and
+ * the one a well-meant tweak is most likely to invert.
+ */
+export const FROGATH_FINAL_TUNING = { health: 11800, rest: 0.58, warn: 0.80 };
+
 const FROGATH_FINAL = {
   open: {
     cold: ['You came a very long way to be confused.',
@@ -302,6 +314,20 @@ export class Overworld {
      */
     this.wood = null;
     /**
+     * THE ASCENDED THRONE — the last arena. See js/throne.js.
+     *
+     * Also its own module, and for the same reason: it is the last ninety
+     * seconds anybody plays, it is the only arena in the game that overrides
+     * its region's own sky, and a generic ring of standing stones was not
+     * going to carry the end of the story.
+     */
+    this.throne = null;
+    /**
+     * The procession after the coronation, while it is running. See
+     * js/coronation.js — it is what holds `player.solemn` on.
+     */
+    this.walk = null;
+    /**
      * A villager walking over to hand you a quest. See `_greet`.
      *
      * `_greetSite` is the settlement already greeted on this visit, cleared
@@ -388,6 +414,33 @@ export class Overworld {
     this.wood = new Wakewood(this.scene, this.realm);
     for (const t of this.wood.buildTasks()) tasks.push(t);
     /**
+     * THE ASCENDED THRONE — the last arena, and also before the bake.
+     *
+     * It registers a collider for every pillar, every plinth, every shard
+     * and the throne itself, and the broadphase only sees boxes that were
+     * in it when `bake` ran. See js/throne.js.
+     *
+     * It has to come after `_placeEncounters`, because it is built around
+     * wherever `placeSpot` actually put the Frogath arena rather than
+     * around the coordinates the region table asked for.
+     */
+    tasks.push(['Finding the last ground', () => {
+      const a = this.sites && this.sites.arenas.get('frogath');
+      if (a) this.throne = new ThroneArena(this.scene, this.realm, a.at);
+    }]);
+    /**
+     * Its own steps are pushed as a wrapper, because the arena does not
+     * exist yet at the moment this list is being assembled — the task
+     * above makes it. Each wrapper is a no-op if there is no arena.
+     */
+    for (const label of ThroneArena.STEPS) {
+      tasks.push([label, () => {
+        if (!this.throne) return;
+        const step = this.throne.step(label);
+        if (step) step();
+      }]);
+    }
+    /**
      * THE STONE IN THE GLADE, as a thing you can put your hand on.
      *
      * The Wakewood builds the carving; this makes it touchable. It is the
@@ -416,6 +469,29 @@ export class Overworld {
      * this line would be scenery you walk straight through.
      */
     tasks.push(['Settling the stones', () => this.realm.collision.bake()]);
+    /**
+     * WHERE A TREE MAY NOT BE SOLID.
+     *
+     * The scatter's trunks, boulders and spikes are colliders now — see
+     * js/scatter.js and the streamed layer in js/collision.js — and the
+     * scatter has no keep-out of its own: it will grow a pine in the middle
+     * of a market square, which was harmless while none of it was solid.
+     *
+     * This is the keep-out. Roads it handles itself; settlements it cannot
+     * see, so the answer is handed in. The visual is untouched either way —
+     * only the collider is skipped, so a village looks exactly as it did.
+     */
+    tasks.push(['Clearing the squares', () => {
+      if (!this.scatter || !this.sites) return;
+      const wood = this.wood;
+      this.scatter.keepClear = (x, z) => {
+        if (this.sites.insideSite(x, z)) return true;
+        // And nothing solid within reach of a Wakewood path. The wood spends
+        // its whole build keeping its paths walkable (see PATH_CLEAR) and a
+        // streamed boulder dropped on one afterwards would undo that.
+        return !!(wood && wood.onPath && wood.onPath(x, z));
+      };
+    }]);
     return tasks;
   }
 
@@ -1046,6 +1122,11 @@ export class Overworld {
     this.ambience.update(dt);
     this._life(dt, player);
     this._wood(dt, player);
+    // The last arena: four group rotations and one opacity pulse, and it
+    // hides itself past four hundred and twenty units. See js/throne.js.
+    if (this.throne) this.throne.update(dt, player.pos.x, player.pos.z);
+    // And the procession, which is what keeps `player.solemn` asserted.
+    if (this.walk) this.walk.update(dt, player);
     this._banner(dt);
     this._music(player);
     this._memory();
@@ -1495,7 +1576,20 @@ export class Overworld {
   _sky(dt, player) {
     const R = this.region;
     if (!R) return;
-    const S = R.sky || {};
+    let S = R.sky || {};
+    /**
+     * EXCEPT OVER THE ASCENDED THRONE.
+     *
+     * The Ashen Throne is fog at thirty-four units under a slate sky, which
+     * is right for the region and ruinous for a heavenly arena sitting in
+     * the middle of it — white marble under an ash sky is grey concrete.
+     * The blend runs over the last two hundred units of the approach, so
+     * the light coming up is how the player is told the last fight is here.
+     */
+    if (this.throne) {
+      const k = this.throne.insideness(player.pos.x, player.pos.z);
+      if (k > 0.002) S = this.throne.skyBlend(S, k);
+    }
     const fog = this.atmo.airFog;
     if (fog) {
       fog.near = damp(fog.near, S.fogNear === undefined ? 90 : S.fogNear, 1.2, dt);
@@ -1849,6 +1943,79 @@ export class Overworld {
     }
   }
 
+  /**
+   * ═══ THE CORONATION, AND THEN THE WALK ═══════════════════════════════════
+   *
+   * Called once, off the end of Frogath's last line. Two things happen:
+   *
+   *   the cutscene   staged through `flash.scene`, which is the flashback
+   *                  machinery with the memory parts taken out — the wash
+   *                  over the cut, the camera remembered and put back, and
+   *                  `busy` so the world stands still. The tableau is
+   *                  `coronation` in js/memoryscene.js.
+   *
+   *   the walk       when the dialogue finishes, the carpet is rolled out in
+   *                  the arena, the player is put on the near end of it
+   *                  facing down it, and their dash, grapple and sprint are
+   *                  taken away until they reach the other end.
+   *
+   * `crowned` is set on progress the moment the ceremony starts rather than
+   * when the walk ends, so a player who quits mid-procession still comes
+   * back a king — and so every NPC in the country greets them as one. See
+   * `_greetingFor` and js/quests.js.
+   */
+  _coronate() {
+    const p = this.progress;
+    if (p.crowned) return;
+    p.crowned = true;
+    this.save();
+    if (!this.flash) return;
+    const script = coronationScript(this.flash.stage, { name: 'MOSSFOOT' });
+    const started = this.flash.scene({
+      id: 'coronation',
+      title: 'THE CORONATION',
+      lines: script,
+      theme: CORONATION_THEME,
+      onEnd: () => this._beginCarpet(),
+    });
+    // No stage and no dialogue channel — a headless or reduced mode. The
+    // walk still happens, because the crown is already on.
+    if (!started) this._beginCarpet();
+  }
+
+  /**
+   * ROLL IT OUT AND PUT THE PLAYER ON IT.
+   *
+   * The carpet is built with the arena and hidden; this shows it, moves the
+   * player to its near end, points them down it and hands the lock to
+   * `CarpetWalk`. If there is no arena — a save loaded straight into a
+   * different mode, a test — nothing happens and the player keeps
+   * everything, which is the correct failure.
+   */
+  _beginCarpet() {
+    const t = this.throne;
+    const pl = this.player;
+    if (!t || !t.carpetFrom || !pl) return;
+    t.showCarpet(true);
+    pl.pos.set(t.carpetFrom.x, t.carpetFrom.y + 0.4, t.carpetFrom.z);
+    pl.vel.set(0, 0, 0);
+    // Facing down the carpet. `lookYaw` because a model's forward is
+    // (-sin y, -cos y) and the carpet runs toward +Z, which is yaw pi.
+    pl.visualYaw = lookYaw(t.carpetFrom.x, t.carpetFrom.z,
+      t.carpetTo.x, t.carpetTo.z);
+    pl.yaw = pl.visualYaw;
+    if (this.followCam) this.followCam.snapTo(pl.pos);
+    this.walk = new CarpetWalk({
+      player: pl, hud: this.hud,
+      from: t.carpetFrom, to: t.carpetTo,
+      onEnd: () => {
+        this.walk = null;
+        this._paintObjectives();
+        this.save();
+      },
+    });
+  }
+
   _maybeFrogath(e, d, player) {
     if (d > e.r + 10) return;
     if (!this.progress.slain.has('zehl')) {
@@ -1861,7 +2028,36 @@ export class Overworld {
     }
     _v.set(e.at.x, this.realm.heightAt(e.at.x, e.at.z), e.at.z);
     this.frogath = new Frogath(_v, this.scene, this.effects, this.hud,
-      this.followCam);
+      this.followCam, { speech: FROGATH_THRONE_SPEECH, name: 'FROGATH' });
+    /**
+     * THE HARDEST FIGHT IN THE GAME, and it has to actually be that.
+     *
+     * The dungeon Frogath's numbers were written for a player who has just
+     * cleared fourteen rooms with nothing but what the dungeon gave them.
+     * The player who walks up the marble here has a levelled character, a
+     * full kit, the best gear in the realm and every ability unlocked, and
+     * against them the dungeon numbers are a speed bump.
+     *
+     * So: FROGATH_FINAL_TUNING. Roughly double the health, and the two
+     * dials turned the other way from the prologue —
+     *
+     *   rest 0.58   he attacks nearly twice as often, so there is no longer
+     *               a free three-hit combo after every swing; you get one
+     *               or two and then you have to move
+     *   warn 0.80   the authored windups are a fifth shorter, but the
+     *               `minWarning` floor in `_warn` is untouched, so no blow
+     *               ever arrives without a readable telegraph
+     *
+     * That combination is deliberately the one that rewards the three things
+     * the player has been doing all game — dash, hit, dodge — and punishes
+     * standing still. It does not reward memorising an unreadable tell,
+     * because there are none: every hitbox is still on screen for at least
+     * 0.45 seconds before it can hurt anybody.
+     */
+    this.frogath.maxHealth = FROGATH_FINAL_TUNING.health;
+    this.frogath.health = FROGATH_FINAL_TUNING.health;
+    this.frogath.restScale = FROGATH_FINAL_TUNING.rest;
+    this.frogath.warnScale = FROGATH_FINAL_TUNING.warn;
     this.frogathOf = e;
     this.frogath.begin(this._frogathTries > 0);
     this._frogathTries = (this._frogathTries || 0) + 1;
@@ -1933,7 +2129,17 @@ export class Overworld {
         { wait: 0.9 },
         { face: 'frogath', text: '...No. I suppose you would not.' },
         { face: 'narrator', who: '', text: 'The banners come down all the way to the Lily Reach.' },
-      ], { onEnd: () => { this._paintObjectives(); this.save(); } });
+      ], {
+        /**
+         * AND STRAIGHT INTO THE CORONATION.
+         *
+         * Chained off the end of his last line rather than triggered by
+         * anything the player does, because there is nothing left for them
+         * to do: the fight is over, the country knows, and the next thing
+         * that happens is a hall full of frogs. See js/coronation.js.
+         */
+        onEnd: () => { this._paintObjectives(); this.save(); this._coronate(); },
+      });
       this.applyStats();
       this.hud.hideBossBar();
       this.hud.announce('THE FIRST CROAK FALLS', 'divine', true);
@@ -2640,6 +2846,11 @@ export class Overworld {
     if (this.people) this.people.dispose();
     if (this.sites) this.sites.dispose();
     if (this.wood) this.wood.dispose();
+    if (this.throne) this.throne.dispose();
+    // Cancelled, not just dropped: the walk holds a flag on the player that
+    // takes their dash away, and a player who leaves the mode mid-procession
+    // must not come back to a frog that cannot dash.
+    if (this.walk) { this.walk.cancel(); this.walk = null; }
     if (this.props) this.props.dispose();
     this._levers.length = 0;
     this._gates.length = 0;

@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { mulberry32, clamp } from './util.js?v=v92';
-import { SEA } from './regions.js?v=v92';
-import { buildLandmark } from './landmarks.js?v=v92';
-import { ROADS } from './roads.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { mulberry32, clamp } from './util.js?v=v93';
+import { SEA } from './regions.js?v=v93';
+import { buildLandmark } from './landmarks.js?v=v93';
+import { ROADS } from './roads.js?v=v93';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -320,6 +320,40 @@ export class Sites {
     m.receiveShadow = true;
     g.add(m);
     return m;
+  }
+
+  /**
+   * ═══ A SOLID RUN ALONG A ROTATED WALL ════════════════════════════════════
+   *
+   * `_solid` — and `CollisionWorld.addBox` under it — is AXIS-ALIGNED. There
+   * is no rotation argument anywhere in the collision world, which is fine
+   * for the ninety-odd per cent of this file that builds square things, and
+   * quietly wrong for the two that build a wall around a circle.
+   *
+   * What happened in practice: a curtain-wall segment eight units long and
+   * two thick, laid tangentially, got ONE unrotated collider two units deep
+   * — so at every segment that was not facing north or south, the collider
+   * lay across the wall instead of along it, and the wall had a walkable gap
+   * beside it. A city with a wall you can stroll through at eleven of its
+   * twenty-two segments.
+   *
+   * This lays a CHAIN of small axis-aligned cubes along the segment instead.
+   * Each is `thick` on a side and they overlap, so the run is continuous
+   * whichever way the wall points, and a staircase of small boxes is
+   * indistinguishable from a rotated one at the size a frog is.
+   *
+   * @param dirX,dirZ  unit vector along the wall
+   * @param half       half its length
+   * @param thick      half its thickness
+   */
+  _solidRun(g, x, y, z, dirX, dirZ, half, thick, hy, tag) {
+    const step = Math.max(thick * 1.2, 1.0);
+    const n = Math.max(1, Math.ceil(half / step));
+    for (let i = -n; i <= n; i++) {
+      const t = (i / n) * half;
+      this._solid(g, thick, hy, thick, x + dirX * t, y, z + dirZ * t,
+        tag || 'wall');
+    }
   }
 
   /** A grapple anchor, so the tongue has something to reach for. */
@@ -1266,8 +1300,11 @@ export class Sites {
     for (let i = 0; i < 18; i++) {
       const a = (i / 18) * Math.PI * 2;
       const x = px + Math.cos(a) * 9.4, z = pz + Math.sin(a) * 9.4;
+      // Tangentially. See `_solidRun` for why `a + π/2` is the wrong yaw:
+      // it lays the block ACROSS the kerb rather than along it, and the
+      // ring came out as eighteen slabs at angles to each other.
       this._put(g, G.box, 'sandDark', 3.6, 0.9, 1.6,
-        x, this._gy(g, x, z) + 0.25, z, a + Math.PI / 2);
+        x, this._gy(g, x, z) + 0.25, z, -a - Math.PI / 2);
     }
     // Steps down to the water on one side, so it is a place people use.
     for (let i = 0; i < 3; i++) {
@@ -1455,8 +1492,20 @@ export class Sites {
         if (a > 0.5 && a < 1.3) continue;                 // the way up
         const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
         const y = this._gy(g, x, z);
-        this._put(g, G.box, 'stoneDark', rad * 0.42, 1.6 + lift, 1.2,
-          x, y + (1.6 + lift) * 0.5 - 0.5, z, a + Math.PI / 2);
+        /**
+         * The retaining wall of the terrace — laid tangentially, and SOLID.
+         *
+         * Four tiers of it hold the Light Fields up, and none of it had a
+         * collider: the whole signature of Lumen was a stack of terraces
+         * you walked straight through the side of. The way up is the gap
+         * the loop above skips.
+         */
+        const dx = -Math.sin(a), dz = Math.cos(a);
+        const h = 1.6 + lift;
+        this._put(g, G.box, 'stoneDark', rad * 0.42, h, 1.2,
+          x, y + h * 0.5 - 0.5, z, -a - Math.PI / 2);
+        this._solidRun(g, x, y + h * 0.5 - 0.5, z, dx, dz,
+          rad * 0.42, 0.8, h * 0.5, 'wall');
       }
       // The crop: rows of glowing bulbs, brighter the higher you go.
       const beds = 20 + t * 6;
@@ -1755,9 +1804,14 @@ export class Sites {
         const x = Math.cos(a) * rw, z = Math.sin(a) * rw;
         const gy = this.realm.heightAt(g.position.x + x, g.position.z + z);
         const base = gy - g.position.y;
+        // Tangentially, and solid the whole way along. See `_solidRun` —
+        // the yaw was `a + π/2`, which rotates every off-axis segment the
+        // wrong way and left half the city wall walk-through.
+        const dx = -Math.sin(a), dz = Math.cos(a);
         this._put(g, G.box, 'stone', rw * 0.32, 7, 2.4, x, base + 3.5, z,
-          a + Math.PI / 2);
-        this._solid(g, rw * 0.16, 3.5, 1.6, x, base + 3.5, z, 'wall');
+          -a - Math.PI / 2);
+        this._solidRun(g, x, base + 3.5, z, dx, dz, rw * 0.32, 1.5, 3.5,
+          'wall');
         if (i % 5 === 0) {
           this._put(g, G.cyl, 'stoneDark', 2.6, 12, 2.6, x, base + 6, z);
           this._put(g, G.cone, 'tileDark', 3.2, 4, 3.2, x, base + 14, z);
@@ -1790,8 +1844,21 @@ export class Sites {
       this._solid(g, 3.6, 0.3, 3.2, x, y, z, 'deck');
       // The walkway back to the trunk.
       const mx = Math.cos(a) * rad * 0.55, mz = Math.sin(a) * rad * 0.55;
-      this._put(g, G.box, 'plank', 2.4, 0.35, rad * 0.9, mx, y - 0.1, mz, a + Math.PI / 2);
-      this._solid(g, 1.4, 0.25, rad * 0.45, mx, y - 0.1, mz, 'deck');
+      /**
+       * The walkway back to the trunk — RADIALLY, which is what it is.
+       *
+       * A plank running from a deck to the middle of the tree points along
+       * the radius, not along the tangent — and this plank's LONG axis is
+       * its local Z, not its X (the scale is 2.4 by 0.35 by rad·0.9). Local
+       * +Z under a yaw θ points at (sin θ, cos θ), and the outward radius
+       * is (cos a, sin a), so θ = π/2 − a. It was `a + π/2`, which is that
+       * with the z component flipped, and the walkway came out lying across
+       * the gap it was supposed to bridge.
+       */
+      this._put(g, G.box, 'plank', 2.4, 0.35, rad * 0.9, mx, y - 0.1, mz,
+        Math.PI / 2 - a);
+      this._solidRun(g, mx, y - 0.1, mz, Math.cos(a), Math.sin(a),
+        rad * 0.45, 1.2, 0.25, 'deck');
       if (i % 2 === 0) {
         this._house(g, x, z, 3.0, 2.8, 2.6, a + Math.PI, style, y + 0.3);
         spots.push({ x: g.position.x + x, z: g.position.z + z });
@@ -2060,7 +2127,11 @@ export class Sites {
       const base = this.realm.heightAt(g.position.x + x, g.position.z + z)
         - g.position.y;
       this._put(g, G.cyl, 'woodDark', 0.11, 1.8, 0.11, x, base + 0.9, z);
-      this._put(g, G.box, 'wood', 3.4, 0.14, 0.12, x, base + 1.3, z, a + Math.PI / 2);
+      // Tangentially — see `_solidRun`. A rail laid with `a + π/2` points
+      // across the fence line instead of along it, so the paddock came out
+      // as twenty-six planks at angles to each other.
+      this._put(g, G.box, 'wood', 3.4, 0.14, 0.12, x, base + 1.3, z,
+        -a - Math.PI / 2);
     }
     this._fire(g, 6, 6, rnd);
     return [{ x: g.position.x + 16, z: g.position.z }, { x: g.position.x + 6, z: g.position.z + 6 }];
@@ -2114,7 +2185,15 @@ export class Sites {
         this._solid(g, 1.2, 6, 1.2, i * (r * 0.24), base + 6, sz * r * 0.34, 'pillar');
       }
     }
+    /**
+     * The roof, and it holds weight now.
+     *
+     * The columns reach base+12 and the slab sits at base+13, so anybody who
+     * grappled a temple went through the roof and out the other side. It is
+     * a stone slab on stone columns.
+     */
     this._put(g, G.box, style.roofMat, r * 1.02, 1.6, r * 0.86, 0, base + 13, 0);
+    this._solid(g, r * 1.0, 0.8, r * 0.84, 0, base + 13, 0, 'deck');
     this._put(g, G.cone, style.roofMat, r * 0.8, 6, r * 0.7, 0, base + 16, 0, 0.785);
     // The cella, and the light in it.
     this._put(g, G.box, style.wall, r * 0.5, 10, r * 0.44, 0, base + 5, 0);
@@ -2187,7 +2266,9 @@ export class Sites {
     }
 
     // A statue that lost its head, and the head, on the floor beside it.
+    // A five-unit column of stone: solid, obviously.
     this._put(g, G.box, 'stoneDark', 1.6, 5.0, 1.6, r * 0.2, 3.0, -r * 0.3);
+    this._solid(g, 1.6, 2.5, 1.6, r * 0.2, 3.0, -r * 0.3, 'stone');
     this._put(g, G.low, 'stone', 1.1, 1.2, 1.1, r * 0.2 + 2.6, 1.6, -r * 0.3 + 2);
 
     // Fallen stone, lying wherever the ground is.
@@ -2242,10 +2323,20 @@ export class Sites {
       this._put(g, G.disc, 'stoneDark', 4.9, 0.6, 4.9, 0, 1 + h * (i / 4), 0);
     }
     this._put(g, G.disc, 'stone', 5.8, 1.4, 5.8, 0, h + 1, 0);
+    /**
+     * The parapet, and it is a parapet.
+     *
+     * The whole point of climbing a thirty-five-unit tower is standing on
+     * top of it, and the blocks round the edge were decoration — so the
+     * reward for the climb was walking through them and falling off. The
+     * GAPS between them are still gaps, which is what crenellations are.
+     */
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
       this._put(g, G.box, 'stoneDark', 1.2, 1.8, 1.0,
         Math.cos(a) * 5.4, h + 2.6, Math.sin(a) * 5.4, a);
+      this._solid(g, 1.1, 0.9, 1.1,
+        Math.cos(a) * 5.4, h + 2.6, Math.sin(a) * 5.4, 'wall');
     }
     this._put(g, G.cone, style.roofMat, 6.0, 6.0, 6.0, 0, h + 6.4, 0);
     this._put(g, G.low, 'lamp', 1.0, 1.2, 1.0, 0, h + 3.4, 0);
@@ -2303,8 +2394,20 @@ export class Sites {
       const x = Math.cos(a) * r * 0.92, z = Math.sin(a) * r * 0.92;
       const base = this.realm.heightAt(g.position.x + x, g.position.z + z)
         - g.position.y;
-      this._put(g, G.box, 'stone', r * 0.2, 8, 2.0, x, base + 4, z, a + Math.PI / 2);
-      this._solid(g, r * 0.1, 4, 1.4, x, base + 4, z, 'wall');
+      /**
+       * TANGENTIALLY, which is not what this said.
+       *
+       * A box rotated about Y by θ has its local +X along (cos θ, −sin θ).
+       * The tangent to a circle at angle `a` is (−sin a, cos a). Solving
+       * those gives θ = −a − π/2; the code said `a + π/2`, which satisfies
+       * the x component and gets the z component backwards — so every
+       * segment except the four on the axes was rotated the wrong way and
+       * the "curtain wall" was a ring of blocks at angles to each other.
+       */
+      const dx = -Math.sin(a), dz = Math.cos(a);
+      this._put(g, G.box, 'stone', r * 0.2, 8, 2.0, x, base + 4, z,
+        -a - Math.PI / 2);
+      this._solidRun(g, x, base + 4, z, dx, dz, r * 0.2, 1.3, 4, 'wall');
     }
     this._fire(g, 0, r * 0.3, rnd);
     spots.push({ x: g.position.x, z: g.position.z + r * 0.36 });
@@ -2350,8 +2453,18 @@ export class Sites {
     this._solid(g, 4.5, 0.5, len * 0.5, 0, 0.4, 0, 'deck');
     for (const sx of [-1, 1]) {
       this._put(g, G.box, 'stonePale', 0.8, 1.8, len, sx * 4.2, 1.6, 0);
+      /**
+       * THE PARAPET IS SOLID.
+       *
+       * A knee-high stone wall down both sides of every bridge in the realm,
+       * and it had no collider — so the parapet was decoration and the
+       * bridge was a plank you fell off sideways. It is a wall. It is made
+       * of stone. It holds you on the bridge.
+       */
+      this._solid(g, 0.5, 0.9, len * 0.5, sx * 4.2, 1.6, 0, 'wall');
       for (let i = -2; i <= 2; i++) {
         this._put(g, G.cyl, 'stoneDark', 0.7, 4.4, 0.7, sx * 4.2, 1.4, i * (len * 0.22));
+        this._solid(g, 0.6, 2.2, 0.6, sx * 4.2, 1.4, i * (len * 0.22), 'stone');
         this._put(g, G.low, 'lamp', 0.4, 0.45, 0.4, sx * 4.2, 3.9, i * (len * 0.22));
         this._anchor(g, sx * 4.2, 3.9, i * (len * 0.22), 1.6);
       }
@@ -2377,10 +2490,26 @@ export class Sites {
   _cave(g, spec, rnd, style) {
     const r = Math.max(12, spec.r);
     // The outcrop the mouth is in.
+    /**
+     * The outcrop, and EVERY BOULDER IN IT IS SOLID.
+     *
+     * Seven masses of eight to thirteen units each, and one collider used
+     * to cover the middle one. The other six were a cliff face you walked
+     * through — which is exactly the kind of thing the no-clip complaint is
+     * about, because nothing in the game looks more solid than a rock.
+     *
+     * Inset a little from the visual, the same as the boulders in
+     * js/world.js and js/scatter.js: clipping the edge of a rock is much
+     * less annoying than snagging on air beside one.
+     */
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI - 0.4;
-      this._putOn(g, G.low, 'stoneDark', 8 + rnd() * 5, 7 + rnd() * 7, 8 + rnd() * 5,
-        Math.cos(a) * r * 0.9, Math.sin(a) * r * 0.9 - r * 0.5);
+      const sx = 8 + rnd() * 5, sy = 7 + rnd() * 7, sz = 8 + rnd() * 5;
+      const bx = Math.cos(a) * r * 0.9, bz = Math.sin(a) * r * 0.9 - r * 0.5;
+      this._putOn(g, G.low, 'stoneDark', sx, sy, sz, bx, bz);
+      const by = this._gy(g, bx, bz);
+      this._solid(g, sx * 0.78, sy * 0.62, sz * 0.78,
+        bx, by + sy * 0.4, bz, 'rock');
     }
     this._putOn(g, G.low, 'stoneDark', r * 0.9, 12, r * 0.7, 0, -r * 0.55);
     this._solid(g, r * 0.8, 6, r * 0.5, 0, 5, -r * 0.7, 'rock');
@@ -2576,9 +2705,12 @@ export class Sites {
       for (let i = 0; i < seg; i++) {
         if (t < 2 && i % 9 === 0) continue;              // the two entrances
         const a = (i / seg) * Math.PI * 2;
+        // Tangentially, so the tier reads as a continuous bench rather than
+        // as a ring of blocks — the same yaw fix as every other curved run
+        // in this file. See `_solidRun`.
         this._put(g, G.box, t % 2 ? 'stone' : 'stonePale', rad * 0.14, 2.2,
           r * 0.09, Math.cos(a) * rad, 0.8 + t * 1.8, Math.sin(a) * rad,
-          a + Math.PI / 2);
+          -a - Math.PI / 2);
       }
       this._solid(g, rad * 1.02, 0.4, rad * 1.02, 0, 0.8 + t * 1.8, 0, 'deck');
     }
@@ -2632,6 +2764,9 @@ export class Sites {
         this._put(g, G.cyl, 'stoneDark', 0.4, 12, 0.4, 0, 8, 1);
         this._put(g, G.box, 'stonePale', 0.3, 8, 5, 0, 8, -1.6);
         this._solid(g, 2.6, 1.6, 6.5, 0, 1.4, 0, 'boat');
+        // The mast and the sail are granite too. That is the joke.
+        this._solid(g, 0.5, 6, 0.5, 0, 8, 1, 'stone');
+        this._solid(g, 0.4, 4, 4.6, 0, 8, -1.6, 'stone');
         break;
       }
 
@@ -2655,6 +2790,9 @@ export class Sites {
           this._solid(g, 2.0, 4.5, 2.0, sx * 4.4, 4.5, 0, 'pillar');
         }
         this._put(g, G.box, 'sandDark', 11, 2.0, 2.6, 0, 10, 0);
+        // The lintel. Eleven units of dressed stone across the top of the
+        // gate, and it should stop a jump rather than swallow it.
+        this._solid(g, 11, 1.0, 2.6, 0, 10, 0, 'wall');
         this._put(g, G.box, 'gold', 8, 0.5, 0.4, 0, 8.6, 1.4);
         this._anchor(g, 0, 10, 0, 2.0);
         for (let i = 0; i < 9; i++) {
@@ -2680,6 +2818,8 @@ export class Sites {
         this._put(g, G.box, 'stoneDark', 16, 30, 8, 0, 15, -8);
         this._solid(g, 16, 15, 8, 0, 15, -8, 'cliff');
         this._put(g, G.box, 'ice', 9, 30, 3, 0, 15, -2.6);
+        // Nine by thirty units of solid ice. It is the thing the oddity IS.
+        this._solid(g, 9, 15, 3, 0, 15, -2.6, 'ice');
         for (let i = 0; i < 5; i++) {
           this._put(g, G.cone, 'iceDeep', 1.2, 5 + rnd() * 4, 1.2,
             -3.4 + i * 1.7, 4, -1.6, 0);
@@ -2732,8 +2872,13 @@ export class Sites {
         this._put(g, G.box, 'pale', 0.5, 0.04, 0.7, 0, 0.55, 0);
         for (let i = 0; i < 6; i++) {
           const a = (i / 6) * Math.PI * 2;
-          this._put(g, G.box, 'stoneDark', 0.5, 1.6 + rnd(), 0.5,
+          const h = 1.6 + rnd();
+          this._put(g, G.box, 'stoneDark', 0.5, h, 0.5,
             Math.cos(a) * 4, 0.8, Math.sin(a) * 4, a);
+          // Standing stones. Small, but stone, and there are six of them in
+          // a ring — walking through the ring rather defeats the object.
+          this._solid(g, 0.5, h * 0.5, 0.5,
+            Math.cos(a) * 4, 0.8, Math.sin(a) * 4, 'stone');
         }
         break;
 
@@ -2988,6 +3133,35 @@ export class Sites {
       bestD = d; best = s;
     }
     return best;
+  }
+
+  /**
+   * Is this point inside ANY built site — settlement, ruin, camp, arena?
+   *
+   * Asked by the scatter, which grows trees and boulders wherever the
+   * ground will take one and has no idea a temple is there. Those are
+   * colliders now (see js/scatter.js), and a solid pine in a temple
+   * doorway or a boulder in the middle of a boss arena is worse than the
+   * no-clip it replaced. The visual is left alone; only the collider is
+   * skipped, so a ruin with a tree growing through it still has one.
+   *
+   * A plain scan of two hundred sites. It is asked a few hundred times per
+   * tile crossing — roughly once every eight seconds of walking — and a
+   * spatial index for that would be forty lines to save a fraction of a
+   * millisecond.
+   */
+  insideSite(x, z) {
+    for (const s of this.sites) {
+      const d2 = (s.at.x - x) * (s.at.x - x) + (s.at.z - z) * (s.at.z - z);
+      const r = s.r + 6;
+      if (d2 < r * r) return true;
+    }
+    for (const [, a] of this.arenas) {
+      const d2 = (a.at.x - x) * (a.at.x - x) + (a.at.z - z) * (a.at.z - z);
+      const r = a.r + 8;
+      if (d2 < r * r) return true;
+    }
+    return false;
   }
 
   /** The nearest settlement, for spawning the people who live in it. */

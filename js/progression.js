@@ -21,8 +21,8 @@
  * thing that makes a hard region become a familiar one.
  */
 
-import { GEAR_BY_ID, GEAR } from './gear.js?v=v92';
-import { clamp } from './util.js?v=v92';
+import { GEAR_BY_ID, GEAR } from './gear.js?v=v93';
+import { clamp } from './util.js?v=v93';
 
 /** Health per heart. Four hearts is the starting body. */
 export const HEART = 25;
@@ -94,6 +94,17 @@ export class Progress {
      * you have not been shown yet is not a memory of anything.
      */
     this.prologue = false;
+    /**
+     * WHETHER THE CROWN IS ON.
+     *
+     * Set the moment the coronation begins — not when the procession that
+     * follows it ends — so a player who closes the game halfway down the
+     * carpet comes back a king. It is the other end of the arc `prologue`
+     * opens, and every talkable frog in the country reads it: see
+     * `crownGreeting` in js/quests.js, which is why a coronation is worth
+     * exactly one boolean and thirty-eight changed conversations.
+     */
+    this.crowned = false;
     /** The region the player was last standing in, for the save screen. */
     this.region = '';
     /** Where the player was standing when they last saved. */
@@ -314,6 +325,7 @@ export class Progress {
       kunai: this.kunai,
       memories: [...this.memories],
       prologue: this.prologue,
+      crowned: this.crowned,
       region: this.region,
       // Written for the SAVE SCREEN's benefit, which needs a one-glance
       // summary without loading and interpreting the whole blob. Derived, so
@@ -364,6 +376,14 @@ export class Progress {
     set(this.seen, d.seen);
     set(this.memories, d.memories);
     this.prologue = !!d.prologue;
+    /**
+     * A save from before the coronation existed, whose owner had already
+     * killed Frogath, is a save whose owner has earned the crown. Reading
+     * `slain` as the fallback means those players are greeted as kings
+     * rather than being told to go and do the last fight again.
+     */
+    this.crowned = d.crowned === undefined
+      ? this.slain.has('frogath') : !!d.crowned;
     this.region = typeof d.region === 'string' ? d.region : '';
     this.quests.clear();
     if (Array.isArray(d.quests)) {

@@ -5,42 +5,42 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v92';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v92';
-import { Input } from './input.js?v=v92';
-import { Audio } from './audio.js?v=v92';
-import { World } from './world.js?v=v92';
-import { Effects } from './effects.js?v=v92';
-import { Atmosphere } from './atmosphere.js?v=v92';
-import { FollowCamera } from './camera.js?v=v92';
-import { Player } from './player.js?v=v92';
-import { RemotePlayer } from './remote.js?v=v92';
-import { HUD } from './hud.js?v=v92';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v92';
-import { FrogModel } from './frog.js?v=v92';
-import { DummyField } from './dummy.js?v=v92';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v92';
-import { ToadModel } from './npc.js?v=v92';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v92';
-import { DungeonRun } from './dungeon.js?v=v92';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v92';
-import { JudgmentRun } from './judgment.js?v=v92';
-import { COMBO_NAMES } from './ascended.js?v=v92';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v92';
-import { MenuScene } from './menu.js?v=v92';
-import { Economy } from './economy.js?v=v92';
-import { Shop } from './shop.js?v=v92';
-import { Network, NetRole } from './net.js?v=v92';
-import { Overworld } from './overworld.js?v=v92';
-import { InventoryScreen } from './inventoryui.js?v=v92';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v92';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v92';
-import { Cine } from './cinema.js?v=v92';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v92';
-import { MEMORIES } from './flashbacks.js?v=v92';
-import { GUARDIANS } from './guardians.js?v=v92';
-import { gearOfTier } from './gear.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v93';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v93';
+import { Input } from './input.js?v=v93';
+import { Audio } from './audio.js?v=v93';
+import { World } from './world.js?v=v93';
+import { Effects } from './effects.js?v=v93';
+import { Atmosphere } from './atmosphere.js?v=v93';
+import { FollowCamera } from './camera.js?v=v93';
+import { Player } from './player.js?v=v93';
+import { RemotePlayer } from './remote.js?v=v93';
+import { HUD } from './hud.js?v=v93';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v93';
+import { FrogModel } from './frog.js?v=v93';
+import { DummyField } from './dummy.js?v=v93';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v93';
+import { ToadModel } from './npc.js?v=v93';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v93';
+import { DungeonRun } from './dungeon.js?v=v93';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v93';
+import { JudgmentRun } from './judgment.js?v=v93';
+import { COMBO_NAMES } from './ascended.js?v=v93';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v93';
+import { MenuScene } from './menu.js?v=v93';
+import { Economy } from './economy.js?v=v93';
+import { Shop } from './shop.js?v=v93';
+import { Network, NetRole } from './net.js?v=v93';
+import { Overworld } from './overworld.js?v=v93';
+import { InventoryScreen } from './inventoryui.js?v=v93';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v93';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v93';
+import { Cine } from './cinema.js?v=v93';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v93';
+import { MEMORIES } from './flashbacks.js?v=v93';
+import { GUARDIANS } from './guardians.js?v=v93';
+import { gearOfTier } from './gear.js?v=v93';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2455,6 +2455,54 @@ class Game {
       this._cheatNote(`${GUARDIANS.length} guardians down, power ${p.power}. `
         + 'Walk forward — he is waiting.');
       this._toggleCheats(false);
+    };
+
+    /**
+     * THE OTHER END OF THE STORY, in one press.
+     *
+     * The coronation and the carpet walk are the last ninety seconds of the
+     * game and they only ever fire once, off the end of Frogath's dying
+     * words. Reaching them the honest way means beating the hardest fight in
+     * the game — so this runs the actual `_coronate` path, with the actual
+     * tableau, the actual script and the actual procession, rather than a
+     * special case only this button can reach.
+     *
+     * It teleports to the arena first, because the walk needs the carpet and
+     * the carpet is in the arena. `crowned` is cleared so the ceremony can be
+     * watched more than once.
+     */
+    $('cheat-coronation').onclick = () => {
+      const ow = this.overworld;
+      if (!ow) return this._cheatNote('Only in the Croaklands.');
+      if (!ow.throne) return this._cheatNote('There is no throne in this world.');
+      const p = ow.progress;
+      p.prologue = true;
+      p.slain.add('frogath');
+      // Cleared so the scene plays again on a second press.
+      p.crowned = false;
+      if (ow.walk) { ow.walk.cancel(); ow.walk = null; }
+      if (ow.frogath) {
+        ow.frogath.dispose();
+        ow.frogath = null;
+        ow.frogathOf = null;
+        this.hud.hideBossBar();
+      }
+      if (ow.flash) ow.flash.cancel();
+      Cine.clearBanter();
+      Cine.cancel();
+      // Standing on the mark, which is where `_beginCarpet` puts them anyway.
+      const t = ow.throne;
+      const pl = this.player;
+      pl.pos.set(t.at.x, ow.realm.heightAt(t.at.x, t.at.z) + 1.5, t.at.z);
+      pl.vel.set(0, 0, 0);
+      pl.health.current = pl.health.max;
+      ow.region = null;
+      ow.lastOpen = { x: pl.pos.x, z: pl.pos.z };
+      ow.home = { x: pl.pos.x, y: pl.pos.y, z: pl.pos.z };
+      this.followCam.snapTo(pl.pos);
+      this._toggleCheats(false);
+      ow._coronate();
+      this._cheatNote('The hall is full. Press E through it, then walk.');
     };
 
     $('cheat-crystal').onclick = () => {

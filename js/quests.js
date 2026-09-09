@@ -1523,10 +1523,73 @@ applyOccupation();
 
 export const NPC_BY_ID = new Map(NPCS.map((n) => [n.id, n]));
 
+/**
+ * ═══ AND ONCE THE CROWN IS ON ════════════════════════════════════════════
+ *
+ * Every frog in the country who can be spoken to greets the player as king
+ * before saying anything else.
+ *
+ * ── why it is a PREFIX and not a replacement ─────────────────────────────
+ * The obvious way to do "all NPCs say greetings king" is to swap out their
+ * dialogue for it, and that would quietly delete the game: these are the
+ * same characters who hand out quests, take them in, name the next boss and
+ * sell things. A king with no functioning quest-givers has less to do after
+ * the coronation than before it.
+ *
+ * So the greeting goes on the FRONT of whatever the character was going to
+ * say. Every conversation in the post-game opens by acknowledging the
+ * crown, and then the shopkeeper still sells you kunai.
+ *
+ * ── and it is per-character, not random ─────────────────────────────────
+ * Keyed off a hash of the npc's id, so the same frog greets you the same
+ * way every time. A greeting that rerolled on every conversation would read
+ * as the character not remembering the last one — which, in a game whose
+ * whole subject is being forgotten, is the wrong note to end on.
+ *
+ * Every line starts with the same two words, because that is the point: it
+ * is the country deciding, all at once and out loud, what you are.
+ */
+const CROWN_GREETINGS = [
+  'Greetings, king.',
+  'Greetings, king. The road is yours, wherever it goes.',
+  'Greetings, king — and it is about time somebody said it.',
+  'Greetings, king. We kept the seat warm. Badly.',
+  'Greetings, king. My mother would never have believed this.',
+  'Greetings, king. You still walk everywhere. You know that?',
+  'Greetings, king. The banners are up as far as the Lily Reach.',
+  'Greetings, king. Nobody here is going to stop saying it, so.',
+];
+
+/** A stable index for an id, so a character's greeting never changes. */
+function idHash(id) {
+  let h = 2166136261;
+  const s = String(id);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * How this character greets a crowned player, or null if there is no crown
+ * on yet. Exported so the villager walk-up cutscene and the shopkeepers use
+ * the same line the conversation would have opened with.
+ */
+export function crownGreeting(npc, p) {
+  if (!p || !p.crowned) return null;
+  return CROWN_GREETINGS[idHash(npc && npc.id ? npc.id : 'x')
+    % CROWN_GREETINGS.length];
+}
+
 /** What this NPC is saying today — the first line-set whose test holds. */
 export function npcSays(npc, p) {
-  for (const l of npc.lines) if (l.when(p)) return l.say;
-  return ['...'];
+  const greet = crownGreeting(npc, p);
+  for (const l of npc.lines) {
+    if (!l.when(p)) continue;
+    return greet ? [greet, ...l.say] : l.say;
+  }
+  return greet ? [greet] : ['...'];
 }
 
 /** Which guardian's death changes a region's mood, or null. */

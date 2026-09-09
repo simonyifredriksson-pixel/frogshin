@@ -54,7 +54,7 @@
  * the sea you woke up in.
  */
 
-import { clamp, smoothstep } from './util.js?v=v92';
+import { clamp, smoothstep } from './util.js?v=v93';
 
 /** World extent. The realm spans -REALM_HALF .. +REALM_HALF on X and Z. */
 export const REALM_SIZE = 5120;
@@ -1305,8 +1305,16 @@ export const REGIONS = [
       sunColor: 0xffd0a0, sunIntensity: 0.5, ambient: 0x3a3a48,
     },
     ground: (n, x, z) => 150 + n.fbm(x * 0.004, z * 0.004, 3) * 22,
+    /**
+     * The landmark sits ninety units BEHIND the final arena, not on top of
+     * it. It used to share coordinates with the Frogath fight, which meant
+     * the last battle of the game was staged on the roof of a
+     * ninety-six-unit obsidian dais — see js/throne.js, which builds the
+     * arena proper. Moved back, it does the job a landmark is for: it looms
+     * over the fight from behind him.
+     */
     landmark: {
-      kind: 'throne', at: [0, -2070],
+      kind: 'throne', at: [0, -2160],
       name: 'THE ASHEN THRONE',
       blurb: 'The seat itself. It is far too big for anything that walks.',
     },

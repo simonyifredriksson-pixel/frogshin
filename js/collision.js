@@ -8,8 +8,8 @@
  * several networked players are simulating at once.
  */
 
-import { CFG } from './config.js?v=v92';
-import { clamp } from './util.js?v=v92';
+import { CFG } from './config.js?v=v93';
+import { clamp } from './util.js?v=v93';
 
 const EPS = 1e-4;
 
@@ -102,10 +102,55 @@ export class CollisionWorld {
      */
     this.climbLimitY = CFG.world.snowLine;
     this.climbLimitRadius = Infinity;
+    /**
+     * WHICH SHAPE `climbLimitRadius` MEANS.
+     *
+     * 'circle' measures `hypot(x, z)`; 'square' measures
+     * `max(|x|, |z|)` — the Chebyshev distance.
+     *
+     * It matters because the thing the limit is standing in for has to be
+     * VISIBLE. The realm's mountain rim is raised from a square metric,
+     * because the map is square and a circular rim would leave four
+     * walkable corners hanging off the end of it — but the climb limit was
+     * measuring a circle. On the diagonals a circle of radius 0.86·half
+     * reaches out to only 0.61·half in Chebyshev terms, so a quarter of the
+     * way in from the visible mountains, in the four corners of the map,
+     * steep ground silently refused to be climbed with nothing to see.
+     *
+     * That is an invisible wall by any reasonable definition, and the fix is
+     * to measure the limit with the same ruler the mountains were built
+     * with. See `setRealmClimbLimit` in js/realm.js.
+     */
+    this.climbLimitShape = 'circle';
     this.boxes = [];
     this.anchors = [];          // floating grapple targets (spheres)
     this.cellSize = 14;
     this.hash = new Map();
+    /**
+     * ═══ THE STREAMED LAYER ══════════════════════════════════════════════
+     *
+     * A second, replaceable set of boxes, for solid things that are not in
+     * the world when `bake` runs and will not be in it for long.
+     *
+     * It exists because of a genuine no-clip: every tree, boulder and
+     * crystal spike in the overworld comes out of js/scatter.js, which
+     * REGENERATES its contents whenever the player crosses a tile boundary.
+     * The static broadphase above is hashed once and never looks at a box
+     * added afterwards, so thirty thousand trunks and boulders were scenery
+     * you walked straight through — by far the largest pass-through surface
+     * in the game.
+     *
+     * The fix is not to bake them, because there are thirty thousand and
+     * they are not all resident. It is a layer that can be thrown away and
+     * rebuilt: the scatter hands over the two or three hundred solid things
+     * within a couple of hundred units of the player each time it streams,
+     * this re-hashes them, and `query` reads both layers. Rebuilding costs
+     * a few hundred Map pushes on a tile crossing — about once every eight
+     * seconds of walking — and the query cost is one extra `Map.get` per
+     * broadphase cell.
+     */
+    this.stream = [];
+    this.streamHash = new Map();
     this._n = { x: 0, y: 0, z: 0 };
     // Starts at 1 so the "already visited this query" mark can never collide
     // with a freshly-created box's undefined `_mark`.
@@ -132,20 +177,50 @@ export class CollisionWorld {
   /** Build the broadphase. Call once after all boxes are added. */
   bake() {
     this.hash.clear();
+    this._hashInto(this.hash, this.boxes);
+  }
+
+  _hashInto(hash, boxes) {
     const cs = this.cellSize;
-    for (let n = 0; n < this.boxes.length; n++) {
-      const b = this.boxes[n];
+    for (let n = 0; n < boxes.length; n++) {
+      const b = boxes[n];
       const x0 = Math.floor(b.minX / cs), x1 = Math.floor(b.maxX / cs);
       const z0 = Math.floor(b.minZ / cs), z1 = Math.floor(b.maxZ / cs);
       for (let ix = x0; ix <= x1; ix++) {
         for (let iz = z0; iz <= z1; iz++) {
           const k = this._key(ix, iz);
-          let arr = this.hash.get(k);
-          if (!arr) { arr = []; this.hash.set(k, arr); }
+          let arr = hash.get(k);
+          if (!arr) { arr = []; hash.set(k, arr); }
           arr.push(b);
         }
       }
     }
+  }
+
+  /**
+   * REPLACE THE STREAMED LAYER.
+   *
+   * Takes flat septuples — `[cx, cy, cz, hx, hy, hz, tag]` — because the one
+   * caller produces a few hundred of them per tile crossing and allocating a
+   * few hundred objects to describe them is the sort of thing that shows up
+   * as a stutter exactly when the player walks somewhere new.
+   *
+   * The whole layer goes at once. There is deliberately no way to remove one
+   * streamed box: the scatter's contents are a pure function of the tiles it
+   * is showing, so "what is solid near the player" is always a fresh answer
+   * and never an edit to the previous one.
+   */
+  setStreamed(items) {
+    this.stream.length = 0;
+    this.streamHash.clear();
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      this.stream.push(new Box(
+        it[0] - it[3], it[1] - it[4], it[2] - it[5],
+        it[0] + it[3], it[1] + it[4], it[2] + it[5], it[6] || 'stone'));
+    }
+    this._hashInto(this.streamHash, this.stream);
+    return this.stream.length;
   }
 
   // ------------------------------------------------------------- broadphase
@@ -156,16 +231,23 @@ export class CollisionWorld {
     const cs = this.cellSize;
     const x0 = Math.floor(minX / cs), x1 = Math.floor(maxX / cs);
     const z0 = Math.floor(minZ / cs), z1 = Math.floor(maxZ / cs);
+    const streamed = this.streamHash.size > 0;
     for (let ix = x0; ix <= x1; ix++) {
       for (let iz = z0; iz <= z1; iz++) {
-        const arr = this.hash.get(this._key(ix, iz));
-        if (!arr) continue;
-        for (let i = 0; i < arr.length; i++) {
-          const b = arr[i];
-          if (b.disabled) continue;
-          if (b._mark === this._queryId) continue;
-          b._mark = this._queryId;
-          out.push(b);
+        const k = this._key(ix, iz);
+        // Both layers, same cell key, same de-duplication mark. See
+        // `setStreamed`: the second one is the overworld's trees and rocks.
+        for (let pass = 0; pass < 2; pass++) {
+          if (pass === 1 && !streamed) break;
+          const arr = pass ? this.streamHash.get(k) : this.hash.get(k);
+          if (!arr) continue;
+          for (let i = 0; i < arr.length; i++) {
+            const b = arr[i];
+            if (b.disabled) continue;
+            if (b._mark === this._queryId) continue;
+            b._mark = this._queryId;
+            out.push(b);
+          }
         }
       }
     }
@@ -353,8 +435,12 @@ export class CollisionWorld {
     // Sampled at the same point as the slope, so the two always agree about
     // which piece of ground is being judged.
     const sx = oldX + dx * 2, sz = oldZ + dz * 2;
+    // Measured with the same ruler the map's rim was built with — see
+    // `climbLimitShape`, which is why this is not always a hypot.
+    const outward = this.climbLimitShape === 'square'
+      ? Math.max(Math.abs(sx), Math.abs(sz)) : Math.hypot(sx, sz);
     const offLimits = th > this.climbLimitY
-      || Math.hypot(sx, sz) > this.climbLimitRadius;
+      || outward > this.climbLimitRadius;
     const tooSteep = climbing && offLimits
       && this.terrain.slopeAt(sx, sz) > CFG.move.maxClimbSlope;
 

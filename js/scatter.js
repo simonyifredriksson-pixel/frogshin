@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { mulberry32 } from './util.js?v=v92';
-import { SEA } from './regions.js?v=v92';
-import { CHUNK } from './realm.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { mulberry32 } from './util.js?v=v93';
+import { SEA } from './regions.js?v=v93';
+import { CHUNK } from './realm.js?v=v93';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -218,6 +218,55 @@ export class Scatter {
       this.meshes[k] = mesh;
     }
     this._n = {};
+    /**
+     * ═══ AND THE SOLID ONES ══════════════════════════════════════════════
+     *
+     * Every tree, boulder and crystal spike in the overworld came out of
+     * this file, and none of them was solid. The realm's broadphase is baked
+     * once and never looks at a box added afterwards, and this file's whole
+     * design is that its contents are thrown away and regenerated whenever
+     * the player crosses a tile — so thirty thousand trunks and boulders
+     * were scenery you walked straight through.
+     *
+     * They are collected here as flat septuples and handed to
+     * `collision.setStreamed` at the end of every refill. See collision.js:
+     * a second hash, replaced wholesale, read by the same `query`.
+     *
+     * ── WHAT IS SOLID AND WHAT IS NOT ────────────────────────────────────
+     * Trunks, big boulders and big shards. Not reeds, not bones, not
+     * flowers, not ferns, not the small stones: running through undergrowth
+     * should feel like running through undergrowth, and a collider on a
+     * fifteen-centimetre flower is a thing that snags you for no reason.
+     *
+     * The colliders also hug the TRUNK rather than the canopy, which is the
+     * same rule js/world.js states for the valley's trees: weaving past
+     * poles, not bumping into invisible boxes the size of a tree's shadow.
+     *
+     * ── AND WHERE NOTHING IS EVER SOLID ──────────────────────────────────
+     * On a road, and inside a settlement. The scatter has no keep-out of
+     * its own — it will happily grow a pine in the middle of a village
+     * square — and that was harmless while none of it was solid. Making it
+     * solid without this would wall off doorways and market stalls. The
+     * visual is untouched in both cases; only the collider is skipped.
+     */
+    this.solids = [];
+    /** Set by the overworld: true where a collider must not be placed. */
+    this.keepClear = null;
+    /** How many solid pieces the last refill handed over. For the tests. */
+    this.solidCount = 0;
+  }
+
+  /**
+   * Remember a solid piece of scatter, unless it is somewhere it must not be.
+   *
+   * `road` comes from the road network's own surface test rather than from a
+   * distance to a polyline, so a wide paved approach is as clear as a track.
+   */
+  _solid(x, y, z, hx, hy, hz) {
+    const net = this.realm && this.realm.net;
+    if (net && net.roadAt(x, z) > 0.12) return;
+    if (this.keepClear && this.keepClear(x, z)) return;
+    this.solids.push([x, y, z, hx, hy, hz, 'stone']);
   }
 
   /** Reserve a slot in a kind's mesh, or refuse when the budget is spent. */
@@ -251,6 +300,7 @@ export class Scatter {
     this._centre.iz = ciz;
 
     for (const k in this.meshes) this._n[k] = 0;
+    this.solids.length = 0;
 
     /**
      * Scatter is drawn closer in than the ground.
@@ -275,6 +325,16 @@ export class Scatter {
       mesh.count = this._n[k] || 0;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+    /**
+     * Hand the solid pieces over in one go.
+     *
+     * Only the DETAIL tiles contribute — the nine round the player, 576
+     * units on a side — because a collider four hundred units away can
+     * never be touched and hashing it is pure cost. See `_fillTile`.
+     */
+    if (this.realm && this.realm.collision) {
+      this.solidCount = this.realm.collision.setStreamed(this.solids);
     }
     return tiles;
   }
@@ -314,6 +374,8 @@ export class Scatter {
       const sc = 0.8 + r() * 1.0;
       const th = 4.5 * sc, fh = 9 * sc, fr = 2.5 * sc;
       this._emit('trunk', x, y + th / 2, z, 0.55 * sc, th, 0.55 * sc, 0x5a4230);
+      // The trunk, and only the trunk. See `_solid`.
+      if (detail) this._solid(x, y + th * 0.5, z, 0.55 * sc, th * 0.5, 0.55 * sc);
       for (let k = 0; k < 3; k++) {
         const kt = k / 3;
         this._emit('pine', x, y + th * 0.6 + fh * kt * 0.72 + fh * 0.11, z,
@@ -329,6 +391,7 @@ export class Scatter {
       const sc = 0.8 + r() * 0.9;
       const th = 5.5 * sc, cr = 3.0 * sc;
       this._emit('trunk', x, y + th / 2, z, 0.6 * sc, th, 0.6 * sc, 0x6b4f33);
+      if (detail) this._solid(x, y + th * 0.5, z, 0.6 * sc, th * 0.5, 0.6 * sc);
       this._emit('blob', x, y + th + cr * 0.5, z, cr, cr * 0.85, cr,
         _c.copy(pal.grass).multiplyScalar(0.9).getHex(), r() * 3, r(), r());
       this._emit('blob', x + cr * 0.5, y + th + cr * 0.2, z - cr * 0.3,
@@ -343,6 +406,16 @@ export class Scatter {
       this._emit('rock', x, y + s * 0.45, z, s, s * 0.75, s * 0.9,
         _c.copy(pal.rock).multiplyScalar(0.85 + r() * 0.3).getHex(),
         r() * 3, r() * 0.4, r() * 0.4);
+      /**
+       * Boulders over 1.5 units. Under that you scramble over them, which
+       * is the rule js/world.js already uses for the valley's rocks — and
+       * the collider is inset from the silhouette for the same reason:
+       * snagging on the edge of a rock you were clearly going to clear is
+       * worse than clipping a corner of one.
+       */
+      if (detail && s > 1.5) {
+        this._solid(x, y + s * 0.35, z, s * 0.78, s * 0.5, s * 0.7);
+      }
     });
 
     // ---- reeds, in and at the waterline ----
@@ -381,6 +454,11 @@ export class Scatter {
       const col = _c.copy(pal.high).multiplyScalar(0.85 + r() * 0.35).getHex();
       this._emit('shard', x, y + s * 0.9, z, s * 0.5, s * 1.9, s * 0.5,
         col, r() * 3, (r() - 0.5) * 0.3, (r() - 0.5) * 0.3);
+      // A three-metre spike of ice or obsidian is not something to walk
+      // through. The small ones stay passable so the ice fields still flow.
+      if (detail && s > 2.0) {
+        this._solid(x, y + s * 0.8, z, s * 0.42, s * 0.9, s * 0.42);
+      }
       if (r() < 0.7) {
         const t = s * (0.4 + r() * 0.4);
         this._emit('shard', x + s * 0.7, y + t * 0.8, z - s * 0.4,

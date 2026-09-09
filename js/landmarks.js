@@ -25,8 +25,8 @@
  * silhouette, or the region behind it becomes unreachable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { mulberry32 } from './util.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { mulberry32 } from './util.js?v=v93';
 
 const G = {
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -60,6 +60,8 @@ function mats() {
     // Lit things: their own light source, so they read at dusk and in fog.
     lamp: B(0xffd76b), ember: B(0xff7a3c), glow: B(0x8fe8ff),
     prism: B(0xc0e8ff), water: L(0x3f8fb8, 0x0d3348),
+    /** The corruption's colour. The same violet js/throne.js uses. */
+    violet: B(0x9f6ce8),
   };
   return M;
 }
@@ -310,12 +312,21 @@ const BUILD = {
       put(g, G.box, i % 4 === 0 ? P.sandDark : P.sand, w, 7, w, 0, 3.5 + i * 6.6, 0);
     }
     solid(96, 40, 96, 0, 40, 0, 'wall');
-    // The door somebody dug out, at the bottom of a cut in the sand.
+    /**
+     * The door somebody dug out, at the bottom of a cut in the sand.
+     *
+     * All three pieces sit OUTSIDE the pyramid's own collider at z 52-60,
+     * so the doorway block and both walls of the cut were walk-through
+     * masonry. The obsidian in the middle is the door itself and stays
+     * open, because the point of the landmark is that somebody got in.
+     */
     put(g, G.box, P.stoneDark, 16, 22, 8, 0, 8, 52);
+    solid(16, 11, 8, 0, 8, 52, 'wall');
     put(g, G.box, P.obsidian, 11, 16, 3, 0, 8, 57);
     put(g, G.box, P.gold, 13, 2.4, 4, 0, 18, 56);
     for (const sx of [-1, 1]) {
       put(g, G.box, P.sandDark, 6, 26, 30, sx * 22, 6, 60);
+      solid(6, 13, 30, sx * 22, 6, 60, 'wall');
     }
     // A capstone that catches the light.
     put(g, G.octa, P.gold, 9, 12, 9, 0, 116, 0);
@@ -340,7 +351,17 @@ const BUILD = {
       put(g, G.cyl, i % 3 === 0 ? P.stonePale : P.stone, r, h, r, x, h / 2, z);
       // The hole the wind comes through.
       put(g, G.box, P.stoneDark, r * 0.7, 10, r * 2.4, x, h * 0.72, z);
-      if (i % 4 === 0) solid(r, h / 2, r, x, h / 2, z, 'pipe');
+      /**
+       * EVERY pipe is solid, not every fourth.
+       *
+       * `i % 4 === 0` made six of the twenty-four solid, which meant
+       * eighteen columns of rock between sixty and a hundred and fifty
+       * units tall that the player walked straight through. There is
+       * nothing in this game that looks more solid than a cliff, and the
+       * gaps between the pipes are wide enough to walk between — that is
+       * what makes it an organ rather than a wall.
+       */
+      solid(r * 0.9, h / 2, r * 0.9, x, h / 2, z, 'pipe');
     }
     put(g, G.box, P.stoneDark, 240, 8, 40, 0, 4, 10);
     solid(120, 4, 20, 0, 4, 10, 'deck');
@@ -386,11 +407,26 @@ const BUILD = {
       put(t, G.box, P.tile, 12, 7, 0.4, 6, h + 36, 0);
       solid(10, h / 2, 10, tx, h / 2, tz, 'tower');
     }
-    // The curtain wall, mostly under.
+    /**
+     * The curtain wall, mostly under — and solid, laid TANGENTIALLY.
+     *
+     * A box rotated about Y by θ has its local +X along (cos θ, −sin θ),
+     * and the tangent at angle `a` is (−sin a, cos a), which gives
+     * θ = −a − π/2. `a + π/2` gets the z component backwards, so the ring
+     * was ten twenty-two-unit slabs at angles to each other rather than a
+     * wall — the same mistake the keep and city walls had in
+     * js/realmsites.js. The colliders are a chain of cubes along the run,
+     * because nothing in the collision world takes a rotation.
+     */
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2;
-      put(g, G.box, P.marbleDark, 22, 20, 6, Math.cos(a) * 62, 6,
-        Math.sin(a) * 62, 0, a + Math.PI / 2);
+      const cx = Math.cos(a) * 62, cz = Math.sin(a) * 62;
+      const dx = -Math.sin(a), dz = Math.cos(a);
+      put(g, G.box, P.marbleDark, 22, 20, 6, cx, 6, cz, 0, -a - Math.PI / 2);
+      for (let k = -3; k <= 3; k++) {
+        const t = (k / 3) * 11;
+        solid(4, 10, 4, cx + dx * t, 6, cz + dz * t, 'wall');
+      }
     }
     put(g, G.disc, P.water, 110, 1, 110, 0, 8, 0);
   },
@@ -642,28 +678,72 @@ const BUILD = {
     }
   },
 
-  // ─────────────────────────────────────────────────────── the Ashen Throne ──
+  /**
+   * ─────────────────────────────────────────────── the Ascended Throne ──
+   *
+   * This was a slab of obsidian in an ash field, and it stood exactly where
+   * the last fight of the game happens — so the final battle was staged on
+   * the roof of its dais. The fight has moved into its own arena (see
+   * js/throne.js) and this has moved ninety units back to be what a
+   * landmark is for: the thing looming over him from behind.
+   *
+   * And it is now the same contradiction the arena is. The seat is
+   * HEAVENLY — white marble, a hundred and thirty units of it, with a fan
+   * of gold rays behind — and the obsidian is growing THROUGH it: up the
+   * legs, across the seat, out of the cracks in the rays. You can read the
+   * whole story of the region off its skyline: something beautiful, taken.
+   */
   throne(g, rnd, solid) {
     const P = mats();
-    // A seat far too big for anything that walks, on a stepped dais.
+    // A stepped dais in pale marble, its lower courses gone black.
     for (let i = 0; i < 5; i++) {
       const w = 96 - i * 13;
-      put(g, G.box, i % 2 ? P.obsidian : P.ash, w, 7, w, 0, 3.5 + i * 6.4, 0);
+      put(g, G.box, i < 2 ? P.obsidian : P.marble, w, 7, w, 0, 3.5 + i * 6.4, 0);
     }
     solid(96, 18, 96, 0, 18, 0, 'deck');
-    put(g, G.box, P.obsidian, 54, 12, 46, 0, 38, 0);
-    put(g, G.box, P.obsidian, 54, 84, 12, 0, 76, -22);
+    // The seat, and the back going up a hundred units.
+    put(g, G.box, P.marble, 54, 12, 46, 0, 38, 0);
+    put(g, G.box, P.marbleDark, 54, 84, 12, 0, 76, -22);
     solid(54, 42, 12, 0, 76, -22, 'wall');
     for (const sx of [-1, 1]) {
-      put(g, G.box, P.obsidian, 10, 46, 44, sx * 26, 56, 4);
-      put(g, G.cone, P.ember, 6, 22, 6, sx * 40, 60, -18);
+      // Arms, and a gilded finial on each.
+      put(g, G.box, P.marble, 10, 46, 44, sx * 26, 56, 4);
+      put(g, G.cone, P.gold, 5, 16, 5, sx * 26, 87, 4);
+      solid(10, 23, 44, sx * 26, 56, 4, 'wall');
     }
-    // A crown of spikes across the back, and the ash blowing off them.
-    for (let i = -4; i <= 4; i++) {
-      const h = 26 + (4 - Math.abs(i)) * 12;
-      put(g, G.cone, P.obsidian, 5, h, 5, i * 12, 118 + h / 2 - 26, -22);
+    /**
+     * A FAN OF GOLD RAYS behind the back, which is the read from a mile
+     * away: nothing else in the Emberwaste or the Ashen Throne has a
+     * straight gold edge on it.
+     */
+    for (let i = -5; i <= 5; i++) {
+      const h = 92 - Math.abs(i) * 9;
+      put(g, G.box, P.gold, 4, h, 3, i * 13, 118 + h / 2 - 40, -30,
+        0, 0, i * 0.10);
     }
-    put(g, G.low, P.ember, 12, 5, 12, 0, 44, 6);
+    // The crown across the top of the back — seven points, as everywhere.
+    for (let i = -3; i <= 3; i++) {
+      const h = 20 + (3 - Math.abs(i)) * 11;
+      put(g, G.cone, P.gold, 5, h, 5, i * 16, 118 + h / 2 - 4, -22);
+    }
+    /**
+     * AND THE OBSIDIAN COMING THROUGH IT.
+     *
+     * Seeded, so it is the same growth on every machine. Spars of black
+     * stone out of the seat and up the back, plus violet in the cracks —
+     * the same violet that is in his own throne down in the arena.
+     */
+    for (let i = 0; i < 16; i++) {
+      const h = 18 + rnd() * 46;
+      put(g, G.cone, P.obsidian, 3 + rnd() * 4, h, 3 + rnd() * 4,
+        (rnd() - 0.5) * 52, 44 + rnd() * 46, -18 + (rnd() - 0.5) * 22,
+        (rnd() - 0.5) * 0.5, rnd() * 3, (rnd() - 0.5) * 0.5);
+    }
+    for (let i = 0; i < 9; i++) {
+      put(g, G.box, P.violet, 1.4, 8 + rnd() * 22, 1.4,
+        (rnd() - 0.5) * 48, 40 + rnd() * 60, -15, 0, 0, (rnd() - 0.5) * 0.8);
+    }
+    put(g, G.low, P.obsidian, 14, 6, 14, 0, 45, 6);
   },
 };
 

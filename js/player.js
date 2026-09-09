@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v92';
-import { CFG } from './config.js?v=v92';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v92';
-import { FrogModel } from './frog.js?v=v92';
-import { Grapple, GrappleState } from './grapple.js?v=v92';
-import { Combat, Health } from './combat.js?v=v92';
-import { Stamina } from './stamina.js?v=v92';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v92';
-import { Audio } from './audio.js?v=v92';
+import * as THREE from '../lib/three.module.js?v=v93';
+import { CFG } from './config.js?v=v93';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v93';
+import { FrogModel } from './frog.js?v=v93';
+import { Grapple, GrappleState } from './grapple.js?v=v93';
+import { Combat, Health } from './combat.js?v=v93';
+import { Stamina } from './stamina.js?v=v93';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v93';
+import { Audio } from './audio.js?v=v93';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -129,6 +129,22 @@ export class Player {
     this.inWater = false;
     this.swimStroke = 0;
     this.sprinting = false;
+    /**
+     * THE PROCESSION LOCK — no dash, no grapple, no sprint.
+     *
+     * Set while the player is walking the carpet after the coronation. See
+     * js/coronation.js: the point of that walk is that it is a WALK, and a
+     * player who can dash the length of a hundred-metre carpet in three
+     * seconds has not had a coronation, they have had a loading screen.
+     *
+     * Deliberately one flag on the player rather than three checks in the
+     * caller. It is read in exactly three places below — the sprint
+     * modifier, the dash key and the grapple key — and everything else the
+     * player can do, including jumping, swinging and looking around, still
+     * works. Being unable to move at all would be a cutscene, and this is
+     * meant to be something the player does.
+     */
+    this.solemn = false;
     this._bubbleTimer = 0;
     this._sprintTrail = 0;
     this._sprintSound = 0;
@@ -357,7 +373,7 @@ export class Player {
     // Sprint is a held modifier: Shift plus any movement input. Facing always
     // follows the movement direction, so the run is never a backpedal.
     // It works underwater too, as a gentler swim boost.
-    this.sprinting = active && hasInput && this.stamina.canAct
+    this.sprinting = active && hasInput && !this.solemn && this.stamina.canAct
       && (input.down('ShiftLeft') || input.down('ShiftRight'));
 
     if (this.sprinting) {
@@ -373,8 +389,18 @@ export class Player {
     if (active) {
       if (input.consume('Space')) this.jumpBuffer = CFG.move.jumpBuffer;
       this.jumpHeld = input.down('Space');
-      if (input.consume('KeyQ')) this._tryDash(_wish, hasInput, cam);
-      if (input.consume('KeyG')) this._toggleGrapple(cam);
+      /**
+       * Dash and grapple, unless the procession lock is on.
+       *
+       * The presses are still CONSUMED while locked. `consume` is what
+       * clears a key from the buffer, so skipping the call would leave Q
+       * sitting there and the player would dash the instant the walk ended
+       * — from wherever they had been mashing it.
+       */
+      if (input.consume('KeyQ') && !this.solemn) {
+        this._tryDash(_wish, hasInput, cam);
+      }
+      if (input.consume('KeyG') && !this.solemn) this._toggleGrapple(cam);
       // Left mouse uses whatever is in your hand: swing the katana, or throw
       // the kunai. One button for "attack" is the intuitive mapping, and it
       // frees the right button to mean guard and nothing else.

@@ -37,10 +37,10 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v92';
-import { Audio } from './audio.js?v=v92';
-import { Cine } from './cinema.js?v=v92';
-import { MemoryScene, STAGE } from './memoryscene.js?v=v92';
+import { MEMORY_THEME } from './themes.js?v=v93';
+import { Audio } from './audio.js?v=v93';
+import { Cine } from './cinema.js?v=v93';
+import { MemoryScene, STAGE } from './memoryscene.js?v=v93';
 
 const $ = (id) => document.getElementById(id);
 
@@ -424,6 +424,62 @@ export class Flashbacks {
     Cine.play(script, { bars: !!acted, onEnd: () => this._end() });
   }
 
+  /**
+   * PLAY A STAGED SCENE THAT IS NOT A MEMORY.
+   *
+   * Everything in `_play` except the parts that make it a memory: no entry
+   * is added to `progress.memories`, no MEMORY RECOVERED banner, and the
+   * script is taken as written instead of having camera cues sprinkled
+   * through it — a scene with its own choreography wants to say where its
+   * own cuts go.
+   *
+   * The reason it lives here rather than in a class of its own is that all
+   * the awkward parts are already solved here: the wash that covers the cut
+   * a mile into the sky, remembering the camera so the world comes back
+   * exactly as it was, and the `busy` flag the overworld freezes on. There
+   * is one caller — the coronation. See js/coronation.js.
+   *
+   * @param spec { id, title, lines, theme, note, onEnd }
+   * @returns true if it started
+   */
+  scene(spec) {
+    if (this.busy) return false;
+    const acted = this.stage && this.camera && this.stage.begin(spec.id);
+    if (!acted && !this.camera) {
+      /**
+       * No stage and no camera — a headless caller, or a mode that never
+       * built one. The dialogue still runs, because the words are the part
+       * that carries the story and a silent skip would lose the ending
+       * entirely.
+       */
+      Cine.play(spec.lines, { bars: true, onEnd: spec.onEnd || (() => {}) });
+      return true;
+    }
+    this.busy = true;
+    this.live = { id: spec.id, title: spec.title, note: spec.note || '' };
+    this.t = 0;
+    if (acted) {
+      this._camWas = {
+        pos: this.camera.position.clone(),
+        quat: this.camera.quaternion.clone(),
+      };
+    }
+    if (this.wash) {
+      const label = this.wash.querySelector('.mw-label');
+      if (label) label.textContent = spec.title || '';
+      this.wash.classList.add('show');
+      this.wash.classList.toggle('thin', !!acted);
+    }
+    this._acted = !!acted;
+    this._lifted = false;
+    this._sceneEnd = spec.onEnd || null;
+    Audio.stopTheme();
+    if (spec.theme) Audio.setTheme(spec.theme, 'scene:' + spec.id);
+    Audio.cue(null);
+    Cine.play(spec.lines, { bars: true, onEnd: () => this._end() });
+    return true;
+  }
+
   _end() {
     if (this.wash) {
       this.wash.classList.remove('show');
@@ -442,7 +498,18 @@ export class Flashbacks {
     const m = this.live;
     this.live = null;
     Audio.stopTheme();
-    if (this.hud && m) this.hud.toast(m.note, 6);
+    if (this.hud && m && m.note) this.hud.toast(m.note, 6);
+    /**
+     * A staged scene's own ending hook, and it is called LAST.
+     *
+     * The coronation's hook puts the player down on a real carpet and takes
+     * their abilities away, and both of those want the camera already
+     * handed back and `busy` already false — otherwise the walk starts
+     * inside a frame that still thinks a cutscene owns the screen.
+     */
+    const hook = this._sceneEnd;
+    this._sceneEnd = null;
+    if (hook) hook();
   }
 
   /** Drive the scene and the dialogue. Called every frame while `busy`. */
