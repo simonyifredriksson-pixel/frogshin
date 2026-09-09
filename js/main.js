@@ -5,43 +5,43 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v94';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v94';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v94';
-import { Input } from './input.js?v=v94';
-import { Audio } from './audio.js?v=v94';
-import { World } from './world.js?v=v94';
-import { Effects } from './effects.js?v=v94';
-import { Atmosphere } from './atmosphere.js?v=v94';
-import { FollowCamera } from './camera.js?v=v94';
-import { Player } from './player.js?v=v94';
-import { RemotePlayer } from './remote.js?v=v94';
-import { HUD } from './hud.js?v=v94';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v94';
-import { FrogModel } from './frog.js?v=v94';
-import { DummyField } from './dummy.js?v=v94';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v94';
-import { ToadModel } from './npc.js?v=v94';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v94';
-import { DungeonRun } from './dungeon.js?v=v94';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v94';
-import { JudgmentRun } from './judgment.js?v=v94';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v94';
-import { COMBO_NAMES } from './ascended.js?v=v94';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v94';
-import { MenuScene } from './menu.js?v=v94';
-import { Economy } from './economy.js?v=v94';
-import { Shop } from './shop.js?v=v94';
-import { Network, NetRole } from './net.js?v=v94';
-import { Overworld } from './overworld.js?v=v94';
-import { InventoryScreen } from './inventoryui.js?v=v94';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v94';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v94';
-import { Cine } from './cinema.js?v=v94';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v94';
-import { MEMORIES } from './flashbacks.js?v=v94';
-import { GUARDIANS } from './guardians.js?v=v94';
-import { gearOfTier } from './gear.js?v=v94';
+import * as THREE from '../lib/three.module.js?v=v95';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v95';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v95';
+import { Input } from './input.js?v=v95';
+import { Audio } from './audio.js?v=v95';
+import { World } from './world.js?v=v95';
+import { Effects } from './effects.js?v=v95';
+import { Atmosphere } from './atmosphere.js?v=v95';
+import { FollowCamera } from './camera.js?v=v95';
+import { Player } from './player.js?v=v95';
+import { RemotePlayer } from './remote.js?v=v95';
+import { HUD } from './hud.js?v=v95';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v95';
+import { FrogModel } from './frog.js?v=v95';
+import { DummyField } from './dummy.js?v=v95';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v95';
+import { ToadModel } from './npc.js?v=v95';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v95';
+import { DungeonRun } from './dungeon.js?v=v95';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v95';
+import { JudgmentRun } from './judgment.js?v=v95';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v95';
+import { COMBO_NAMES } from './ascended.js?v=v95';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v95';
+import { MenuScene } from './menu.js?v=v95';
+import { Economy } from './economy.js?v=v95';
+import { Shop } from './shop.js?v=v95';
+import { Network, NetRole } from './net.js?v=v95';
+import { Overworld } from './overworld.js?v=v95';
+import { InventoryScreen } from './inventoryui.js?v=v95';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v95';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v95';
+import { Cine } from './cinema.js?v=v95';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v95';
+import { MEMORIES } from './flashbacks.js?v=v95';
+import { GUARDIANS } from './guardians.js?v=v95';
+import { gearOfTier } from './gear.js?v=v95';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2208,14 +2208,25 @@ class Game {
     this.kunaiSystem.update(dt, targets);
     if (p.deathPending) p.deathPending = false;
     /**
-     * The katana queues its hits as EVENTS, because in the arena they have
-     * to travel to the victim's client. Nothing here is networked, so this
-     * is where they land — and the island's own targets have already
-     * applied the damage through their `onHit`, so all that is left is the
-     * hitmarker.
+     * ═══ THE KATANA'S HITS, APPLIED ══════════════════════════════════════
+     *
+     * The blade does NOT call a target's `onHit`. It queues a `hit` EVENT,
+     * because in the arena a hit has to travel to the victim's client, and
+     * whichever mode it happened in is what applies it — see `_applyHits`
+     * in js/player.js, where `onHit` is only called directly for `isDummy`
+     * targets. The dungeon resolves these with `damageBoss`, the open world
+     * against its own mobs, and this is the island's.
+     *
+     * Getting this wrong once made every straw target and every mob on the
+     * island completely immune to the sword. Thrown kunai still worked,
+     * because a kunai calls `onHit` itself, which is precisely what made it
+     * look like the sword was landing — the hit spark, the damage number
+     * and the hitmarker all came up and nothing took any damage.
      */
     for (const ev of p.events) {
-      if (ev.t === 'hit') this.hud.hitmarker(ev.c === 2);
+      if (ev.t !== 'hit') continue;
+      isle.applyHit(ev.id, ev.dmg);
+      this.hud.hitmarker(ev.c === 2);
     }
     p.events.length = 0;
 

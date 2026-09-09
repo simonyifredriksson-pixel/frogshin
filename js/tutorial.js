@@ -51,14 +51,14 @@
  * a gap and the positions are worked out from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v94';
-import { CFG } from './config.js?v=v94';
-import { clamp, mulberry32 } from './util.js?v=v94';
-import { Terrain, CollisionWorld } from './collision.js?v=v94';
-import { Mob } from './mobs.js?v=v94';
-import { addFrog } from './frogbuild.js?v=v94';
-import { Cine } from './cinema.js?v=v94';
-import { Audio } from './audio.js?v=v94';
+import * as THREE from '../lib/three.module.js?v=v95';
+import { CFG } from './config.js?v=v95';
+import { clamp, mulberry32 } from './util.js?v=v95';
+import { Terrain, CollisionWorld } from './collision.js?v=v95';
+import { Mob } from './mobs.js?v=v95';
+import { addFrog } from './frogbuild.js?v=v95';
+import { Cine } from './cinema.js?v=v95';
+import { Audio } from './audio.js?v=v95';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -124,12 +124,51 @@ export const ISLE = {
  *   0.76 s in the air, and runSpeed 15.5 carries you ~11.8 units in that.
  *   The frog flip adds most of another arc: ~19. A dash is 47 u/s for
  *   0.17 s and keeps 52% of that afterwards, so a jump with a dash in it is
- *   about 24. The tongue reaches 62.
+ *   about 31. The tongue reaches 62.
  *
- * So: 9 is a hop anybody lands, 15 needs the second jump, 23 needs the dash
- * and cannot be flipped, and 34 needs the tongue and cannot be dashed.
+ * ── and then they were all made much smaller ────────────────────────────
+ * The first version of this island used 9 / 15 / 23 / 34, which are the
+ * numbers you get by asking "what proves the player used the right key".
+ * They were far too hard, and the reason is worth writing down: the person
+ * on this island has never played this game and may never have played
+ * anything. They do not yet know that you have to be RUNNING before you
+ * jump. They will jump from a standstill, which carries about six units,
+ * and fall in the sea.
+ *
+ * So every gap is now sized for the worst realistic attempt rather than for
+ * the ideal one:
+ *
+ *   hop 5      clears a standing jump, never mind a running one
+ *   flip 10    past a standing jump but inside a running one, and trivial
+ *              with the second jump — so the flip gets DISCOVERED here
+ *              rather than being required
+ *   dash 16    past a running jump. Crossed by running at it and pressing
+ *              Q — no jump, no timing, one key — and the far side is LOWER
+ *              (see `_layout`), which is what makes that work
+ *   tongue 26  past everything but the tongue, and less than half its range
+ *
+ * The stations still teach the same four things in the same order. What
+ * changed is that failing one is now a near miss instead of a fall, and the
+ * checkpoint follows you across a course platform by platform, so a missed
+ * jump costs one gap and not the whole crossing. See `_rollCheckpoint`.
  */
-const GAP = { hop: 9, flip: 15, dash: 23, tongue: 34 };
+export const GAP = { hop: 5, flip: 10, dash: 16, tongue: 26 };
+
+/**
+ * HOW FAR EACH CHASM TOP SITS BELOW THE ONE BEFORE IT.
+ *
+ * The dash station descends. That is not decoration — it is what makes a
+ * sixteen-unit gap crossable by a beginner with one keypress: a running
+ * dash off a ledge carries about twenty units of ground before gravity has
+ * taken you far down, so a landing four units LOWER catches somebody who
+ * simply held W and pressed Q. Dashing across a gap onto a platform at the
+ * same height is a much finer thing to ask, and it was what made the first
+ * version of this station a wall.
+ *
+ * It also looks like the far side of a chasm, which is what the whole
+ * island is supposed to look like.
+ */
+const CHASM_DROP = 4;
 
 /**
  * ═══ THE NINE STATIONS ══════════════════════════════════════════════════
@@ -144,6 +183,22 @@ const GAP = { hop: 9, flip: 15, dash: 23, tongue: 34 };
  *   break   destroy straw targets
  *   parry   turn blows aside
  *   kill    put mobs down
+ *
+ * ── `weapon`, and the trap it closes ────────────────────────────────────
+ * Which slot the island puts in the player's hand as the station begins.
+ *
+ * This exists because of a real and completely invisible dead end. Right
+ * click is only a guard WITH THE KATANA IN HAND — see `_updateParry` in
+ * js/player.js, which does nothing at all unless the selected slot is the
+ * blade. The yard's lesson asks the player to press 2 for a kunai. A
+ * beginner does not then press 1. They walk into the parry station holding
+ * a handful of throwing knives, hold right click, and NOTHING HAPPENS: no
+ * guard, no message, no way to work out why, and a door that only parries
+ * open.
+ *
+ * So the island puts the right thing in your hand at the start of every
+ * station that needs one, and says so. A tutorial is the one place in a
+ * game where it is not the player's job to have remembered.
  */
 export const STATIONS = [
   {
@@ -165,64 +220,102 @@ export const STATIONS = [
   {
     id: 'chasm', title: 'THE CHASM', kind: 'reach',
     objective: 'Dash across the gaps',
-    prompt: ['DASH', 'Q', 'IN THE AIR, AFTER THE JUMP'],
-    teach: 'Q dashes. Jump first, then dash while you are out over the water '
-      + '— it carries you further than any jump, it costs stamina, and for a '
-      + 'moment nothing can touch you.',
-    master: 'Too far to jump. That is rather the point. Jump, then Q.',
+    prompt: ['DASH', 'Q', 'RUN AT THE GAP AND PRESS Q'],
+    teach: 'Q dashes. Just run at the gap and press Q — you do not need to '
+      + 'jump. It carries you much further than a jump, and for a moment '
+      + 'nothing can touch you. The far side is lower, so a dash always '
+      + 'gets there.',
+    master: 'Too far to jump. Run at it and press Q. That is all.',
   },
   {
     id: 'posts', title: 'THE POSTS', kind: 'reach',
     objective: 'Grapple post to post',
-    prompt: ['TONGUE', 'G', 'AIM AT THE LIGHTS'],
-    teach: 'G fires your tongue at anything glowing. It reels you in, and you '
-      + 'can swing on it. G again lets go. It is the best thing you own.',
+    prompt: ['TONGUE', 'G', 'LOOK AT A LIGHT AND PRESS G'],
+    teach: 'G fires your tongue at anything glowing. Look at the next light '
+      + 'and press G — it reels you straight in. Press G again to let go. It '
+      + 'is the best thing you own.',
     master: 'Look at a light. Press G. Do not think about it too hard.',
   },
   {
-    id: 'yard', title: 'THE YARD', kind: 'break', need: 4,
+    id: 'yard', title: 'THE YARD', kind: 'break', need: 3,
+    weapon: 'katana',
     objective: 'Destroy the straw targets',
-    prompt: ['SWING', 'LEFT CLICK', '— PRESS 2 FOR KUNAI, 1 FOR THE BLADE'],
-    teach: 'LEFT CLICK swings the katana; keep going for the combo, the third '
-      + 'is the heavy one. The fourth target is out over the water: press 2 '
-      + 'to take out a kunai, throw it with LEFT CLICK, then press 1 to put '
-      + 'the blade back in your hand.',
+    prompt: ['SWING', 'LEFT CLICK', 'THREE TIMES FOR THE HEAVY ONE'],
+    teach: 'LEFT CLICK swings the katana; keep clicking for the combo, and '
+      + 'the third one is the heavy hit. Three of the targets are in front '
+      + 'of you.',
     master: 'Straw first. Straw does not hit back and you are not ready.',
   },
   {
+    /**
+     * The kunai get a station of their own.
+     *
+     * They used to be the fourth target of the yard, which meant one
+     * station taught two weapons AND a hotbar — and then handed the player
+     * straight to a parry station holding the wrong one. Split out, the
+     * yard is "this is your sword" and this is "this is what you throw",
+     * and the island puts the blade back for the guard.
+     */
+    id: 'throw', title: 'THE HIGH TARGET', kind: 'break', need: 1,
+    weapon: 'kunai',
+    objective: 'Knock down the high target',
+    prompt: ['THROW', 'LEFT CLICK', 'A KUNAI IS ALREADY IN YOUR HAND'],
+    teach: 'That one is too high to reach. A kunai is in your hand now — '
+      + 'press 2 for it any time — and LEFT CLICK throws it. You have '
+      + 'plenty; they do not come back, so in the real country you pick '
+      + 'them up again.',
+    master: 'You cannot reach that one. So do not reach. Throw.',
+  },
+  {
     id: 'ring', title: 'THE RING', kind: 'parry', need: 3,
+    weapon: 'katana',
     objective: 'Parry three blows',
-    prompt: ['GUARD', 'RIGHT CLICK', 'HOLD IT — AND KEEP THE BLADE IN HAND'],
-    teach: 'HOLD RIGHT CLICK to guard, with the katana in hand — press 1 if '
-      + 'you still have kunai out. A red ring on the ground is a blow about '
-      + 'to land. Hold the guard through it. Turn one aside and you must wait '
-      + 'a moment before guarding again.',
+    prompt: ['GUARD', 'HOLD RIGHT CLICK', 'AND KEEP HOLDING IT'],
+    teach: 'HOLD RIGHT CLICK down to guard. The blade is back in your hand — '
+      + 'press 1 if you ever need it again, because the guard only works '
+      + 'with the sword out. A red ring on the ground means a blow is about '
+      + 'to land: hold the guard through it and you turn it aside. You can '
+      + 'simply keep holding it the whole time; that is fine.',
     master: 'She shows you the blow before she throws it. Everything in this '
       + 'country does. Watch the ground, not her.',
   },
   {
-    id: 'pit', title: 'THE PIT', kind: 'kill', need: 3,
-    objective: 'Put down all three',
-    prompt: ['FIGHT', 'ALL OF IT', 'GUARD IT OR DASH IT — BOTH WORK'],
-    teach: 'Three at once. You can dash out of a red ring instead of guarding '
-      + 'it — a dash has the same moment of nothing-touches-you. Knowing '
-      + 'which to use is most of this game.',
-    master: 'Three. Do not stand in the middle of them.',
+    /**
+     * TWO, not three, and the second one waits.
+     *
+     * Three at once was the wrong lesson for the fourth minute of somebody's
+     * first game: a beginner who has just learned to swing cannot track
+     * three telegraphs, so it read as being mobbed rather than as a fight.
+     * One at a time, with the second waking when the first goes down, is
+     * the same lesson — keep moving, guard or dash — at a pace anybody can
+     * follow. See `_spawnPit`.
+     */
+    id: 'pit', title: 'THE PIT', kind: 'kill', need: 2,
+    weapon: 'katana',
+    objective: 'Put them down',
+    prompt: ['FIGHT', 'LEFT CLICK', 'GUARD IT OR DASH IT — BOTH WORK'],
+    teach: 'One at a time. You can dash out of a red ring instead of '
+      + 'guarding it — a dash has the same moment of nothing-touches-you. '
+      + 'Knowing which to use is most of this game.',
+    master: 'One, then the other. Do not stand still in front of them.',
   },
   {
     id: 'run', title: 'THE RUN', kind: 'reach',
     objective: 'Run the course to the plaza',
     prompt: ['EVERYTHING', 'IN ORDER', 'JUMP — DASH — TONGUE — WALL'],
-    teach: 'Jump the short ones, dash the long one, tongue the posts. At the '
-      + 'end there is a wall: hold into it and press SPACE to kick off it.',
+    teach: 'Jump the short ones, dash the long one, tongue the lights. At the '
+      + 'end there is a wall: run into it, hold forward, and press SPACE to '
+      + 'kick off it.',
     master: 'Everything I have shown you, in one go, without stopping.',
   },
   {
     id: 'warden', title: 'THE WARDEN', kind: 'kill', need: 1,
+    weapon: 'katana',
     objective: 'Beat the Warden of the First Island',
-    prompt: ['THE WARDEN', 'ALL OF IT', 'GUARD, HIT THREE TIMES, GET OUT'],
+    prompt: ['THE WARDEN', 'LEFT CLICK', 'GUARD, HIT THREE TIMES, GET OUT'],
     teach: 'He telegraphs like everything else. Guard it or dash it, take '
-      + 'your three hits, and get back out of his reach.',
+      + 'your three hits, and get back out of his reach. He cannot finish '
+      + 'you — if he puts you down you get straight back up.',
     master: 'One more, and he is not straw. If he puts you down, get up.',
   },
 ];
@@ -350,53 +443,109 @@ export class TutorialIsland {
      */
     const lagoonFrom = x;
 
-    // ── THE STEPS ─────────────────────────────────────────────────────────
-    let y = 1.4;
-    const stepHw = 3.5;
-    for (let i = 0; i < 9; i++) {
+    /**
+     * ── THE STEPS ────────────────────────────────────────────────────────
+     *
+     * Seven platforms, not nine, and each is TWELVE units across rather
+     * than seven. A wide platform is the cheapest forgiveness there is:
+     * every one of these is wider than the gap in front of it, so a jump
+     * that goes long lands anyway.
+     *
+     * The first five gaps are five units — a STANDING jump clears that, so
+     * a player who has not yet worked out that you run first still gets
+     * across. The last one is ten, which a standing jump does not do and a
+     * running jump or a frog flip both do: the one gap on the island that
+     * asks for something, placed last, when there is a row of successes
+     * behind it.
+     */
+    let y = 1.2;
+    const stepHw = 6;
+    for (let i = 0; i < 7; i++) {
       x += stepHw;
       P.steps.push({ x, y, hw: stepHw });
       x += stepHw;
-      // The first six are inside one jump; the last two need the flip.
-      if (i < 8) x += (i < 6 ? GAP.hop : GAP.flip);
-      y += 1.5;
+      if (i < 6) x += (i < 5 ? GAP.hop : GAP.flip);
+      /**
+       * Two and a half units of rise each, which is well inside a jump's
+       * 3.65-unit apex and adds up to fifteen by the top.
+       *
+       * The height matters as much as the gaps: everything after this
+       * station DESCENDS — two chasm tops four units down each, then three
+       * posts stepping down, then the landing — and if the steps do not
+       * climb far enough, the far end of the lagoon crossing comes out
+       * BELOW the island's own surface. Which is exactly what the first
+       * pass did: the landing landed at minus two, and its stair down to
+       * the beach went up.
+       */
+      y += 2.5;
     }
     const top = P.steps[P.steps.length - 1];
     const steps = S('steps');
     steps.at = P.steps[0].x;
-    steps.to = top.x - 3;
+    steps.to = top.x - 5;
     steps.y = top.y;
     steps.checkpoint = [P.arch + 4, 0, 0];
 
-    // ── THE CHASM ─────────────────────────────────────────────────────────
-    const chasmHw = 6;
+    /**
+     * ── THE CHASM ────────────────────────────────────────────────────────
+     *
+     * Two tops, sixteen units of air, and each one FOUR UNITS LOWER than
+     * the last. The drop is the whole trick — see `CHASM_DROP`: a running
+     * dash off a ledge is one keypress and lands you well short of the far
+     * lip if that lip is level, and comfortably ON it if the lip is lower.
+     *
+     * Fourteen units across, so the landing is wider than the gap.
+     */
+    // Eighteen units across, which is wider than the gap in front of it.
+    const chasmHw = 9;
+    let cy = top.y;
     for (let i = 0; i < 2; i++) {
       x += GAP.dash;
       x += chasmHw;
-      P.chasm.push({ x, y: top.y, hw: chasmHw });
+      cy -= CHASM_DROP;
+      P.chasm.push({ x, y: cy, hw: chasmHw });
       x += chasmHw;
     }
     const chasm = S('chasm');
     chasm.at = P.chasm[0].x;
-    chasm.to = P.chasm[1].x - 4;
+    chasm.to = P.chasm[1].x - 5;
     chasm.checkpoint = [top.x, top.y, 0];
 
-    // ── THE POSTS ─────────────────────────────────────────────────────────
-    const postHw = 3.2;
+    /**
+     * ── THE POSTS ────────────────────────────────────────────────────────
+     *
+     * Three posts, twenty-six units apart, and every cap is nine units
+     * across with the anchor sitting over the middle of it. The tongue
+     * reaches sixty-two and reels you straight in, so this is one keypress
+     * per post with a generous target — and the caps step DOWN like the
+     * chasm did, so somebody who lets go early still lands on one.
+     */
+    const postHw = 4.5;
+    /**
+     * The first cap is FIVE UNITS ABOVE the ledge you leave.
+     *
+     * That, and not the distance, is what makes this station the tongue's.
+     * Twenty-six units is inside a jump-with-a-dash on the flat — but a
+     * dash is horizontal and then falls, so it cannot gain five units of
+     * height however it is timed. The alternative was a gap past a dash's
+     * whole reach, which would have meant thirty-five units of open water
+     * as somebody's first grapple, and that is a much worse thing to ask.
+     */
+    let py = P.chasm[1].y + 5;
     for (let i = 0; i < 3; i++) {
       x += GAP.tongue;
       x += postHw;
-      // Rising, and alternating a little, so the swing has somewhere to go.
-      P.posts.push({ x, y: top.y + 4 + i * 3, hw: postHw });
+      P.posts.push({ x, y: py, hw: postHw });
       x += postHw;
+      py -= 1.5;
     }
     x += GAP.tongue;
-    P.landing = { x: x + 7, y: top.y, hw: 7 };
+    P.landing = { x: x + 9, y: py - 1, hw: 9 };
     x = P.landing.x + P.landing.hw;
     const posts = S('posts');
     posts.at = P.posts[0].x;
-    posts.to = P.landing.x - 3;
-    posts.checkpoint = [P.chasm[1].x, top.y, 0];
+    posts.to = P.landing.x - 4;
+    posts.checkpoint = [P.chasm[1].x, P.chasm[1].y, 0];
 
     /**
      * The stair down to the grass. Eight treads, each a fixed rise, so it is
@@ -412,36 +561,47 @@ export class TutorialIsland {
     P.holes.push([lagoonFrom, x + 4]);
     x += 12;
 
-    // ── THE YARD ──────────────────────────────────────────────────────────
+    /**
+     * ── THE YARD ─────────────────────────────────────────────────────────
+     *
+     * Three straw men standing in the grass, close together, all three
+     * within a few steps of where the player walks in. Nothing here is a
+     * test of anything but "left click makes the sword go".
+     */
     const yard = S('yard');
     yard.at = x;
     P.yardAt = x + 20;
-    /**
-     * Three targets you can walk up to and one on a post out over the water
-     * on the island's north shore — which is the whole lesson about the
-     * kunai: there is a target you cannot reach and a key that deals with it.
-     */
-    /**
-     * Three you can walk up to, and one fifteen units in the air.
-     *
-     * UP rather than far away: the first version put the fourth one on a
-     * post out past the north shore, which measured a hundred and eighteen
-     * units from the nearest and read as a straw man on the horizon rather
-     * than as a target. On top of a post in the middle of the same yard it
-     * is unmistakably part of the station, obviously out of reach — nothing
-     * jumps fifteen units and there is no anchor on it — and close enough
-     * that a first kunai throw is not a guess.
-     */
     P.straw = [
-      { x: x + 12, z: -6, reach: true },
-      { x: x + 20, z: 8, reach: true },
-      { x: x + 29, z: -5, reach: true },
-      { x: x + 22, z: -1, reach: false, up: 15 },
+      { x: x + 14, z: -5, reach: true, station: 'yard' },
+      { x: x + 21, z: 6, reach: true, station: 'yard' },
+      { x: x + 28, z: -4, reach: true, station: 'yard' },
     ];
-    x += 44;
+    x += 42;
     yard.door = x;
     yard.to = x + 4;
     yard.checkpoint = [yard.at + 4, 0, 0];
+    x += 12;
+
+    /**
+     * ── THE HIGH TARGET ──────────────────────────────────────────────────
+     *
+     * One straw man, fifteen units up a smooth post, and its own station.
+     *
+     * UP rather than far away: an earlier version put it out past the north
+     * shore, a hundred and eighteen units off, where it read as a straw man
+     * on the horizon rather than as a target. On a post in front of you it
+     * is unmistakably the thing to deal with, obviously out of reach —
+     * nothing jumps fifteen units and there is no anchor on it — and close
+     * enough that a first throw is not a guess.
+     */
+    const thr = S('throw');
+    thr.at = x;
+    P.throwAt = x + 18;
+    P.straw.push({ x: x + 20, z: 0, reach: false, up: 15, station: 'throw' });
+    x += 34;
+    thr.door = x;
+    thr.to = x + 4;
+    thr.checkpoint = [thr.at + 4, 0, 0];
     x += 12;
 
     // ── THE RING ──────────────────────────────────────────────────────────
@@ -774,22 +934,23 @@ export class TutorialIsland {
    */
   _steps() {
     this.plan.steps.forEach((p, i) => {
-      this._plat(p.x, p.y, p.hw, 5.5);
-      if (i > 4) this.b.lamp.add(p.x, p.y + 1.6, 5.0, 0.5, 0.6, 0.5, 0xffd76b);
+      this._plat(p.x, p.y, p.hw, 7);
+      if (i > 3) this.b.lamp.add(p.x, p.y + 1.6, 6.4, 0.5, 0.6, 0.5, 0xffd76b);
     });
   }
 
   /**
    * ═══ THE CHASM — dashing ════════════════════════════════════════════════
    *
-   * Two tops at the height the steps left you at, with twenty-three units of
-   * air before each. See `GAP`: that is past a frog flip and inside a jump
-   * with a dash in it, which is what makes this station teach the dash
-   * rather than reward the jump the player already has.
+   * Two tops, sixteen units of air, each one four units lower than the last.
+   * See `GAP` and `CHASM_DROP`: the gap is past a running jump, the drop is
+   * what makes a running dash — one key, no timing — land on the far lip
+   * rather than short of it, and the tops are fourteen across so a dash
+   * that goes long still finds floor.
    */
   _chasm() {
     for (const p of this.plan.chasm) {
-      this._plat(p.x, p.y, p.hw, 12);
+      this._plat(p.x, p.y, p.hw, 13);
       // A gold chevron pointing on. It is the only direction cue out there
       // and the gap is wide enough to want one.
       for (let k = -1; k <= 1; k++) {
@@ -802,27 +963,35 @@ export class TutorialIsland {
   /**
    * ═══ THE POSTS — the tongue ═════════════════════════════════════════════
    *
-   * Three posts with lit anchors, thirty-four units apart. That is past a
-   * dash and well inside the tongue's sixty-two, so there is exactly one way
-   * across — and the anchors are the only lit things on this stretch, which
-   * is how "aim at the lights" becomes an instruction needing no arrow.
+   * Three posts with lit anchors, twenty-six units apart. That is past a
+   * dash and less than half the tongue's sixty-two, so there is exactly one
+   * way across and it is a comfortable one — and the anchors are the only
+   * lit things out here, which is how "look at a light and press G" becomes
+   * an instruction needing no arrow.
+   *
+   * The caps are NINE UNITS ACROSS and step down as they go, so the tongue
+   * pulling you slightly past one still puts you on it.
    */
   _posts() {
     for (const p of this.plan.posts) {
-      this.b.rod.add(p.x, p.y * 0.5 - 6, 0, p.hw * 0.62, p.y + 12,
-        p.hw * 0.62, 0x7a6a58);
-      this._solid(p.x, p.y * 0.5 - 6, 0, p.hw * 0.7, (p.y + 12) * 0.5,
-        p.hw * 0.7, 'stone');
+      this.b.rod.add(p.x, p.y * 0.5 - 6, 0, p.hw * 0.5, p.y + 12,
+        p.hw * 0.5, 0x7a6a58);
+      this._solid(p.x, p.y * 0.5 - 6, 0, p.hw * 0.55, (p.y + 12) * 0.5,
+        p.hw * 0.55, 'stone');
       this.b.box.add(p.x, p.y, 0, p.hw * 2, 1.4, p.hw * 2, 0x8a8172);
       this._solid(p.x, p.y, 0, p.hw, 0.7, p.hw, 'deck');
       /**
-       * The anchor, three units above the cap so the tongue has clear air
-       * round it, and generous — three units of radius — because this is
-       * somebody's first grapple and a near miss teaches nothing.
+       * The anchor, and it is FOUR AND A HALF units of radius.
+       *
+       * Generous on purpose. This is the first grapple anybody has ever
+       * fired in this game and a near miss teaches nothing at all — it just
+       * looks like the key does not work. The aim assist in
+       * `CFG.grapple.aimAssistAngle` helps too, but the radius is what
+       * makes looking roughly at the light enough.
        */
-      this._anchor(p.x, p.y + 3.4, 0, 3.0);
-      this.b.lamp.add(p.x, p.y + 3.4, 0, 1.1, 1.2, 1.1, 0xffd76b);
-      this.b.glow.add(p.x, p.y + 3.4, 0, 2.0, 2.1, 2.0, 0x8fe8ff);
+      this._anchor(p.x, p.y + 3.4, 0, 4.5);
+      this.b.lamp.add(p.x, p.y + 3.4, 0, 1.3, 1.4, 1.3, 0xffd76b);
+      this.b.glow.add(p.x, p.y + 3.4, 0, 2.4, 2.5, 2.4, 0x8fe8ff);
     }
     const L = this.plan.landing;
     this._plat(L.x, L.y, L.hw, 13);
@@ -833,38 +1002,39 @@ export class TutorialIsland {
   }
 
   /**
-   * ═══ THE YARD — the katana, and the kunai ═══════════════════════════════
+   * ═══ THE YARD — the katana ══════════════════════════════════════════════
    *
-   * Four straw targets behind a rail fence, with a stone door at the far
-   * end — a straw man is the one station a player can simply walk past.
+   * Three straw men behind a rail fence, with a stone door at the far end —
+   * a straw man is the one station a player can simply walk past.
    *
-   * The fourth stands on a post out past the north shore. That is the whole
-   * lesson about the hotbar: there is a target you cannot walk to, and a key
-   * that puts something in your hand which deals with it.
+   * The fence is open toward the player and closed at the sides, which is
+   * the entire instruction "the thing to hit is in here".
    */
   _yard() {
     const A = this.plan.yardAt;
     for (let i = 0; i < 30; i++) {
       const a = (i / 30) * Math.PI * 2;
       if (Math.cos(a) < -0.55) continue;                  // the way in
-      const x = A + Math.cos(a) * 22, z = Math.sin(a) * 22;
+      const x = A + Math.cos(a) * 21, z = Math.sin(a) * 21;
       this.b.rod.add(x, 0.9, z, 0.16, 1.8, 0.16, 0x7a5a3a);
       this.b.box.add(x, 1.3, z, 2.8, 0.14, 0.12, 0xd9c46a, -a - Math.PI / 2);
     }
     /**
-     * The post the fourth target stands on.
+     * And the post the HIGH target stands on, in the next station along.
      *
      * Deliberately smooth and deliberately unanchored: nothing on it can be
      * grappled and nothing jumps fifteen units, so the only thing that
-     * reaches the top of it is a thrown blade.
+     * reaches the top of it is a thrown blade. Built here because it is one
+     * post and this is where the posts get built.
      */
-    const far = this.plan.straw[3];
+    const far = this.plan.straw.find((s) => !s.reach);
     const h = far.up;
     this.b.rod.add(far.x, h * 0.5, far.z, 1.5, h, 1.5, 0x7a6a58);
     this._solid(far.x, h * 0.5, far.z, 1.7, h * 0.5, 1.7, 'stone');
     this.b.box.add(far.x, h - 0.4, far.z, 4.4, 1.0, 4.4, 0x8a8172);
-    // A lamp under it, so the thing you cannot reach is the thing you see.
-    this.b.lamp.add(far.x, h + 5.4, far.z, 0.8, 0.9, 0.8, 0xffd76b);
+    // A lamp above it, so the thing you cannot reach is the thing you see.
+    this.b.lamp.add(far.x, h + 5.4, far.z, 0.9, 1.0, 0.9, 0xffd76b);
+    this.b.glow.add(far.x, h + 5.4, far.z, 1.8, 1.9, 1.8, 0x8fe8ff);
   }
 
   /**
@@ -1131,6 +1301,8 @@ export class TutorialIsland {
     const s = this.station;
     if (!s) return;
     this.count = 0;
+    this.stationT = 0;
+    this._nudged = 0;
     this._checkpoint.set(this.at.x + s.checkpoint[0],
       this.at.y + s.checkpoint[1] + 1.2, this.at.z + s.checkpoint[2]);
     this._clearMobs();
@@ -1139,12 +1311,41 @@ export class TutorialIsland {
       this.root.remove(this.strawRoot);
       this.strawRoot = null;
     }
-    if (s.id === 'yard') this._spawnStraw();
+    if (s.kind === 'break') this._spawnStraw(s.id);
     if (s.id === 'ring') this._spawnRing();
     if (s.id === 'pit') this._spawnPit();
     if (s.id === 'warden') this._spawnWarden();
+    this._giveWeapon(s, player);
     this._teach(s, player);
     this._paint();
+  }
+
+  /**
+   * ═══ PUT THE RIGHT THING IN THEIR HAND ═════════════════════════════════
+   *
+   * See the note on `weapon` in the station table. Right click is only a
+   * guard while the KATANA is selected — `_updateParry` in js/player.js
+   * simply does not run otherwise — so a player who came out of the throwing
+   * station still holding kunai would walk into the parry station, hold
+   * right click, and get no guard, no message and no way to find out why.
+   *
+   * Slot 0 is the blade and slot 1 is the kunai stack; see `Inventory`.
+   */
+  _giveWeapon(s, player) {
+    if (!s.weapon || !player || !player.inventory) return;
+    const want = s.weapon === 'kunai' ? 1 : 0;
+    if (player.inventory.selected === want) return;
+    player.inventory.select(want);
+    // A guard already up with the wrong thing in hand is dropped, so the
+    // swap cannot leave the parry state machine half-on.
+    player.parrying = false;
+    player.parryCooldown = 0;
+    if (this.hud) {
+      this.hud.toast(s.weapon === 'kunai'
+        ? 'A kunai is in your hand. (Press 2 for kunai, 1 for the blade.)'
+        : 'The blade is back in your hand. (Press 1 for it, 2 for kunai.)',
+        5);
+    }
   }
 
   /**
@@ -1241,10 +1442,13 @@ export class TutorialIsland {
    * `target()` shape the mobs use, so the katana and the kunai both find
    * them with no special case anywhere in the player controller.
    */
-  _spawnStraw() {
+  _spawnStraw(station) {
     const g = new THREE.Group();
     this.root.add(g);
     this.strawRoot = g;
+    // Only this station's targets. The yard's three and the high one belong
+    // to different lessons and must not be standing there during each other.
+    const mine = this.plan.straw.filter((s) => s.station === station);
     const geo = {
       post: new THREE.CylinderGeometry(0.28, 0.34, 1, 7),
       body: new THREE.CylinderGeometry(0.9, 0.7, 1, 8),
@@ -1258,7 +1462,7 @@ export class TutorialIsland {
       wood: new THREE.MeshLambertMaterial({ color: 0x7a5a3a }),
     };
     for (const k in mats) this.owned.push(mats[k]);
-    this.plan.straw.forEach((spot, i) => {
+    mine.forEach((spot, i) => {
       const root = new THREE.Group();
       const y = spot.reach ? 0 : spot.up - 0.4;
       root.position.set(spot.x, y, spot.z);
@@ -1277,7 +1481,7 @@ export class TutorialIsland {
       put('bar', 'wood', 3.4, 0.22, 0.22, 2.9);
       put('bar', 'rope', 1.0, 0.16, 1.0, 2.9);
       this.straw.push({
-        id: 'straw-' + i,
+        id: 'isle-straw-' + station + '-' + i,
         root,
         pos: new THREE.Vector3(this.at.x + spot.x, this.at.y + y,
           this.at.z + spot.z),
@@ -1318,15 +1522,41 @@ export class TutorialIsland {
       const left = (s.need || 1) - this.count;
       this.hud.toast(left > 0
         ? `Straw down. ${left} to go.`
-        : 'All four. The door goes down.', 2.2);
-      // And the nudge toward the one you cannot reach, exactly when it
-      // becomes the only one left.
-      if (left === 1 && this.straw[3] && !this.straw[3].dead) {
-        this.hud.toast('The last one is out over the water. Press 2 for a '
-          + 'kunai and throw it with LEFT CLICK.', 9);
-      }
+        : 'That is the lot. The door goes down.', 2.2);
     }
     this._paint();
+  }
+
+  /**
+   * ═══ APPLY A KATANA HIT ════════════════════════════════════════════════
+   *
+   * The katana does NOT call a target's `onHit`. It queues a `hit` EVENT —
+   * `{ t: 'hit', id, dmg, ... }` — because in the arena a hit has to travel
+   * to the victim's client, and the mode it happens in is what applies it.
+   * See `_applyHits` in js/player.js: `onHit` is only called directly for
+   * `isDummy` targets and for thrown kunai.
+   *
+   * This is where the island applies them, and its absence was a real and
+   * total bug: every mob and every straw target on the island was immune to
+   * the sword. The kunai worked, because a kunai calls `onHit` itself, which
+   * is exactly why it was not obvious.
+   *
+   * Called from `Game._updateTutorial`, the same place the dungeon calls
+   * `damageBoss` and the open world resolves its own hits.
+   */
+  applyHit(id, dmg) {
+    if (!id) return false;
+    for (const t of this.straw) {
+      if (t.id !== id || t.dead) continue;
+      this._hitStraw(t, dmg);
+      return true;
+    }
+    for (const m of this.mobs) {
+      if (m.id !== id || !m.alive) continue;
+      if (m.takeDamage(dmg)) this._mobDied(m);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1343,46 +1573,142 @@ export class TutorialIsland {
    */
   _spawnRing() {
     const A = this.plan.ringAt;
-    const m = new Mob('stonewarden', 0,
-      { x: this.at.x + A.x, y: this.at.y, z: this.at.z + A.z },
-      this.scene, this.effects, () => this.groundAt());
+    const m = this._mob('stonewarden', 0, A.x, A.z);
     m.maxHealth = 1e9;
     m.health = 1e9;
     m.unkillable = true;
-    this.mobs.push(m);
+    /**
+     * And it winds up for A FULL SECOND AND A HALF.
+     *
+     * The mob table's own wind-up is 0.55s, which is a fair telegraph for
+     * somebody who has been playing for an hour and far too fast for the
+     * first guard anybody has ever held. `windScale` stretches it — see
+     * `_stretchWind` — and this is the only place on the island that uses
+     * it, because this is the only station where reacting in time IS the
+     * lesson rather than a consequence of it.
+     */
+    m.windScale = 2.8;
+    return m;
   }
 
+  /**
+   * ═══ THE PIT — ONE AT A TIME ═══════════════════════════════════════════
+   *
+   * Two, and the second one is asleep until the first goes down.
+   *
+   * It was three at once, which was the wrong ask four minutes into
+   * somebody's first game: three simultaneous telegraphs cannot be read by
+   * a player who learned to swing ninety seconds ago, so it read as being
+   * mobbed rather than as a fight. Sequenced, it is the same lesson — keep
+   * moving, guard or dash — at a pace anybody can follow, and the moment
+   * the first drops the second gets up, which is its own small piece of
+   * theatre.
+   *
+   * The sleeper is parked out of sight range and woken by `_wakeNext`.
+   */
   _spawnPit() {
     const A = this.plan.pitAt;
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2;
-      this.mobs.push(new Mob(['lurker', 'thornling', 'reedstalker'][i], 0,
-        { x: this.at.x + A.x + Math.cos(a) * 11, y: this.at.y,
-          z: this.at.z + A.z + Math.sin(a) * 11 },
-        this.scene, this.effects, () => this.groundAt()));
-    }
+    const first = this._mob('lurker', 0, A.x + 8, 0);
+    const second = this._mob('thornling', 0, A.x + 12, A.r * 0.7);
+    second.asleep = true;
+    void first;
   }
 
   /**
    * THE WARDEN.
    *
-   * A City Husk at tier two — six times the health of anything else on the
-   * island, a great sword, and sixteen damage a blow. Still telegraphed,
-   * still leashed to the plaza, and still impossible to lose to: going down
-   * puts you back on the plaza with a full bar and him back at full health.
+   * A City Husk at TIER ONE — three times the health of anything else on
+   * the island and eleven damage a blow, which is nine blows from a full
+   * bar. He was tier two, at sixteen a blow; that is six, and six is not
+   * enough room for somebody still working out which button guards.
+   *
+   * Still telegraphed, still leashed to the plaza, still impossible to lose
+   * to: going down puts you back on the plaza with a full bar and him back
+   * at full health.
    */
   _spawnWarden() {
     const A = this.plan.plazaAt;
-    const m = new Mob('cityhusk', 2,
-      { x: this.at.x + A.x + 12, y: this.at.y, z: this.at.z + A.z },
-      this.scene, this.effects, () => this.groundAt());
-    m.maxHealth = 220;
-    m.health = 220;
-    this.mobs.push(m);
+    const m = this._mob('cityhusk', 1, A.x + 12, 0);
+    m.maxHealth = 180;
+    m.health = 180;
+    m.windScale = 1.6;
     if (this.hud) {
       this.hud.showBossBar('THE WARDEN OF THE FIRST ISLAND', 1,
         'He was here before the island had a name.');
     }
+    return m;
+  }
+
+  /**
+   * One mob, with an ID.
+   *
+   * `Mob` does not give itself one — in the open world `Camp.spawn` assigns
+   * them — and without an id the katana's `hit` event has nothing to name,
+   * so `applyHit` can never find its target. That was half of the reason
+   * everything on this island was immune to the sword.
+   */
+  _mob(kind, tier, lx, lz) {
+    const m = new Mob(kind, tier,
+      { x: this.at.x + lx, y: this.at.y, z: this.at.z + lz },
+      this.scene, this.effects, () => this.groundAt());
+    m.id = `isle-mob-${this.mobs.length}`;
+    this.mobs.push(m);
+    return m;
+  }
+
+  /**
+   * STRETCH A WIND-UP.
+   *
+   * `Mob` hard-codes 0.55 seconds between showing the ring and throwing the
+   * blow. That is not long enough for a first guard, and it is not this
+   * file's business to fork the mob AI — so the island watches for the
+   * moment a mob enters its wind-up state and multiplies the timer, and
+   * redraws the warning ring to match. Everything else about the attack is
+   * the real thing.
+   *
+   * STATE 3 is WIND; see the `STATE` table in js/mobs.js.
+   */
+  _stretchWind(m, dt) {
+    const winding = m.state === 3;
+    if (winding && !m._wasWinding) {
+      m._wasWinding = true;
+      if (m.windScale && m.windScale !== 1) {
+        m.timer *= m.windScale;
+        // Redraw the ring for as long as the blow now actually takes, or
+        // the marker fades a second before the thing it is warning about.
+        _at.set(m.strikeAt ? m.strikeAt.x : m.pos.x, this.groundAt() + 0.12,
+          m.strikeAt ? m.strikeAt.z : m.pos.z);
+        this.effects.ring(_at, m.reach, m.reach, m.timer, 0xff5a4a, true);
+      }
+      /**
+       * And SAY it, on the parry station only.
+       *
+       * "A red ring means a blow is coming" is a sentence. "GUARD NOW" in
+       * the middle of the screen at the exact moment the ring appears is a
+       * lesson. Only here: it would be hand-holding anywhere else, and this
+       * is the station whose whole job is connecting the two.
+       */
+      const s = this.station;
+      if (s && s.kind === 'parry' && this.hud) {
+        this.hud.announce('GUARD NOW — HOLD RIGHT CLICK', 'danger', false);
+      }
+    } else if (!winding && m._wasWinding) {
+      m._wasWinding = false;
+    }
+    void dt;
+  }
+
+  /** The next sleeping mob gets up. */
+  _wakeNext() {
+    for (const m of this.mobs) {
+      if (!m.asleep || !m.alive) continue;
+      m.asleep = false;
+      m.state = 2;                        // CHASE — it has seen you
+      m.timer = 0.6;
+      if (this.hud) this.hud.toast('Another one. Same rules.', 3);
+      return true;
+    }
+    return false;
   }
 
   /** Everything the player's katana and kunai may hit this frame. */
@@ -1404,6 +1730,8 @@ export class TutorialIsland {
         const left = (s.need || 1) - this.count;
         if (left > 0) this.hud.toast(`Down. ${left} left.`, 2.0);
       }
+      // And the next one gets up, if there is one asleep.
+      this._wakeNext();
       this._paint();
     }
   }
@@ -1416,7 +1744,7 @@ export class TutorialIsland {
    * the dungeon and the open world. See `Player._parryTook`.
    */
   playerHit(player, damage) {
-    if (player.health.dead || player.health.protected) return;
+    if (player.health.dead) return;
     /**
      * A dash has i-frames. Not a parry, but the right answer — and calling
      * it out by name is how the pit's lesson ("both work") gets taught by
@@ -1426,6 +1754,16 @@ export class TutorialIsland {
       if (this.hud) this.hud.toast('DODGED', 0.8);
       return;
     }
+    /**
+     * THE GUARD IS CHECKED BEFORE SPAWN PROTECTION, and on purpose.
+     *
+     * `health.protected` is true for two seconds after every respawn — and
+     * `_fell` respawns you, so a player who goes down in the ring gets two
+     * seconds where blows pass through them. If protection were checked
+     * first, a guard held perfectly during those two seconds would turn
+     * nothing aside and count for nothing, and the player would have done
+     * everything right and been told nothing happened. Here, it counts.
+     */
     if (player.parrying) {
       player.justParried = 0.2;
       player._parryTook();
@@ -1445,6 +1783,9 @@ export class TutorialIsland {
       } else if (this.hud) this.hud.toast('PARRIED', 0.8);
       return;
     }
+    // Guard down, and still inside a respawn's grace. Nothing happens, and
+    // nothing needs to be said about it.
+    if (player.health.protected) return;
     player.health.damage(damage, 'island');
     _at.set(player.pos.x, player.pos.y + 1.2, player.pos.z);
     this.effects.damageNumber(_at, damage, damage > 30);
@@ -1474,6 +1815,8 @@ export class TutorialIsland {
    */
   update(dt, player, held) {
     this.t += dt;
+    // Remembered so `_skip` can put the player down on the next station.
+    this._lastPlayer = player;
     if (this.gateVeil) {
       this.gateVeil.material.opacity = 0.2 + Math.sin(this.t * 2.2) * 0.08
         + (this.station ? 0 : 0.14);
@@ -1490,7 +1833,16 @@ export class TutorialIsland {
       t.root.rotation.z = Math.sin(t.wobble * 24) * t.wobble * t.wobble * 0.5;
     }
     for (const m of this.mobs) {
+      /**
+       * A SLEEPER DOES NOTHING AT ALL.
+       *
+       * Not "stands there ignoring you" — `Mob` would see the player from
+       * twenty-six units and start walking. It is skipped entirely until
+       * `_wakeNext` calls it up, which is what makes the pit sequential.
+       */
+      if (m.asleep) continue;
       m.update(dt, player, (dmg) => this.playerHit(player, dmg));
+      this._stretchWind(m, dt);
       // A sparring partner that cannot be killed still has to look hurt.
       if (m.unkillable && m.health < m.maxHealth) m.health = m.maxHealth;
     }
@@ -1500,8 +1852,86 @@ export class TutorialIsland {
       this.hud.setBossBar(Math.max(0, w.health / w.maxHealth));
     }
     this._fell(player);
+    this._rollCheckpoint(player);
     this._checkStation(player);
+    this._nudge(dt, player);
     this._skip(dt, held);
+  }
+
+  /**
+   * ═══ THE CHECKPOINT FOLLOWS YOU ════════════════════════════════════════
+   *
+   * Every platform on a course becomes the respawn point the moment you are
+   * standing on it. So a missed jump costs ONE GAP, not the whole crossing.
+   *
+   * This is the single biggest difficulty lever on the island, and the first
+   * version did not have it: falling off the last of the steps put the
+   * player back at the arch to do all six again, and falling off the second
+   * chasm top sent them back to the top of the steps. That is how a course
+   * made of fair jumps becomes an unfair course — not because any one gap is
+   * hard, but because the cost of missing one is everything before it.
+   *
+   * Only ever moves FORWARD, and only when the player is actually resting
+   * on something: `grounded` is what keeps it from latching on mid-fall.
+   */
+  _rollCheckpoint(player) {
+    const s = this.station;
+    if (!s || player.health.dead) return;
+    if (player.grounded === false) return;
+    if (player.vel && Math.abs(player.vel.y) > 2) return;
+    const lx = player.pos.x - this.at.x;
+    const ly = player.pos.y - this.at.y;
+    // On the ground somewhere sensible, and further east than last time.
+    if (ly < ISLE.wet + 1) return;
+    const wasX = this._checkpoint.x - this.at.x;
+    if (lx <= wasX + 2) return;
+    // Never past the station's own finish line, so completing a station
+    // cannot leave the next one's checkpoint out in the lagoon.
+    if (s.to !== undefined && lx > s.to + 2) return;
+    this._checkpoint.set(player.pos.x, player.pos.y + 0.6, player.pos.z);
+  }
+
+  /**
+   * ═══ NOBODY GETS STUCK ═════════════════════════════════════════════════
+   *
+   * A player who has been on the same station for a while is not being
+   * challenged, they are lost — and the difference between a tutorial and a
+   * wall is whether anybody notices. So the help escalates on its own:
+   *
+   *   25s   the key prompt again, in the middle of the screen
+   *   50s   the old frog says the quiet part out loud
+   *   80s   the station can be stepped past by holding BACKSPACE
+   *
+   * The last one is deliberately a per-STATION skip and not the island's:
+   * somebody stuck on the grapple should be able to go and see the rest of
+   * the island without giving up on the whole tutorial. See `_skip`, which
+   * reads `stepPast`.
+   */
+  _nudge(dt, player) {
+    const s = this.station;
+    if (!s || this.finished) return;
+    this.stationT = (this.stationT || 0) + dt;
+    if (this._nudged < 1 && this.stationT > 25) {
+      this._nudged = 1;
+      if (this.hud) {
+        this.hud.announce(`${s.prompt[0]} — ${s.prompt[1]}`, 'divine', false);
+        this.hud.toast(s.teach, 12);
+      }
+    } else if (this._nudged < 2 && this.stationT > 50) {
+      this._nudged = 2;
+      Cine.say('elder', s.master,
+        { id: 'isle-again-' + s.id, secs: 8, priority: 3 });
+      if (this.hud) this.hud.toast('Take your time. Nothing here is timed '
+        + 'and nothing here can kill you.', 8);
+    } else if (this._nudged < 3 && this.stationT > 80) {
+      this._nudged = 3;
+      this.stepPast = true;
+      if (this.hud) {
+        this.hud.toast('If this one is not working for you, hold BACKSPACE '
+          + 'and I will let you past it.', 14);
+      }
+    }
+    void player;
   }
 
   /**
@@ -1583,16 +2013,29 @@ export class TutorialIsland {
   }
 
   /**
-   * ═══ SKIPPING ══════════════════════════════════════════════════════════
+   * ═══ SKIPPING, AND STEPPING PAST ═══════════════════════════════════════
    *
-   * Held for a second and a half, never tapped, and only offered once the
-   * first station is behind you — so the option is found by somebody who has
-   * seen what it is they would be skipping, and nobody leaves the tutorial
-   * by leaning on a key.
+   * BACKSPACE, held for a second and a half — never tapped, so nobody leaves
+   * by leaning on a key — and it does one of two things depending on how
+   * long the player has been stuck:
+   *
+   *   normally           it leaves the island altogether
+   *   after `stepPast`   it steps past THIS STATION and no further
+   *
+   * The second is the important one and `_nudge` is what turns it on, eighty
+   * seconds into a station nobody is getting anywhere on. Somebody defeated
+   * by the grapple should be able to go and see the rest of the island
+   * rather than having to abandon the whole tutorial — and a player who has
+   * stepped past two or three stations has told us, without being asked,
+   * that they want to be somewhere else, so the prompt then offers the exit.
+   *
+   * Neither is offered on the very first station: the option should be found
+   * by somebody who has seen what it is they would be skipping.
    */
   _skip(dt, held) {
     if (this.finished || this.index < 1) return;
     const down = !!(held && held.skip);
+    const step = !!this.stepPast && !!this.station;
     if (!down) {
       if (this.skipHeld > 0 && this.hud) {
         // Put the station's own prompt back.
@@ -1605,11 +2048,40 @@ export class TutorialIsland {
     }
     this.skipHeld += dt;
     if (this.hud) {
-      this.hud.setTutorial('LEAVING', 'BACKSPACE',
-        `KEEP HOLDING — ${Math.round(Math.min(1, this.skipHeld / 1.5) * 100)}%`);
+      const pct = Math.round(Math.min(1, this.skipHeld / 1.5) * 100);
+      this.hud.setTutorial(step ? 'STEPPING PAST' : 'LEAVING', 'BACKSPACE',
+        `KEEP HOLDING — ${pct}%`);
     }
     if (this.skipHeld < 1.5) return;
     this.skipHeld = 0;
+    if (step) {
+      this.stepPast = false;
+      this.skipped = (this.skipped || 0) + 1;
+      if (this.hud) {
+        this.hud.toast('Past it. Come back to that one another time.', 5);
+      }
+      const p = this._lastPlayer;
+      this._advance(p);
+      /**
+       * And put them down on the next station.
+       *
+       * Without this, stepping past the grapple leaves the player standing
+       * on a post in the middle of the lagoon with the next objective
+       * seventy units east of them and no way to get there — which is a
+       * worse place to be than the one they asked to leave.
+       */
+      const next = this.station;
+      if (p && next) {
+        p.pos.set(this.at.x + next.checkpoint[0],
+          this.at.y + next.checkpoint[1] + 1.4,
+          this.at.z + next.checkpoint[2]);
+        p.vel.set(0, 0, 0);
+        if (p.grapple && p.grapple.active) p.grapple.release();
+        p.health.revive();
+        if (this.followCam) this.followCam.snapTo(p.pos);
+      }
+      return;
+    }
     this.finished = true;
     if (this.hud) {
       this.hud.setObjectives([]);
