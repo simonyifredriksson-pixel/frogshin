@@ -10,6 +10,17 @@
 /**
  * Rarity tiers. Weights are relative and follow the familiar steep curve —
  * the top tier is deliberately rare enough to feel like an event.
+ *
+ * ── why the weights are RELATIVE ────────────────────────────────────────
+ * `rollCrate` totals only the tiers a crate actually contains, so a crate
+ * whose floor is Uncommon is genuinely better per roll rather than being a
+ * commons machine with the commons deleted. That is what makes the Celestial
+ * Forge worth 5,000 froglets: its worst outcome is an Uncommon, and its
+ * Legendary chance is about five times the Swampforged one.
+ *
+ * MYTHIC exists for exactly one item — the Astral Sovereign — and at weight
+ * 4 against the celestial crate's 2,012 it lands about once in five hundred
+ * opens. Anything likelier would not deserve its own tier.
  */
 export const RARITY = {
   common:    { id: 'common',    name: 'Common',    color: '#4b69ff', weight: 7992 },
@@ -17,9 +28,12 @@ export const RARITY = {
   rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', weight: 320 },
   epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', weight: 64 },
   legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', weight: 26 },
+  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', weight: 4 },
 };
 
-export const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+export const RARITY_ORDER = [
+  'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic',
+];
 
 // ---------------------------------------------------------------- swords
 
@@ -92,6 +106,103 @@ export const SWORD_SKINS = [
       shape: 'curved', tsuba: 'ring', glow: true, runes: 0xfff3c4,
       aura: 0xffd24a, tassel: 0xffd24a, long: 1.2,
     } },
+
+  /**
+   * ═══ SWAMPFORGED ════════════════════════════════════════════════════
+   *
+   * Wood, chipped iron and poison. The ladder runs down the list: two
+   * commons, two uncommons, two rares, two epics and the King's Fang, which
+   * is the only gold on any of them.
+   */
+  { id: 'sword_rotwood', name: 'Rotwood Blade', rarity: 'common', set: 'swamp',
+    blade: 0x8a7a52, edge: 0xaa9a6a, guard: 0x6a5a3a, grip: 0x3a2e1c, glow: 0x1a1408,
+    fx: { shape: 'katana', tsuba: 'square' } },
+  { id: 'sword_bogcut',  name: 'Bog Cutter',    rarity: 'common', set: 'swamp',
+    blade: 0x7a8a72, edge: 0xa8b89a, guard: 0x4a5a44, grip: 0x24301f, glow: 0x141a12,
+    fx: { shape: 'serrated', tsuba: 'square' } },
+  { id: 'sword_mosssteel', name: 'Mosssteel Katana', rarity: 'uncommon', set: 'swamp',
+    blade: 0x9ab89a, edge: 0xd8ecd0, guard: 0x5a7a4a, grip: 0x22301c, glow: 0x1a2a18,
+    fx: { shape: 'katana', tsuba: 'disc', tassel: 0x7aa84a } },
+  { id: 'sword_venomedge', name: 'Venom Edge',  rarity: 'uncommon', set: 'swamp',
+    blade: 0x6a8a5a, edge: 0xc8f0a0, guard: 0x4a6a2a, grip: 0x1a240f, glow: 0x2a4a10,
+    fx: { shape: 'curved', tsuba: 'ring', runes: 0xa8ff4a } },
+  { id: 'sword_swampfang', name: 'Swampfang',   rarity: 'rare', set: 'swamp',
+    blade: 0xc8c0a0, edge: 0xeae4c8, guard: 0x5a4a2a, grip: 0x241c10, glow: 0x2a2418,
+    fx: { shape: 'fang', tsuba: 'cross', tassel: 0x6a8a2a } },
+  { id: 'sword_warden',  name: 'Warden Blade',  rarity: 'rare', set: 'swamp',
+    blade: 0x8a8a7a, edge: 0xb8b8a0, guard: 0x6a5a3a, grip: 0x2a2418, glow: 0x1a1a12,
+    fx: { shape: 'broad', tsuba: 'cross', long: 1.1 } },
+  { id: 'sword_rotfang', name: 'Rotfang Katana', rarity: 'epic', set: 'swamp',
+    blade: 0x2a3024, edge: 0x8aa86a, guard: 0x3a4a24, grip: 0x121610, glow: 0x2a4a10,
+    fx: {
+      shape: 'serrated', tsuba: 'ring', runes: 0xc9ff4a, aura: 0x6ac02a,
+    } },
+  { id: 'sword_marsh',   name: 'Marsh Reaper',  rarity: 'epic', set: 'swamp',
+    blade: 0x24301f, edge: 0x7a9a5a, guard: 0x2a3a1f, grip: 0x0f1410, glow: 0x24400f,
+    fx: {
+      shape: 'broad', tsuba: 'cross', runes: 0x8ac44a, aura: 0x4a8a2a, long: 1.25,
+    } },
+  { id: 'sword_kingsfang', name: "King's Fang", rarity: 'legendary', set: 'swamp',
+    blade: 0xd8f0b0, edge: 0xf4ffe0, guard: 0xc9a227, grip: 0x2a3a14, glow: 0x6ac02a,
+    fx: {
+      shape: 'fang', tsuba: 'ring', glow: true, runes: 0xa8ff4a,
+      aura: 0x6aff2a, tassel: 0xc9a227, long: 1.2,
+    } },
+
+  /**
+   * ═══ CELESTIAL FORGE ════════════════════════════════════════════════
+   *
+   * Dark metal, gold and blue-white light — the metal the heaven levels are
+   * built out of, so this set reads as the same material as Frogath's own
+   * gear rather than as another palette.
+   *
+   * `orbit` is on exactly one of them. See the note in js/frog.js: it is the
+   * signal that somebody is carrying the rarest thing in the game, and it
+   * only means that if nothing else in the shop has it.
+   */
+  { id: 'sword_starsteel', name: 'Starsteel Blade', rarity: 'uncommon', set: 'celestial',
+    blade: 0x8a97ac, edge: 0xdce6f4, guard: 0x3a4258, grip: 0x141a26, glow: 0x2a3648,
+    fx: { shape: 'katana', tsuba: 'disc', runes: 0xbfe6ff } },
+  { id: 'sword_moonfang', name: 'Moonfang',    rarity: 'uncommon', set: 'celestial',
+    blade: 0xc0cada, edge: 0xf0f6ff, guard: 0x6a7a9a, grip: 0x1a2230, glow: 0x3a4a6a,
+    fx: { shape: 'fang', tsuba: 'ring', runes: 0x7fbcff } },
+  { id: 'sword_astral',  name: 'Astral Katana', rarity: 'rare', set: 'celestial',
+    blade: 0x9aa8c8, edge: 0xe4eeff, guard: 0xffd24a, grip: 0x1a2038, glow: 0x3a4a8a,
+    fx: { shape: 'katana', tsuba: 'ring', runes: 0x8fd8ff, tassel: 0xffd24a } },
+  { id: 'sword_comet',   name: 'Comet Edge',   rarity: 'rare', set: 'celestial',
+    blade: 0x7fbcff, edge: 0xdcf2ff, guard: 0x4a6a9a, grip: 0x121c30, glow: 0x2a6ac0,
+    fx: { shape: 'curved', tsuba: 'cross', runes: 0xbfe6ff, aura: 0x7fbcff } },
+  { id: 'sword_sunforged', name: 'Sunforged Blade', rarity: 'epic', set: 'celestial',
+    blade: 0xffd24a, edge: 0xfff6d0, guard: 0xc9a227, grip: 0x3a2a06, glow: 0xc9922a,
+    fx: {
+      shape: 'broad', tsuba: 'cross', glow: true, runes: 0xfff3c4,
+      aura: 0xffd24a, long: 1.1,
+    } },
+  { id: 'sword_heavensfang', name: "Heaven's Fang", rarity: 'epic', set: 'celestial',
+    blade: 0xfff3c4, edge: 0xffffff, guard: 0xe8c86a, grip: 0x3a2e0a, glow: 0xffd76b,
+    fx: {
+      shape: 'fang', tsuba: 'ring', glow: true, runes: 0xffffff,
+      aura: 0xffd76b, tassel: 0xffd76b, long: 1.15,
+    } },
+  { id: 'sword_celestial', name: 'Celestial Reaper', rarity: 'legendary', set: 'celestial',
+    blade: 0x2a3060, edge: 0xbfd4ff, guard: 0xffd24a, grip: 0x0d1024, glow: 0x4a5ac0,
+    fx: {
+      shape: 'curved', tsuba: 'cross', runes: 0xbfe6ff, aura: 0x6a7aff,
+      tassel: 0xffd24a, long: 1.3,
+    } },
+  { id: 'sword_emperor', name: "Emperor's Edge", rarity: 'legendary', set: 'celestial',
+    blade: 0xffe98a, edge: 0xfffbe0, guard: 0xffd24a, grip: 0x2a2050, glow: 0xc9922a,
+    fx: {
+      shape: 'broad', tsuba: 'ring', glow: true, runes: 0xfff3c4,
+      aura: 0xffd76b, tassel: 0xffd24a, long: 1.3,
+    } },
+  { id: 'sword_sovereign', name: 'Astral Sovereign', rarity: 'mythic', set: 'celestial',
+    blade: 0xffffff, edge: 0xfff3c4, guard: 0xffd24a, grip: 0x1a1e38, glow: 0xffd76b,
+    fx: {
+      shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+      aura: 0xffd76b, tassel: 0xffd24a, long: 1.4,
+      orbit: 0xffd76b, orbitN: 8,
+    } },
 ];
 
 // ----------------------------------------------------------------- kunai
@@ -132,6 +243,79 @@ export const KUNAI_SKINS = [
   { id: 'kunai_sun',     name: 'Sunspire',    rarity: 'legendary',
     blade: 0xffd76b, facet: 0xfff6d0, wrap: 0xc9922a, ring: 0x3a2a06,
     fx: { shape: 'crystal', glow: true, ribbon: 0xffd76b, big: 1.25 } },
+
+  /**
+   * ═══ SWAMPFORGED ════════════════════════════════════════════════════
+   *
+   * Every blade in the pool is drawn from the same shared geometry, and
+   * changing shape rebuilds the pool — so these lean on the five profiles
+   * rather than asking for new ones, and rise through them: mud and moss are
+   * plain, the King's Fang is a glowing shard half again the size.
+   */
+  { id: 'kunai_mud',     name: 'Mud Kunai',    rarity: 'common', set: 'swamp',
+    blade: 0x4a3a28, facet: 0x8a7a52, wrap: 0x6a5a3a, ring: 0x1d1610,
+    fx: { shape: 'classic' } },
+  { id: 'kunai_moss',    name: 'Moss Kunai',   rarity: 'common', set: 'swamp',
+    blade: 0x3a4a2c, facet: 0x7aa85a, wrap: 0x5a7a3a, ring: 0x16200f,
+    fx: { shape: 'broad' } },
+  { id: 'kunai_bog',     name: 'Bog Kunai',    rarity: 'uncommon', set: 'swamp',
+    blade: 0x2a3a2c, facet: 0x6a8a6a, wrap: 0x4a5a44, ring: 0x141a12,
+    fx: { shape: 'needle', ribbon: 0x5a7a3a } },
+  { id: 'kunai_venom',   name: 'Venom Kunai',  rarity: 'uncommon', set: 'swamp',
+    blade: 0x24401c, facet: 0xa8ff4a, wrap: 0x4a8a2a, ring: 0x101a0a,
+    fx: { shape: 'classic', ribbon: 0xa8ff4a, big: 1.1 } },
+  { id: 'kunai_swampfang', name: 'Swampfang Kunai', rarity: 'rare', set: 'swamp',
+    blade: 0xc8c0a0, facet: 0xeae4c8, wrap: 0x5a4a2a, ring: 0x241c10,
+    fx: { shape: 'broad', ribbon: 0x6a8a2a, big: 1.15 } },
+  { id: 'kunai_warden',  name: 'Warden Kunai', rarity: 'rare', set: 'swamp',
+    blade: 0x6a6a58, facet: 0xb8b8a0, wrap: 0x4a4030, ring: 0x1e1e16,
+    fx: { shape: 'needle', big: 1.2 } },
+  { id: 'kunai_rotfang', name: 'Rotfang Kunai', rarity: 'epic', set: 'swamp',
+    blade: 0x1e2018, facet: 0xc9ff4a, wrap: 0x3a5a14, ring: 0x0f1208,
+    fx: { shape: 'star', glow: true, ribbon: 0x6ac02a } },
+  { id: 'kunai_marsh',   name: 'Marsh Kunai',  rarity: 'epic', set: 'swamp',
+    blade: 0x24301f, facet: 0x8ac44a, wrap: 0x2a3a1f, ring: 0x0f1410,
+    fx: { shape: 'crystal', glow: true, ribbon: 0x4a8a2a, big: 1.15 } },
+  { id: 'kunai_kingsfang', name: "King's Fang Kunai", rarity: 'legendary', set: 'swamp',
+    blade: 0xd8f0b0, facet: 0xa8ff4a, wrap: 0xc9a227, ring: 0x2a3a14,
+    fx: { shape: 'crystal', glow: true, ribbon: 0x6aff2a, big: 1.3 } },
+
+  /**
+   * ═══ CELESTIAL FORGE ════════════════════════════════════════════════
+   *
+   * No `orbit` here, unlike the sword set. A kunai is a POOLED PROJECTILE —
+   * dozens exist at once and they are rebuilt whenever the shape changes —
+   * so orbiting fragments would be per-frame work on every blade in flight,
+   * paid for by everyone in the match. The Prime gets the biggest glowing
+   * shard in the game instead.
+   */
+  { id: 'kunai_star',    name: 'Star Kunai',   rarity: 'uncommon', set: 'celestial',
+    blade: 0x2a2e42, facet: 0xbfe6ff, wrap: 0x4a5a8a, ring: 0x14161f,
+    fx: { shape: 'classic', ribbon: 0x7fbcff } },
+  { id: 'kunai_moon',    name: 'Moon Kunai',   rarity: 'uncommon', set: 'celestial',
+    blade: 0x8a97ac, facet: 0xf0f6ff, wrap: 0x6a7a9a, ring: 0x1a2230,
+    fx: { shape: 'needle' } },
+  { id: 'kunai_astral',  name: 'Astral Kunai', rarity: 'rare', set: 'celestial',
+    blade: 0x3a4258, facet: 0xffd24a, wrap: 0x2a3348, ring: 0x141a26,
+    fx: { shape: 'broad', ribbon: 0xffd24a, big: 1.1 } },
+  { id: 'kunai_comet',   name: 'Comet Kunai',  rarity: 'rare', set: 'celestial',
+    blade: 0x1a2c48, facet: 0x8fd8ff, wrap: 0x2a6ac0, ring: 0x0f1828,
+    fx: { shape: 'needle', glow: true, ribbon: 0x8fd8ff, big: 1.15 } },
+  { id: 'kunai_sunspear', name: 'Sun Kunai',   rarity: 'epic', set: 'celestial',
+    blade: 0xc9a227, facet: 0xfff6d0, wrap: 0xffd24a, ring: 0x3a2a06,
+    fx: { shape: 'star', glow: true, ribbon: 0xffd24a } },
+  { id: 'kunai_heaven',  name: 'Heaven Kunai', rarity: 'epic', set: 'celestial',
+    blade: 0xfff3c4, facet: 0xffffff, wrap: 0xe8c86a, ring: 0x3a2e0a,
+    fx: { shape: 'crystal', glow: true, ribbon: 0xffd76b, big: 1.15 } },
+  { id: 'kunai_celestial', name: 'Celestial Kunai', rarity: 'legendary', set: 'celestial',
+    blade: 0x2a3060, facet: 0xbfd4ff, wrap: 0x6a7aff, ring: 0x0d1024,
+    fx: { shape: 'crystal', glow: true, ribbon: 0x6a7aff, big: 1.25 } },
+  { id: 'kunai_emperor', name: 'Emperor Kunai', rarity: 'legendary', set: 'celestial',
+    blade: 0xffe98a, facet: 0xfffbe0, wrap: 0xffd24a, ring: 0x2a2050,
+    fx: { shape: 'star', glow: true, ribbon: 0xffd24a, big: 1.25 } },
+  { id: 'kunai_prime',   name: 'Astral Kunai Prime', rarity: 'mythic', set: 'celestial',
+    blade: 0xffffff, facet: 0xffd76b, wrap: 0xffd24a, ring: 0x1a1e38,
+    fx: { shape: 'crystal', glow: true, ribbon: 0xffd76b, big: 1.4 } },
 ];
 
 // ------------------------------------------------------------------ frog
@@ -149,9 +333,17 @@ export const KUNAI_SKINS = [
  *   aura      a soft shell around the whole frog
  *   halo      one or two rings above the head
  *   horns     n horns on the brow
- *   crown     a ring of points around the skull
+ *   crown     a ring of points around the skull; a number scales it
  *   spikes    n spines down the back
  *   fins      cheek fins
+ *   plates    colour of a breastplate, pauldrons and a collar — ARMOUR
+ *   moss      colour of moss tufts over the shoulders and back
+ *   hood      colour of a hood pulled over the skull
+ *   shield    colour of a shield strapped to the off arm
+ *   stars     colour of glowing specks scattered over the hide
+ *   orbit     colour of fragments that ORBIT the frog (`orbitN` = how many)
+ *   embers    colour of sparks that rise off the hide and fade
+ *   divine    build the Ascended's whole rig — wings, rings, corona
  */
 export const FROG_SKINS = [
   { id: 'frog_default', name: 'Pond Green',  rarity: 'common',
@@ -217,6 +409,126 @@ export const FROG_SKINS = [
       aura: 0xffd76b, halo: 0xfff3c4, halo2: true, crown: true,
       horns: 2, embers: 0xfff3c4,
     } },
+
+  /**
+   * ═══ SWAMPFORGED ════════════════════════════════════════════════════
+   *
+   * Mud, leather, moss and poison — and the armour gets heavier as the tier
+   * climbs, which is the thing you can see across an arena. The two commons
+   * carry nothing that glows; from Venom Frog up, something does.
+   */
+  { id: 'frog_bogfrog', name: 'Bog Frog',      rarity: 'common', set: 'swamp',
+    skin: 0x6a5a3a, belly: 0xc4b88a, cloth: 0x4a3a24, scarf: 0x6a5a2a,
+    fx: {} },
+  { id: 'frog_mossfrog', name: 'Moss Frog',    rarity: 'common', set: 'swamp',
+    skin: 0x5a7a4a, belly: 0xc8d8a8, cloth: 0x3a4a2a, scarf: 0x6a8a4a,
+    fx: { moss: 0x9ad24a, plates: 0x5a4a2a } },
+  { id: 'frog_scout',   name: 'Swamp Scout',   rarity: 'uncommon', set: 'swamp',
+    skin: 0x7aa84a, belly: 0xdcecb0, cloth: 0x2a3a20, scarf: 0x9ac24a,
+    fx: { fins: true, spikes: 3 } },
+  { id: 'frog_mudguard', name: 'Mudguard Frog', rarity: 'uncommon', set: 'swamp',
+    skin: 0x7a6a4a, belly: 0xd8c8a0, cloth: 0x3a2e1c, scarf: 0x8a7a4a,
+    fx: { plates: 0x6a5638, shield: 0x7a5a30, spikes: 3 } },
+  { id: 'frog_venomfrog', name: 'Venom Frog',  rarity: 'rare', set: 'swamp',
+    skin: 0x2a4a2a, belly: 0x8ac46a, cloth: 0x16240f, scarf: 0x4a8a2a,
+    fx: {
+      plates: 0x24401c, pattern: 0xa8ff4a, eyeGlow: 0xa8ff4a, spikes: 5,
+      emissive: 0x14240c,
+    } },
+  { id: 'frog_assassin', name: 'Bog Assassin', rarity: 'rare', set: 'swamp',
+    skin: 0x4a5a44, belly: 0xa8b89a, cloth: 0x141a12, scarf: 0x2a3a24,
+    fx: { hood: 0x141a12, plates: 0x2a3524 } },
+  { id: 'frog_wardenfrog', name: 'Swamp Warden', rarity: 'epic', set: 'swamp',
+    skin: 0x5a6a4a, belly: 0xb8c8a0, cloth: 0x2a3324, scarf: 0x4a5a3a,
+    fx: {
+      plates: 0x6a6a58, moss: 0x8fc44a, horns: 2, spikes: 5,
+      emissive: 0x1a2410,
+    } },
+  { id: 'frog_rotfangfrog', name: 'Rotfang Frog', rarity: 'epic', set: 'swamp',
+    skin: 0x2a2a24, belly: 0x8a9a70, cloth: 0x121410, scarf: 0x4a6a1a,
+    fx: {
+      plates: 0x1e2018, pattern: 0xc9ff4a, eyeGlow: 0xc9ff4a, aura: 0x4a8a10,
+      horns: 2, spikes: 6, emissive: 0x162008,
+    } },
+  { id: 'frog_swampking', name: 'The Swamp King', rarity: 'legendary', set: 'swamp',
+    skin: 0x4a7a3a, belly: 0xd0e8a8, cloth: 0x1a2a14, scarf: 0x8ac24a,
+    fx: {
+      plates: 0x8a7a3a, moss: 0x9ad24a, crown: 1.7, pattern: 0x9aff5a,
+      eyeGlow: 0x9aff5a, aura: 0x4aa82a, horns: 2, spikes: 6,
+      emissive: 0x1e3a12,
+    } },
+
+  /**
+   * ═══ CELESTIAL FORGE ════════════════════════════════════════════════
+   *
+   * Dark metal, gold and blue-white light. Nothing in this set is common —
+   * its floor is Uncommon, which is what the 5,000 buys.
+   */
+  { id: 'frog_starbound', name: 'Starbound Frog', rarity: 'uncommon', set: 'celestial',
+    skin: 0x2a2e42, belly: 0x8a94b8, cloth: 0x14161f, scarf: 0x4a5a8a,
+    fx: { plates: 0x1e2230, stars: 0xbfe6ff, emissive: 0x101828 } },
+  { id: 'frog_moonlit', name: 'Moonlit Frog',  rarity: 'uncommon', set: 'celestial',
+    skin: 0x8a97ac, belly: 0xdce6f4, cloth: 0x2a3240, scarf: 0x7fbcff,
+    fx: { plates: 0xc0cada, pattern: 0x7fbcff, emissive: 0x1a2430 } },
+  { id: 'frog_astralwarrior', name: 'Astral Warrior', rarity: 'rare', set: 'celestial',
+    skin: 0x3a4258, belly: 0xc0c8dc, cloth: 0x1a2030, scarf: 0xffd24a,
+    fx: {
+      plates: 0x2a3348, pattern: 0xffd24a, horns: 2, emissive: 0x141c2a,
+    } },
+  { id: 'frog_cometfrog', name: 'Comet Frog',  rarity: 'rare', set: 'celestial',
+    skin: 0x2e3a52, belly: 0xa8b8d8, cloth: 0x161e2c, scarf: 0x8fd8ff,
+    fx: {
+      plates: 0x222c40, stars: 0x8fd8ff, pattern: 0x8fd8ff,
+      eyeGlow: 0xd0f0ff, spikes: 4, emissive: 0x122030,
+    } },
+  { id: 'frog_sunforged', name: 'Sunforged Frog', rarity: 'epic', set: 'celestial',
+    skin: 0xc9a227, belly: 0xfff0b0, cloth: 0x4a3206, scarf: 0xffd24a,
+    fx: {
+      plates: 0xffd24a, pattern: 0xfff3c4, eyeGlow: 0xfff6d0,
+      aura: 0xffd24a, horns: 2, emissive: 0x6a4a08,
+    } },
+  { id: 'frog_moonguardian', name: 'Moon Guardian', rarity: 'epic', set: 'celestial',
+    skin: 0x9aa8c0, belly: 0xe4eef8, cloth: 0x28303e, scarf: 0x7fbcff,
+    fx: {
+      plates: 0xd0daea, pattern: 0x7fbcff, eyeGlow: 0xdcf0ff,
+      halo: 0x9fd4ff, aura: 0x5a9ae0, emissive: 0x1e2a3a,
+    } },
+  { id: 'frog_staremperor', name: 'Star Emperor', rarity: 'legendary', set: 'celestial',
+    skin: 0x2a3050, belly: 0xc0c8e8, cloth: 0x161a2e, scarf: 0xffd24a,
+    fx: {
+      plates: 0x3a4470, crown: 1.6, pattern: 0xffe98a, eyeGlow: 0xfff6d0,
+      aura: 0x6a7aff, horns: 4, spikes: 6, emissive: 0x1a2050,
+    } },
+  /**
+   * "Floating energy" — `embers`, NOT `orbit`.
+   *
+   * Orbiting fragments are the Mythic's tell and have to stay unique to it,
+   * or a Legendary two tiers down looks the same across an arena and the
+   * signal is worth nothing. Rising sparks are the same promise kept a
+   * different way.
+   */
+  { id: 'frog_champion', name: "Heaven's Champion", rarity: 'legendary', set: 'celestial',
+    skin: 0xb89a4a, belly: 0xffeeb8, cloth: 0x3a2e0a, scarf: 0xfff3c4,
+    fx: {
+      plates: 0xe8c86a, embers: 0xffd76b, pattern: 0xfff3c4,
+      eyeGlow: 0xffffff, aura: 0xffd76b, halo: 0xfff3c4, horns: 2,
+      emissive: 0x5a4408,
+    } },
+  /**
+   * THE RAREST THING THE SHOP CAN PRODUCE. About one open in five hundred.
+   *
+   * It gets everything: armour, a crown, a double halo, glowing hide, and
+   * twelve golden fragments orbiting the frog. That last one is the tell —
+   * `orbit` is on this and on one sword, and nothing else, so a frog with
+   * fragments going round it is unmistakable from across the arena.
+   */
+  { id: 'frog_sovereign', name: 'Astral Sovereign', rarity: 'mythic', set: 'celestial',
+    skin: 0x1a1e38, belly: 0xd8e0ff, cloth: 0x0d1024, scarf: 0xffd76b,
+    fx: {
+      plates: 0x2a3060, orbit: 0xffd76b, orbitN: 12, stars: 0xffffff,
+      crown: 1.8, pattern: 0xffe98a, eyeGlow: 0xffffff, aura: 0xffd76b,
+      halo: 0xfff3c4, halo2: true, horns: 4, spikes: 6, emissive: 0x2a2060,
+    } },
 ];
 
 /** Catalog lookup by the same keys the Economy stores unlocks under. */
@@ -241,38 +553,109 @@ export function findSkin(kind, id) {
 
 // ---------------------------------------------------------------- crates
 
+/**
+ * ═══ THE CASES ══════════════════════════════════════════════════════════
+ *
+ * Three SETS of three: a case per category per set. `set` is what scopes the
+ * pool — a Swampforged case can only ever hand you swamp gear — which is the
+ * whole reason the sets are worth buying separately. Without it every case
+ * of a kind would draw from the same growing soup and adding a set would
+ * only ever DILUTE what the older ones drop.
+ *
+ * `anim` picks the opening sequence. See `_openCrate` in js/shop.js: the base
+ * cases just spin the reel, the swamp one cracks and gasses, the celestial
+ * one lifts off the ground.
+ */
 export const CRATES = [
+  // ── the standard cases ──────────────────────────────────────────────
   {
-    id: 'crate_kunai', kind: 'kunai', price: 1500,
+    id: 'crate_kunai', kind: 'kunai', set: 'base', price: 1000,
     name: 'Common Kunai Case',
     blurb: 'Nine blades. Nine ways to miss.',
     color: '#c0392b',
   },
   {
-    id: 'crate_sword', kind: 'swords', price: 2500,
+    id: 'crate_sword', kind: 'swords', set: 'base', price: 1500,
     name: 'Common Sword Case',
     blurb: 'Steel for the frog who takes their duels seriously.',
     color: '#5f9ec4',
   },
   {
-    id: 'crate_frog', kind: 'frogs', price: 5000,
+    id: 'crate_frog', kind: 'frogs', set: 'base', price: 2500,
     name: 'Common Frog Case',
     blurb: 'A whole new you. Same terrible habits.',
     color: '#4e9a3c',
+  },
+  // ── Swampforged: wood, chipped iron, poison ─────────────────────────
+  {
+    id: 'crate_swamp_kunai', kind: 'kunai', set: 'swamp', price: 2000,
+    name: 'Swampforged Kunai Case',
+    blurb: 'Nine blades pulled out of the mire. Two of them still drip.',
+    color: '#6ac02a', anim: 'swamp',
+  },
+  {
+    id: 'crate_swamp_sword', kind: 'swords', set: 'swamp', price: 3000,
+    name: 'Swampforged Sword Case',
+    blurb: 'Rotwood to royalty. Everything in here was forged in a bog.',
+    color: '#7aa84a', anim: 'swamp',
+  },
+  {
+    id: 'crate_swamp_frog', kind: 'frogs', set: 'swamp', price: 4500,
+    name: 'Bogswamp Crate',
+    blurb: 'Nine frogs out of the wetlands, up to and including their king.',
+    color: '#4a7a3a', anim: 'swamp',
+  },
+  /**
+   * ── Celestial Forge: the upgrade ──────────────────────────────────
+   *
+   * Not swamp iron — heavenly metal, the same stuff the heaven levels are
+   * built out of. Priced above everything else and worth it: NO CASE IN
+   * THIS SET CAN ROLL A COMMON. Its floor is Uncommon, which multiplies
+   * every tier above it (see the note on RARITY), and one item in it is
+   * Mythic — the only Mythic in the game.
+   */
+  {
+    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 2500,
+    name: 'Celestial Kunai Case',
+    blurb: 'Dark metal and starlight. Nothing common has ever been in one.',
+    color: '#7fbcff', anim: 'celestial',
+  },
+  {
+    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 3500,
+    name: 'Celestial Sword Case',
+    blurb: 'Nine blades of heavenly metal — and one that is not quite a blade.',
+    color: '#8fd8ff', anim: 'celestial',
+  },
+  {
+    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 5000,
+    name: 'Celestial Forge Crate',
+    blurb: 'Ancient gold, blue fire, and the rarest frog anybody owns.',
+    color: '#ffd24a', anim: 'celestial',
   },
 ];
 
 export function crateById(id) { return CRATES.find((c) => c.id === id) || null; }
 
+/** Every case that fills a given category, in shop order. */
+export function cratesFor(kind) { return CRATES.filter((c) => c.kind === kind); }
+
+/** Which set a skin belongs to. Anything unmarked is the original set. */
+export function setOf(item) { return (item && item.set) || 'base'; }
+
 /**
  * What a crate can actually contain.
+ *
+ * Scoped to the crate's SET, so the Celestial Forge cannot hand you a Bog
+ * Frog and buying a new set never waters down an old one.
  *
  * Reward skins are filtered out here rather than at each call site, so a
  * crate can never hand you something that is supposed to be earned — and the
  * displayed odds, which read the same pool, stay honest.
  */
 export function cratePool(crate) {
-  return (CATALOG[crate.kind] || []).filter((s) => !s.reward);
+  const set = setOf(crate);
+  return (CATALOG[crate.kind] || [])
+    .filter((s) => !s.reward && setOf(s) === set);
 }
 
 /** Skins that cannot be bought — only awarded. */
@@ -309,6 +692,22 @@ export function rollCrate(crate, rnd = Math.random) {
   const first = tiers[RARITY_ORDER.find((r) => tiers[r])];
   return first[0];
 }
+
+/**
+ * Roll a crate several times.
+ *
+ * Every roll is INDEPENDENT — no pity, no "one of these is guaranteed to be
+ * good". A ten-pack is ten opens bought in one click, and it has to have the
+ * same odds as ten separate clicks or the price per open would be a lie.
+ */
+export function rollMany(crate, n, rnd = Math.random) {
+  const out = [];
+  for (let i = 0; i < Math.max(1, n | 0); i++) out.push(rollCrate(crate, rnd));
+  return out;
+}
+
+/** How many cases you may buy in one go. */
+export const BULK_SIZES = [1, 3, 5, 10];
 
 /** Percentage chance of each tier present in a crate, for the odds display. */
 export function crateOdds(crate) {

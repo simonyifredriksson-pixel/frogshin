@@ -33,7 +33,7 @@
  * `setTheme` — this is the one import this file has, and it is here to stop
  * a missing field becoming a NaN becoming a thrown TypeError.
  */
-import { asTheme } from './themes.js?v=v104';
+import { asTheme } from './themes.js?v=v105';
 
 const TRACKS = {
   phase1: 'audio/frogath-phase1.mp3',
@@ -455,6 +455,38 @@ export class AudioEngine {
     this.tone({ freq: 1200, dur: 0.07, type: 'triangle', volume: 0.08 });
   }
   uiBack() { this.tone({ freq: 480, to: 260, dur: 0.13, type: 'square', volume: 0.12 }); }
+
+  /**
+   * ── the two crate sets ────────────────────────────────────────────────
+   *
+   * Both are 2D (`pos` left null): the case is being opened on a menu, not
+   * at a place in the world, so panning it would put the sound off to one
+   * side of a thing that is dead centre of the screen.
+   */
+
+  /** Swampforged: a dry crack, then wet gas escaping. */
+  crateCrack() {
+    this.noise({ dur: 0.09, volume: 0.34, filter: 3200, filterTo: 900, q: 1.8 });
+    this.tone({ freq: 150, to: 62, dur: 0.26, type: 'square', volume: 0.20 });
+    // The hiss comes in a beat later, the way pressure does.
+    this.tone({ freq: 90, to: 70, dur: 0.7, type: 'sawtooth', volume: 0.07, cutoff: 380 });
+    this.noise({ dur: 0.85, volume: 0.14, filter: 700, filterTo: 260, q: 0.7, attack: 0.14 });
+  }
+
+  /** Celestial: a rising swell that resolves into a bright fifth. */
+  crateLift() {
+    this.tone({ freq: 180, to: 540, dur: 1.1, type: 'triangle', volume: 0.16, attack: 0.25 });
+    this.tone({ freq: 270, to: 810, dur: 1.1, type: 'sine', volume: 0.11, attack: 0.3 });
+    this.noise({ dur: 1.0, volume: 0.09, filter: 500, filterTo: 4200, q: 0.6, attack: 0.4 });
+  }
+
+  /** The one Mythic. Deliberately the biggest noise the shop can make. */
+  crateMythic() {
+    this.tone({ freq: 880, dur: 1.5, type: 'sine', volume: 0.20, attack: 0.02 });
+    this.tone({ freq: 1320, dur: 1.5, type: 'triangle', volume: 0.14, attack: 0.06 });
+    this.tone({ freq: 220, to: 440, dur: 1.6, type: 'sawtooth', volume: 0.10, cutoff: 900 });
+    this.noise({ dur: 1.4, volume: 0.12, filter: 6000, filterTo: 800, q: 0.8 });
+  }
 
   // ---------------------------------------------------------------- ambient
 

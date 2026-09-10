@@ -39,7 +39,7 @@
  * 8% better is not.
  */
 
-import { GEAR_BY_ID } from './gear.js?v=v104';
+import { GEAR_BY_ID } from './gear.js?v=v105';
 
 /**
  * ═══ THE CLASSES ════════════════════════════════════════════════════════
@@ -232,6 +232,14 @@ export function lookOf(id, skin) {
     runes: (custom && skin.fx && skin.fx.runes) || w.runes || null,
     aura: (custom && skin.fx && skin.fx.aura) || w.aura || null,
     tassel: (custom && skin.fx && skin.fx.tassel) || null,
+    /**
+     * Orbiting fragments come only from a SKIN — no piece of gear has them.
+     * They are the Astral Sovereign's signature, and somebody who rolled a
+     * Mythic out of the Celestial Forge should keep it whether they are
+     * carrying a Reed Knife or a Quarry Maul.
+     */
+    orbit: (custom && skin.fx && skin.fx.orbit) || null,
+    orbitN: (custom && skin.fx && skin.fx.orbitN) || 6,
   };
 }
 

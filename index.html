@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v104" />
+<link rel="stylesheet" href="css/style.css?v=v105" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -924,18 +924,44 @@
   </div>
 </div>
 
-<!-- ═════════════════════════════════════════════════════ CRATE OPENING ══ -->
+<!-- ═════════════════════════════════════════════════════ CRATE OPENING ══
+     Three stages, in order: the CRATE opens (differently per set — see
+     `_playStage` in js/shop.js), the REEL spins, the item is REVEALED.
+
+     `#crate` carries an `anim-*` class for the set, and every piece below is
+     driven off that, so a swamp case and a celestial case share this markup
+     and look nothing alike. The mist and star layers sit outside
+     `.crate-inner` because the top-tier drops are supposed to cover the
+     whole screen, not a panel inside it. -->
 <div id="crate">
+  <div class="crate-mist" id="crate-mist"></div>
+  <div class="crate-stars" id="crate-stars"></div>
   <div class="crate-inner">
     <div class="crate-title" id="crate-title">OPENING</div>
 
+    <!-- Stage one: the crate itself, cracking / lifting / breaking open -->
+    <div class="crate-stage" id="crate-stage">
+      <div class="stage-crate" id="stage-crate">
+        <div class="sc-beam"></div>
+        <div class="sc-body"></div>
+        <div class="sc-lid"></div>
+        <div class="sc-lock"></div>
+        <div class="sc-crack"></div>
+        <div class="sc-vines"></div>
+        <div class="sc-smoke"></div>
+      </div>
+    </div>
+
     <!-- The reel: a strip of items that scrolls past a fixed centre marker -->
-    <div class="reel-window">
+    <div class="reel-window" id="reel-window">
       <div class="reel-marker"></div>
       <div class="reel-strip" id="reel-strip"></div>
       <div class="reel-fade left"></div>
       <div class="reel-fade right"></div>
     </div>
+
+    <!-- Where you are in a multi-case buy, and the skip prompt -->
+    <div class="crate-sub" id="crate-sub"></div>
 
     <!-- Reveal card, shown once the reel settles -->
     <div id="crate-result">
@@ -946,6 +972,17 @@
       <div class="crate-actions">
         <button class="btn btn-go" id="crate-again"><span>OPEN ANOTHER</span></button>
         <button class="btn" id="crate-close"><span>DONE</span></button>
+      </div>
+    </div>
+
+    <!-- Everything a multi-case buy produced, once the last one lands -->
+    <div id="crate-batch">
+      <div class="cb-head" id="cb-head">10 CASES</div>
+      <div class="cb-grid" id="cb-grid"></div>
+      <div class="cb-tally" id="cb-tally"></div>
+      <div class="crate-actions">
+        <button class="btn btn-go" id="crate-again2"><span>OPEN AGAIN</span></button>
+        <button class="btn" id="crate-close2"><span>DONE</span></button>
       </div>
     </div>
   </div>
@@ -1045,6 +1082,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v104"></script>
+<script type="module" src="js/main.js?v=v105"></script>
 </body>
 </html>

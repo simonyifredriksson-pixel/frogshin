@@ -7,16 +7,40 @@
  */
 
 import {
-  CATALOG, CRATES, RARITY, DEFAULT_SKIN,
-  rollCrate, cratePool, crateOdds, findSkin,
-} from './skins.js?v=v104';
-import { Audio } from './audio.js?v=v104';
-import { PX } from './icons.js?v=v104';
-import { CFG } from './config.js?v=v104';
+  CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
+  rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
+} from './skins.js?v=v105';
+import { Audio } from './audio.js?v=v105';
+import { PX } from './icons.js?v=v105';
+import { CFG } from './config.js?v=v105';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+
+/**
+ * ── how long an opening takes ──────────────────────────────────────────
+ *
+ * `STAGE_MS` is the crate animation, and it runs ONCE per purchase rather
+ * than once per case: it is the set's signature, and sitting through the
+ * same vines ten times in a ten-pack would make the flourish the thing
+ * standing between you and your items.
+ *
+ * The reel is much shorter inside a multi-buy. Five and a half seconds is
+ * the right length for a single open — it is the whole ceremony — and
+ * completely wrong ten times in a row.
+ */
+const STAGE_MS = { base: 950, swamp: 1800, celestial: 1850 };
+const SPIN_SOLO = 5.4;
+const SPIN_BULK = 2.3;
+/** What S leaves you: the last half second, exactly as asked. */
+const SKIP_S = 0.5;
+/** How long a result sits on screen before the next case in a multi-buy. */
+const HOLD_MS = { low: 720, high: 1250 };
+
+const SET_NAMES = {
+  base: 'STANDARD', swamp: 'SWAMPFORGED', celestial: 'CELESTIAL FORGE',
+};
 
 // --------------------------------------------------------------- previews
 
@@ -89,8 +113,17 @@ function swordSVG(s) {
     : '';
   const tassel = f.tassel
     ? `<rect x="1" y="57" width="3" height="6" fill="${hex(f.tassel)}"/>` : '';
+  // Fragments orbiting the blade — one sword in the game has these, and the
+  // card has to show it or the rarest drop looks like another gold katana.
+  const orbit = f.orbit
+    ? [[46, 8], [36, 22], [24, 34], [14, 48], [52, 20], [30, 12]]
+      .slice(0, f.orbitN || 6)
+      .map(([x, y]) => `<rect x="${x}" y="${y}" width="4" height="4"
+        fill="${hex(f.orbit)}"/><rect x="${x - 1}" y="${y - 1}" width="6" height="6"
+        fill="${hex(f.orbit)}" opacity="0.35"/>`).join('')
+    : '';
   return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
-    ${blade}${runes}${guard}
+    ${orbit}${blade}${runes}${guard}
     <rect x="4" y="47" width="15" height="8" fill="${hex(s.grip)}"
           transform="rotate(-45 11.5 51)"/>
     <rect x="1" y="53" width="6" height="6" fill="${g}"
@@ -159,9 +192,11 @@ function frogSVG(s) {
   const horns = f.horns
     ? `<polygon points="14,14 10,3 20,11" fill="${hex(s.skin)}"/>
        <polygon points="50,14 54,3 44,11" fill="${hex(s.skin)}"/>` : '';
+  // `crown` may be a number that scales it, matching the 3D build.
+  const cs = typeof f.crown === 'number' ? f.crown : 1;
   const crown = f.crown && f.pattern
     ? [0, 1, 2, 3, 4].map((i) => `<polygon fill="${hex(f.pattern)}"
-        points="${16 + i * 8},13 ${19 + i * 8},4 ${22 + i * 8},13"/>`).join('')
+        points="${16 + i * 8},13 ${19 + i * 8},${13 - 9 * cs} ${22 + i * 8},13"/>`).join('')
     : '';
   const spikes = f.spikes
     ? [0, 1, 2].map((i) => `<polygon fill="${hex(s.cloth)}"
@@ -175,9 +210,60 @@ function frogSVG(s) {
        <rect x="20" y="46" width="24" height="2" fill="${hex(f.pattern)}"/>` : '';
   const aura = f.aura
     ? `<circle cx="32" cy="34" r="29" fill="${hex(f.aura)}" opacity="0.16"/>` : '';
+  /**
+   * Everything the two new crate sets add. Drawn in the same order the rig
+   * builds it, so a card and the frog you equip agree — a Swamp Warden whose
+   * card is a plain green frog would be a lie told at 4,500 froglets.
+   */
+  const moss = f.moss
+    ? [[8, 24], [18, 19], [30, 17], [42, 19], [52, 24], [24, 21]]
+      .map(([x, y]) => `<rect x="${x}" y="${y}" width="9" height="5"
+        rx="2" fill="${hex(f.moss)}"/>`).join('')
+    : '';
+  // Breastplate, pauldrons and a collar, over the torso.
+  const plates = f.plates
+    ? `<rect x="8" y="24" width="12" height="11" fill="${hex(f.plates)}"/>
+       <rect x="44" y="24" width="12" height="11" fill="${hex(f.plates)}"/>
+       <rect x="19" y="33" width="26" height="17" fill="${hex(f.plates)}"/>
+       <rect x="30" y="35" width="4" height="13" fill="${hex(f.plates)}"
+         opacity="0.45"/>
+       <rect x="17" y="30" width="30" height="4" fill="${hex(f.plates)}"
+         opacity="0.7"/>`
+    : '';
+  /**
+   * The hood is drawn BEHIND the head, a size larger, so a rim of it shows
+   * around the crown and temples.
+   *
+   * As an arch over the front it covered the eyes — they sit at the head's
+   * top outer corners on this card, and any band wide enough to read as a
+   * hood lands on them. A shell behind reads the same and keeps the face,
+   * which is the whole thing you are buying.
+   */
+  const hood = f.hood
+    ? `<path d="M3,34 Q3,2 32,2 Q61,2 61,34 L61,44 L52,40 L52,24
+        Q52,11 32,11 Q12,11 12,24 L12,40 L3,44 Z" fill="${hex(f.hood)}"/>`
+    : '';
+  const shield = f.shield
+    ? `<circle cx="9" cy="45" r="9" fill="${hex(f.shield)}"/>
+       <circle cx="9" cy="45" r="9" fill="none" stroke="${hex(f.shield)}"
+         stroke-width="2" opacity="0.5"/>
+       <circle cx="9" cy="45" r="2.5" fill="${hex(f.shield)}" opacity="0.55"/>`
+    : '';
+  const stars = f.stars
+    ? [[16, 30], [26, 24], [40, 28], [48, 36], [22, 40], [36, 44], [44, 20]]
+      .map(([x, y]) => `<rect x="${x}" y="${y}" width="2" height="2"
+        fill="${hex(f.stars)}"/>`).join('')
+    : '';
+  const orbit = f.orbit
+    ? [[3, 20], [58, 22], [6, 44], [56, 46], [30, 2], [32, 60], [14, 10], [50, 10]]
+      .slice(0, Math.min(8, f.orbitN || 6))
+      .map(([x, y]) => `<rect x="${x}" y="${y}" width="4" height="4"
+        fill="${hex(f.orbit)}"/><rect x="${x - 1}" y="${y - 1}" width="6"
+        height="6" fill="${hex(f.orbit)}" opacity="0.3"/>`).join('')
+    : '';
 
   return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
-    ${aura}${halo}${fins}${spikes}${horns}${crown}
+    ${aura}${orbit}${halo}${hood}${fins}${spikes}${horns}
     <rect x="10" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
     <rect x="44" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
     <rect x="12" y="16" width="6" height="5" fill="${white}"/>
@@ -190,6 +276,7 @@ function frogSVG(s) {
     <rect x="20" y="42" width="24" height="12" fill="${hex(s.skin)}"/>
     <rect x="24" y="44" width="16" height="8" fill="${hex(s.belly)}"/>
     <rect x="14" y="38" width="36" height="4" fill="${hex(s.cloth)}"/>
+    ${plates}${moss}${stars}${shield}${crown}
     ${pattern}
   </svg>`;
 }
@@ -279,12 +366,37 @@ export class Shop {
         this.render();
       });
     }
-    $('crate-close').onclick = () => { Audio.uiBack(); this.closeCrate(); };
-    $('crate-again').onclick = () => {
+    const again = () => {
       const c = this._lastCrate;
+      const n = this._lastCount || 1;
       this.closeCrate();
-      if (c) this.buyCrate(c);
+      if (c) this.buyCrate(c, n);
     };
+    $('crate-close').onclick = () => { Audio.uiBack(); this.closeCrate(); };
+    $('crate-again').onclick = again;
+    $('crate-close2').onclick = () => { Audio.uiBack(); this.closeCrate(); };
+    $('crate-again2').onclick = again;
+
+    /**
+     * S SKIPS THE SPIN.
+     *
+     * On the document, not the overlay: the overlay never has focus — you
+     * got here by clicking a button, and that button kept it — so a
+     * listener on `#crate` would never fire. Gated on the overlay being
+     * open, so S is the skip key only while a case is being opened and is
+     * free for everything else the rest of the time.
+     */
+    document.addEventListener('keydown', (e) => {
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      const box = $('crate');
+      if (!box || !box.classList.contains('show')) return;
+      if ((e.key || '').toLowerCase() !== 's') return;
+      e.preventDefault();
+      // Safe to call more than once: the second `skip` on the same spin is a
+      // no-op, so a duplicate listener costs nothing and needs no bookkeeping
+      // that could go stale.
+      this.skip();
+    });
   }
 
   status(msg, isError) {
@@ -305,15 +417,36 @@ export class Shop {
   }
 
   _renderSkins(body, kind) {
-    const crate = CRATES.find((c) => c.kind === kind);
-    if (crate) body.appendChild(this._crateOffer(crate));
+    for (const crate of cratesFor(kind)) body.appendChild(this._crateOffer(crate));
 
-    const grid = document.createElement('div');
-    grid.className = 'skin-grid';
-    for (const skin of CATALOG[kind]) {
-      grid.appendChild(this._skinCard(kind, skin));
+    /**
+     * The items, GROUPED BY SET.
+     *
+     * Three cases fill this tab now. One flat grid of thirty cards would
+     * give no clue which case drops which, and a set that you cannot see the
+     * boundaries of is not a set — it is a pile.
+     *
+     * Sets are listed in catalogue order rather than from a fixed list, so
+     * adding a fourth one later needs no change here.
+     */
+    const items = CATALOG[kind] || [];
+    const order = [];
+    for (const s of items) {
+      const set = setOf(s);
+      if (order.indexOf(set) === -1) order.push(set);
     }
-    body.appendChild(grid);
+    for (const set of order) {
+      const head = document.createElement('div');
+      head.className = 'set-head';
+      head.textContent = SET_NAMES[set] || set.toUpperCase();
+      body.appendChild(head);
+      const grid = document.createElement('div');
+      grid.className = 'skin-grid';
+      for (const skin of items) {
+        if (setOf(skin) === set) grid.appendChild(this._skinCard(kind, skin));
+      }
+      body.appendChild(grid);
+    }
   }
 
   _crateOffer(crate) {
@@ -321,7 +454,9 @@ export class Shop {
     wrap.className = 'crate-offer';
 
     const box = document.createElement('div');
-    box.className = 'crate-box';
+    // The case looks like its set here too, so you can tell them apart in
+    // the shop and not only once one is already open.
+    box.className = 'crate-box' + (setOf(crate) === 'base' ? '' : ' ' + setOf(crate));
     box.style.setProperty('--crate-color', crate.color);
     box.innerHTML = '<div class="crate-lock"></div>';
     wrap.appendChild(box);
@@ -341,12 +476,40 @@ export class Shop {
     const btn = document.createElement('button');
     btn.className = 'btn btn-go';
     btn.innerHTML = '<span>OPEN CASE</span>';
-    btn.onclick = () => this.buyCrate(crate);
+    btn.onclick = () => this.buyCrate(crate, 1);
     buy.appendChild(btn);
     const price = document.createElement('div');
     price.className = 'crate-price';
     price.textContent = crate.price.toLocaleString('en-GB') + ' FROGLETS';
     buy.appendChild(price);
+
+    /**
+     * BULK BUYS. Same case, several at a time.
+     *
+     * Charged at the plain multiple with no discount — this buys SPEED, not
+     * a better deal. A ten-pack at a discount would make opening one at a
+     * time the wrong move, and then the ×1 button is just a trap for anyone
+     * who wanted to watch the animation.
+     */
+    const bulk = document.createElement('div');
+    bulk.className = 'crate-bulk';
+    for (const n of BULK_SIZES) {
+      if (n === 1) continue;
+      const b = document.createElement('button');
+      b.className = 'btn btn-quiet';
+      b.innerHTML = `<span>×${n}</span>`;
+      b.title = `${n} cases — ${(crate.price * n).toLocaleString('en-GB')} froglets`;
+      b.onclick = () => this.buyCrate(crate, n);
+      bulk.appendChild(b);
+    }
+    buy.appendChild(bulk);
+    const note = document.createElement('div');
+    note.className = 'crate-bulk-note';
+    note.textContent = BULK_SIZES.filter((n) => n > 1)
+      .map((n) => `×${n} ${(crate.price * n).toLocaleString('en-GB')}`)
+      .join('  ·  ');
+    buy.appendChild(note);
+
     wrap.appendChild(buy);
     return wrap;
   }
@@ -495,24 +658,105 @@ export class Shop {
 
   // ---------------------------------------------------------- crate opening
 
-  buyCrate(crate) {
+  /**
+   * Every timer the opening sequence sets, in one place.
+   *
+   * The sequence is a chain of them — stage, spin, reveal, hold, next spin —
+   * and closing the overlay part way through has to stop ALL of it. A stray
+   * timer would land on a closed overlay and unlock an item you are no
+   * longer watching, or start a spin on top of the next purchase.
+   */
+  _after(ms, fn) {
+    const id = setTimeout(fn, ms);
+    (this._timers = this._timers || []).push(id);
+    return id;
+  }
+
+  _clearTimers() {
+    for (const id of this._timers || []) clearTimeout(id);
+    this._timers = [];
+    this._holding = null;
+  }
+
+  /**
+   * Buy and open `count` cases.
+   *
+   * The whole purchase is charged and ROLLED UP FRONT. Rolling as each reel
+   * starts would mean a ten-pack could be interrupted half way — by a
+   * close, a reload, a stray error — having charged for ten and delivered
+   * four. Everything is decided here; what follows is presentation.
+   */
+  buyCrate(crate, count = 1) {
     if (this.opening) return;
-    if (!this.economy.canAfford(crate.price)) {
+    const n = Math.max(1, Math.min(50, count | 0));
+    const total = crate.price * n;
+    if (!this.economy.canAfford(total)) {
       Audio.uiBack();
-      this.status(`Not enough froglets — you need ${(crate.price - this.economy.froglets).toLocaleString('en-GB')} more.`, true);
+      const short = (total - this.economy.froglets).toLocaleString('en-GB');
+      this.status(n > 1
+        ? `${n} cases costs ${total.toLocaleString('en-GB')} — you need ${short} more.`
+        : `Not enough froglets — you need ${short} more.`, true);
       return;
     }
-    this.economy.spend(crate.price);
+    this.economy.spend(total);
     this.status('');
     this.render();
+
     this._lastCrate = crate;
-    this._openCrate(crate);
+    this._lastCount = n;
+    this._queue = rollMany(crate, n);
+    this._batch = [];
+    this._index = 0;
+    this.opening = true;
+
+    const box = $('crate');
+    box.classList.remove('mist', 'starfield', 'staging', 'batching',
+      'anim-base', 'anim-swamp', 'anim-celestial');
+    box.classList.add('anim-' + (crate.anim || 'base'));
+    if (n > 1) box.classList.add('batching');
+    $('crate-batch').classList.remove('show');
+    $('crate-result').classList.remove('show');
+    $('crate-title').textContent = crate.name.toUpperCase();
+    box.classList.add('show');
+
+    this._playStage(crate);
+  }
+
+  /**
+   * STAGE ONE: the crate itself.
+   *
+   * Which sequence plays is the crate's `anim`, and all of it lives in CSS —
+   * see the keyframes in css/style.css. The node is CLONED to restart it:
+   * CSS animations only run when an element enters the document with the
+   * class on it, so re-opening a case without replacing the node would show
+   * a crate that has already finished cracking.
+   */
+  _playStage(crate) {
+    const box = $('crate');
+    const old = $('stage-crate');
+    if (old && old.parentNode) {
+      old.parentNode.replaceChild(old.cloneNode(true), old);
+    }
+    box.classList.add('staging');
+    const anim = crate.anim || 'base';
+    this._sub(anim === 'swamp' ? 'Something in there is moving.'
+      : anim === 'celestial' ? 'It is not touching the floor any more.'
+        : 'Locked.');
+    if (anim === 'swamp') this._after(430, () => Audio.crateCrack());
+    else if (anim === 'celestial') this._after(120, () => Audio.crateLift());
+    else Audio.uiClick();
+    this._after(STAGE_MS[anim] || STAGE_MS.base, () => {
+      box.classList.remove('staging');
+      this._openCrate(crate);
+    });
   }
 
   /** Spin the reel, then reveal. */
   _openCrate(crate) {
     this.opening = true;
-    const won = rollCrate(crate);
+    // Decided in `buyCrate`, up front, for the whole purchase. The fallback
+    // is only there so a direct call cannot spin a reel with no prize on it.
+    const won = (this._queue && this._queue[this._index]) || rollCrate(crate);
     // The REEL must be drawn from the same pool the roll came from.
     //
     // It used to spin the full catalog, so Frogath's hide and blade — and the
@@ -554,27 +798,105 @@ export class Shop {
 
     // Force a reflow so the transition starts from the reset position.
     void strip.offsetWidth;
-    const DURATION = 5.4;
+    const bulk = this._queue && this._queue.length > 1;
+    const DURATION = bulk ? SPIN_BULK : SPIN_SOLO;
     strip.style.transition = `transform ${DURATION}s cubic-bezier(0.12, 0.62, 0.11, 1)`;
     strip.style.transform = `translateX(${target}px)`;
 
-    this._tickReel(DURATION);
+    /**
+     * Kept so S can finish the spin from wherever it has got to. Without the
+     * target, a skip would have to guess where the reel was going and could
+     * land the marker on the wrong card — which is the one thing a skip must
+     * never do: it changes the presentation, not the prize.
+     */
+    this._target = target;
+    this._skipped = false;
+    this._spin = (this._spin || 0) + 1;
 
-    clearTimeout(this._revealTimer);
-    this._revealTimer = setTimeout(() => this._reveal(crate, won), DURATION * 1000 + 220);
+    this._sub(bulk
+      ? `CASE ${this._index + 1} OF ${this._queue.length}  ·  <kbd>S</kbd> SKIP`
+      : '<kbd>S</kbd> SKIP');
+
+    this._tickReel(DURATION, this._spin);
+    this._after(DURATION * 1000 + 220, () => this._reveal(crate, won));
   }
 
-  /** Ticks that thin out as the reel slows, matching the deceleration. */
-  _tickReel(duration) {
+  /**
+   * S — cut to the last half second.
+   *
+   * Three things can be on screen and each has its own skip: the crate
+   * animation goes straight to the reel, a spinning reel keeps its landing
+   * but runs the rest of the way in `SKIP_S`, and the pause between cases in
+   * a multi-buy fires the next spin immediately.
+   */
+  skip() {
+    if (!this.opening) return;
+    const box = $('crate');
+    if (box.classList.contains('staging')) {
+      this._clearTimers();
+      box.classList.remove('staging');
+      Audio.uiClick();
+      this._openCrate(this._lastCrate);
+      return;
+    }
+    // Between cases: jump to the next one.
+    if (this._holding) {
+      const go = this._holding;
+      this._clearTimers();
+      go();
+      return;
+    }
+    if (this._skipped || this._target === undefined) return;
+    this._skipped = true;
+    this._clearTimers();
+
+    /**
+     * Freeze the strip where it actually IS, then run the last half second
+     * from there.
+     *
+     * Reading the computed transform is what makes it continuous: the CSS
+     * transition is mid-flight, so the inline value still says the target,
+     * and re-transitioning without pinning the real position first would
+     * make the reel sit still for half a second and then jump.
+     */
+    const strip = $('reel-strip');
+    const now = typeof getComputedStyle === 'function'
+      ? getComputedStyle(strip).transform : null;
+    strip.style.transition = 'none';
+    if (now && now !== 'none') strip.style.transform = now;
+    void strip.offsetWidth;
+    strip.style.transition = `transform ${SKIP_S}s cubic-bezier(0.15, 0.75, 0.15, 1)`;
+    strip.style.transform = `translateX(${this._target}px)`;
+
+    const crate = this._lastCrate;
+    const won = this._queue[this._index];
+    this._sub('SKIPPED');
+    this._after(SKIP_S * 1000 + 120, () => this._reveal(crate, won));
+  }
+
+  /** The line under the reel: where you are, and how to skip. */
+  _sub(html) {
+    const el = $('crate-sub');
+    if (el) el.innerHTML = html || '';
+  }
+
+  /**
+   * Ticks that thin out as the reel slows, matching the deceleration.
+   *
+   * `gen` is the spin this chain belongs to. A skip starts the next reveal
+   * while an older chain still has a timer in flight, and without the check
+   * that chain would keep clicking over the top of the reveal.
+   */
+  _tickReel(duration, gen) {
     let t = 0;
     const step = () => {
-      if (!this.opening) return;
+      if (!this.opening || this._spin !== gen || this._skipped) return;
       Audio.uiHover();
       // Same easing shape as the CSS curve, so the clicks track the motion.
       const p = t / duration;
       const gap = 0.045 + Math.pow(p, 3) * 0.55;
       t += gap;
-      if (t < duration) this._tickTimer = setTimeout(step, gap * 1000);
+      if (t < duration) this._tickTimer = this._after(gap * 1000, step);
     };
     step();
   }
@@ -582,6 +904,7 @@ export class Shop {
   _reveal(crate, won) {
     const r = RARITY[won.rarity];
     const dupe = !this.economy.unlock(crate.kind, won.id);
+    (this._batch = this._batch || []).push({ item: won, dupe });
 
     $('cr-rarity').textContent = r.name.toUpperCase();
     $('cr-rarity').style.color = r.color;
@@ -592,24 +915,124 @@ export class Shop {
       : 'Added to your collection.';
     $('crate-result').classList.add('show');
 
+    /**
+     * ── the top-tier flourishes ─────────────────────────────────────────
+     *
+     * A Legendary out of a Swampforged case fills the screen with mist; the
+     * one Mythic darkens everything and puts stars behind the item. Both are
+     * screen-wide on purpose — a rare drop should change the room, and both
+     * are tied to the SET so the effect tells you where the thing came from.
+     */
+    const anim = crate.anim || 'base';
+    const box = $('crate');
+    if (anim === 'swamp' && (won.rarity === 'legendary' || won.rarity === 'mythic')) {
+      box.classList.add('mist');
+      // It rolls in and rolls off again — it is a moment, not a filter left
+      // over the screen for as long as you sit reading the card.
+      this._after(2800, () => box.classList.remove('mist'));
+    }
+    if (won.rarity === 'mythic') {
+      // Left up until the overlay closes. It is the rarest thing in the game
+      // and it happens about once in five hundred opens; it can have the sky.
+      box.classList.add('starfield');
+    }
+
     // Louder fanfare the rarer it is.
-    if (won.rarity === 'legendary' || won.rarity === 'epic') {
+    if (won.rarity === 'mythic') {
+      Audio.crateMythic();
+    } else if (won.rarity === 'legendary' || won.rarity === 'epic') {
       Audio.headshot({ x: 0, y: 0, z: 0 });
-      setTimeout(() => Audio.respawn({ x: 0, y: 0, z: 0 }), 120);
+      this._after(120, () => Audio.respawn({ x: 0, y: 0, z: 0 }));
     } else {
       Audio.pickup({ x: 0, y: 0, z: 0 });
     }
 
-    this.opening = false;
+    this._index = (this._index || 0) + 1;
     this.onChange();
     this.render();
+
+    const queue = this._queue || [];
+    if (this._index < queue.length) {
+      /**
+       * More to open. Hold the result long enough to read, then spin again —
+       * longer for something good, because the reason for a pause here is to
+       * let a rare drop land, not to pad out the commons.
+       */
+      const top = won.rarity !== 'common' && won.rarity !== 'uncommon';
+      const next = () => {
+        this._holding = null;
+        $('crate-result').classList.remove('show');
+        box.classList.remove('mist');
+        this._openCrate(crate);
+      };
+      this._holding = next;
+      this._after(top ? HOLD_MS.high : HOLD_MS.low, () => {
+        if (this._holding === next) next();
+      });
+      return;
+    }
+
+    this.opening = false;
+    this._holding = null;
+    if (queue.length > 1) this._revealBatch(crate);
+    else this._sub('');
+  }
+
+  /**
+   * Everything a multi-buy produced, once the last case has landed.
+   *
+   * Sorted RAREST FIRST. After ten opens what you want to know is the best
+   * thing you got, and hunting for it down a list in roll order is work the
+   * screen should be doing.
+   */
+  _revealBatch(crate) {
+    const batch = this._batch || [];
+    $('crate-result').classList.remove('show');
+    $('crate').classList.remove('batching');
+    $('cb-head').textContent = `${batch.length} CASES OPENED`;
+
+    const rank = (e) => RARITY_ORDER.indexOf(e.item.rarity);
+    const grid = $('cb-grid');
+    grid.innerHTML = '';
+    for (const e of batch.slice().sort((a, b) => rank(b) - rank(a))) {
+      const r = RARITY[e.item.rarity];
+      const card = document.createElement('div');
+      card.className = 'cb-item' + (e.dupe ? '' : ' fresh');
+      card.style.borderBottomColor = r.color;
+      card.innerHTML = previewSVG(crate.kind, e.item)
+        + `<span>${e.item.name}</span>`
+        + `<span style="color:${r.color}">${e.dupe ? 'DUPE' : 'NEW'}</span>`;
+      grid.appendChild(card);
+    }
+
+    const counts = {};
+    for (const e of batch) counts[e.item.rarity] = (counts[e.item.rarity] || 0) + 1;
+    $('cb-tally').innerHTML = RARITY_ORDER
+      .filter((k) => counts[k]).reverse()
+      .map((k) => `<span style="color:${RARITY[k].color}">`
+        + `${counts[k]}× ${RARITY[k].name}</span>`).join('');
+
+    const fresh = batch.filter((e) => !e.dupe).length;
+    this._sub(fresh
+      ? `${fresh} NEW  ·  ${batch.length - fresh} ALREADY OWNED`
+      : 'ALL DUPLICATES. IT HAPPENS.');
+    $('crate-again2').querySelector('span').textContent
+      = `OPEN ${batch.length} MORE`;
+    $('crate-batch').classList.add('show');
   }
 
   closeCrate() {
+    this._clearTimers();
     clearTimeout(this._revealTimer);
     clearTimeout(this._tickTimer);
     this.opening = false;
-    $('crate').classList.remove('show');
+    this._queue = null;
+    this._target = undefined;
+    $('crate').classList.remove('show', 'staging', 'mist', 'starfield',
+      'batching', 'anim-base', 'anim-swamp', 'anim-celestial');
+    $('crate-batch').classList.remove('show');
+    $('crate-result').classList.remove('show');
+    this._sub('');
     this.render();
   }
 

@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v104';
-import { CFG } from './config.js?v=v104';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v104';
+import * as THREE from '../lib/three.module.js?v=v105';
+import { CFG } from './config.js?v=v105';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v105';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -341,6 +341,32 @@ export function buildKatana(m, fx) {
     a.castShadow = false;
     k.add(a);
   }
+  /**
+   * FRAGMENTS ORBITING THE BLADE.
+   *
+   * On exactly one sword in the game — the Astral Sovereign, the only Mythic
+   * — so that seeing it means something. Handed out on the group as
+   * `userData.shards` and driven by `FrogModel.update`, because the pivot is
+   * re-posed every frame by the swing code and anything animating itself
+   * inside it would fight that.
+   */
+  if (F.orbit && m.bladeShard) {
+    const shards = [];
+    const n = F.orbitN || 6;
+    for (let i = 0; i < n; i++) {
+      const s = mesh(G.box, m.bladeShard, 0.05, 0.05, 0.05, 0, 0, 0);
+      s.castShadow = false;
+      k.add(s);
+      shards.push({
+        mesh: s,
+        a: (i / n) * Math.PI * 2,
+        r: 0.22 + (i % 2) * 0.10,
+        y: (0.20 + (i / n) * 1.25) * L,
+        spin: 1.15 + (i % 3) * 0.38,
+      });
+    }
+    k.userData.shards = shards;
+  }
 
   k.add(mesh(G.cyl, m.gold, 0.055, 0.10, 0.055, 0, 0.14, 0));       // habaki
 
@@ -458,6 +484,11 @@ export class FrogModel {
 
     // ---- optional materials, only made when a skin asks for them ----
     if (sfx.runes) this.mats.rune = new THREE.MeshBasicMaterial({ color: sfx.runes });
+    // Named apart from the frog's `shard`: a frog and its sword can both be
+    // orbiting things, in two different colours.
+    if (sfx.orbit) {
+      this.mats.bladeShard = new THREE.MeshBasicMaterial({ color: sfx.orbit });
+    }
     if (sfx.tassel) this.mats.tassel = new THREE.MeshLambertMaterial({ color: sfx.tassel });
     if (sfx.aura) {
       this.mats.aura = new THREE.MeshBasicMaterial({
@@ -475,6 +506,56 @@ export class FrogModel {
       this.mats.bodyAura = new THREE.MeshBasicMaterial({
         color: ffx.aura, transparent: true, opacity: 0.14,
         side: THREE.BackSide, depthWrite: false,
+      });
+    }
+    /**
+     * ── the Swampforged and Celestial sets ────────────────────────────
+     *
+     * Armour, moss, a hood, a shield, specks and orbiting fragments. The two
+     * new crate sets describe almost every skin in them as wearing ARMOUR,
+     * and there was no way to say that — a crate that sells you "heavy
+     * ancient armour covered in moss" and hands you a differently tinted
+     * naked frog is the exact failure the `fx` system exists to prevent.
+     *
+     * Plate is lit rather than shaded only when it glows; ordinary metal and
+     * wet moss both want the light.
+     */
+    if (ffx.plates) {
+      this.mats.plate = new THREE.MeshLambertMaterial({
+        color: ffx.plates,
+        emissive: new THREE.Color(ffx.plates).multiplyScalar(0.16),
+      });
+      this.mats.plateDark = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(ffx.plates).multiplyScalar(0.66),
+      });
+    }
+    if (ffx.moss) this.mats.moss = new THREE.MeshLambertMaterial({ color: ffx.moss });
+    if (ffx.hood) {
+      this.mats.hood = new THREE.MeshLambertMaterial({ color: ffx.hood });
+    }
+    if (ffx.shield) {
+      this.mats.shield = new THREE.MeshLambertMaterial({ color: ffx.shield });
+      this.mats.shieldRim = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(ffx.shield).multiplyScalar(0.6),
+      });
+    }
+    if (ffx.stars) this.mats.star = new THREE.MeshBasicMaterial({ color: ffx.stars });
+    /**
+     * `embers` was DEAD. Frogath's hide and the Ascended's have declared it
+     * since they were written and no builder has ever read it, so two of the
+     * three rarest skins in the game were quietly missing an effect their
+     * own data asks for. Sparks, rising and fading out — implemented here
+     * because the orbit machinery below is most of what it needed.
+     */
+    if (ffx.embers) {
+      this.mats.ember = new THREE.MeshBasicMaterial({
+        color: ffx.embers, transparent: true, opacity: 0.85, depthWrite: false,
+      });
+    }
+    if (ffx.orbit) {
+      this.mats.shard = new THREE.MeshBasicMaterial({ color: ffx.orbit });
+      this.mats.shardFaint = new THREE.MeshBasicMaterial({
+        color: ffx.orbit, transparent: true, opacity: 0.35, depthWrite: false,
       });
     }
 
@@ -872,12 +953,199 @@ export class FrogModel {
       this.head.add(mesh(G.cone, M.skinDark, 0.055, 0.20 + tier * 0.07, 0.055,
         sx * (0.26 + tier * 0.07), 0.30 + tier * 0.06, 0.02, -0.35, 0, sx * 0.6));
     }
-    // A ring of points around the skull.
+    /**
+     * A ring of points around the skull.
+     *
+     * `crown` may be a NUMBER, which scales it — the Swamp King's is meant
+     * to be huge and the Star Emperor's larger again, and a crown that is
+     * the same size on a common and on a legendary is not a crown, it is a
+     * hat everybody owns. `true` still means 1.
+     *
+     * ── IT HAS TO CLEAR THE EYES ──────────────────────────────────────
+     * This frog's eyes are mounds of radius 0.23 centred at (±0.28, 0.26,
+     * 0.10) — they bulge to y 0.49, well above the 0.36 skull. The crown was
+     * a ring of 0.14-tall cones based at y 0.26, on a ring of radius 0.36:
+     * the same height and almost the same place as the eyes, so five of its
+     * seven points were INSIDE an eyeball and the other two inside the
+     * skull. No skin has ever actually shown its crown, this one or the
+     * three that had it before.
+     *
+     * The band may still be hidden behind the brow — that is what a crown
+     * does — but the POINTS now start above the eyes and rise from there.
+     */
     if (F.crown && M.inlay) {
+      const cs = typeof F.crown === 'number' ? F.crown : 1;
+      const rr = 1 + (cs - 1) * 0.12;
+      const y = 0.40 + (cs - 1) * 0.10;
       for (let i = 0; i < 7; i++) {
         const a = (i / 7) * Math.PI * 2;
-        this.head.add(mesh(G.cone, M.inlay, 0.035, 0.14, 0.035,
-          Math.cos(a) * 0.36, 0.26, Math.sin(a) * 0.34));
+        this.head.add(mesh(G.cone, M.inlay, 0.05 * cs, 0.30 * cs, 0.05 * cs,
+          Math.cos(a) * 0.34 * rr, y + 0.04 * cs, Math.sin(a) * 0.32 * rr));
+      }
+      // A band joining them, so it is a crown and not seven spikes.
+      this.head.add(mesh(G.torus, M.inlay,
+        0.34 * rr, 0.34 * rr, 0.33 * rr, 0, y - 0.13 * cs, 0, Math.PI / 2));
+    }
+    /**
+     * ── ARMOUR ────────────────────────────────────────────────────────
+     *
+     * A breastplate, a pair of pauldrons and a collar. Parented to the BODY
+     * and the SHOULDERS respectively, so the plate leans and squashes with
+     * the frog and the pauldrons swing with the arms — armour bolted to the
+     * root would slide about over the animation and read as a decal.
+     *
+     * The pauldrons go on `shoulder`, not `fore`: a pauldron covers the
+     * joint, and on the forearm it would travel down the arm mid-swing.
+     */
+    if (M.plate) {
+      /**
+       * SIZED OFF THE TORSO, the way every other garment on this rig is.
+       *
+       * The torso is an ellipsoid 0.52 × 0.46 × 0.46 centred at y 0.62 (see
+       * TOR), which puts its front face at z 0.45 across the chest. The
+       * first version of this armour was 0.35 deep and sat entirely INSIDE
+       * the frog — exactly the mistake the note on the gi warns about, and
+       * it renders as a differently-coloured naked frog. Every figure below
+       * is checked against that ellipsoid at the height it sits at.
+       */
+      /**
+       * The breastplate goes in `girth`, NOT on the body.
+       *
+       * That group is what the croak inflates, and it holds the belly with
+       * the gi and the obi over it precisely so clothing stretches with the
+       * body underneath — see _buildTorso. Armour bolted to the body would
+       * have the belly swell straight through it on every croak.
+       */
+      const g = this.girth;
+      g.add(mesh(G.lowSphere, M.plate, 0.46, 0.33, 0.42, 0, 0.56, 0.20));
+      // A raised ridge down the middle of it, so it is not a smooth blob.
+      g.add(mesh(G.box, M.plateDark, 0.07, 0.30, 0.07, 0, 0.58, 0.56));
+      // A gorget at the neck: clear of the torso (0.443 at this height) and
+      // of the skull (0.388), so it rings the gap between them.
+      b.add(mesh(G.wrap, M.plateDark, 0.48, 0.11, 0.45, 0, 0.86, 0));
+      b.add(mesh(G.wrap, M.plate, 0.465, 0.07, 0.435, 0, 0.94, 0));
+      // Pauldrons capping the shoulder joints. The upper arm is a 0.11
+      // capsule, so these have to be more than twice its width to read.
+      for (const arm of this.arms) {
+        arm.shoulder.add(mesh(G.lowSphere, M.plate, 0.26, 0.18, 0.25, 0, -0.02, 0));
+        arm.shoulder.add(mesh(G.box, M.plateDark, 0.27, 0.045, 0.26, 0, -0.15, 0));
+      }
+    }
+    // Moss: tufts around the torso and over the crown, each pushed out to
+    // the body's own surface at its height so it sits ON the frog.
+    if (M.moss) {
+      for (let i = 0; i < 10; i++) {
+        const a = (i / 10) * Math.PI * 2;
+        const y = 0.52 + (i % 4) * 0.13;
+        const k = Math.sqrt(Math.max(0.2, 1 - Math.pow((y - 0.62) / 0.46, 2)));
+        b.add(mesh(G.lowSphere, M.moss, 0.16, 0.09, 0.14,
+          Math.cos(a) * 0.55 * k, y, Math.sin(a) * 0.50 * k));
+      }
+      this.head.add(mesh(G.lowSphere, M.moss, 0.24, 0.10, 0.20, 0, 0.30, -0.10));
+    }
+    /**
+     * A HOOD, pulled up over the cowl the rig already has.
+     *
+     * Every frog wears a dark cowl over the back and top of its skull — see
+     * _buildHead — so a hood skin cannot just add cloth in the same place;
+     * that is what the first attempt did, and it was invisible. This one is
+     * bigger than the cowl in all three axes and arches over the top of the
+     * eyes, which the cowl does not reach.
+     *
+     * It stops short of the FACE on purpose. The eyes are mounds at
+     * (±0.28, 0.26, 0.10) with a radius of 0.23; a shell whose front edge
+     * lands at z 0.16 presses in behind them and leaves the whites, the
+     * pupils and the mask clear, which is how a hood actually sits.
+     */
+    if (M.hood) {
+      this.head.add(mesh(G.sphere, M.hood, 0.52, 0.44, 0.36, 0, 0.08, -0.20));
+      this.head.add(mesh(G.cone, M.hood, 0.16, 0.34, 0.16, 0, 0.26, -0.38, 1.15));
+      // A drape down the back of the neck.
+      this.head.add(mesh(G.box, M.hood, 0.42, 0.34, 0.05, 0, -0.18, -0.42, 0.24));
+    }
+    /**
+     * A shield, strapped to the OFF arm.
+     *
+     * Side -1, never side +1: the sword is posed into the right hand, and a
+     * shield on that arm would be swung through the target along with the
+     * blade. On the left forearm it stays out of every swing.
+     */
+    if (M.shield) {
+      const off = this.arms.find((a) => a.side < 0);
+      if (off) {
+        off.fore.add(mesh(G.cyl, M.shield, 0.30, 0.05, 0.30,
+          -0.13, -0.16, 0, 0, 0, Math.PI / 2));
+        off.fore.add(mesh(G.torus, M.shieldRim, 0.30, 0.30, 0.30,
+          -0.15, -0.16, 0, 0, 0, Math.PI / 2));
+        off.fore.add(mesh(G.lowSphere, M.shieldRim, 0.08, 0.08, 0.08, -0.19, -0.16, 0));
+      }
+    }
+    /**
+     * Glowing specks over the hide — stars, or a comet's trail.
+     *
+     * Pushed out onto the torso's own surface at each height for the same
+     * reason the moss is: a speck one hundredth inside an opaque frog is not
+     * a speck, and the torso's half-width falls away fast above the middle.
+     */
+    if (M.star) {
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2 * 3;
+        const y = 0.34 + (i / 14) * 0.58;
+        const k = Math.sqrt(Math.max(0.2, 1 - Math.pow((y - 0.62) / 0.46, 2)));
+        b.add(mesh(G.box, M.star, 0.05, 0.05, 0.05,
+          Math.cos(a) * 0.54 * k, y, Math.sin(a) * 0.49 * k));
+      }
+      this.head.add(mesh(G.box, M.star, 0.055, 0.055, 0.055, 0.30, 0.06, 0.28));
+      this.head.add(mesh(G.box, M.star, 0.045, 0.045, 0.045, -0.34, -0.02, 0.22));
+    }
+    /**
+     * ── ORBITING FRAGMENTS ────────────────────────────────────────────
+     *
+     * Chips of gold going round the frog, animated in `update`. This is the
+     * signature of the Mythic — see the note on `frog_sovereign` in
+     * js/skins.js — so it is deliberately the only fx here that MOVES
+     * independently of the rig, which is what makes it catch the eye.
+     *
+     * Parented to the body but positioned in body space each frame, and
+     * `castShadow` off: fourteen shadow casters orbiting a frog is a lot of
+     * shadow map for a cosmetic, and a chip of light should not cast one.
+     */
+    // Sparks coming off the hide and rising. See the note on the material.
+    if (M.ember) {
+      this.embers = [];
+      for (let i = 0; i < 9; i++) {
+        const size = 0.06 + (i % 3) * 0.015;
+        const e = mesh(G.box, M.ember, size, size, size, 0, 0, 0);
+        e.castShadow = false;
+        b.add(e);
+        this.embers.push({
+          mesh: e,
+          size,
+          a: (i / 9) * Math.PI * 2,
+          r: 0.34 + (i % 3) * 0.13,
+          t: i / 9,                       // staggered, so they do not pulse together
+          rate: 0.34 + (i % 4) * 0.08,
+        });
+      }
+    }
+    if (M.shard) {
+      this.shards = [];
+      const n = F.orbitN || 6;
+      for (let i = 0; i < n; i++) {
+        const s = mesh(G.box, M.shard, 0.07, 0.07, 0.07, 0, 0, 0);
+        s.castShadow = false;
+        b.add(s);
+        const halo = mesh(G.lowSphere, M.shardFaint, 0.11, 0.11, 0.11, 0, 0, 0);
+        halo.castShadow = false;
+        s.add(halo);
+        this.shards.push({
+          mesh: s,
+          a: (i / n) * Math.PI * 2,
+          r: 0.72 + (i % 3) * 0.13,
+          y: 0.30 + (i % 4) * 0.20,
+          spin: 0.55 + (i % 3) * 0.22,
+          bob: 0.06 + (i % 2) * 0.05,
+        });
       }
     }
     // Glowing inlay across the back and brow.
@@ -1604,6 +1872,59 @@ export class FrogModel {
     if (this.bodyAura) {
       this.bodyAura.material.opacity = 0.11 + Math.sin(t * 2.4) * 0.04;
     }
+    /**
+     * Orbiting fragments. Each rides its own ring at its own rate, and bobs
+     * on a phase taken from its starting angle — a single shared rate would
+     * make them a rigid wheel, and the whole point is that they float.
+     */
+    if (this.shards) {
+      for (const s of this.shards) {
+        s.a += dt * s.spin;
+        s.mesh.position.set(
+          Math.cos(s.a) * s.r,
+          s.y + Math.sin(t * 1.7 + s.a) * s.bob,
+          Math.sin(s.a) * s.r,
+        );
+        s.mesh.rotation.y += dt * 1.6;
+        s.mesh.rotation.x += dt * 1.1;
+      }
+    }
+    /**
+     * Embers: each spark rises from the hip to over the head and restarts.
+     *
+     * Fading is done with SCALE, not opacity, because all nine share one
+     * material — nine materials to fade nine cubes independently would be
+     * nine draw calls for something the size of a pixel at arm's length.
+     *
+     * `size` is the spark's own build scale and the fade MULTIPLIES it.
+     * `setScalar(k)` alone replaced it, which turned nine 0.05 sparks into
+     * nine unit cubes and buried the frog in slabs of light.
+     */
+    if (this.embers) {
+      for (const e of this.embers) {
+        e.t += dt * e.rate;
+        if (e.t >= 1) e.t -= 1;
+        e.a += dt * 0.5;
+        const k = 1 - e.t;
+        e.mesh.position.set(
+          Math.cos(e.a) * e.r * (0.7 + e.t * 0.5),
+          0.24 + e.t * 1.55,
+          Math.sin(e.a) * e.r * (0.7 + e.t * 0.5),
+        );
+        e.mesh.scale.setScalar(e.size * Math.max(0.12, k * k));
+        e.mesh.rotation.y += dt * 2.4;
+      }
+    }
+    // The same, around the blade. Local to the weapon pivot, so they follow
+    // it through the swing instead of hanging in the air where it used to be.
+    const bs = this.katana && this.katana.userData.shards;
+    if (bs) {
+      for (const s of bs) {
+        s.a += dt * s.spin;
+        s.mesh.position.set(Math.cos(s.a) * s.r, s.y, Math.sin(s.a) * s.r);
+        s.mesh.rotation.y += dt * 2.2;
+      }
+    }
     if (this.divine) this._animateDivine(dt, t);
 
     // Throat pulse — a frog is never quite still.
@@ -1962,6 +2283,10 @@ export class FrogModel {
     if (look.tassel) {
       kill(M.tassel);
       M.tassel = new THREE.MeshLambertMaterial({ color: look.tassel });
+    }
+    if (look.orbit) {
+      kill(M.bladeShard);
+      M.bladeShard = new THREE.MeshBasicMaterial({ color: look.orbit });
     }
 
     // The sheath is made of the same materials, so it re-tints for free —

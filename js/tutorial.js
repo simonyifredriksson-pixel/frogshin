@@ -51,14 +51,14 @@
  * a gap and the positions are worked out from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v104';
-import { CFG } from './config.js?v=v104';
-import { clamp, mulberry32 } from './util.js?v=v104';
-import { Terrain, CollisionWorld } from './collision.js?v=v104';
-import { Mob } from './mobs.js?v=v104';
-import { addFrog } from './frogbuild.js?v=v104';
-import { Cine } from './cinema.js?v=v104';
-import { Audio } from './audio.js?v=v104';
+import * as THREE from '../lib/three.module.js?v=v105';
+import { CFG } from './config.js?v=v105';
+import { clamp, mulberry32 } from './util.js?v=v105';
+import { Terrain, CollisionWorld } from './collision.js?v=v105';
+import { Mob } from './mobs.js?v=v105';
+import { addFrog } from './frogbuild.js?v=v105';
+import { Cine } from './cinema.js?v=v105';
+import { Audio } from './audio.js?v=v105';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
