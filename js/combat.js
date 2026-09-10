@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v103';
-import { CFG } from './config.js?v=v103';
-import { clamp } from './util.js?v=v103';
+import * as THREE from '../lib/three.module.js?v=v104';
+import { CFG } from './config.js?v=v104';
+import { clamp } from './util.js?v=v104';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -28,6 +28,36 @@ export class Combat {
     this.hitstop = 0;
     this.justSwung = false;
     this.swingIndex = 0;
+    /**
+     * ═══ WHAT IS BEING SWUNG ══════════════════════════════════════════════
+     *
+     * All twenty weapons in the gear table used to swing at exactly the same
+     * rate with exactly the same reach, differing only in a damage number.
+     * This is what makes a maul feel like a maul: see `feelOf` in
+     * js/weapons.js and `setWeapon` below.
+     *
+     * Defaults are the sword's, which are 1 across the board — so anything
+     * that never calls `setWeapon` (the arena, the dungeon, the prologue,
+     * every remote player) behaves exactly as it did.
+     */
+    this.speed = 1;
+    this.hit = 1;
+    this.reachMult = 1;
+  }
+
+  /**
+   * Set the weapon's feel. `f` is a `feelOf` result, or null for the default.
+   *
+   * Deliberately does NOT touch a swing in progress: the timers are read
+   * through `attackT`, which is a ratio, and re-scaling `attackDuration`
+   * under a swing that is half done would make the animation jump. The next
+   * swing is the first one that uses it, which is one swing of latency after
+   * equipping something in a menu.
+   */
+  setWeapon(f) {
+    this.speed = (f && f.speed) || 1;
+    this.hit = (f && f.hit) || 1;
+    this.reachMult = (f && f.reach) || 1;
   }
 
   /** Normalised swing progress for the animation rig (1 -> 0). */
@@ -45,10 +75,24 @@ export class Combat {
     else this.comboIndex = 0;
 
     const i = this.comboIndex;
-    this.attackDuration = CFG.combat.attackCooldown[i];
+    /**
+     * THE WHOLE SWING SCALES, wind-up included.
+     *
+     * A maul at 0.66 speed takes half again as long to bring round AND half
+     * again as long to recover, and its wind-up — the part before the hitbox
+     * opens — stretches with it. That last part is what makes a slow weapon
+     * a commitment rather than just a slow number: there is more time in
+     * which you have started something you cannot stop.
+     *
+     * The combo WINDOW does not scale. It is how long you have to decide on
+     * the next cut, and a slow weapon giving you longer to think would undo
+     * the thing that makes it slow.
+     */
+    const s = this.speed || 1;
+    this.attackDuration = CFG.combat.attackCooldown[i] / s;
     this.attackTimer = this.attackDuration;
-    this.cooldown = CFG.combat.attackCooldown[i];
-    this.windupLeft = CFG.combat.windup[i];
+    this.cooldown = this.attackDuration;
+    this.windupLeft = CFG.combat.windup[i] / s;
     this.comboTimer = CFG.combat.comboWindow;
     this.active = false;
     this.hitThisSwing.clear();
@@ -94,7 +138,14 @@ export class Combat {
   resolve(origin, yaw, targets, reachOverride) {
     if (!this.active) return null;
     const i = this.comboIndex;
-    const reach = reachOverride || CFG.combat.reach;
+    /**
+     * A polearm reaches half again as far as a knife.
+     *
+     * `reachOverride` still wins outright — that is the juggernaut's blade,
+     * which is a different weapon at a different scale and has nothing to do
+     * with what the frog bought in a market.
+     */
+    const reach = reachOverride || CFG.combat.reach * (this.reachMult || 1);
     const results = [];
 
     _fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
@@ -129,14 +180,23 @@ export class Combat {
       }
 
       this.hitThisSwing.add(t.id);
+      /**
+       * DAMAGE PER BLOW RISES AS THE SWING SLOWS, by design and by very
+       * nearly the reciprocal: `hit × speed ≈ 1` in every class in
+       * js/weapons.js. So a maul's output over a fight matches a sabre's of
+       * the same `atk`, and the class is a choice about the shape of a fight
+       * rather than a hidden re-ranking of the whole gear table — which is
+       * what `atk` is for, and what every shop price is built on.
+       */
       results.push({
         target: t,
         dirX: _to.x, dirZ: _to.z,
-        damage: CFG.combat.comboDamage[i],
-        knockback: CFG.combat.knockback[i],
+        damage: CFG.combat.comboDamage[i] * (this.hit || 1),
+        // Knockback follows the weight too: a maul throws things.
+        knockback: CFG.combat.knockback[i] * (this.hit || 1),
         knockbackUp: CFG.combat.knockbackUp[i],
         index: i,
-        heavy: i === 2,
+        heavy: i === 2 || (this.hit || 1) >= 1.4,
       });
     }
 

@@ -32,42 +32,43 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v103';
-import { CFG } from './config.js?v=v103';
-import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v103';
+import * as THREE from '../lib/three.module.js?v=v104';
+import { CFG } from './config.js?v=v104';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v104';
 import { coronationScript, CarpetWalk, CORONATION_THEME }
-  from './coronation.js?v=v103';
-import { Realm } from './realm.js?v=v103';
-import { Scatter } from './scatter.js?v=v103';
-import { Traversals } from './traverse.js?v=v103';
-import { Sites } from './realmsites.js?v=v103';
-import { Camp } from './mobs.js?v=v103';
-import { DungeonBoss } from './dungeonboss.js?v=v103';
-import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v103';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v103';
+  from './coronation.js?v=v104';
+import { Realm } from './realm.js?v=v104';
+import { Scatter } from './scatter.js?v=v104';
+import { Traversals } from './traverse.js?v=v104';
+import { Sites } from './realmsites.js?v=v104';
+import { Camp } from './mobs.js?v=v104';
+import { DungeonBoss } from './dungeonboss.js?v=v104';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v104';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v104';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v103';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v103';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v103';
+  CONTENT_HALF } from './regions.js?v=v104';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v104';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v104';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v103';
+  mainObjective } from './quests.js?v=v104';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v103';
-import { disposeLandmarkMats } from './landmarks.js?v=v103';
-import { Props, disposePropMats } from './props.js?v=v103';
-import { TRADES, tradeFor, stockOf } from './stalls.js?v=v103';
-import { StallScreen } from './stallui.js?v=v103';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v103';
-import { Ambience } from './ambience.js?v=v103';
-import { Weather } from './weather.js?v=v103';
-import { Audio } from './audio.js?v=v103';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v103';
+  disposeVillagerMats } from './realmquests.js?v=v104';
+import { disposeLandmarkMats } from './landmarks.js?v=v104';
+import { Props, disposePropMats } from './props.js?v=v104';
+import { TRADES, tradeFor, stockOf } from './stalls.js?v=v104';
+import { feelOf, lookOf } from './weapons.js?v=v104';
+import { StallScreen } from './stallui.js?v=v104';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v104';
+import { Ambience } from './ambience.js?v=v104';
+import { Weather } from './weather.js?v=v104';
+import { Audio } from './audio.js?v=v104';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v104';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v103';
-import { Cine } from './cinema.js?v=v103';
-import { recommendedFor, readiness } from './guardians.js?v=v103';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v103';
-import { ThroneArena } from './throne.js?v=v103';
+  MEMORY_COUNT } from './flashbacks.js?v=v104';
+import { Cine } from './cinema.js?v=v104';
+import { recommendedFor, readiness } from './guardians.js?v=v104';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v104';
+import { ThroneArena } from './throne.js?v=v104';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -1185,6 +1186,38 @@ export class Overworld {
     if (!pl) return;
     pl.health.setMaxScale((this.progress.hearts * HEART) / CFG.combat.maxHealth);
     pl.damageMultiplier = st.atk / BASE.atk;
+    /**
+     * ═══ AND THE WEAPON IN YOUR HAND IS THE ONE YOU EQUIPPED ══════════════
+     *
+     * Twenty weapons in the gear table and, until this, every one of them
+     * was the same katana held the same way and swung at the same rate.
+     * Buying the Quarry Maul changed a number in the bag and nothing you
+     * could see or feel.
+     *
+     * This is the only place gear changes: it is called from the inventory
+     * screen, from every loot payout, from a market purchase and from
+     * entering the mode. So both halves hang off it — the silhouette in the
+     * frog's hand and the way it swings. See js/weapons.js.
+     *
+     * The COSMETIC SKIN still shows: `lookOf` takes the shape from the gear
+     * and the colours from a bought skin, so a gold katana carried as a maul
+     * is a gold maul and neither purchase is thrown away.
+     */
+    const wid = this.progress.equipped.weapon;
+    if (this._weaponShown !== wid) {
+      this._weaponShown = wid;
+      /**
+       * Both halves are guarded, like everything else this function touches.
+       * `applyStats` is called with whatever the mode has for a player — the
+       * loader calls it before the rig exists, and the tests drive it with a
+       * stub — so it may not have a combat state or a model yet, and a shop
+       * purchase must not be able to throw on the way out of the panel.
+       */
+      if (pl.combat && pl.combat.setWeapon) pl.combat.setWeapon(feelOf(wid));
+      if (pl.model && pl.model.setWeapon) {
+        pl.model.setWeapon(lookOf(wid, this.skins && this.skins.sword));
+      }
+    }
     // The hotbar's meal follows the bag, and the bag changes at exactly the
     // moments this is called: a kill, a reward, a piece of gear swapped.
     this._syncMeal();

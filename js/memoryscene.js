@@ -40,9 +40,9 @@
  * up front would be geometry nobody looks at.
  */
 
-import * as THREE from '../lib/three.module.js?v=v103';
-import { mulberry32, lerp, smoothstep, clamp } from './util.js?v=v103';
-import { addFrog, FROG_SKINS, FROG_CLOTH } from './frogbuild.js?v=v103';
+import * as THREE from '../lib/three.module.js?v=v104';
+import { mulberry32, lerp, smoothstep, clamp } from './util.js?v=v104';
+import { addFrog, FROG_SKINS, FROG_CLOTH } from './frogbuild.js?v=v104';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

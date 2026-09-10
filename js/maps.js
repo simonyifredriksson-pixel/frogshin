@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v103';
-import { clamp, smoothstep } from './util.js?v=v103';
+import { CFG } from './config.js?v=v104';
+import { clamp, smoothstep } from './util.js?v=v104';
 
 export const MAPS = [
   {

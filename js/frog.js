@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v103';
-import { CFG } from './config.js?v=v103';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v103';
+import * as THREE from '../lib/three.module.js?v=v104';
+import { CFG } from './config.js?v=v104';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v104';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -216,12 +216,100 @@ export function buildKatana(m, fx) {
       blade.position.y = 0.62 * L;
       k.add(mesh(G.cone, m.edge, 0.09, 0.40, 0.17, 0, 1.30 * L, 0));
       break;
+    case 'dagger':
+      /**
+       * A KNIFE. Short, straight, and pointed rather than tipped.
+       *
+       * `fang` was doing this job and it does not: its point is a cone 0.40
+       * long, so on a blade shortened to two-thirds it is over a third of
+       * the whole weapon and the thing reads as an ARROWHEAD on a handle.
+       * A knife is mostly blade with a little point on the end of it.
+       */
+      blade.scale.set(0.05, 1.30 * L, 0.10);
+      k.add(mesh(G.box, m.edge, 0.052, 1.24 * L, 0.03, 0, 0.78 * L, 0.032));
+      k.add(mesh(G.cone, m.edge, 0.05, 0.14, 0.06, 0, tipY - 0.04, 0));
+      break;
     case 'light':
       // Not steel at all — a bar of light, like the god's.
       blade.scale.set(0.10, 1.42 * L, 0.30);
       k.add(mesh(G.box, m.edge, 0.14, 1.36 * L, 0.16, 0, 0.80 * L, 0));
       k.add(mesh(G.cone, m.edge, 0.12, 0.34, 0.30, 0, tipY + 0.06, 0));
       break;
+    /**
+     * ═══ THE THREE THAT ARE NOT SWORDS ══════════════════════════════════
+     *
+     * A spear, an axe and a maul, added for the WEAPONS table in
+     * js/weapons.js — the gear list has four polearms, two mauls and two
+     * axes in it and every one of them was being drawn as a katana.
+     *
+     * All three are built the same way and it is the one thing that makes
+     * them read: a long plain SHAFT in the grip colour, and the mass at the
+     * far end of it. A sword's weight is in the hand; a polearm's is at the
+     * top of a pole, and the silhouette is the only thing that says so.
+     */
+    case 'spear': {
+      // A shaft the whole length, with a leaf-shaped head on the end.
+      blade.visible = false;
+      k.add(mesh(G.cyl, m.grip, 0.036, 1.62 * L, 0.036, 0, 0.72 * L, 0));
+      k.add(mesh(G.box, m.steel, 0.05, 0.40 * L, 0.15, 0, 1.42 * L, 0));
+      k.add(mesh(G.cone, m.edge, 0.075, 0.34, 0.10, 0, 1.74 * L, 0));
+      // A collar where the head is socketed on, and a butt-spike.
+      k.add(mesh(G.cyl, m.gold, 0.055, 0.08, 0.055, 0, 1.22 * L, 0));
+      k.add(mesh(G.cone, m.gold, 0.04, 0.14, 0.04, 0, -0.30, 0, Math.PI));
+      break;
+    }
+    case 'axe': {
+      /**
+       * A short haft with a broad bit hung off one side of it.
+       *
+       * THE HEAD IS BIG. It has to be: at a third of this size it read as a
+       * small block on a stick, and the one thing that makes an axe an axe
+       * from ten units away is that all of its mass is out at the end and
+       * off to one side. A weapon silhouette is a mass distribution.
+       */
+      blade.visible = false;
+      k.add(mesh(G.cyl, m.grip, 0.05, 1.10 * L, 0.05, 0, 0.44 * L, 0));
+      /**
+       * The bit: thick and narrow where it is socketed onto the haft, thinning
+       * and FLARING out to a tall edge.
+       *
+       * It must flare the whole way. It used to be waisted — a 0.52 shoulder,
+       * a 0.30 middle and a 0.58 edge — and a cutting edge standing that far
+       * proud of the piece behind it reads as a tab with a notch bitten out
+       * behind it, which is a hatchet that has hit something it should not
+       * have. Each step is thinner in x, deeper in z and taller in y than the
+       * one before it, so the outline is one clean wedge.
+       */
+      k.add(mesh(G.box, m.steel, 0.09, 0.44 * L, 0.30, 0, 0.86 * L, 0.20));
+      k.add(mesh(G.box, m.steel, 0.07, 0.54 * L, 0.22, 0, 0.86 * L, 0.44));
+      k.add(mesh(G.box, m.edge, 0.035, 0.62 * L, 0.08, 0, 0.86 * L, 0.57));
+      // A langet down the haft, and a spike on top, so it reads as a weapon
+      // and not as a woodsman's tool.
+      k.add(mesh(G.box, m.gold, 0.055, 0.26, 0.055, 0, 0.60 * L, 0.06));
+      k.add(mesh(G.cone, m.edge, 0.05, 0.24, 0.05, 0, 1.14 * L, 0));
+      break;
+    }
+    case 'hammer': {
+      /**
+       * A haft and a block, with no edge anywhere on it — and the block is
+       * deliberately enormous. See the note on the axe: the whole reading of
+       * a maul is that the far end of it is much heavier than the near end.
+       */
+      blade.visible = false;
+      k.add(mesh(G.cyl, m.grip, 0.055, 1.02 * L, 0.055, 0, 0.40 * L, 0));
+      k.add(mesh(G.box, m.steel, 0.26, 0.46 * L, 0.52, 0, 0.86 * L, 0));
+      // Faces on both ends of the head, banded in the guard colour, and
+      // studs on them.
+      for (const z of [-0.29, 0.29]) {
+        k.add(mesh(G.box, m.gold, 0.28, 0.46 * L, 0.07, 0, 0.86 * L, z));
+        for (const y of [-0.11, 0.11]) {
+          k.add(mesh(G.box, m.gold, 0.07, 0.07, 0.07, 0, 0.86 * L + y, z * 1.14));
+        }
+      }
+      // A collar where the head is wedged onto the haft.
+      k.add(mesh(G.cyl, m.gold, 0.075, 0.09, 0.075, 0, 0.60 * L, 0));
+      break;
+    }
     default:                                   // katana
       k.add(mesh(G.box, m.edge, 0.048, 1.32 * L, 0.035, 0, 0.78 * L, 0.036));
       k.add(mesh(G.cone, m.edge, 0.06, 0.22, 0.075, 0, tipY, 0));
@@ -1802,6 +1890,113 @@ export class FrogModel {
     if (this.visible === v) return;
     this.visible = v;
     this.root.visible = v;
+  }
+
+  /**
+   * ═══ PUT A DIFFERENT WEAPON IN THE FROG'S HAND ═════════════════════════
+   *
+   * Called when the equipped weapon changes — see `applyStats` in
+   * js/overworld.js. Twenty weapons in the gear table were all being drawn
+   * as the same katana, so buying the Quarry Maul changed a number in the
+   * bag and nothing else in the world.
+   *
+   * It REBUILDS the group rather than swapping meshes inside it, because
+   * the nine shapes `buildKatana` makes have different part counts — a maul
+   * has a haft and a block where a sabre has seven stacked segments — and
+   * there is no sensible correspondence to morph between. Rebuilding costs
+   * about twenty meshes and happens when a player equips something, which
+   * is a menu action and not a frame.
+   *
+   * ── what it keeps ─────────────────────────────────────────────────────
+   * The pivot's transform. `this.katana` is animated every frame by the
+   * swing code and parked in the sheath pose between swings, so a fresh
+   * group at the origin would put the weapon through the frog's chest until
+   * the next animation frame wrote over it. Copied across explicitly.
+   *
+   * ── the materials ─────────────────────────────────────────────────────
+   * The four the weapon colours live in are REPLACED, not edited, and the
+   * old ones are disposed. They cannot simply be recoloured: a glowing
+   * blade is a `MeshBasicMaterial` and a steel one is a `MeshLambertMaterial`
+   * — a bar of light is a light source, not a thing the world lights — so
+   * FROGSHIN and the Reed Knife need different material classes, not
+   * different values in the same one.
+   *
+   * `saya` follows the grip so the scabbard on the frog's back stays part of
+   * the same object, and `same` follows the guard for the same reason.
+   */
+  setWeapon(look) {
+    if (!look || !this.katana) return;
+    const M = this.mats;
+    const kill = (m) => { if (m) m.dispose(); };
+
+    kill(M.steel);
+    M.steel = look.glow
+      ? new THREE.MeshBasicMaterial({ color: look.blade })
+      : new THREE.MeshLambertMaterial({
+        color: look.blade, emissive: look.glowTint || 0x2a3038,
+      });
+    kill(M.edge);
+    M.edge = look.glow
+      ? new THREE.MeshBasicMaterial({ color: look.edge })
+      : new THREE.MeshLambertMaterial({ color: look.edge });
+    kill(M.gold);
+    M.gold = new THREE.MeshLambertMaterial({ color: look.guard });
+    kill(M.grip);
+    M.grip = new THREE.MeshLambertMaterial({ color: look.grip });
+    kill(M.same);
+    M.same = new THREE.MeshLambertMaterial({ color: look.guard });
+    kill(M.saya);
+    M.saya = new THREE.MeshLambertMaterial({
+      color: new THREE.Color(look.grip).multiplyScalar(1.15),
+    });
+    if (look.runes) {
+      kill(M.rune);
+      M.rune = new THREE.MeshBasicMaterial({ color: look.runes });
+    }
+    if (look.aura) {
+      kill(M.aura);
+      M.aura = new THREE.MeshBasicMaterial({
+        color: look.aura, transparent: true, opacity: 0.22, depthWrite: false,
+      });
+    }
+    if (look.tassel) {
+      kill(M.tassel);
+      M.tassel = new THREE.MeshLambertMaterial({ color: look.tassel });
+    }
+
+    // The sheath is made of the same materials, so it re-tints for free —
+    // but its meshes hold references to the OLD ones, so it is rebuilt too.
+    for (const child of this.sheath.children.slice()) {
+      if (child.geometry && !Object.values(G).includes(child.geometry)) {
+        child.geometry.dispose();
+      }
+      this.sheath.remove(child);
+    }
+    this.sheath.add(mesh(G.box, M.saya, 0.085, 0.80, 0.15, 0, 0.30, 0));
+    this.sheath.add(mesh(G.box, M.gold, 0.095, 0.05, 0.16, 0, 0.68, 0));
+    this.sheath.add(mesh(G.box, M.gold, 0.092, 0.045, 0.158, 0, -0.08, 0));
+    this.sheath.add(mesh(G.cyl, M.grip, 0.10, 0.05, 0.17, 0, 0.60, 0));
+
+    const old = this.katana;
+    const pos = old.position.clone();
+    const rot = old.rotation.clone();
+    const scl = old.scale.clone();
+    this.body.remove(old);
+    old.traverse((o) => {
+      if (o.geometry && !Object.values(G).includes(o.geometry)) {
+        o.geometry.dispose();
+      }
+    });
+
+    this.swordFx = look;
+    this.katana = buildKatana(M, look);
+    this.blade = this.katana.userData.blade;
+    this.katana.position.copy(pos);
+    this.katana.rotation.copy(rot);
+    this.katana.scale.copy(scl);
+    this.body.add(this.katana);
+    /** What is in the hand, so the tests and the HUD can ask. */
+    this.weaponLook = look;
   }
 
   dispose() {
