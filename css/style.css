@@ -627,20 +627,35 @@ kbd {
 
 /* ---- crate offer ---- */
 .crate-offer {
-  display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
-  padding: 16px;
-  margin-bottom: 18px;
+  display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+  padding: 18px;
+  /* Three cases stack in every tab now, so they need real air between them
+     — at 18px they read as one long slab with lines through it. */
+  margin-bottom: 30px;
   background: rgba(0,0,0,0.3);
   border: 3px solid #26313d;
+}
+.crate-offer:last-child { margin-bottom: 0; }
+/* The case and its "what's inside" button travel together. */
+.crate-side {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
 }
 .crate-box {
   width: 108px; height: 82px;
   position: relative;
   flex: 0 0 auto;
+  cursor: pointer;
   background: linear-gradient(180deg, #4a5058 0%, #2f343b 55%, #232830 100%);
   border: 4px solid #14171c;
   box-shadow: inset 0 3px 0 rgba(255,255,255,0.13), 0 5px 0 #0d1014;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
+.crate-box:hover {
+  transform: translateY(-3px);
+  box-shadow: inset 0 3px 0 rgba(255,255,255,0.2), 0 8px 0 #0d1014;
+}
+.crate-box:active { transform: translateY(0); }
 /* Latch and colour flash, so each case reads differently at a glance. */
 .crate-box::before {
   content: '';
@@ -688,7 +703,9 @@ kbd {
 .skin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(122px, 1fr));
-  gap: 10px;
+  /* A tab holds thirty of these now. At 10px they touched at the corners and
+     read as one sheet; the gap is what makes them separate objects. */
+  gap: 14px;
 }
 .skin-card {
   position: relative;
@@ -1132,6 +1149,85 @@ kbd {
   box-shadow: inset 0 3px 0 rgba(255,210,74,0.22), 0 0 16px rgba(122,160,255,0.35);
 }
 .crate-box.celestial .crate-lock { background: #ffd24a; }
+
+/* ─────────────────────────────────────── what is inside a case ──
+   Opened by clicking the case itself, never the buy button. */
+.crate-peek-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.35);
+  border: 2px solid #3a4654;
+  color: var(--parch-dim);
+  font-family: var(--font-px); font-size: 7px; letter-spacing: 1px;
+  cursor: pointer;
+}
+.crate-peek-btn:hover { border-color: var(--gold); color: var(--parch); }
+.crate-peek-btn i { font-style: normal; font-size: 8px; line-height: 1; }
+.crate-offer.open .crate-peek-btn { border-color: var(--gold); color: var(--gold); }
+
+/* Full width of the offer panel, below the case, the blurb and the buttons. */
+.crate-contents {
+  flex: 1 0 100%;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 3px solid #26313d;
+}
+.cc-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-family: var(--font-px); font-size: 8px;
+}
+.cc-head b { color: var(--gold); letter-spacing: 1px; }
+.cc-head span { color: var(--parch-dim); }
+/* One row per rarity tier, keyed by a bar in the tier's own colour. */
+.cc-tier {
+  display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-start;
+  padding: 9px 0 9px 12px;
+  border-left: 5px solid #4b69ff;
+  margin-bottom: 9px;
+}
+.cc-label {
+  flex: 0 0 118px;
+  display: flex; flex-direction: column; gap: 4px;
+  font-family: var(--font-px); font-size: 8px;
+}
+.cc-label b { font-size: 11px; color: var(--parch); }
+.cc-label i { font-style: normal; font-size: 7px; color: var(--parch-dim); }
+.cc-grid {
+  flex: 1 1 320px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.cc-item {
+  position: relative;
+  padding: 6px 4px 5px;
+  background: linear-gradient(180deg, #2a3340, #161d26);
+  border: 2px solid #0c1219;
+  border-bottom-width: 4px;
+  text-align: center;
+  /* Not yours yet reads as dimmer, so the gaps in a set are the thing that
+     stands out rather than the things you already have. */
+  opacity: 0.55;
+}
+.cc-item.owned { opacity: 1; }
+.cc-item svg { width: 44px; height: 38px; }
+.cc-item span {
+  display: block;
+  font-family: var(--font-px); font-size: 6px; line-height: 1.5;
+  color: var(--parch-dim);
+}
+.cc-item.owned span { color: var(--parch); }
+.cc-tick {
+  position: absolute; right: 3px; top: 2px;
+  font-style: normal; font-size: 9px; line-height: 1;
+  color: var(--jade);
+  text-shadow: 0 1px 0 #000;
+}
+.cc-foot {
+  margin-top: 4px;
+  font-size: 15px; color: var(--parch-dim);
+}
 
 /* A heading per set in the item grid, now that a tab holds three sets. */
 .set-head {

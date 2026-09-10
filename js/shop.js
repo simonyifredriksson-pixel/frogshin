@@ -9,10 +9,10 @@
 import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
-} from './skins.js?v=v105';
-import { Audio } from './audio.js?v=v105';
-import { PX } from './icons.js?v=v105';
-import { CFG } from './config.js?v=v105';
+} from './skins.js?v=v106';
+import { Audio } from './audio.js?v=v106';
+import { PX } from './icons.js?v=v106';
+import { CFG } from './config.js?v=v106';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -452,6 +452,17 @@ export class Shop {
   _crateOffer(crate) {
     const wrap = document.createElement('div');
     wrap.className = 'crate-offer';
+    /**
+     * The contents drawer's open/shut state is kept on the Shop, not on the
+     * element. `render()` rebuilds this whole panel on every purchase and
+     * every equip, so state living in the DOM would slam the drawer shut the
+     * moment you bought anything with it open.
+     */
+    const peeking = this._peek && this._peek.has(crate.id);
+    if (peeking) wrap.classList.add('open');
+
+    const side = document.createElement('div');
+    side.className = 'crate-side';
 
     const box = document.createElement('div');
     // The case looks like its set here too, so you can tell them apart in
@@ -459,7 +470,34 @@ export class Shop {
     box.className = 'crate-box' + (setOf(crate) === 'base' ? '' : ' ' + setOf(crate));
     box.style.setProperty('--crate-color', crate.color);
     box.innerHTML = '<div class="crate-lock"></div>';
-    wrap.appendChild(box);
+    side.appendChild(box);
+
+    /**
+     * CLICK THE CASE TO SEE WHAT IS IN IT.
+     *
+     * Deliberately not the OPEN CASE button — that one spends money. A case
+     * you can inspect before buying is the difference between a gamble and a
+     * choice, and the odds on the card only say how often a tier comes up,
+     * not which nine things are in it.
+     *
+     * The caption is not decoration: a box that does something when you
+     * click it and gives no sign of that is a secret, so it says so and the
+     * chevron says which way it goes.
+     */
+    const peek = document.createElement('button');
+    peek.className = 'crate-peek-btn';
+    peek.innerHTML = `<span>WHAT'S INSIDE</span><i>${peeking ? '▴' : '▾'}</i>`;
+    const toggle = () => {
+      this._peek = this._peek || new Set();
+      if (this._peek.has(crate.id)) this._peek.delete(crate.id);
+      else this._peek.add(crate.id);
+      Audio.uiClick();
+      this.render();
+    };
+    peek.onclick = toggle;
+    box.onclick = toggle;
+    side.appendChild(peek);
+    wrap.appendChild(side);
 
     const meta = document.createElement('div');
     meta.className = 'crate-meta';
@@ -511,7 +549,84 @@ export class Shop {
     buy.appendChild(note);
 
     wrap.appendChild(buy);
+    if (peeking) wrap.appendChild(this._crateContents(crate));
     return wrap;
+  }
+
+  /**
+   * WHAT IS IN A CASE, tier by tier, with the odds on each.
+   *
+   * Built only when the drawer is open, so a shop tab with three cases is
+   * not quietly drawing eighty item previews nobody asked to see.
+   *
+   * ── rarest first ────────────────────────────────────────────────────────
+   * The question anybody opens this to answer is "is the thing I want in
+   * here", and the thing they want is at the top of the ladder. The odds
+   * come off `crateOdds`, which reads the same pool `rollCrate` rolls from,
+   * so what is listed here and what can actually come out cannot drift.
+   *
+   * Owned items are marked. "Which of these do I still not have" is the
+   * other half of the buying decision, and on a set you are most of the way
+   * through it is the whole of it.
+   */
+  _crateContents(crate) {
+    const el = document.createElement('div');
+    el.className = 'crate-contents';
+
+    const pool = cratePool(crate);
+    const pct = {};
+    for (const o of crateOdds(crate)) pct[o.rarity] = o.pct;
+
+    const owned = pool.filter((s) => this.tryMode || this.economy.owns(crate.kind, s.id));
+    const head = document.createElement('div');
+    head.className = 'cc-head';
+    head.innerHTML = `<b>${pool.length} ITEMS</b>`
+      + `<span>${owned.length} of ${pool.length} collected</span>`;
+    el.appendChild(head);
+
+    // Rarest tier first. `RARITY_ORDER` runs the other way, so walk it back.
+    for (const tier of RARITY_ORDER.slice().reverse()) {
+      const group = pool.filter((s) => s.rarity === tier);
+      if (!group.length) continue;
+      const r = RARITY[tier];
+      const row = document.createElement('div');
+      row.className = 'cc-tier';
+      row.style.borderLeftColor = r.color;
+
+      const label = document.createElement('div');
+      label.className = 'cc-label';
+      const p = pct[tier] || 0;
+      label.innerHTML = `<span style="color:${r.color}">${r.name.toUpperCase()}</span>`
+        + `<b>${p.toFixed(p < 1 ? 2 : 1)}%</b>`
+        // One in how many. A percentage under a tenth of one percent means
+        // nothing to read; "1 in 503" is a number you can feel.
+        + (p > 0 && p < 5 ? `<i>1 in ${Math.round(100 / p)}</i>` : '');
+      row.appendChild(label);
+
+      const grid = document.createElement('div');
+      grid.className = 'cc-grid';
+      for (const item of group) {
+        const have = this.tryMode || this.economy.owns(crate.kind, item.id);
+        const card = document.createElement('div');
+        card.className = 'cc-item' + (have ? ' owned' : '');
+        card.style.borderBottomColor = r.color;
+        card.innerHTML = previewSVG(crate.kind, item)
+          + `<span>${item.name}</span>`;
+        if (have) card.appendChild(Object.assign(document.createElement('i'),
+          { className: 'cc-tick', textContent: '✓' }));
+        grid.appendChild(card);
+      }
+      row.appendChild(grid);
+      el.appendChild(row);
+    }
+
+    // Say the one thing the odds cannot: a case is sealed to its own set.
+    const foot = document.createElement('p');
+    foot.className = 'cc-foot';
+    foot.textContent = `Only these ${pool.length} can come out of this case — `
+      + 'nothing from another set, and nothing that has to be earned.';
+    el.appendChild(foot);
+    return el;
   }
 
   _skinCard(kind, skin) {
@@ -739,9 +854,12 @@ export class Shop {
     }
     box.classList.add('staging');
     const anim = crate.anim || 'base';
-    this._sub(anim === 'swamp' ? 'Something in there is moving.'
-      : anim === 'celestial' ? 'It is not touching the floor any more.'
-        : 'Locked.');
+    // Nothing written under the crate while it opens. The animation is the
+    // thing you are watching; a line of narration under it is just something
+    // else asking to be read, and it said nothing the crate was not already
+    // showing. The line below the reel stays for what it is FOR — which case
+    // of a pack you are on, and the skip key.
+    this._sub('');
     if (anim === 'swamp') this._after(430, () => Audio.crateCrack());
     else if (anim === 'celestial') this._after(120, () => Audio.crateLift());
     else Audio.uiClick();
@@ -870,7 +988,6 @@ export class Shop {
 
     const crate = this._lastCrate;
     const won = this._queue[this._index];
-    this._sub('SKIPPED');
     this._after(SKIP_S * 1000 + 120, () => this._reveal(crate, won));
   }
 
