@@ -5,43 +5,43 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v102';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v102';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v102';
-import { Input } from './input.js?v=v102';
-import { Audio } from './audio.js?v=v102';
-import { World } from './world.js?v=v102';
-import { Effects } from './effects.js?v=v102';
-import { Atmosphere } from './atmosphere.js?v=v102';
-import { FollowCamera } from './camera.js?v=v102';
-import { Player } from './player.js?v=v102';
-import { RemotePlayer } from './remote.js?v=v102';
-import { HUD } from './hud.js?v=v102';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v102';
-import { FrogModel } from './frog.js?v=v102';
-import { DummyField } from './dummy.js?v=v102';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v102';
-import { ToadModel } from './npc.js?v=v102';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v102';
-import { DungeonRun } from './dungeon.js?v=v102';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v102';
-import { JudgmentRun } from './judgment.js?v=v102';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v102';
-import { COMBO_NAMES } from './ascended.js?v=v102';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v102';
-import { MenuScene } from './menu.js?v=v102';
-import { Economy } from './economy.js?v=v102';
-import { Shop } from './shop.js?v=v102';
-import { Network, NetRole } from './net.js?v=v102';
-import { Overworld } from './overworld.js?v=v102';
-import { InventoryScreen } from './inventoryui.js?v=v102';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v102';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v102';
-import { Cine } from './cinema.js?v=v102';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v102';
-import { MEMORIES } from './flashbacks.js?v=v102';
-import { GUARDIANS } from './guardians.js?v=v102';
-import { gearOfTier } from './gear.js?v=v102';
+import * as THREE from '../lib/three.module.js?v=v103';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v103';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v103';
+import { Input } from './input.js?v=v103';
+import { Audio } from './audio.js?v=v103';
+import { World } from './world.js?v=v103';
+import { Effects } from './effects.js?v=v103';
+import { Atmosphere } from './atmosphere.js?v=v103';
+import { FollowCamera } from './camera.js?v=v103';
+import { Player } from './player.js?v=v103';
+import { RemotePlayer } from './remote.js?v=v103';
+import { HUD } from './hud.js?v=v103';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v103';
+import { FrogModel } from './frog.js?v=v103';
+import { DummyField } from './dummy.js?v=v103';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v103';
+import { ToadModel } from './npc.js?v=v103';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v103';
+import { DungeonRun } from './dungeon.js?v=v103';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v103';
+import { JudgmentRun } from './judgment.js?v=v103';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v103';
+import { COMBO_NAMES } from './ascended.js?v=v103';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v103';
+import { MenuScene } from './menu.js?v=v103';
+import { Economy } from './economy.js?v=v103';
+import { Shop } from './shop.js?v=v103';
+import { Network, NetRole } from './net.js?v=v103';
+import { Overworld } from './overworld.js?v=v103';
+import { InventoryScreen } from './inventoryui.js?v=v103';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v103';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v103';
+import { Cine } from './cinema.js?v=v103';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v103';
+import { MEMORIES } from './flashbacks.js?v=v103';
+import { GUARDIANS } from './guardians.js?v=v103';
+import { gearOfTier } from './gear.js?v=v103';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -3606,6 +3606,7 @@ class Game {
           this.hud.showRespawn(p.health.respawnTimer, this._killerName);
           if (p.health.respawnTimer <= 0) {
             p.spawn(this._safeSpawn());
+            this._refillArenaKunai();
             this.followCam.snapTo(p.pos);
             this.hud.hideRespawn();
             this._killerName = null;
@@ -3970,6 +3971,9 @@ class Game {
       this.hud.setSpectating(false);
       // Fresh spawn for everyone, so no one starts a chase cornered.
       this.player.spawn(this._safeSpawn());
+      // And a fresh pouch, so nobody starts a round with the empty one they
+      // finished the last one on. See `_refillArenaKunai`.
+      this._refillArenaKunai();
       this.followCam.snapTo(this.player.pos);
       const info = this.round.modeInfo;
       this.hud.announce(info.name, '', true);
@@ -4087,6 +4091,38 @@ class Game {
   _requestEliminate(victimId) {
     if (this.round.authority) this.round.eliminate(victimId);
     else this.net.sendEvent({ t: 'elim', id: victimId });
+  }
+
+  /**
+   * ═══ A FRESH HANDFUL OF BLADES ON EVERY RESPAWN ═════════════════════════
+   *
+   * Ten of them — `CFG.kunai.startCount`, the same number a match begins
+   * with — so coming back is a fresh start rather than a continuation of
+   * however the last life ended.
+   *
+   * IN THE ARENA MODES ONLY, and that distinction is the whole of it. This
+   * is called from `_updateGame` and `_onRoundPhase`, both of which only
+   * run for a round of tag, free-for-all, team or juggernaut. Blades in the
+   * Croaklands are a RESOURCE: bought with froglets, kept in the save, and
+   * the story's difficulty is built on the fact that they do not come back
+   * — see `giveKunai` in js/overworld.js, and the note on the tutorial
+   * island's twelve. Refilling them on death there would undo all of it.
+   *
+   * In a round they are ammunition, and the difference matters. Coming back
+   * with an empty pouch means being hunted with a sword and no answer at
+   * all to somebody standing on a roof, and the crates scattered on a map
+   * are not a quick enough remedy — you die, you come back with nothing,
+   * and the only move available is to go looking for a box while somebody
+   * chases you.
+   *
+   * A tagger is left alone: `unlimitedKunai` means the count is not what is
+   * feeding their throws, and setting it would be writing to a number
+   * nothing reads.
+   */
+  _refillArenaKunai() {
+    const inv = this.player && this.player.inventory;
+    if (!inv || !inv.setKunai || inv.unlimitedKunai) return;
+    inv.setKunai(CFG.kunai.startCount);
   }
 
   /**

@@ -29,8 +29,8 @@
  * what a price looks like and nothing about whether you can pay it.
  */
 
-import { gearIcon } from './gearicons.js?v=v102';
-import { clamp } from './util.js?v=v102';
+import { gearIcon } from './gearicons.js?v=v103';
+import { clamp } from './util.js?v=v103';
 
 const $ = (id) => document.getElementById(id);
 
