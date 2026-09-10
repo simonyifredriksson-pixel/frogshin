@@ -67,8 +67,43 @@ export class Input {
     this._chordT = 0;
     /** Set when the chord completes; taken and cleared by `takeChord`. */
     this._chordReady = false;
+    /**
+     * SUSPENDED — the game is not reading the keyboard or the mouse.
+     *
+     * Set while the chat is open. Gated in ONE place (here, in the queries)
+     * rather than at every call site, because there are dozens of them: the
+     * player, the combat code, the tutorial, every boss, the map, the
+     * inventory. Any one of them missed would be a key that still moved the
+     * frog while you were typing about it.
+     *
+     * The look is suspended too — see `Chat.tryOpen` for why the pointer
+     * stays locked while you type.
+     */
+    this.suspended = false;
 
     this._bind();
+  }
+
+  /**
+   * Stop or resume reading input, and drop whatever was held.
+   *
+   * Clearing on the way IN matters: keys held when the chat opens would
+   * otherwise stay in `keys` forever, because the keyup arrives while a text
+   * field has focus and never reaches the held-state set. The frog would run
+   * into the distance while you wrote.
+   */
+  suspend(on) {
+    this.suspended = !!on;
+    this.keys.clear();
+    this.pressed.clear();
+    this.recent.length = 0;
+    this._chordAt = 0;
+    this._chordReady = false;
+    this._mouseDown = false;
+    this._mousePressed = false;
+    this._rightDown = false;
+    this.mouse.dx = 0; this.mouse.dy = 0;
+    this.wheel = 0;
   }
 
   _bind() {
@@ -135,7 +170,10 @@ export class Input {
     });
 
     document.addEventListener('mousemove', (e) => {
-      if (!this.locked) return;
+      // Not accumulated while suspended, rather than accumulated and thrown
+      // away: `takeLook` is not called every frame by every mode, so a
+      // discard-on-read would let a long drift arrive all at once.
+      if (!this.locked || this.suspended) return;
       this.mouse.dx += e.movementX || 0;
       this.mouse.dy += (e.movementY || 0) * (this.invertY ? -1 : 1);
     });
@@ -154,7 +192,7 @@ export class Input {
     // Wheel cycles the hotbar. This is the in-play equivalent of clicking a
     // slot, which the pointer lock makes impossible while you are moving.
     window.addEventListener('wheel', (e) => {
-      if (!this.locked) return;
+      if (!this.locked || this.suspended) return;
       this.wheel += Math.sign(e.deltaY);
     }, { passive: true });
   }
@@ -180,10 +218,11 @@ export class Input {
 
   // -------------------------------------------------------------- querying
 
-  down(code) { return this.keys.has(code); }
+  down(code) { return !this.suspended && this.keys.has(code); }
 
   /** Any of these held? Lets one binding accept Digit3 or Numpad3. */
   downAny(codes) {
+    if (this.suspended) return false;
     for (const c of codes) if (this.keys.has(c)) return true;
     return false;
   }
@@ -261,18 +300,19 @@ export class Input {
    * panel a second time and close it again.
    */
   takeChord() {
-    const r = this._chordReady;
+    const r = this._chordReady && !this.suspended;
     this._chordReady = false;
     return r;
   }
 
   /** True exactly once per physical press. */
   consume(code) {
+    if (this.suspended) return false;
     if (this.pressed.has(code)) { this.pressed.delete(code); return true; }
     return false;
   }
 
-  get attackHeld() { return this._mouseDown; }
+  get attackHeld() { return !this.suspended && this._mouseDown; }
   /**
    * GUARD HELD — right mouse button, OR P.
    *
@@ -292,8 +332,11 @@ export class Input {
    * `Player._updateParry`, the tutorial's parry station and the boss
    * fights all ask the same question and none of them had to change.
    */
-  get rightHeld() { return !!this._rightDown || this.down('KeyP'); }
+  get rightHeld() {
+    return !this.suspended && (!!this._rightDown || this.down('KeyP'));
+  }
   consumeAttack() {
+    if (this.suspended) return false;
     if (this._mousePressed) { this._mousePressed = false; return true; }
     return false;
   }

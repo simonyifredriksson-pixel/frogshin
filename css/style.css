@@ -769,6 +769,98 @@ kbd {
 }
 
 /* ==========================================================================
+   CHAT
+   Bottom-left, above the hotbar, below every menu. See js/chat.js.
+   ========================================================================== */
+
+#chat {
+  position: fixed;
+  /* Clear of the hotbar. That tray is centred at `bottom: 22px` and roughly
+     76px tall, so its top edge lands near 98px — and the chat is wide enough
+     at 1280px to reach under it. Anchored by its BOTTOM so the entry row sits
+     on this line and the log grows upward, which is the way round the
+     reference has it. */
+  left: 12px; bottom: 106px;
+  z-index: 22;              /* over the world, under the pause menu (45+) */
+  width: min(560px, 62vw);
+  /* NEVER takes the pointer as a whole — see the note in index.html. The
+     entry row turns this back on for itself, and only while open. */
+  pointer-events: none;
+  font-family: var(--font-px);
+}
+#chat-log {
+  display: flex; flex-direction: column;
+  gap: 2px;
+  max-height: 232px;
+  overflow: hidden;
+}
+.chat-line {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 6px;
+  /* The reference's flat translucent strip: one panel per line, sized to the
+     line, so an empty log is genuinely invisible rather than a dark box. */
+  background: rgba(0,0,0,0.5);
+  font-size: 9px; line-height: 1.6;
+  color: var(--parch);
+  text-shadow: 1px 1px 0 rgba(0,0,0,0.85);
+  align-self: flex-start;
+  max-width: 100%;
+  opacity: 1;
+  transition: opacity 0.7s ease;
+}
+/* Faded out on its own, with the chat shut. Still laid out, so the rows above
+   do not jump down as each one goes. */
+.chat-line.gone { opacity: 0; }
+.chat-who { flex: 0 0 auto; }
+.chat-text { word-break: break-word; }
+/* Duplicates collapsed — `(4)` after the message, dim, out of the way. */
+.chat-count { flex: 0 0 auto; color: #8fa0ae; font-size: 8px; }
+/* A game notice rather than a person. */
+.chat-line.system .chat-text { color: #9fd4ff; }
+
+/* ---- the entry row: only there while it is open ---- */
+#chat-entry {
+  display: none;
+  align-items: center; gap: 7px;
+  margin-top: 5px;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.72);
+  border: 2px solid #3a4654;
+  pointer-events: auto;
+}
+#chat.open #chat-entry { display: flex; }
+/* Open, every line stays lit no matter how old — you opened it to read. */
+#chat.open .chat-line { opacity: 1; }
+#chat.open #chat-log { max-height: 300px; overflow-y: auto; pointer-events: auto; }
+.chat-caret { color: var(--gold); font-size: 10px; flex: 0 0 auto; }
+#chat-field {
+  flex: 1 1 auto; min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--parch);
+  font-family: var(--font-px); font-size: 10px;
+  padding: 2px 0;
+}
+.chat-hint {
+  flex: 0 0 auto;
+  font-size: 6px; color: var(--parch-dim); letter-spacing: 1px;
+}
+.chat-hint kbd {
+  font-family: var(--font-px); font-size: 6px;
+  padding: 1px 3px; margin: 0 1px;
+  background: #1d242e; border: 1px solid #3a4654; color: var(--parch);
+}
+/* Phones: the hint is the first thing to go, then the log gets shorter. */
+@media (max-width: 620px) {
+  /* The hotbar is the same height on a phone, so the clearance stays; only
+     the width and the log get smaller. */
+  #chat { width: 88vw; }
+  .chat-hint { display: none; }
+  #chat-log { max-height: 150px; }
+}
+
+/* ==========================================================================
    CRATE OPENING
    ========================================================================== */
 

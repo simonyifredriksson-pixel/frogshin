@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v106" />
+<link rel="stylesheet" href="css/style.css?v=v107" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -332,6 +332,7 @@
               <li><kbd>1</kbd><kbd>2</kbd>…<kbd>0</kbd><span>Hotbar — or click a slot</span></li>
               <li><kbd>E</kbd><span>Pick up a kunai crate — or, in the Realm, talk / examine</span></li>
               <li><kbd>TAB</kbd><span>Scoreboard — or, in the Realm, your bag</span></li>
+              <li><kbd>CTRL</kbd><span>Chat — tap it, type, <kbd>ENTER</kbd> to send (<kbd>↑</kbd> for what you sent last, <kbd>ESC</kbd> to back out). A tap only: <kbd>CTRL</kbd> held with anything else is still a shortcut.</span></li>
               <li><kbd>ESC</kbd><span>Pause</span></li>
             </ul>
 
@@ -924,6 +925,24 @@
   </div>
 </div>
 
+<!-- ════════════════════════════════════════════════════════════ CHAT ══
+     Bottom-left, `<name> message`, newest at the bottom. Tap CTRL to open,
+     ENTER to send, ESC to back out — see js/chat.js.
+
+     `#chat` is always in the page and always pointer-transparent; only the
+     entry row takes clicks, and only while it is open. A chat panel that
+     swallowed clicks over the bottom of the screen would eat the shots you
+     were trying to line up. -->
+<div id="chat">
+  <div id="chat-log"></div>
+  <form id="chat-entry" autocomplete="off">
+    <span class="chat-caret">&gt;</span>
+    <input id="chat-field" type="text" maxlength="120" spellcheck="false"
+           autocomplete="off" aria-label="Chat message">
+    <span class="chat-hint"><kbd>ENTER</kbd> SEND <kbd>ESC</kbd> CANCEL</span>
+  </form>
+</div>
+
 <!-- ═════════════════════════════════════════════════════ CRATE OPENING ══
      Three stages, in order: the CRATE opens (differently per set — see
      `_playStage` in js/shop.js), the REEL spins, the item is REVEALED.
@@ -1082,6 +1101,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v106"></script>
+<script type="module" src="js/main.js?v=v107"></script>
 </body>
 </html>

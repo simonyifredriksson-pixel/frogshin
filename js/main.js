@@ -5,43 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v106';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v106';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v106';
-import { Input } from './input.js?v=v106';
-import { Audio } from './audio.js?v=v106';
-import { World } from './world.js?v=v106';
-import { Effects } from './effects.js?v=v106';
-import { Atmosphere } from './atmosphere.js?v=v106';
-import { FollowCamera } from './camera.js?v=v106';
-import { Player } from './player.js?v=v106';
-import { RemotePlayer } from './remote.js?v=v106';
-import { HUD } from './hud.js?v=v106';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v106';
-import { FrogModel } from './frog.js?v=v106';
-import { DummyField } from './dummy.js?v=v106';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v106';
-import { ToadModel } from './npc.js?v=v106';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v106';
-import { DungeonRun } from './dungeon.js?v=v106';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v106';
-import { JudgmentRun } from './judgment.js?v=v106';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v106';
-import { COMBO_NAMES } from './ascended.js?v=v106';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v106';
-import { MenuScene } from './menu.js?v=v106';
-import { Economy } from './economy.js?v=v106';
-import { Shop } from './shop.js?v=v106';
-import { Network, NetRole } from './net.js?v=v106';
-import { Overworld } from './overworld.js?v=v106';
-import { InventoryScreen } from './inventoryui.js?v=v106';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v106';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v106';
-import { Cine } from './cinema.js?v=v106';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v106';
-import { MEMORIES } from './flashbacks.js?v=v106';
-import { GUARDIANS } from './guardians.js?v=v106';
-import { gearOfTier } from './gear.js?v=v106';
+import * as THREE from '../lib/three.module.js?v=v107';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v107';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v107';
+import { Input } from './input.js?v=v107';
+import { Audio } from './audio.js?v=v107';
+import { World } from './world.js?v=v107';
+import { Effects } from './effects.js?v=v107';
+import { Atmosphere } from './atmosphere.js?v=v107';
+import { FollowCamera } from './camera.js?v=v107';
+import { Player } from './player.js?v=v107';
+import { RemotePlayer } from './remote.js?v=v107';
+import { HUD } from './hud.js?v=v107';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v107';
+import { FrogModel } from './frog.js?v=v107';
+import { DummyField } from './dummy.js?v=v107';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v107';
+import { ToadModel } from './npc.js?v=v107';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v107';
+import { DungeonRun } from './dungeon.js?v=v107';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v107';
+import { JudgmentRun } from './judgment.js?v=v107';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v107';
+import { COMBO_NAMES } from './ascended.js?v=v107';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v107';
+import { MenuScene } from './menu.js?v=v107';
+import { Economy } from './economy.js?v=v107';
+import { Shop } from './shop.js?v=v107';
+import { Network, NetRole } from './net.js?v=v107';
+import { Overworld } from './overworld.js?v=v107';
+import { InventoryScreen } from './inventoryui.js?v=v107';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v107';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v107';
+import { Cine } from './cinema.js?v=v107';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v107';
+import { MEMORIES } from './flashbacks.js?v=v107';
+import { GUARDIANS } from './guardians.js?v=v107';
+import { gearOfTier } from './gear.js?v=v107';
+import { Chat } from './chat.js?v=v107';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -101,6 +102,32 @@ class Game {
     this.hud = new HUD();
     this.hud.show(false);
     this.hud.setFroglets(this.economy.froglets);
+
+    /**
+     * TEXT CHAT. Tap Ctrl to open, Enter to send.
+     *
+     * Sent on the `event` channel, which is reliable and already relayed
+     * through the host with the sender stamped on it — so a client's message
+     * reaches every other client without chat needing a route of its own.
+     *
+     * `canOpen` is "playing, with the mouse captured", and the second half is
+     * the load-bearing one. Every screen in this game that wants the keyboard
+     * releases the pointer first — the pause menu, the vote screen, the
+     * inventory, the practice panel — so asking whether the lock is held is
+     * asking whether anything else already owns the input, and it keeps
+     * answering correctly for panels that do not exist yet.
+     *
+     * It matters because the chat suspends the whole input layer while it is
+     * up. Opening it behind a panel would leave that panel unable to read a
+     * key, with the box that caused it hidden underneath.
+     */
+    this.chat = new Chat({
+      input: this.input,
+      canOpen: () => this.mode === 'playing' && this.input.locked,
+      selfName: () => this.profile.name,
+      selfColor: () => this.profile.color,
+      onSend: (text) => this.net.sendEvent({ t: 'chat', s: text }),
+    });
 
     // The Tab inventory is built once and borrows the renderer for its
     // paperdoll. It only ever opens in the open world.
@@ -774,7 +801,12 @@ class Game {
       console.warn('[frogshin] build mismatch:', theirBuild, 'vs', BUILD);
     };
 
-    net.onJoin = (id, prof) => this._addRemote(id, prof);
+    net.onJoin = (id, prof) => {
+      // In the log as well as the toast. A toast is gone in three seconds;
+      // the chat is where you look to find out who is actually in the room.
+      if (this.chat) this.chat.system(`${prof.name} joined`);
+      this._addRemote(id, prof);
+    };
 
     net.onLeave = (id) => {
       this._pendingJoins.delete(id);
@@ -783,6 +815,7 @@ class Game {
       const r = this.remotes.get(id);
       if (!r) return;
       if (this.hud) this.hud.toast(`${r.name} left`);
+      if (this.chat) this.chat.system(`${r.name} left`);
       r.dispose();
       this.remotes.delete(id);
     };
@@ -793,6 +826,26 @@ class Game {
     };
 
     net.onEvent = (id, ev) => {
+      /**
+       * A CHAT LINE from another player.
+       *
+       * Handled first and returned from immediately: it is the one event that
+       * has nothing to do with a remote player OBJECT, so it must not depend
+       * on them having spawned. Somebody typing in the lobby before the world
+       * is built should still be heard.
+       *
+       * The text is not trusted. `Chat.push` writes it with textContent and
+       * caps its length — the string came off a peer connection.
+       */
+      if (ev.t === 'chat') {
+        const prof = this.net.profiles.get(id);
+        this.chat.push({
+          name: this.net.nameOf(id),
+          text: ev.s,
+          color: prof ? prof.color : 0xdfe6c8,
+        });
+        return;
+      }
       // World-state events are not tied to a remote player object, so they
       // are handled before the roster lookup.
       if (ev.t === 'boxes') {
@@ -3292,6 +3345,29 @@ class Game {
     // Clamp so an alt-tab or a stall can never teleport anyone through a wall.
     dt = clamp(dt, 0, 0.05);
     this.clock = t;
+
+    /**
+     * THE CHAT MUST NEVER LEAVE THE INPUT SUSPENDED.
+     *
+     * While it is open the game reads no keys and no mouse, which is exactly
+     * right — and catastrophic if it ever outlives the chat. Any path that
+     * hides the chat without closing it properly, now or later, would leave a
+     * game that ignores every key with nothing on screen to explain why, and
+     * no key that could fix it.
+     *
+     * So rather than trusting every exit to remember, the loop checks. It
+     * costs one comparison a frame and it makes the whole class of bug
+     * self-correcting.
+     */
+    if (this.chat && this.input.suspended && !this.chat.open) {
+      this.input.suspend(false);
+    }
+    // And it shuts itself the moment anything else takes the screen — the
+    // same condition that governs opening it, so the two cannot disagree.
+    if (this.chat && this.chat.open
+      && !(this.mode === 'playing' && this.input.locked)) {
+      this.chat.forceClose();
+    }
 
     // The dev menu chord is checked in every mode, including the menus.
     this._updateCheatChord();
