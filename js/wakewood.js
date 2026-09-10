@@ -36,10 +36,10 @@
  * game and the first line of the story.
  */
 
-import * as THREE from '../lib/three.module.js?v=v101';
+import * as THREE from '../lib/three.module.js?v=v102';
 import { ValueNoise, mulberry32, clamp, lerp, smoothstep,
-  dampAngle, lookYaw } from './util.js?v=v101';
-import { SEA, REGIONS } from './regions.js?v=v101';
+  dampAngle, lookYaw } from './util.js?v=v102';
+import { SEA, REGIONS } from './regions.js?v=v102';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

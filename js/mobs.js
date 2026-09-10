@@ -19,10 +19,10 @@
  * holds it for the wind-up, and only then swings. They are quick, not unfair.
  */
 
-import * as THREE from '../lib/three.module.js?v=v101';
-import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v101';
-import { buildGuardian } from './guardians.js?v=v101';
-import { rollLoot } from './gear.js?v=v101';
+import * as THREE from '../lib/three.module.js?v=v102';
+import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v102';
+import { buildGuardian } from './guardians.js?v=v102';
+import { rollLoot } from './gear.js?v=v102';
 
 const _to = new THREE.Vector3();
 const _at = new THREE.Vector3();

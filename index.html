@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v101" />
+<link rel="stylesheet" href="css/style.css?v=v102" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -979,6 +979,24 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════ STALL ══
+     A market counter: the sign, the keeper's line, your purse, and the four
+     to six lots laid out along it. Driven from js/stallui.js. -->
+<div id="stall" class="hidden">
+  <div class="stall-frame">
+    <div class="stall-titlebar">
+      <b id="stall-sign">A STALL</b>
+      <div id="stall-purse" class="stall-purse"></div>
+    </div>
+    <div id="stall-say" class="stall-say"></div>
+    <div class="stall-body">
+      <div id="stall-list" class="stall-list"></div>
+      <div id="stall-detail" class="stall-detail"></div>
+    </div>
+    <div id="stall-foot" class="stall-foot"></div>
+  </div>
+</div>
+
 <!-- ════════════════════════════════════════════════════════════ DIALOGUE ══
      One NPC line at a time, advanced with E. -->
 <div id="talk" class="hidden">
@@ -1027,6 +1045,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v101"></script>
+<script type="module" src="js/main.js?v=v102"></script>
 </body>
 </html>

@@ -3264,3 +3264,136 @@ kbd {
 .danger-note { color: var(--danger) !important; }
 .btn-danger { border-color: var(--danger) !important; }
 .btn-danger span { color: var(--danger) !important; }
+
+/* ═══════════════════════════════════════════════════════════════ STALL ══
+   A market counter. Same furniture as the bag panel — ink frame, parchment
+   text, four-pixel edges — because it opens the same way and over the same
+   game, and a shop that looked like a different game would read as a
+   different game. See js/stallui.js.
+
+   Narrower than the bag on purpose: a stall has one trade and a handful of
+   lots, and a full-width panel for six rows is a panel that looks broken. */
+#stall {
+  position: fixed; inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 3vw;
+  font-family: var(--font-ui);
+  background: rgba(6,8,12,0.78);
+}
+#stall.hidden { display: none; }
+
+.stall-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 94vw);
+  max-height: 92vh;
+  background: var(--ink);
+  border: var(--edge) solid var(--ink-3);
+  box-shadow: 0 0 0 4px #0a0a10, 0 14px 0 rgba(0,0,0,0.45);
+}
+
+.stall-titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 18px;
+  padding: 10px 16px;
+  background: linear-gradient(var(--ink-2), var(--ink));
+  border-bottom: 3px solid var(--ink-3);
+}
+.stall-titlebar b {
+  font-family: var(--font-px);
+  font-size: 15px;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.stall-purse { font-size: 21px; color: var(--parch); white-space: nowrap; }
+.stall-purse b { color: var(--gold); }
+.sp-coin { color: var(--gold-dark); }
+
+/* What the keeper says. Two lines' worth of room, so a long line does not
+   shove the counter down the panel. */
+.stall-say {
+  padding: 9px 16px;
+  font-size: 20px;
+  line-height: 1.15;
+  color: var(--parch-dim);
+  background: rgba(0,0,0,0.25);
+  border-bottom: 3px solid var(--ink-3);
+  min-height: 46px;
+}
+.stall-say b { color: var(--jade); }
+.ss-none { color: #8e8a7e; }
+
+.stall-body { display: flex; flex-direction: column; min-height: 0; }
+
+/* THE COUNTER. A list, not a grid: every lot visible at once with room for
+   its stat line, and never a second page to find. */
+.stall-list {
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.stall-row {
+  display: grid;
+  grid-template-columns: 42px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  text-align: left;
+  color: var(--parch);
+  background: var(--ink-2);
+  border: 3px solid transparent;
+  cursor: pointer;
+}
+.stall-row:hover { background: #262633; }
+.stall-row.on { border-color: var(--gold); background: #2b2b38; }
+/* Cannot pay, or already carrying the most of it you can. Still readable —
+   greyed out, never hidden, because "come back when you are richer" is
+   information and an empty counter is not. */
+.stall-row.poor { opacity: 0.5; }
+.stall-row.full .sr-price::after {
+  content: ' FULL';
+  color: var(--danger);
+  font-size: 15px;
+}
+.sr-icon { font-size: 26px; text-align: center; line-height: 1; }
+.sr-mid { display: flex; flex-direction: column; min-width: 0; }
+.sr-name { color: var(--parch); }
+.sr-stat { font-size: 16px; color: #9a9482; }
+.sr-stars { color: var(--gold); font-size: 15px; letter-spacing: 1px; }
+.sr-stars i { color: #4a4636; font-style: normal; }
+.sr-price { color: var(--gold); white-space: nowrap; }
+.sr-price i { color: var(--gold-dark); font-style: normal; margin-left: 3px; }
+
+/* The selected lot, spelled out under the counter. */
+.stall-detail {
+  padding: 9px 16px 11px;
+  border-top: 3px solid var(--ink-3);
+  background: rgba(0,0,0,0.22);
+}
+.sd-name { font-family: var(--font-px); font-size: 13px; color: var(--gold); }
+.sd-desc { font-size: 19px; color: var(--parch-dim); margin-top: 4px; }
+.sd-stat { font-size: 17px; color: var(--jade); margin-top: 3px; }
+.sd-have { font-size: 17px; color: #9a9482; margin-top: 2px; }
+.sd-have b { color: var(--parch); }
+.sd-price { font-size: 20px; color: var(--gold); margin-top: 3px; }
+.sd-empty, .stall-empty {
+  font-size: 19px; color: #7e7a6e; text-align: center; padding: 14px;
+}
+
+.stall-foot {
+  padding: 8px 16px;
+  font-size: 18px;
+  color: #8e8a7e;
+  background: linear-gradient(var(--ink), var(--ink-2));
+  border-top: 3px solid var(--ink-3);
+}
+.stall-foot b { color: var(--gold); }
+.sf-note { color: var(--jade); }
