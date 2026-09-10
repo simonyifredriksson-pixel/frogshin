@@ -27,11 +27,11 @@
  *      -Z  [ your army ]  ...  YOU  ...  <fight>  ...  FROGATH  [ his ]  +Z
  */
 
-import * as THREE from '../lib/three.module.js?v=v107';
+import * as THREE from '../lib/three.module.js?v=v108';
 import { ValueNoise, mulberry32, clamp, lerp, smoothstep,
-  lookYaw } from './util.js?v=v107';
-import { addFrog, FROG_SKINS } from './frogbuild.js?v=v107';
-import { Terrain, CollisionWorld } from './collision.js?v=v107';
+  lookYaw } from './util.js?v=v108';
+import { addFrog, FROG_SKINS } from './frogbuild.js?v=v108';
+import { Terrain, CollisionWorld } from './collision.js?v=v108';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

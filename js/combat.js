@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v107';
-import { CFG } from './config.js?v=v107';
-import { clamp } from './util.js?v=v107';
+import * as THREE from '../lib/three.module.js?v=v108';
+import { CFG } from './config.js?v=v108';
+import { clamp } from './util.js?v=v108';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -294,12 +294,34 @@ export class Health {
     this.invulnerable = 0;
   }
 
+  /**
+   * THE PART OF THE CLOCK THAT MUST RUN EVEN WHILE THE GAME IS PAUSED.
+   *
+   * Spawn protection and dash i-frames make `protected` true, and `protected`
+   * makes every incoming hit bounce. They used to count down only inside
+   * `update`, which the pause skips — so pausing inside either window left
+   * you INVULNERABLE for as long as you stayed paused. Spawn, take a hit,
+   * press Escape, and nothing could touch you.
+   *
+   * That is not a freeze, it is a shield, and the other players never stopped
+   * playing. It goes with the round clock, which is outside the pause check
+   * for the same reason: pausing must not hand the person who paused
+   * something the rest of the room does not get.
+   *
+   * Called by `update` on the normal path, and directly by the game loop
+   * while paused — never both in one frame, or the windows would run out at
+   * twice the rate.
+   */
+  tickProtection(dt) {
+    if (this.spawnProtection > 0) this.spawnProtection -= dt;
+    if (this.invulnerable > 0) this.invulnerable -= dt;
+  }
+
   update(dt) {
     this.justDied = false;
     this.justHurt = 0;
     this.timeSinceDamage += dt;
-    if (this.spawnProtection > 0) this.spawnProtection -= dt;
-    if (this.invulnerable > 0) this.invulnerable -= dt;
+    this.tickProtection(dt);
 
     if (this.dead) {
       this.respawnTimer -= dt;

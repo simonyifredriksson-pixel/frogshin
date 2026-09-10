@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v107';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v107';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v107';
-import { Input } from './input.js?v=v107';
-import { Audio } from './audio.js?v=v107';
-import { World } from './world.js?v=v107';
-import { Effects } from './effects.js?v=v107';
-import { Atmosphere } from './atmosphere.js?v=v107';
-import { FollowCamera } from './camera.js?v=v107';
-import { Player } from './player.js?v=v107';
-import { RemotePlayer } from './remote.js?v=v107';
-import { HUD } from './hud.js?v=v107';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v107';
-import { FrogModel } from './frog.js?v=v107';
-import { DummyField } from './dummy.js?v=v107';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v107';
-import { ToadModel } from './npc.js?v=v107';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v107';
-import { DungeonRun } from './dungeon.js?v=v107';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v107';
-import { JudgmentRun } from './judgment.js?v=v107';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v107';
-import { COMBO_NAMES } from './ascended.js?v=v107';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v107';
-import { MenuScene } from './menu.js?v=v107';
-import { Economy } from './economy.js?v=v107';
-import { Shop } from './shop.js?v=v107';
-import { Network, NetRole } from './net.js?v=v107';
-import { Overworld } from './overworld.js?v=v107';
-import { InventoryScreen } from './inventoryui.js?v=v107';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v107';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v107';
-import { Cine } from './cinema.js?v=v107';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v107';
-import { MEMORIES } from './flashbacks.js?v=v107';
-import { GUARDIANS } from './guardians.js?v=v107';
-import { gearOfTier } from './gear.js?v=v107';
-import { Chat } from './chat.js?v=v107';
+import * as THREE from '../lib/three.module.js?v=v108';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v108';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v108';
+import { Input } from './input.js?v=v108';
+import { Audio } from './audio.js?v=v108';
+import { World } from './world.js?v=v108';
+import { Effects } from './effects.js?v=v108';
+import { Atmosphere } from './atmosphere.js?v=v108';
+import { FollowCamera } from './camera.js?v=v108';
+import { Player } from './player.js?v=v108';
+import { RemotePlayer } from './remote.js?v=v108';
+import { HUD } from './hud.js?v=v108';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v108';
+import { FrogModel } from './frog.js?v=v108';
+import { DummyField } from './dummy.js?v=v108';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v108';
+import { ToadModel } from './npc.js?v=v108';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v108';
+import { DungeonRun } from './dungeon.js?v=v108';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v108';
+import { JudgmentRun } from './judgment.js?v=v108';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v108';
+import { COMBO_NAMES } from './ascended.js?v=v108';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v108';
+import { MenuScene } from './menu.js?v=v108';
+import { Economy } from './economy.js?v=v108';
+import { Shop } from './shop.js?v=v108';
+import { Network, NetRole } from './net.js?v=v108';
+import { Overworld } from './overworld.js?v=v108';
+import { InventoryScreen } from './inventoryui.js?v=v108';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v108';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v108';
+import { Cine } from './cinema.js?v=v108';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v108';
+import { MEMORIES } from './flashbacks.js?v=v108';
+import { GUARDIANS } from './guardians.js?v=v108';
+import { gearOfTier } from './gear.js?v=v108';
+import { Chat } from './chat.js?v=v108';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -3622,6 +3622,21 @@ class Game {
     // to freeze it locally, so whoever paused came back with extra time on
     // the board while everyone else had been playing.
     if (this.round) this.round.update(dt, this._playerIds());
+
+    /**
+     * And so do the protection timers — for exactly the same reason.
+     *
+     * Spawn protection and dash i-frames both make `health.protected` true,
+     * which turns every incoming hit away. Frozen by the pause, they never
+     * ran out: pausing within two seconds of a respawn made you INVULNERABLE
+     * until you unpaused, while everyone shooting at you carried on. Hits
+     * arrive over the network whether you are paused or not — only the shield
+     * was stuck.
+     *
+     * Ticked here and only here while paused; `health.update` does it on the
+     * normal path, so nothing counts down twice.
+     */
+    if (paused && p && p.health) p.health.tickProtection(dt);
 
     if (!paused) {
       // Mouse look.

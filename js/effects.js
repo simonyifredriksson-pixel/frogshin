@@ -8,8 +8,8 @@
  * nothing is allocated during gameplay.
  */
 
-import * as THREE from '../lib/three.module.js?v=v107';
-import { clamp } from './util.js?v=v107';
+import * as THREE from '../lib/three.module.js?v=v108';
+import { clamp } from './util.js?v=v108';
 
 const VERT = `
   attribute float aSize;

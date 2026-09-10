@@ -1,22 +1,23 @@
 /**
  * TEXT CHAT.
  *
- * Tap CTRL to open, type, ENTER to send, ESC to back out. Lines sit in the
- * bottom-left as `<name> message`, newest at the bottom, and fade out on
- * their own a few seconds after they arrive so the log is never in the way of
- * the game.
+ * Tap the chat key to open, type, ENTER to send, ESC to back out. Lines sit
+ * in the bottom-left as `<name> message`, newest at the bottom, and fade out
+ * on their own a few seconds after they arrive so the log is never in the way
+ * of the game.
  *
- * ── why CTRL is read on RELEASE ─────────────────────────────────────────
- * Ctrl is a modifier, so its keydown also fires as the first half of every
- * shortcut anybody types. Opening on keydown would mean Ctrl+R, Ctrl+W and
- * the Ctrl+Shift+R that the version-mismatch notice actually tells players to
- * press all popped the chat open on their way past.
+ * ── the key is O ────────────────────────────────────────────────────────
+ * One key, the same in every mode, and it opens the moment you press it.
  *
- * So a TAP counts and a HOLD does not: the press is remembered, any other key
- * or a mouse button while it is held disqualifies it, and the chat opens on
- * the release if nothing else happened and it was quick. That is the standard
- * way to give a modifier a job of its own, and it leaves every shortcut on the
- * keyboard alone.
+ * O is bound to nothing else in the game, which is the whole reason to use
+ * it. Tab and Ctrl both had to be shared: Tab is the scoreboard in the arena
+ * and your bag in the Croaklands, Ctrl is the first half of every browser
+ * shortcut. Sharing either meant a tap/hold split — a key that does one
+ * thing quickly and another slowly — which works but costs a delay on
+ * something and has to be explained. A free key needs none of that.
+ *
+ * The one guard it does need: `Ctrl+O` is the browser's own open-file
+ * shortcut, so a press with any modifier held is left alone.
  *
  * ── duplicates collapse ─────────────────────────────────────────────────
  * The same line sent again does not add a row; it finds the existing row and
@@ -41,8 +42,8 @@ const SHOW_SHUT = 6;
 const SHOW_OPEN = 14;
 /** What a message may be. */
 const MAX_LEN = 120;
-/** A tap on Ctrl has to be quicker than this to count as one. */
-const TAP_MAX = 0.55;
+/** The key that opens the chat, in every mode. */
+const OPEN_KEY = 'KeyO';
 /**
  * How far back a duplicate is looked for, in rows and in seconds.
  *
@@ -89,11 +90,6 @@ export class Chat {
     this._histAt = -1;
     this._fadeTimer = null;
 
-    // Ctrl-tap tracking. See the note at the top of the file.
-    this._ctrlAt = 0;
-    this._ctrlDown = false;
-    this._ctrlClean = false;
-
     this._bind();
   }
 
@@ -102,17 +98,24 @@ export class Chat {
 
     document.addEventListener('keydown', (e) => {
       const code = e.code;
-      if (code === 'ControlLeft' || code === 'ControlRight') {
-        // Repeat events fire while it is held; only the first is the press.
-        if (!this._ctrlDown) {
-          this._ctrlDown = true;
-          this._ctrlClean = true;
-          this._ctrlAt = now();
-        }
+      /**
+       * O OPENS IT — and only when it is shut.
+       *
+       * It must NOT toggle. Once the chat is open, O is a letter like any
+       * other: a key that closed the box would make it impossible to type
+       * "frog", "no" or "look". Escape and Enter are what close it.
+       */
+      if (code === OPEN_KEY && !this.open) {
+        /**
+         * A modifier means this is a browser shortcut, not the chat key —
+         * Ctrl+O is the open-file dialog. Left entirely alone: not opened,
+         * not swallowed.
+         */
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        e.preventDefault();
+        if (!e.repeat) this.tryOpen();
         return;
       }
-      // Any other key while Ctrl is held means this was a shortcut, not a tap.
-      if (this._ctrlDown) this._ctrlClean = false;
 
       if (!this.open) return;
       if (code === 'Escape') { e.preventDefault(); this.close(); return; }
@@ -125,25 +128,6 @@ export class Chat {
         e.preventDefault();
         this._recall(code === 'ArrowUp' ? 1 : -1);
       }
-    });
-
-    document.addEventListener('keyup', (e) => {
-      if (e.code !== 'ControlLeft' && e.code !== 'ControlRight') return;
-      const tapped = this._ctrlClean && now() - this._ctrlAt <= TAP_MAX;
-      this._ctrlDown = false;
-      this._ctrlClean = false;
-      if (!tapped) return;
-      // A tap toggles: the same key that opened it shuts it again.
-      if (this.open) this.close();
-      else this.tryOpen();
-    });
-
-    // A click with Ctrl held is a shortcut too.
-    document.addEventListener('mousedown', () => { this._ctrlClean = false; });
-    // Alt-tabbing away with Ctrl down must not leave a tap armed.
-    window.addEventListener('blur', () => {
-      this._ctrlDown = false;
-      this._ctrlClean = false;
     });
 
     if (this.formEl) {
