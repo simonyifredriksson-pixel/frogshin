@@ -36,9 +36,9 @@
  * a glance which rooms of a ruin they have already been through.
  */
 
-import * as THREE from '../lib/three.module.js?v=v100';
-import { clamp, lerp, damp } from './util.js?v=v100';
-import { Audio } from './audio.js?v=v100';
+import * as THREE from '../lib/three.module.js?v=v101';
+import { clamp, lerp, damp } from './util.js?v=v101';
+import { Audio } from './audio.js?v=v101';
 
 const _v = new THREE.Vector3();
 
@@ -108,6 +108,14 @@ const TIMING = {
   tome: { dur: 1.0, pay: 0.70, reach: 3.0 },
   /** A market stall. The only prop you can use more than once. */
   stall: { dur: 0.8, pay: 0.45, reach: 3.6 },
+  /**
+   * The wares on a stall that is already built.
+   *
+   * Slightly longer reach than the stall prop, because you are standing at
+   * a counter that is nearly two units deep and the prompt has to appear
+   * from where a customer would stand rather than from inside the awning.
+   */
+  wares: { dur: 0.7, pay: 0.4, reach: 4.2 },
 };
 
 export class Prop {
@@ -173,6 +181,7 @@ export class Prop {
       case 'stele': this._stele(trim); break;
       case 'tome': this._tome(wood, trim); break;
       case 'stall': this._stall(wood, trim); break;
+      case 'wares': this._wares(wood, s.goods === undefined ? trim : s.goods); break;
       default: this._pickup(trim); break;
     }
   }
@@ -240,6 +249,45 @@ export class Prop {
       this.hinge.add(mesh(G.box, mat(0x2a2a30), 0.04, 0.2, 0.04, i * 0.38, -0.05, 0));
     }
     this.solids.push({ cx: 0, cy: 0.6, cz: 0, hx: 1.35, hy: 0.6, hz: 0.6, tag: 'solid' });
+  }
+
+  /**
+   * ═══ THE WARES ON A COUNTER THAT IS ALREADY THERE ══════════════════════
+   *
+   * Four meshes: a cloth on the boards and three of whatever is for sale,
+   * in the trade's own colour, so a grocer reads as a grocer from across the
+   * square and an armourer does not.
+   *
+   * It has NO stall of its own, and that is the whole reason it exists. The
+   * markets are already built — nine stalls in a city, forty in the Hollow
+   * Market, all of them merged into the settlement's own mesh and free to
+   * draw. Putting the existing `stall` prop on top of one would stand a
+   * second awning inside the first. This is the thing a stall was missing:
+   * something on the counter you can put a hand on.
+   *
+   * Four meshes matters too. A city market is nine of these resident at
+   * once and the Hollow Market's row is ten, and props are not merged.
+   *
+   * @param goods  the colour of what is piled up — see TRADES in js/stalls.js
+   */
+  _wares(wood, goods) {
+    // A cloth laid over the boards, so the goods are not floating on wood.
+    this.group.add(mesh(G.box, mat(wood), 1.9, 0.05, 0.9, 0, 0.03, 0));
+    this.hinge = new THREE.Group();
+    this.group.add(this.hinge);
+    /**
+     * Three lots, in a row along the counter. `G.low` is the same
+     * low-poly ball the market's own produce is built from, so a bought
+     * lot and the pile it came out of are the same object.
+     */
+    for (let i = -1; i <= 1; i++) {
+      this.hinge.add(mesh(G.low, mat(goods), 0.3, 0.3, 0.3, i * 0.62, 0.19, 0));
+    }
+    /**
+     * No collider. The stall under it already has one — see `_stall` in
+     * js/realmsites.js — and a second box on the same counter would be a
+     * lip you catch on while walking along the front of a market.
+     */
   }
 
   /** A book on a lectern, and the covers come apart when it is read. */
@@ -531,6 +579,12 @@ export class Prop {
       case 'tome':
         Audio.noise({ dur: 0.5, volume: 0.11, filter: 2600, filterTo: 900, type: 'bandpass', pos: p });
         break;
+      case 'wares':
+        // Coins onto boards, and something moved across a counter. A market
+        // stall should not make the same noise as a chest lid.
+        Audio.tone({ freq: 880, to: 1180, dur: 0.10, type: 'square', volume: 0.07, pos: p });
+        Audio.noise({ dur: 0.26, volume: 0.08, filter: 3200, filterTo: 1400, type: 'bandpass', pos: p });
+        break;
       default:
         Audio.tone({ freq: 260, to: 120, dur: 0.5, type: 'triangle', volume: 0.10, pos: p });
         Audio.noise({ dur: 0.35, volume: 0.10, filter: 1400, filterTo: 500, type: 'bandpass', pos: p });
@@ -612,6 +666,26 @@ export class Prop {
         // returned, because the stall is still open for business afterwards.
         this.hinge.position.z = Math.sin(e * Math.PI) * 0.5;
         break;
+      case 'wares': {
+        /**
+         * One lot is lifted off the counter and handed over: the pile rises
+         * and comes forward, then settles back, because the stall still has
+         * goods on it afterwards. A repeating prop must end where it began.
+         *
+         * The abandoned ones do not repeat, so they finish emptied — the
+         * pile sinks into the boards and stays there, which is how you can
+         * see from across the Hollow Market which stalls you have searched.
+         */
+        const swell = Math.sin(e * Math.PI);
+        if (this.spec.repeat) {
+          this.hinge.position.y = swell * 0.34;
+          this.hinge.position.z = swell * 0.42;
+        } else {
+          this.hinge.position.y = -e * 0.24;
+          this.hinge.scale.setScalar(Math.max(0.001, 1 - e * 0.85));
+        }
+        break;
+      }
       case 'pedestal':
       case 'pickup':
         // Lifted, turned, and gone: the prize IS the thing on the stand, so

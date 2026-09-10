@@ -15,16 +15,16 @@
  * swing landed on *them*, so nobody needs a per-player hit message.
  */
 
-import * as THREE from '../lib/three.module.js?v=v100';
-import { CFG } from './config.js?v=v100';
-import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v100';
+import * as THREE from '../lib/three.module.js?v=v101';
+import { CFG } from './config.js?v=v101';
+import { clamp, damp, dampAngle, angleDelta, lerp } from './util.js?v=v101';
 import {
   ToadModel, VillageScene, PatrolGuard, VillagerToad, GuideFrog,
-} from './npc.js?v=v100';
-import { FrogModel } from './frog.js?v=v100';
-import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v100';
-import { Audio } from './audio.js?v=v100';
-import { ITEMS } from './items.js?v=v100';
+} from './npc.js?v=v101';
+import { FrogModel } from './frog.js?v=v101';
+import { StoryLevel, PATH_LENGTH, ARENA_Z, ARENA_RADIUS } from './storylevel.js?v=v101';
+import { Audio } from './audio.js?v=v101';
+import { ITEMS } from './items.js?v=v101';
 
 export const STORY_PHASE = {
   ESCAPE: 'escape',
@@ -322,7 +322,7 @@ export class StoryMode {
       this.hud.setTutorial(null);
     } else if (step === TUT.PARRY) {
       this.timeScale = 0.18;
-      this.hud.setTutorial('HOLD', 'RIGHT CLICK', 'TO PARRY HIS ATTACK');
+      this.hud.setTutorial('HOLD', 'RIGHT CLICK OR P', 'TO PARRY HIS ATTACK');
       Audio.cue(this.camera.position);
     } else if (step === TUT.DONE) {
       this.timeScale = 1;

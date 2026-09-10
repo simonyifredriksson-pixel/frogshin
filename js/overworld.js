@@ -32,40 +32,41 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v100';
-import { CFG } from './config.js?v=v100';
-import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v100';
+import * as THREE from '../lib/three.module.js?v=v101';
+import { CFG } from './config.js?v=v101';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v101';
 import { coronationScript, CarpetWalk, CORONATION_THEME }
-  from './coronation.js?v=v100';
-import { Realm } from './realm.js?v=v100';
-import { Scatter } from './scatter.js?v=v100';
-import { Traversals } from './traverse.js?v=v100';
-import { Sites } from './realmsites.js?v=v100';
-import { Camp } from './mobs.js?v=v100';
-import { DungeonBoss } from './dungeonboss.js?v=v100';
-import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v100';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v100';
+  from './coronation.js?v=v101';
+import { Realm } from './realm.js?v=v101';
+import { Scatter } from './scatter.js?v=v101';
+import { Traversals } from './traverse.js?v=v101';
+import { Sites } from './realmsites.js?v=v101';
+import { Camp } from './mobs.js?v=v101';
+import { DungeonBoss } from './dungeonboss.js?v=v101';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v101';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v101';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v100';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v100';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v100';
+  CONTENT_HALF } from './regions.js?v=v101';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v101';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v101';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v100';
+  mainObjective } from './quests.js?v=v101';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v100';
-import { disposeLandmarkMats } from './landmarks.js?v=v100';
-import { Props, disposePropMats } from './props.js?v=v100';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v100';
-import { Ambience } from './ambience.js?v=v100';
-import { Weather } from './weather.js?v=v100';
-import { Audio } from './audio.js?v=v100';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v100';
+  disposeVillagerMats } from './realmquests.js?v=v101';
+import { disposeLandmarkMats } from './landmarks.js?v=v101';
+import { Props, disposePropMats } from './props.js?v=v101';
+import { tradeFor, offerOf, leftoverOf } from './stalls.js?v=v101';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v101';
+import { Ambience } from './ambience.js?v=v101';
+import { Weather } from './weather.js?v=v101';
+import { Audio } from './audio.js?v=v101';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v101';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v100';
-import { Cine } from './cinema.js?v=v100';
-import { recommendedFor, readiness } from './guardians.js?v=v100';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v100';
-import { ThroneArena } from './throne.js?v=v100';
+  MEMORY_COUNT } from './flashbacks.js?v=v101';
+import { Cine } from './cinema.js?v=v101';
+import { recommendedFor, readiness } from './guardians.js?v=v101';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v101';
+import { ThroneArena } from './throne.js?v=v101';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -217,12 +218,21 @@ const PROP_PLAN = {
   camp: [{ kind: 'crate', n: 2 }, { kind: 'pickup', chance: 0.75 }],
   hut: [{ kind: 'crate', chance: 0.9 }],
   farm: [{ kind: 'crate', n: 2 }],
-  // Every settlement has somewhere to buy blades. It is the only reliable
-  // supply in the country, and it costs froglets.
+  /**
+   * Every settlement has somewhere to buy blades. It is the only reliable
+   * supply in the country, and it costs froglets.
+   *
+   * A VILLAGE gets a stall prop of its own because it has no market: see
+   * SETTLE in js/realmsites.js, where `market` is 0 for a village and 5 and
+   * 9 for a town and a city. Those, and the tree village's four, have real
+   * market stalls standing in them already, and each of THOSE now gets its
+   * own trade — see `_placeStalls`. Giving them a random stall prop as well
+   * would stand a second awning in the square beside the market.
+   */
   village: [{ kind: 'crate', n: 2, at: 'edge' }, { kind: 'stall' }],
-  town: [{ kind: 'crate', n: 3, at: 'edge' }, { kind: 'stall', n: 2 }],
-  city: [{ kind: 'crate', n: 3, at: 'edge' }, { kind: 'stall', n: 2 }],
-  treevillage: [{ kind: 'crate', n: 2, at: 'edge' }, { kind: 'stall' }],
+  town: [{ kind: 'crate', n: 3, at: 'edge' }],
+  city: [{ kind: 'crate', n: 3, at: 'edge' }],
+  treevillage: [{ kind: 'crate', n: 2, at: 'edge' }],
   landmark: [{ kind: 'chest', chance: 0.55, at: 'edge' }],
   bridge: [],
   arena: [],
@@ -404,6 +414,9 @@ export class Overworld {
       this.props.onPay = (p) => this._propPay(p);
       this._placeProps();
     }]);
+    // The goods on the market counters, one trade per stall. Before the
+    // bake, like every other prop. See `_placeStalls`.
+    tasks.push(['Setting out the market', () => this._placeStalls()]);
     /**
      * The Wakewood, before the bake.
      *
@@ -646,6 +659,140 @@ export class Overworld {
     }
   }
 
+  /**
+   * ═══ A TRAY OF WARES ON EVERY MARKET STALL ═════════════════════════════
+   *
+   * The markets were already built and you could not buy anything from any
+   * of them: nine stalls in a city, four round the roots of the tree
+   * village, forty in the Hollow Market, and the only shop in the country
+   * was a separate stall prop dropped at a random angle somewhere in the
+   * square. This puts the goods on the counters that are already there.
+   *
+   * WHAT EACH ONE SELLS COMES FROM WHERE IT STANDS. `tradeFor` deals the
+   * trades out along the row so no two neighbours repeat, and `offerOf`
+   * seeds the actual item off the counter's rounded-off position — so the
+   * grocer by the well is the grocer by the well on every load and on every
+   * machine, which is what makes it worth walking back to an armourer you
+   * found in a town you can reach. It is also what lets `Progress.found`
+   * remember which of the Hollow Market's stalls you have already searched.
+   *
+   * The first stall of every market is the blade-seller, at the price the
+   * world's one kunai stall always charged. Blades are the only reliable
+   * supply in the country and that promise predates this file.
+   *
+   * Before the bake, like every other prop. See `_placeProps`.
+   */
+  _placeStalls() {
+    if (!this.sites || !this.props) return;
+    const byId = new Map(this.sites.sites.map((s) => [s.id, s]));
+    /** How many trade stalls this settlement has dealt out so far. */
+    const dealt = new Map();
+    /** And how many of its abandoned ones have been made searchable. */
+    const searchable = new Map();
+    /** What is already on sale in each market, so nothing is offered twice. */
+    const stocked = new Map();
+    let n = 0;
+    for (const st of this.sites.stalls) {
+      const site = byId.get(st.site);
+      const R = site ? REGION_BY_ID.get(site.region) : null;
+      const tier = R ? R.tier : 0;
+      // The counter's own position, rounded, is the seed for everything.
+      const seed = ((Math.round(st.x) * 2654435761)
+        ^ (Math.round(st.z) * 1597334677)) >>> 0;
+      const P = {
+        kind: 'wares',
+        at: { x: st.x, y: st.y, z: st.z },
+        /**
+         * `face` is the yaw the stall's awning was built with, and the
+         * counter faces the same way, so the tray shares it. See `_stall`.
+         */
+        yaw: st.face || 0,
+        wood: 0x8a6a4a,
+        site: site ? site.kind : null,
+      };
+
+      if (st.abandoned) {
+        /**
+         * THE HOLLOW MARKET. Not shops — you search them, once, and two in
+         * three have nothing, which is the point of the place.
+         *
+         * Only a QUARTER of them get a tray, and never more than twelve in
+         * one settlement. There are fifty-seven counters there and the
+         * market's ring is eighty units across, so every one of them is
+         * inside the props' hundred-and-fifty-unit draw distance at the same
+         * time — and props are not merged into anything. Fifty-seven groups
+         * of meshes for a row of tables would cost more to draw than the
+         * city they stand in. Twelve places to search is already more than
+         * anybody will patiently check.
+         */
+        const done = searchable.get(st.site) || 0;
+        if ((seed >>> 5) % 4 !== 0 || done >= 12) continue;
+        searchable.set(st.site, done + 1);
+        const left = leftoverOf(tier, seed);
+        P.id = `wares:${st.site}:${n++}`;
+        P.goods = left ? 0x9a8f72 : 0x6f6a5c;
+        P.label = 'Search the stall';
+        P.usedLabel = 'Picked over.';
+        P.prize = left
+          ? { what: 'stock', id: left.item.id, n: left.n }
+          : { what: 'stock', id: null, n: 0 };
+        this.props.add(P);
+        continue;
+      }
+
+      const index = dealt.get(st.site) || 0;
+      dealt.set(st.site, index + 1);
+      /**
+       * THE TRADE COMES FROM THE SETTLEMENT'S SEED, THE GOODS FROM THE
+       * STALL'S.
+       *
+       * Which is the whole difference between a market and a shuffle.
+       * `tradeFor` walks the trade list, so consecutive counters in a row
+       * are consecutive trades; seeded per stall instead it draws
+       * independently for each one and independent draws clump — Anurath's
+       * nine-stall market came out with two herbalists side by side and no
+       * armourer in it at all. The ITEM is still per stall, so two
+       * herbalists in one city sell two different materials.
+       */
+      const siteSeed = site
+        ? (((Math.round(site.at.x) * 374761393)
+          ^ (Math.round(site.at.z) * 668265263)) >>> 0)
+        : seed;
+      const trade = tradeFor(index, siteSeed);
+      /**
+       * AND NO TWO STALLS IN ONE MARKET SELL THE SAME THING.
+       *
+       * A nine-stall city runs out of trades and comes back round, which is
+       * fine — two herbalists in Anurath is a market. Two herbalists selling
+       * the same sack of cut stone at the same price is a copy-paste. The
+       * item pools at a given tier are small enough (three or four weapons)
+       * that the collision is likely rather than unlucky, so the seed is
+       * perturbed and asked again a few times. It gives up rather than
+       * looping: a repeated item beats an empty counter.
+       */
+      const already = stocked.get(st.site) || new Set();
+      stocked.set(st.site, already);
+      let offer = null;
+      for (let k = 0; k < 6; k++) {
+        offer = offerOf(trade, tier, (seed + k * 0x9e3779b9) >>> 0);
+        if (!offer) break;
+        const key = offer.item ? offer.item.id : 'kunai';
+        if (!already.has(key)) { already.add(key); break; }
+      }
+      if (!offer) continue;
+      P.id = `wares:${st.site}:${n++}`;
+      P.goods = trade.goods;
+      P.repeat = true;
+      P.label = offer.label;
+      P.price = offer.price;
+      P.prize = offer.kunai
+        ? { what: 'shop', n: offer.n, price: offer.price }
+        : { what: 'shop', id: offer.item.id, n: offer.n, price: offer.price,
+          sign: trade.sign, keeper: trade.keeper, line: trade.line };
+      this.props.add(P);
+    }
+  }
+
   /** One prop, with the look and the reward its kind and its region imply. */
   _prop(kind, id, x, y, z, yaw, tier, site, rnd, lore) {
     const P = { kind, id, at: { x, y, z }, yaw };
@@ -795,10 +942,59 @@ export class Overworld {
        * — see `_touch` — because sliding the rack out and then refusing would
        * be the worst of both.
        */
-      if (this.economy && this.economy.spend(prize.price)) {
+      if (!this.economy || !this.economy.canAfford(prize.price)) {
+        this.hud.toast('You cannot afford that.', 3);
+      } else if (!prize.id) {
+        this.economy.spend(prize.price);
         this.giveKunai(prize.n, 'bought');
       } else {
-        this.hud.toast('You cannot afford that.', 3);
+        /**
+         * BUYING A THING RATHER THAN BLADES.
+         *
+         * The purse is only opened once the goods are known to fit. A stall
+         * that took the froglets and then found the pack full would be the
+         * one transaction in the game that can lose you money, and the
+         * inventory has a per-item cap — see `Progress.add`, which returns
+         * how many it actually took.
+         */
+        const g = GEAR_BY_ID.get(prize.id);
+        const got = g ? this.progress.add(prize.id, prize.n) : 0;
+        if (got > 0) {
+          this.economy.spend(prize.price);
+          this.hud.toast(`${prize.keeper || 'The stallholder'}: `
+            + `"${prize.line || 'Much obliged.'}" `
+            + `(${g.name}${got > 1 ? ` ×${got}` : ''})`, 5);
+          Audio.pickup(prop.pos);
+          this.applyStats();
+          this._paintObjectives();
+        } else {
+          this.hud.toast(g
+            ? `You cannot carry another ${g.name.toLowerCase()}.`
+            : 'Nothing to sell you.', 3);
+        }
+      }
+    } else if (prize.what === 'stock') {
+      /**
+       * WHAT WAS LEFT ON AN ABANDONED STALL.
+       *
+       * The Hollow Market. Free, one-shot, and usually nothing — which is
+       * deliberate: a market where every stall pays out is a supply depot,
+       * and the whole point of that place is that the awnings are up and
+       * there is nobody behind any of them.
+       */
+      const g = prize.id ? GEAR_BY_ID.get(prize.id) : null;
+      if (!g) {
+        this.hud.toast('Picked over years ago. Whatever was here is gone.', 4);
+      } else {
+        const got = this.progress.add(prize.id, prize.n);
+        if (got > 0) {
+          this.hud.toast(`Still on the counter: ${g.name}`
+            + `${got > 1 ? ` ×${got}` : ''}.`, 5);
+          Audio.pickup(prop.pos);
+          this.applyStats();
+        } else {
+          this.hud.toast(`You cannot carry another ${g.name.toLowerCase()}.`, 3);
+        }
       }
     } else if (prize.what === 'memory') {
       /**
@@ -2473,6 +2669,22 @@ export class Overworld {
         + `${Math.floor(this.economy.froglets)}.`, 4);
       Audio.uiBack();
       return;
+    }
+    /**
+     * And so does a full pack, for the same reason.
+     *
+     * A stall selling a thing you are already carrying the maximum of would
+     * otherwise play the whole hand-over and then refuse at the end — see
+     * the note in `_propPay`, which will not take the froglets in that case.
+     * Better to say so with your hand still on the counter.
+     */
+    if (prize && prize.what === 'shop' && prize.id) {
+      const g = GEAR_BY_ID.get(prize.id);
+      if (g && this.progress.count(prize.id) >= g.stack) {
+        this.hud.toast(`You cannot carry another ${g.name.toLowerCase()}.`, 3);
+        Audio.uiBack();
+        return;
+      }
     }
     player.reachOut();
     if (!prop.use()) return;

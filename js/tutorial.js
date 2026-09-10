@@ -12,7 +12,7 @@
  *   THE CHASM     gaps too wide to jump                 Q
  *   THE POSTS     posts over deep water                 G
  *   THE YARD      straw targets, one out of reach       Left click, and 1 / 2
- *   THE RING      one frog who telegraphs every swing   Right click
+ *   THE RING      one frog who telegraphs every swing   Right click / P
  *   THE PIT       three of them at once                 all of it
  *   THE RUN       jump, dash, tongue, wall — in order   all of it
  *   THE WARDEN    something that hits back properly     all of it
@@ -51,14 +51,14 @@
  * a gap and the positions are worked out from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v100';
-import { CFG } from './config.js?v=v100';
-import { clamp, mulberry32 } from './util.js?v=v100';
-import { Terrain, CollisionWorld } from './collision.js?v=v100';
-import { Mob } from './mobs.js?v=v100';
-import { addFrog } from './frogbuild.js?v=v100';
-import { Cine } from './cinema.js?v=v100';
-import { Audio } from './audio.js?v=v100';
+import * as THREE from '../lib/three.module.js?v=v101';
+import { CFG } from './config.js?v=v101';
+import { clamp, mulberry32 } from './util.js?v=v101';
+import { Terrain, CollisionWorld } from './collision.js?v=v101';
+import { Mob } from './mobs.js?v=v101';
+import { addFrog } from './frogbuild.js?v=v101';
+import { Cine } from './cinema.js?v=v101';
+import { Audio } from './audio.js?v=v101';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -270,12 +270,23 @@ export const STATIONS = [
     id: 'ring', title: 'THE RING', kind: 'parry', need: 3,
     weapon: 'katana',
     objective: 'Parry three blows',
-    prompt: ['GUARD', 'HOLD RIGHT CLICK', 'AND KEEP HOLDING IT'],
-    teach: 'HOLD RIGHT CLICK down to guard. The blade is back in your hand — '
-      + 'press 1 if you ever need it again, because the guard only works '
-      + 'with the sword out. A red ring on the ground means a blow is about '
-      + 'to land: hold the guard through it and you turn it aside. You can '
-      + 'simply keep holding it the whole time; that is fine.',
+    prompt: ['GUARD', 'HOLD RIGHT CLICK OR P', 'AND KEEP HOLDING IT'],
+    /**
+     * BOTH KEYS, NAMED IN THE PROMPT AND IN THE TEACH LINE.
+     *
+     * P is not a hidden alternative — it is the only way to parry at all on
+     * a trackpad, where holding a right-click while running and steering is
+     * not really available. Anyone who cannot use the mouse button has to
+     * learn that here, on the one frog in the game that telegraphs every
+     * swing, rather than in front of a guardian. See `rightHeld` in
+     * js/input.js, which is where the two are the same thing.
+     */
+    teach: 'HOLD RIGHT CLICK — or hold P, whichever suits your hands — to '
+      + 'guard. The blade is back in your hand: press 1 if you ever need it '
+      + 'again, because the guard only works with the sword out. A red ring '
+      + 'on the ground means a blow is about to land. Hold the guard through '
+      + 'it and you turn it aside. You can simply keep holding it the whole '
+      + 'time; that is fine.',
     master: 'She shows you the blow before she throws it. Everything in this '
       + 'country does. Watch the ground, not her.',
   },
@@ -1690,7 +1701,7 @@ export class TutorialIsland {
        */
       const s = this.station;
       if (s && s.kind === 'parry' && this.hud) {
-        this.hud.announce('GUARD NOW — HOLD RIGHT CLICK', 'danger', false);
+        this.hud.announce('GUARD NOW — HOLD RIGHT CLICK OR P', 'danger', false);
       }
     } else if (!winding && m._wasWinding) {
       m._wasWinding = false;

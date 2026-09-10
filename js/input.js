@@ -273,8 +273,26 @@ export class Input {
   }
 
   get attackHeld() { return this._mouseDown; }
-  /** Right button held — used for the story-mode parry. */
-  get rightHeld() { return !!this._rightDown; }
+  /**
+   * GUARD HELD — right mouse button, OR P.
+   *
+   * Parrying was the one thing in the game that could not be done without a
+   * mouse: everything else has a key, and the guard was right-click and
+   * nothing else. On a laptop trackpad a held right-click while also running
+   * and steering is somewhere between awkward and impossible, and parrying
+   * is not optional content — the story bosses break your guard on purpose
+   * and expect you to time one.
+   *
+   * P rather than a modifier because it is reachable with the right hand
+   * while the left stays on WASD, and it is not taken: the keys already
+   * spoken for are WASD, Space, Shift, Ctrl, E, F, Q, R, G, Tab, M, J, 1-5
+   * and 0. See the controls list in index.html.
+   *
+   * It is read through this one getter, so every caller gets it at once —
+   * `Player._updateParry`, the tutorial's parry station and the boss
+   * fights all ask the same question and none of them had to change.
+   */
+  get rightHeld() { return !!this._rightDown || this.down('KeyP'); }
   consumeAttack() {
     if (this._mousePressed) { this._mousePressed = false; return true; }
     return false;

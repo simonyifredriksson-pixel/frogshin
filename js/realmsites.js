@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v100';
-import { mulberry32, clamp } from './util.js?v=v100';
-import { SEA } from './regions.js?v=v100';
-import { buildLandmark } from './landmarks.js?v=v100';
-import { ROADS } from './roads.js?v=v100';
+import * as THREE from '../lib/three.module.js?v=v101';
+import { mulberry32, clamp } from './util.js?v=v101';
+import { SEA } from './regions.js?v=v101';
+import { buildLandmark } from './landmarks.js?v=v101';
+import { ROADS } from './roads.js?v=v101';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -258,6 +258,15 @@ export class Sites {
      * settlement, spots }. `spots` is where villagers may stand.
      */
     this.sites = [];
+    /**
+     * EVERY MARKET STALL'S COUNTER, in world space.
+     *
+     * Filled by `_stall`, read by the overworld to give each one a tray of
+     * wares and its own trade — see js/stalls.js. Nine hundred-odd meshes of
+     * market get merged into the site they stand in and are then unreachable,
+     * so the position has to be remembered at the moment it is known.
+     */
+    this.stalls = [];
     /** Arena rings, keyed by boss id, so a fight can be found by its stones. */
     this.arenas = new Map();
     /** The huge things, keyed by region id. */
@@ -530,6 +539,24 @@ export class Sites {
       ^ (Math.round(spot.z) * 668265263)) >>> 0);
     const style = STYLE[R.arch] || STYLE.timber;
     let spots = null;
+    /**
+     * Which site is being built, for `_stall` to file its counters under.
+     * A field rather than a parameter threaded through nine builders and two
+     * signature methods, which is what it would take otherwise.
+     */
+    this._nowSite = spec.id;
+    /**
+     * AND WHETHER ANYBODY IS BEHIND THE COUNTERS.
+     *
+     * A settlement whose signature is the empty market has no shops in it —
+     * not the forty stalls the signature builds, and not the nine the city
+     * layout put in the square either. The Hollow Market's whole blurb is
+     * "Stalls, awnings, prices chalked up. Nobody.", and nine working
+     * traders in the middle of it would be the loudest possible way to
+     * contradict that. So the flag is set for the whole site, from the
+     * signature table, before anything is built.
+     */
+    this._nowAbandoned = SIGNATURE[spec.id] === '_sigEmptyStalls';
 
     switch (spec.kind) {
       case 'village': case 'town': case 'city':
@@ -685,7 +712,22 @@ export class Sites {
     this._anchor(g, x, h + 0.1, z);
   }
 
-  /** A market stall: four posts, an awning, and a table of goods. */
+  /**
+   * A market stall: four posts, an awning, and a table of goods.
+   *
+   * AND IT REMEMBERS WHERE ITS COUNTER IS. Every stall pushes a record onto
+   * `this.stalls`, in world space, so the overworld can put a tray of wares
+   * on the counter of each one and give it its own trade — see js/stalls.js
+   * and `_placeStalls`. Recorded here rather than at each of the three call
+   * sites because a stall that is not in the list is a stall you walk up to
+   * and cannot buy anything from, and there is no way to notice that from
+   * reading the call sites.
+   *
+   * The counter is the plank at `z + 0.7`, and its offset is NOT rotated by
+   * `face` (the posts are not either — only the awning and the plank turn on
+   * the spot). So the recorded point is that plank's centre, which is where
+   * the goods have to sit whichever way the stall is turned.
+   */
   _stall(g, x, z, face, rnd) {
     const cloth = rnd() < 0.5 ? 'cloth' : 'clothBlue';
     for (const sx of [-1, 1]) {
@@ -701,6 +743,18 @@ export class Sites {
         0.24, 0.24, 0.24, x - 1.4 + i * 0.9, 1.35, z + 0.7);
     }
     this._solid(g, 2.0, 0.6, 0.8, x, 1.0, z + 0.7, 'stall');
+    this.stalls.push({
+      site: this._nowSite,
+      x: g.position.x + x,
+      y: g.position.y + 1.19,
+      z: g.position.z + z + 0.7,
+      face,
+      /**
+       * The Hollow Market's forty are not shops. See `_sigEmptyStalls`, and
+       * `leftoverOf` in js/stalls.js for what is left on them instead.
+       */
+      abandoned: !!this._nowAbandoned,
+    });
   }
 
   // ----------------------------------------------- what makes a place lived-in
