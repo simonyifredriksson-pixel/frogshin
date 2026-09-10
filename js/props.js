@@ -36,9 +36,9 @@
  * a glance which rooms of a ruin they have already been through.
  */
 
-import * as THREE from '../lib/three.module.js?v=v108';
-import { clamp, lerp, damp } from './util.js?v=v108';
-import { Audio } from './audio.js?v=v108';
+import * as THREE from '../lib/three.module.js?v=v109';
+import { clamp, lerp, damp } from './util.js?v=v109';
+import { Audio } from './audio.js?v=v109';
 
 const _v = new THREE.Vector3();
 

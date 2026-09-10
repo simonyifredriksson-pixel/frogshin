@@ -11,26 +11,52 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v108';
-import { CFG } from './config.js?v=v108';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v108';
-import { FrogModel } from './frog.js?v=v108';
-import { ToadModel } from './npc.js?v=v108';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v108';
-import { Audio } from './audio.js?v=v108';
+import * as THREE from '../lib/three.module.js?v=v109';
+import { CFG } from './config.js?v=v109';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v109';
+import { FrogModel } from './frog.js?v=v109';
+import { ToadModel } from './npc.js?v=v109';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v109';
+import { Audio } from './audio.js?v=v109';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 
+/**
+ * Turn the three ids off the wire into the skin OBJECTS the rig wants.
+ *
+ * `findSkin` maps an unknown id back to that category's default, so a peer on
+ * an older build — or one wearing something from a set this build has never
+ * heard of — comes out as a plain frog instead of a crash. Returns null when
+ * nothing was sent, which is what `FrogModel` already expects.
+ */
+function resolveSkins(ids) {
+  if (!ids) return null;
+  return {
+    frog: findSkin('frogs', ids.frog || DEFAULT_SKIN.frogs),
+    sword: findSkin('swords', ids.sword || DEFAULT_SKIN.swords),
+    kunai: findSkin('kunai', ids.kunai || DEFAULT_SKIN.kunai),
+  };
+}
+
 export class RemotePlayer {
-  constructor(id, name, color, scene, effects) {
+  /**
+   * @param skins optional { frog, sword, kunai } SKIN IDS from the roster.
+   *
+   * Without these a remote frog was built with no skins at all — the default
+   * green body tinted by the player's colour and the standard katana — so
+   * everything anybody bought was visible only to themselves. Which is most
+   * of the point of buying it.
+   */
+  constructor(id, name, color, scene, effects, skins) {
     this.id = id;
     this.name = name;
     this.color = color;
     this.scene = scene;
     this.effects = effects;
+    this.skins = resolveSkins(skins);
 
-    this.model = new FrogModel(color, name, false);
+    this.model = new FrogModel(color, name, false, this.skins);
     scene.add(this.model.root);
 
     this.pos = new THREE.Vector3();
@@ -274,6 +300,42 @@ export class RemotePlayer {
   }
 
   /**
+   * They equipped something mid-match. Rebuild them wearing it.
+   *
+   * Rebuilt rather than repainted for the same reason the local player is in
+   * `Game._applySkins`: a skin changes GEOMETRY — armour, a crown, a halo,
+   * orbiting fragments, a different blade shape — so there is nothing to
+   * repaint. Cheap enough at the rate people open menus.
+   *
+   * The clone is dropped too, so it is rebuilt in the new gear next time it
+   * appears; a decoy in last season's skin gives its owner away.
+   */
+  setSkins(ids) {
+    const next = resolveSkins(ids);
+    const same = (a, b) => (a ? a.id : null) === (b ? b.id : null);
+    if (this.skins && next
+      && same(this.skins.frog, next.frog)
+      && same(this.skins.sword, next.sword)) return;
+    this.skins = next;
+    if (this.cloneModel) {
+      this.scene.remove(this.cloneModel.root);
+      this.cloneModel.dispose();
+      this.cloneModel = null;
+    }
+    // The juggernaut is not wearing a frog, so there is nothing to swap now;
+    // `setJuggernaut(false)` will pick the new skins up on the way back.
+    if (this.isJuggernautModel) return;
+    const old = this.model;
+    this.model = new FrogModel(this.color, this.name, false, this.skins);
+    this.model.root.position.copy(old.root.position);
+    this.model.root.rotation.copy(old.root.rotation);
+    this.model.root.visible = old.root.visible;
+    this.scene.remove(old.root);
+    old.dispose();
+    this.scene.add(this.model.root);
+  }
+
+  /**
    * Swap this player between the frog rig and the juggernaut toad.
    *
    * Done by rebuilding rather than hiding one of two models, so a long match
@@ -286,7 +348,9 @@ export class RemotePlayer {
     const old = this.model;
     this.model = on
       ? new ToadModel(true, findSkin('swords', DEFAULT_SKIN.swords))
-      : new FrogModel(this.color, this.name, false);
+      // Back into a frog wearing what they were wearing — dropping the skins
+      // here would undress them for the rest of the match.
+      : new FrogModel(this.color, this.name, false, this.skins);
     this.model.root.position.copy(old.root.position);
     this.model.root.rotation.copy(old.root.rotation);
     this.model.root.visible = old.root.visible;
@@ -352,9 +416,10 @@ export class RemotePlayer {
       return;
     }
     if (!this.cloneModel) {
-      // Same name and nameplate as its owner: a decoy with no name tag over
-      // it would be spotted instantly, which is the whole ability wasted.
-      this.cloneModel = new FrogModel(this.color, this.name, false);
+      // Same name, nameplate AND skins as its owner: a decoy with no name tag
+      // over it — or wearing different gear — would be spotted instantly,
+      // which is the whole ability wasted.
+      this.cloneModel = new FrogModel(this.color, this.name, false, this.skins);
       this.scene.add(this.cloneModel.root);
     }
     const [x, y, z, yaw, speed, bits, attackT, attackIndex, throwT, vy,

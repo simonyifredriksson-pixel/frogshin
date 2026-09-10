@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v108';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v108';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v108';
-import { Input } from './input.js?v=v108';
-import { Audio } from './audio.js?v=v108';
-import { World } from './world.js?v=v108';
-import { Effects } from './effects.js?v=v108';
-import { Atmosphere } from './atmosphere.js?v=v108';
-import { FollowCamera } from './camera.js?v=v108';
-import { Player } from './player.js?v=v108';
-import { RemotePlayer } from './remote.js?v=v108';
-import { HUD } from './hud.js?v=v108';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v108';
-import { FrogModel } from './frog.js?v=v108';
-import { DummyField } from './dummy.js?v=v108';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v108';
-import { ToadModel } from './npc.js?v=v108';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v108';
-import { DungeonRun } from './dungeon.js?v=v108';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v108';
-import { JudgmentRun } from './judgment.js?v=v108';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v108';
-import { COMBO_NAMES } from './ascended.js?v=v108';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v108';
-import { MenuScene } from './menu.js?v=v108';
-import { Economy } from './economy.js?v=v108';
-import { Shop } from './shop.js?v=v108';
-import { Network, NetRole } from './net.js?v=v108';
-import { Overworld } from './overworld.js?v=v108';
-import { InventoryScreen } from './inventoryui.js?v=v108';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v108';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v108';
-import { Cine } from './cinema.js?v=v108';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v108';
-import { MEMORIES } from './flashbacks.js?v=v108';
-import { GUARDIANS } from './guardians.js?v=v108';
-import { gearOfTier } from './gear.js?v=v108';
-import { Chat } from './chat.js?v=v108';
+import * as THREE from '../lib/three.module.js?v=v109';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v109';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v109';
+import { Input } from './input.js?v=v109';
+import { Audio } from './audio.js?v=v109';
+import { World } from './world.js?v=v109';
+import { Effects } from './effects.js?v=v109';
+import { Atmosphere } from './atmosphere.js?v=v109';
+import { FollowCamera } from './camera.js?v=v109';
+import { Player } from './player.js?v=v109';
+import { RemotePlayer } from './remote.js?v=v109';
+import { HUD } from './hud.js?v=v109';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v109';
+import { FrogModel } from './frog.js?v=v109';
+import { DummyField } from './dummy.js?v=v109';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v109';
+import { ToadModel } from './npc.js?v=v109';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v109';
+import { DungeonRun } from './dungeon.js?v=v109';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v109';
+import { JudgmentRun } from './judgment.js?v=v109';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v109';
+import { COMBO_NAMES } from './ascended.js?v=v109';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v109';
+import { MenuScene } from './menu.js?v=v109';
+import { Economy } from './economy.js?v=v109';
+import { Shop } from './shop.js?v=v109';
+import { Network, NetRole, cleanSkins } from './net.js?v=v109';
+import { Overworld } from './overworld.js?v=v109';
+import { InventoryScreen } from './inventoryui.js?v=v109';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v109';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v109';
+import { Cine } from './cinema.js?v=v109';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v109';
+import { MEMORIES } from './flashbacks.js?v=v109';
+import { GUARDIANS } from './guardians.js?v=v109';
+import { gearOfTier } from './gear.js?v=v109';
+import { Chat } from './chat.js?v=v109';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -250,6 +250,17 @@ class Game {
     return {
       name: (this.settings.name || 'Frog').slice(0, 14),
       color: FROG_COLORS[this.settings.colorIndex % FROG_COLORS.length],
+      /**
+       * What we are WEARING, as three ids, for everyone else to build us
+       * from. Read off the economy rather than `shop.equippedSkins()` so it
+       * is available before the shop has rendered — the profile is asked for
+       * on the way into a room, which can be the first thing that happens.
+       */
+      skins: {
+        frog: this.economy.equipped.frog || DEFAULT_SKIN.frogs,
+        sword: this.economy.equipped.sword || DEFAULT_SKIN.swords,
+        kunai: this.economy.equipped.kunai || DEFAULT_SKIN.kunai,
+      },
     };
   }
 
@@ -746,6 +757,29 @@ class Game {
     this._dropClone();
     // Abilities live in the hotbar; owning one is what puts it there.
     if (this.player) this.player.inventory.setAbilities(this.shop.equippedAbilities());
+
+    /**
+     * TELL THE ROOM WHAT WE ARE WEARING.
+     *
+     * Skins ride along with the introduction (see the connection metadata in
+     * js/net.js), which covers everybody who was already dressed when they
+     * arrived. This covers the other case: equipping something from the shop
+     * without leaving the match, which is a thing you can do from the pause
+     * menu and from the practice ring.
+     *
+     * Three ids, once per change, on the reliable channel. Not per frame and
+     * not in the state packet — this changes when somebody opens a menu, not
+     * twenty times a second.
+     */
+    const ids = {
+      frog: this.economy.equipped.frog || DEFAULT_SKIN.frogs,
+      sword: this.economy.equipped.sword || DEFAULT_SKIN.swords,
+      kunai: this.economy.equipped.kunai || DEFAULT_SKIN.kunai,
+    };
+    if (JSON.stringify(ids) !== this._sentSkins) {
+      this._sentSkins = JSON.stringify(ids);
+      this.net.sendEvent({ t: 'skins', s: ids });
+    }
   }
 
   /** Throw away the shadow-clone model so it is rebuilt with fresh skins. */
@@ -837,6 +871,24 @@ class Game {
        * The text is not trusted. `Chat.push` writes it with textContent and
        * caps its length — the string came off a peer connection.
        */
+      /**
+       * SOMEBODY CHANGED THEIR SKIN mid-match.
+       *
+       * Kept on the profile as well as pushed at the model, so a player who
+       * has not spawned yet — parked in `_pendingJoins` while the world
+       * builds — is created wearing the right thing rather than the thing
+       * they had on when they connected.
+       */
+      if (ev.t === 'skins') {
+        const ids = cleanSkins(ev.s);
+        const prof = this.net.profiles.get(id);
+        if (prof) prof.skins = ids;
+        const parked = this._pendingJoins.get(id);
+        if (parked) parked.skins = ids;
+        const r = this.remotes.get(id);
+        if (r && r.setSkins) r.setSkins(ids);
+        return;
+      }
       if (ev.t === 'chat') {
         const prof = this.net.profiles.get(id);
         this.chat.push({
@@ -972,7 +1024,8 @@ class Game {
       this._pendingJoins.set(id, prof);
       return;
     }
-    const r = new RemotePlayer(id, prof.name, prof.color, this.scene, this.effects);
+    const r = new RemotePlayer(id, prof.name, prof.color, this.scene,
+      this.effects, prof.skins);
     // A remote clone's kunai is drawn locally and deals nothing — the decoy
     // has to look armed, but only the real frog can actually hurt you.
     r.onCloneThrow = (pos, dx, dy, dz) => {
@@ -3624,19 +3677,53 @@ class Game {
     if (this.round) this.round.update(dt, this._playerIds());
 
     /**
-     * And so do the protection timers — for exactly the same reason.
+     * ═══ A PAUSED PLAYER IS STILL IN THE MATCH ═══════════════════════════
      *
-     * Spawn protection and dash i-frames both make `health.protected` true,
-     * which turns every incoming hit away. Frozen by the pause, they never
-     * ran out: pausing within two seconds of a respawn made you INVULNERABLE
-     * until you unpaused, while everyone shooting at you carried on. Hits
-     * arrive over the network whether you are paused or not — only the shield
-     * was stuck.
+     * Pausing stops your CONTROL, not your presence. Everything in here used
+     * to sit inside the `if (!paused)` block below, and the combined effect
+     * was that pausing turned you into an immortal statue:
      *
-     * Ticked here and only here while paused; `health.update` does it on the
-     * normal path, so nothing counts down twice.
+     *   - the protection timers froze, so pausing within two seconds of a
+     *     respawn (or inside a dash's i-frames) left `health.protected` true
+     *     and turned every incoming hit away outright;
+     *   - `tickState` stopped, so even the hits that DID land were invisible
+     *     to everyone else — the damage came off your own health and was
+     *     never broadcast, so the bar over your frog never moved on their
+     *     screens;
+     *   - the event queue stopped draining, so your own death never left
+     *     your machine;
+     *   - and `deathPending` was never consumed, so you did not actually die
+     *     until you unpaused.
+     *
+     * From the outside all four read as one thing: hitting a paused player
+     * does nothing. Which is how it was reported, and it is not a pause, it
+     * is invulnerability with a menu over it.
+     *
+     * What still does NOT happen while paused: movement, aiming, attacking,
+     * abilities, the camera. Those are the things pausing is for.
      */
-    if (paused && p && p.health) p.health.tickProtection(dt);
+    if (paused && p) {
+      if (p.health) p.health.tickProtection(dt);
+      // A death that arrived between frames resolves now, rather than being
+      // held back until the pause menu closes.
+      if (p.deathPending) {
+        p.deathPending = false;
+        this._onLocalDeath();
+      }
+      /**
+       * Knockback taken while paused is DROPPED, not banked.
+       *
+       * `receiveHit` adds to the velocity and nothing integrates it while
+       * the world is stopped, so without this a player who took a few hits
+       * behind the pause menu was fired across the map on resuming.
+       */
+      p.vel.set(0, 0, 0);
+      // The queue carries the death out to the room, along with anything a
+      // swing left in it on the frame the pause landed.
+      this._drainEvents(p);
+      // And the room keeps hearing where they are and how they are doing.
+      this.net.tickState(dt, () => p.netState());
+    }
 
     if (!paused) {
       // Mouse look.

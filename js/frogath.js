@@ -20,10 +20,10 @@
  *   Phase 4   — 15%. A dying star. Everything, at once, barely spaced.
  */
 
-import * as THREE from '../lib/three.module.js?v=v108';
-import { CFG } from './config.js?v=v108';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v108';
-import { Audio } from './audio.js?v=v108';
+import * as THREE from '../lib/three.module.js?v=v109';
+import { CFG } from './config.js?v=v109';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v109';
+import { Audio } from './audio.js?v=v109';
 
 const _v = new THREE.Vector3();
 const _to = new THREE.Vector3();

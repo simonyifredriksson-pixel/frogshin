@@ -29,8 +29,8 @@
  * runs out behind you.
  */
 
-import * as THREE from '../lib/three.module.js?v=v108';
-import { mulberry32, damp, clamp } from './util.js?v=v108';
+import * as THREE from '../lib/three.module.js?v=v109';
+import { mulberry32, damp, clamp } from './util.js?v=v109';
 
 /** How many particles exist. Density decides how many are drawn. */
 const COUNT = 1100;

@@ -16,10 +16,30 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v108';
-import { roomCode as makeRoomCode } from './util.js?v=v108';
+import { CFG, BUILD } from './config.js?v=v109';
+import { roomCode as makeRoomCode } from './util.js?v=v109';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
+
+/**
+ * WHICH SKINS A PLAYER IS WEARING — three ids, and nothing else.
+ *
+ * Only the ids cross the wire. Every peer already has the whole catalogue in
+ * js/skins.js, so sending palettes and `fx` blocks would be sending each
+ * other a copy of a file they both shipped with — and would let one client
+ * dictate what another client's frog looks like in detail.
+ *
+ * Sanitised on the way in because it arrives from a peer: anything that is
+ * not a short string is dropped, and `findSkin` maps an id it does not
+ * recognise back to the default. So an older build, a corrupt packet or a
+ * hand-edited one produces a plain frog rather than a broken one.
+ */
+export function cleanSkins(s) {
+  if (!s || typeof s !== 'object') return null;
+  const id = (v) => (typeof v === 'string' && v.length <= 40 ? v : null);
+  const out = { frog: id(s.frog), sword: id(s.sword), kunai: id(s.kunai) };
+  return (out.frog || out.sword || out.kunai) ? out : null;
+}
 
 /**
  * ICE configuration — how two browsers find a path to each other.
@@ -277,7 +297,13 @@ export class Network {
       const conn = this.peer.connect(CFG.net.prefix + this.room, {
         reliable: true,
         serialization: 'json',
-        metadata: { name: profile.name, color: profile.color, uid: this.uid },
+        metadata: {
+          name: profile.name, color: profile.color, uid: this.uid,
+          // Skins travel with the introduction, so the host can build the
+          // right frog the moment it hears about us rather than a default
+          // one that gets replaced a beat later.
+          skins: profile.skins || null,
+        },
       });
       this.hostConn = conn;
 
@@ -299,7 +325,10 @@ export class Network {
         clearTimeout(timeout);
         this._quick = null;                // Quick Play landed in a real room
         this.connected = true;
-        this._send(conn, { m: 'hello', name: profile.name, color: profile.color, uid: this.uid, v: BUILD });
+        this._send(conn, {
+          m: 'hello', name: profile.name, color: profile.color,
+          uid: this.uid, v: BUILD, skins: profile.skins || null,
+        });
         this._status(`Connected to room ${this.room}`);
         if (this.onReady) this.onReady({ role: this.role, room: this.room });
       });
@@ -423,6 +452,7 @@ export class Network {
         color: meta.color || 0x6cc24a,
         uid: meta.uid || null,
         kills: 0, deaths: 0,
+        skins: cleanSkins(meta.skins),
       };
       this.profiles.set(conn.peer, prof);
 
@@ -433,7 +463,10 @@ export class Network {
       });
 
       // Tell everyone else about the newcomer.
-      this._broadcast({ m: 'join', id: conn.peer, name: prof.name, color: prof.color }, conn.peer);
+      this._broadcast({
+        m: 'join', id: conn.peer, name: prof.name, color: prof.color,
+        skins: prof.skins,
+      }, conn.peer);
 
       if (this.onJoin) this.onJoin(conn.peer, prof);
       this._status(`Room ${this.room} — ${this.playerCount} frogs`);
@@ -464,9 +497,14 @@ export class Network {
 
   /** Everyone in the room except `exceptId`, host first. */
   _roster(exceptId) {
-    const roster = [{ id: this.selfId, name: this.profile.name, color: this.profile.color }];
+    const roster = [{
+      id: this.selfId,
+      name: this.profile.name,
+      color: this.profile.color,
+      skins: cleanSkins(this.profile.skins),
+    }];
     for (const [id, p] of this.profiles) {
-      if (id !== exceptId) roster.push({ id, name: p.name, color: p.color });
+      if (id !== exceptId) roster.push({ id, name: p.name, color: p.color, skins: p.skins });
     }
     return roster;
   }
@@ -492,6 +530,9 @@ export class Network {
           prof.name = (d.name || prof.name).slice(0, 14);
           prof.color = d.color || prof.color;
           prof.build = d.v || 'older';
+          // Metadata already carried these; `hello` is the fallback for a
+          // link that arrived without it, exactly as with `uid` below.
+          if (d.skins) prof.skins = cleanSkins(d.skins);
           // Metadata is the normal carrier for the client tag; this is the
           // fallback for a link that arrived without it.
           if (d.uid && !prof.uid) { prof.uid = d.uid; this._retireOldSlot(d.uid, from); }
@@ -542,13 +583,19 @@ export class Network {
         }
         for (const p of d.roster) {
           if (p.id === this.selfId) continue;
-          this.profiles.set(p.id, { name: p.name, color: p.color, kills: 0, deaths: 0 });
+          this.profiles.set(p.id, {
+            name: p.name, color: p.color, kills: 0, deaths: 0,
+            skins: cleanSkins(p.skins),
+          });
           if (this.onJoin) this.onJoin(p.id, this.profiles.get(p.id));
         }
         this._status(`Room ${this.room} — ${this.playerCount} frogs`);
         break;
       case 'join':
-        this.profiles.set(d.id, { name: d.name, color: d.color, kills: 0, deaths: 0 });
+        this.profiles.set(d.id, {
+          name: d.name, color: d.color, kills: 0, deaths: 0,
+          skins: cleanSkins(d.skins),
+        });
         if (this.onJoin) this.onJoin(d.id, this.profiles.get(d.id));
         this._status(`Room ${this.room} — ${this.playerCount} frogs`);
         break;
