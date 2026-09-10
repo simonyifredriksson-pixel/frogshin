@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v109" />
+<link rel="stylesheet" href="css/style.css?v=v110" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -44,6 +44,22 @@
 
   <!-- Warm vignette + a scanline wash to sell the pixel-art presentation -->
   <div class="menu-grade"></div>
+
+  <!--
+    WHICH BUILD IS THIS?
+
+    index.html is served with `max-age=600` and it is the file that names
+    which `?v=` modules to load — so a browser holding a ten-minute-old copy
+    quietly runs the OLD game while the new one sits on the server. There was
+    no way to tell from inside the game, which made "is the fix live?"
+    unanswerable without opening devtools.
+
+    Filled in by main.js from `BUILD`, so it cannot disagree with the modules
+    that are actually running: if this says v109, v109 is what you are
+    playing. It matters in multiplayer too — both machines have to be on the
+    same build for anything added to the protocol to be exchanged at all.
+  -->
+  <div id="build-stamp" title="Game build. Ctrl+Shift+R to force a refresh."></div>
 
   <div class="menu-inner">
 
@@ -1101,6 +1117,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v109"></script>
+<script type="module" src="js/main.js?v=v110"></script>
 </body>
 </html>

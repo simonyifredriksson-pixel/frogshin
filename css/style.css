@@ -768,6 +768,19 @@ kbd {
   box-shadow: inset 0 0 0 1px rgba(127,220,255,0.25);
 }
 
+/* Build stamp, bottom-right of the menu. Deliberately quiet — it is there to
+   be checked, not read. See the note in index.html. */
+#build-stamp {
+  position: absolute;
+  right: 10px; bottom: 8px;
+  z-index: 4;
+  font-family: var(--font-px); font-size: 8px;
+  color: var(--parch-dim);
+  opacity: 0.6;
+  letter-spacing: 1px;
+  pointer-events: none;
+}
+
 /* ==========================================================================
    CHAT
    Bottom-left, above the hotbar, below every menu. See js/chat.js.

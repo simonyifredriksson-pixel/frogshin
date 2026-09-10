@@ -36,7 +36,7 @@
  * of inputs that leaves a player permanently unable to dash.
  */
 
-import { Cine } from './cinema.js?v=v109';
+import { Cine } from './cinema.js?v=v110';
 /**
  * THE MUSIC IT PLAYS UNDER, and it comes from js/themes.js like all of it.
  *
@@ -50,7 +50,7 @@ import { Cine } from './cinema.js?v=v109';
  * taken and before the dialogue started, so the last scene in the game
  * locked solid on a white screen. Music now lives where music lives.
  */
-import { CORONATION_THEME } from './themes.js?v=v109';
+import { CORONATION_THEME } from './themes.js?v=v110';
 
 /**
  * THE SCRIPT.

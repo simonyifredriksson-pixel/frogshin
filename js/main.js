@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v109';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v109';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v109';
-import { Input } from './input.js?v=v109';
-import { Audio } from './audio.js?v=v109';
-import { World } from './world.js?v=v109';
-import { Effects } from './effects.js?v=v109';
-import { Atmosphere } from './atmosphere.js?v=v109';
-import { FollowCamera } from './camera.js?v=v109';
-import { Player } from './player.js?v=v109';
-import { RemotePlayer } from './remote.js?v=v109';
-import { HUD } from './hud.js?v=v109';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v109';
-import { FrogModel } from './frog.js?v=v109';
-import { DummyField } from './dummy.js?v=v109';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v109';
-import { ToadModel } from './npc.js?v=v109';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v109';
-import { DungeonRun } from './dungeon.js?v=v109';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v109';
-import { JudgmentRun } from './judgment.js?v=v109';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v109';
-import { COMBO_NAMES } from './ascended.js?v=v109';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v109';
-import { MenuScene } from './menu.js?v=v109';
-import { Economy } from './economy.js?v=v109';
-import { Shop } from './shop.js?v=v109';
-import { Network, NetRole, cleanSkins } from './net.js?v=v109';
-import { Overworld } from './overworld.js?v=v109';
-import { InventoryScreen } from './inventoryui.js?v=v109';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v109';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v109';
-import { Cine } from './cinema.js?v=v109';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v109';
-import { MEMORIES } from './flashbacks.js?v=v109';
-import { GUARDIANS } from './guardians.js?v=v109';
-import { gearOfTier } from './gear.js?v=v109';
-import { Chat } from './chat.js?v=v109';
+import * as THREE from '../lib/three.module.js?v=v110';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v110';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v110';
+import { Input } from './input.js?v=v110';
+import { Audio } from './audio.js?v=v110';
+import { World } from './world.js?v=v110';
+import { Effects } from './effects.js?v=v110';
+import { Atmosphere } from './atmosphere.js?v=v110';
+import { FollowCamera } from './camera.js?v=v110';
+import { Player } from './player.js?v=v110';
+import { RemotePlayer } from './remote.js?v=v110';
+import { HUD } from './hud.js?v=v110';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v110';
+import { FrogModel } from './frog.js?v=v110';
+import { DummyField } from './dummy.js?v=v110';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v110';
+import { ToadModel } from './npc.js?v=v110';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v110';
+import { DungeonRun } from './dungeon.js?v=v110';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v110';
+import { JudgmentRun } from './judgment.js?v=v110';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v110';
+import { COMBO_NAMES } from './ascended.js?v=v110';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v110';
+import { MenuScene } from './menu.js?v=v110';
+import { Economy } from './economy.js?v=v110';
+import { Shop } from './shop.js?v=v110';
+import { Network, NetRole, cleanSkins } from './net.js?v=v110';
+import { Overworld } from './overworld.js?v=v110';
+import { InventoryScreen } from './inventoryui.js?v=v110';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v110';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v110';
+import { Cine } from './cinema.js?v=v110';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v110';
+import { MEMORIES } from './flashbacks.js?v=v110';
+import { GUARDIANS } from './guardians.js?v=v110';
+import { gearOfTier } from './gear.js?v=v110';
+import { Chat } from './chat.js?v=v110';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -138,6 +138,11 @@ class Game {
     this.menuScene = new MenuScene(this.renderer);
     this._resize();
     window.addEventListener('resize', () => this._resize());
+
+    // Stamped from BUILD, so it always names the modules actually running.
+    // See the note in index.html for why this exists.
+    const stamp = $('build-stamp');
+    if (stamp) stamp.textContent = BUILD;
 
     this._buildMenuUI();
     this._buildCheatUI();
@@ -3234,6 +3239,9 @@ class Game {
       : (this.net.isOnline
         ? `Room code: ${this.net.room}`
         : 'Offline solo practice — no froglets earned');
+    // The build, here too: mid-match is exactly when you want to know whether
+    // you and the person you are playing with are running the same game.
+    $('pause-room').textContent += `  ·  ${BUILD}`;
     this.hud.showScoreboard(false);
   }
 

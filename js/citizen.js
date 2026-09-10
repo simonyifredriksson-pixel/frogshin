@@ -38,8 +38,8 @@
  * villager it replaces was nine draw calls with nine.
  */
 
-import * as THREE from '../lib/three.module.js?v=v109';
-import { clamp, damp, lerp } from './util.js?v=v109';
+import * as THREE from '../lib/three.module.js?v=v110';
+import { clamp, damp, lerp } from './util.js?v=v110';
 
 /** Source geometry. Everything below is built out of these five. */
 const S = {
