@@ -97,22 +97,15 @@ html, body {
 
 .logo {
   position: relative;
-  /*
-   * ROOM TO BREATHE. The logo used to be crowded up against the top of a
-   * panel that ran off the bottom of the screen; with the menu down to six
-   * buttons there is space for it to be a title rather than a header.
-   *
-   * Scaled in `vh` so it gives ground on a short window instead of pushing
-   * the buttons off the bottom.
-   */
-  margin: clamp(1.2vh, 3.5vh, 6vh) 0 clamp(2vh, 4.5vh, 7vh);
+  margin: 1.2vh 0 2.2vh;
   text-align: center;
   animation: logoFloat 5s ease-in-out infinite;
 }
-/* On the deeper screens the title gives way to the card — the heading there
-   is the card's own, and two headings stacked is one too many. */
-#menu:not(.at-home) .logo { margin: 1vh 0 2vh; }
-#menu:not(.at-home) .logo-eyes { opacity: 0.5; }
+/* Off the home screen the title gives a little ground to the card — the
+   heading there is the card's own, and two stacked is one too many. The home
+   screen itself is untouched. */
+#menu:not(.at-home) .logo { margin: 0.8vh 0 1.6vh; }
+#menu:not(.at-home) .logo-eyes { opacity: 0.55; }
 @keyframes logoFloat {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-8px); }
@@ -241,7 +234,7 @@ html, body {
 /* Anyone who has asked not to be moved about gets the change without it. */
 @media (prefers-reduced-motion: reduce) {
   .panel.active { animation: none; }
-  .btn, .btn-x, .linkbtn { transition: none; }
+  .btn, .btn-x { transition: none; }
   .btn:hover, .btn-x:hover { transform: none; }
 }
 
@@ -394,21 +387,25 @@ html, body {
 .btn-row { display: flex; gap: 12px; }
 .btn-row .btn { flex: 1; }
 
-/* ═══════════════════════════════════════════════════ THE MAIN MENU ══
-   MODE FIRST, DETAIL LATER — see the note over #panel-home in index.html.
+/* ═══════════════════════════════════════════════ THE PLAY SCREEN ══
+   The home menu is untouched. This is the screen that was doing too much —
+   see the note over #panel-play in index.html.
 
-   The whole redesign is a hierarchy problem: one screen was carrying six
-   screens' worth of decisions, so nothing on it looked more important than
-   anything else. These rules exist to make three sizes of thing obviously
-   three sizes: the one you came here to press, the two campaigns, and the
-   supporting screens. */
+   The job here is to make three kinds of thing look like three kinds of
+   thing: the match you are about to join, the solo modes behind it, and the
+   one button each mode screen exists for. */
 
-.home-list {
-  width: min(440px, 90vw);
-  gap: 13px;
+/* The solo modes, two across: a button each and no descriptions. */
+.mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
 }
+.mode-grid .btn { margin: 0; }
 
-/* PLAY. The largest thing on the screen, and the only gold one. */
+/* The one button a mode screen exists for — ENTER THE CROAKLANDS and so on.
+   The only gold thing on its screen, and the biggest. */
 .btn-hero {
   padding: clamp(18px, 2.6vh, 26px) 18px;
   font-size: clamp(13px, 2.2vw, 21px);
@@ -433,38 +430,6 @@ html, body {
     0 16px 32px rgba(0,0,0,0.55),
     0 0 46px rgba(255,196,80,0.4);
 }
-
-/* The two campaigns: same size as each other, each in its own colour, so the
-   green one and the purple one are told apart before the words are read. */
-.btn-mode {
-  padding: clamp(15px, 2vh, 20px) 18px;
-  font-size: clamp(10px, 1.7vw, 15px);
-  letter-spacing: 2px;
-}
-
-/* The supporting screens, four across, deliberately small and quiet. */
-.home-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 9px;
-  margin-top: 6px;
-}
-.home-row .btn { padding: 13px 4px; letter-spacing: 0; }
-
-/* The two that are neither a mode nor a screen you configure anything on. */
-.home-links {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  margin-top: 14px;
-}
-.home-links i { color: #46525f; font-style: normal; }
-.linkbtn {
-  background: none; border: 0; padding: 4px 2px;
-  font-family: var(--font-px); font-size: 8px; letter-spacing: 1px;
-  color: #7c8a97;
-  cursor: pointer;
-  transition: color 0.14s ease, text-shadow 0.14s ease;
-}
-.linkbtn:hover { color: var(--gold); text-shadow: 0 0 10px rgba(255,200,90,0.5); }
 
 /* ── the back arrow ──────────────────────────────────────────────────
    In the card's own corner rather than a full-width button at the bottom.

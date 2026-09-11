@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v112" />
+<link rel="stylesheet" href="css/style.css?v=v113" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -99,53 +99,34 @@
 
     <!-- ─────────────────────────── panels ─────────────────────────── -->
 
-    <!-- ══════════════════════════════════════════════════════════ HOME ══
-         MODE FIRST, DETAIL LATER.
-
-         This screen answers one question — what do you want to do — and
-         nothing else. It used to answer it alongside your ninja name, your
-         frog colour, the map list, a room code box and four paragraphs of
-         description, which is a settings page wearing a main menu's clothes.
-
-         Everything that was on it is still in the game; it lives one screen
-         deeper, next to the thing it belongs to. The map picker is inside
-         Create Room, the name and colour are in Customize, and each mode's
-         description is on that mode's own screen where there is room for it.
-
-         The ladder is deliberate: PLAY is the biggest thing here, the two
-         solo campaigns are next, and the four supporting screens are small.
-         Nothing on this screen has a description, because a button that
-         needs one is a button that is not named well enough. -->
+    <!-- HOME — unchanged, and deliberately so.
+         Five buttons, one of which is PLAY. Everything about choosing what
+         to play happens behind it; see the note over #panel-play. -->
     <div class="panel active" id="panel-home">
-      <nav class="menu-list home-list">
-        <button class="btn btn-hero" id="btn-play"><span>PLAY</span></button>
-        <button class="btn btn-realm btn-mode" id="btn-realm"><span>THE CROAKLANDS</span></button>
-        <button class="btn btn-dungeon btn-mode" id="btn-dungeon"><span>THE DUNGEON</span></button>
-
-        <div class="home-row">
-          <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
-          <button class="btn btn-quiet" id="btn-customize"><span>CUSTOMIZE</span></button>
-          <button class="btn btn-quiet" id="btn-shop"><span>SHOP</span></button>
-          <button class="btn btn-quiet" id="btn-settings"><span>SETTINGS</span></button>
-        </div>
-
-        <div class="home-links">
-          <button class="linkbtn" id="btn-howto">HOW TO PLAY</button>
-          <i>·</i>
-          <button class="linkbtn" id="btn-credits">CREDITS</button>
-        </div>
+      <nav class="menu-list">
+        <button class="btn btn-main" id="btn-play"><span>PLAY</span></button>
+        <button class="btn btn-main" id="btn-howto"><span>HOW TO PLAY</span></button>
+        <button class="btn btn-main" id="btn-shop"><span>SHOP</span></button>
+        <button class="btn btn-main" id="btn-settings"><span>SETTINGS</span></button>
+        <button class="btn btn-main" id="btn-credits"><span>CREDITS</span></button>
       </nav>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ PLAY ══
-         Multiplayer, and only multiplayer. Three ways in, one line of
-         explanation each, in the order people want them.
+         THE SCREEN THAT WAS DOING TOO MUCH.
 
-         THE MAP PICKER LIVES HERE, inside Create Room — not on the main
-         menu, where it was a decision asked of everybody including the
-         people about to play a solo campaign. It is the host's choice, so it
-         sits under the host's button. Joiners never see it, because in a
-         room you join the map is voted for in the lobby. -->
+         It used to carry, in one column: your ninja name, your frog colour,
+         the map list, the multiplayer buttons, a room code box, and four
+         paragraphs describing the Croaklands, the Dungeon, the First Island
+         and arena practice. That is six screens' worth of decisions stacked
+         into one, and the result was a page you scrolled rather than read.
+
+         Now it is a CHOOSER. Multiplayer sits at the top because it is what
+         PLAY has always meant and it stays two clicks from the main menu;
+         everything else is a button to its own screen, where its description
+         has room to exist. Nothing was removed — the name box, the colour
+         swatches and every paragraph are all still here, one screen deeper,
+         next to the thing they belong to. -->
     <div class="panel" id="panel-play">
       <div class="card">
         <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
@@ -159,6 +140,11 @@
         <div class="choice">
           <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
           <p class="choice-note">A private code to share with your friends.</p>
+          <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
+               choice, so it sits under the host's button rather than being
+               asked of everybody on the way past. Somebody joining a room
+               never sees it, because there the map is voted for in the
+               lobby, which keeps a picker of its own. -->
           <div class="inline-field">
             <label>MAP</label>
             <button class="btn btn-quiet map-toggle" id="play-map-toggle">
@@ -177,6 +163,17 @@
         </div>
 
         <div id="play-status" class="status"></div>
+
+        <!-- The solo modes: a button each, and not a word more. What each
+             one IS belongs on its own screen, which is where the paragraphs
+             that used to live here have gone. -->
+        <div class="divider"><span>OR PLAY ALONE</span></div>
+        <div class="mode-grid">
+          <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
+          <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON</span></button>
+          <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
+          <button class="btn btn-quiet" id="btn-customize"><span>CUSTOMIZE</span></button>
+        </div>
       </div>
     </div>
 
@@ -1210,6 +1207,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v112"></script>
+<script type="module" src="js/main.js?v=v113"></script>
 </body>
 </html>

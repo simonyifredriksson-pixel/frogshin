@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v112';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v112';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v112';
-import { Input } from './input.js?v=v112';
-import { Audio } from './audio.js?v=v112';
-import { World } from './world.js?v=v112';
-import { Effects } from './effects.js?v=v112';
-import { Atmosphere } from './atmosphere.js?v=v112';
-import { FollowCamera } from './camera.js?v=v112';
-import { Player } from './player.js?v=v112';
-import { RemotePlayer } from './remote.js?v=v112';
-import { HUD } from './hud.js?v=v112';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v112';
-import { FrogModel } from './frog.js?v=v112';
-import { DummyField } from './dummy.js?v=v112';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v112';
-import { ToadModel } from './npc.js?v=v112';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v112';
-import { DungeonRun } from './dungeon.js?v=v112';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v112';
-import { JudgmentRun } from './judgment.js?v=v112';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v112';
-import { COMBO_NAMES } from './ascended.js?v=v112';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v112';
-import { MenuScene } from './menu.js?v=v112';
-import { Economy } from './economy.js?v=v112';
-import { Shop } from './shop.js?v=v112';
-import { Network, NetRole, cleanSkins } from './net.js?v=v112';
-import { Overworld } from './overworld.js?v=v112';
-import { InventoryScreen } from './inventoryui.js?v=v112';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v112';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v112';
-import { Cine } from './cinema.js?v=v112';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v112';
-import { MEMORIES } from './flashbacks.js?v=v112';
-import { GUARDIANS } from './guardians.js?v=v112';
-import { gearOfTier } from './gear.js?v=v112';
-import { Chat } from './chat.js?v=v112';
+import * as THREE from '../lib/three.module.js?v=v113';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v113';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v113';
+import { Input } from './input.js?v=v113';
+import { Audio } from './audio.js?v=v113';
+import { World } from './world.js?v=v113';
+import { Effects } from './effects.js?v=v113';
+import { Atmosphere } from './atmosphere.js?v=v113';
+import { FollowCamera } from './camera.js?v=v113';
+import { Player } from './player.js?v=v113';
+import { RemotePlayer } from './remote.js?v=v113';
+import { HUD } from './hud.js?v=v113';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v113';
+import { FrogModel } from './frog.js?v=v113';
+import { DummyField } from './dummy.js?v=v113';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v113';
+import { ToadModel } from './npc.js?v=v113';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v113';
+import { DungeonRun } from './dungeon.js?v=v113';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v113';
+import { JudgmentRun } from './judgment.js?v=v113';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v113';
+import { COMBO_NAMES } from './ascended.js?v=v113';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v113';
+import { MenuScene } from './menu.js?v=v113';
+import { Economy } from './economy.js?v=v113';
+import { Shop } from './shop.js?v=v113';
+import { Network, NetRole, cleanSkins } from './net.js?v=v113';
+import { Overworld } from './overworld.js?v=v113';
+import { InventoryScreen } from './inventoryui.js?v=v113';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v113';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v113';
+import { Cine } from './cinema.js?v=v113';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v113';
+import { MEMORIES } from './flashbacks.js?v=v113';
+import { GUARDIANS } from './guardians.js?v=v113';
+import { gearOfTier } from './gear.js?v=v113';
+import { Chat } from './chat.js?v=v113';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -456,11 +456,11 @@ class Game {
      * menu. Solo, offline, and it remembers everything.
      */
     /**
-     * The button on the main menu now OPENS the Croaklands screen; the one
-     * ON that screen is what starts a game. A main-menu button that took you
-     * straight to a file-picker gave you nothing to decide with — no idea
-     * what the mode was or how far you had got — and no way back out that
-     * was not the file screen's own.
+     * The button on the PLAY screen now OPENS the Croaklands screen; the one
+     * ON that screen is what starts a game. A button that went straight to a
+     * file-picker gave you nothing to decide with — no idea what the mode
+     * was or how far you had got — and no way back out that was not the file
+     * screen's own.
      */
     $('btn-realm').onclick = () => this.showPanel('croaklands');
     $('btn-realm-enter').onclick = () => {
@@ -471,16 +471,21 @@ class Game {
 
     // --- the save files ---
     /**
-     * BACK, from the file screen, goes to THE CROAKLANDS, not home.
+     * BACK MEANS ONE STEP, not all the way out.
      *
-     * The generic `.btn-back` handler above sends everything home, which is
-     * right for the leaf panels but wrong here: the file screen is one step
-     * INSIDE the Croaklands screen, and back should undo one step rather
-     * than the whole journey. Assigned after that loop so it wins.
+     * The generic handler above sends everything home, which is right for the
+     * leaf panels hanging off the main menu. These four hang off PLAY, and
+     * the file screen hangs off the Croaklands screen — so back on each of
+     * them undoes one step rather than the whole journey. Assigned after that
+     * loop so they win.
      */
-    const savesBack = $('panel-saves').querySelector('.btn-back');
-    if (savesBack) {
-      savesBack.onclick = () => { Audio.uiBack(); this.showPanel('croaklands'); };
+    const backTo = {
+      croaklands: 'play', dungeon: 'play', practice: 'play',
+      customize: 'play', saves: 'croaklands',
+    };
+    for (const [from, to] of Object.entries(backTo)) {
+      const b = $('panel-' + from).querySelector('.btn-back');
+      if (b) b.onclick = () => { Audio.uiBack(); this.showPanel(to); };
     }
     $('btn-erase-no').onclick = () => { Audio.uiBack(); this._showSaves(); };
     $('btn-erase-yes').onclick = () => {
