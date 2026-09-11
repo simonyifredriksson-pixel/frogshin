@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v111';
+import { CFG } from './config.js?v=v112';
 
 export class Economy {
   constructor() {
@@ -53,6 +53,12 @@ export class Economy {
      * does not quietly throw away the other mode's progress either.
      */
     this.dungeonRuns = { checkpoints: null, hard: null };
+    /**
+     * The deepest room ever reached, across both modes. See `setDungeonRun`:
+     * the bookmarks are cleared when a run ends, so this is the only thing
+     * that can answer "how far have I got" after one does.
+     */
+    this.dungeonDeepest = 0;
     /**
      * The open world's whole save, as one opaque blob.
      *
@@ -114,6 +120,19 @@ export class Economy {
         this.dungeonRuns[d.dungeonRun.clean ? 'hard' : 'checkpoints']
           = slot(d.dungeonRun);
       }
+      /**
+       * A save written before this was tracked has no high-water mark, so it
+       * is seeded from whatever bookmark it does have — somebody four rooms
+       * into a run has plainly reached room four. Better than telling a
+       * returning player they have got nowhere.
+       */
+      const deep = Number(d.dungeonDeepest);
+      const marks = [Number.isFinite(deep) ? deep : 0];
+      for (const k of ['checkpoints', 'hard']) {
+        const r = this.dungeonRuns[k];
+        if (r) marks.push(r.checkpoint);
+      }
+      this.dungeonDeepest = Math.max(0, ...marks);
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -135,6 +154,7 @@ export class Economy {
         statueOpened: this.statueOpened,
         ascendedBeaten: this.ascendedBeaten,
         dungeonRuns: this.dungeonRuns,
+        dungeonDeepest: this.dungeonDeepest,
         realm: this.realm,
       }));
     } catch (e) {
@@ -159,6 +179,16 @@ export class Economy {
 
   setDungeonRun(checkpoints, room) {
     this.dungeonRuns[this._slot(checkpoints)] = { checkpoint: room };
+    /**
+     * HOW FAR ANYONE HAS EVER GOT, across both modes and every run.
+     *
+     * The bookmarks above are erased when a run is finished or abandoned, so
+     * on their own they can only say "nothing in progress" — which is what
+     * the dungeon screen would have had to show somebody who had already
+     * beaten fourteen guardians. This is the high-water mark and it only
+     * ever goes up.
+     */
+    if (room > this.dungeonDeepest) this.dungeonDeepest = room;
     this.save();
   }
 

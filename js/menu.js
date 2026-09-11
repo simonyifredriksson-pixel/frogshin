@@ -19,16 +19,19 @@
  * posed on the dais, and the two sparring in front of it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v111';
-import { lerp, lookYaw } from './util.js?v=v111';
-import { Atmosphere } from './atmosphere.js?v=v111';
-import { FrogModel } from './frog.js?v=v111';
-import { World } from './world.js?v=v111';
-import { DEFAULT_MAP } from './maps.js?v=v111';
+import * as THREE from '../lib/three.module.js?v=v112';
+import { lerp, lookYaw } from './util.js?v=v112';
+import { Atmosphere } from './atmosphere.js?v=v112';
+import { FrogModel } from './frog.js?v=v112';
+import { World } from './world.js?v=v112';
+import { DEFAULT_MAP } from './maps.js?v=v112';
 
 const _v = new THREE.Vector3();
 const _ray = new THREE.Raycaster();
 const _down = new THREE.Vector3(0, -1, 0);
+// The camera's flattened facing and its right, for placing the fireflies.
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
 
 /**
  * How far the menu camera stays above the ground beneath it.
@@ -63,6 +66,7 @@ export class MenuScene {
 
     this._buildHero();
     this._buildDuel();
+    this._buildFireflies();
     /**
      * The map's own sky and fog, so the menu is lit the way the match is.
      *
@@ -294,6 +298,98 @@ export class MenuScene {
     this.camera.rotateZ(Math.sin(this.time * 0.21) * 0.012);
   }
 
+  /**
+   * FIREFLIES.
+   *
+   * The map already animates its own lanterns, water and grass, and two frogs
+   * spar on the dais — but all of that is far away down the valley, and the
+   * air between the camera and it was empty. A drifting light close to the
+   * lens is what makes a background read as a place you are standing in
+   * rather than a picture you are looking at, because it is the only thing
+   * with visible parallax against the camera's own motion.
+   *
+   * One InstancedMesh, ninety of them, no shadows and no depth writes: a
+   * firefly is a light, not a thing that is lit, and ninety shadow casters
+   * for specks would cost more than everything else on this screen.
+   *
+   * They travel WITH the camera — see `_updateFireflies` — so the swarm is
+   * always in shot without seeding them over the whole 420-unit map.
+   */
+  _buildFireflies() {
+    const COUNT = 90;
+    const geo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xd8ff9a, transparent: true, opacity: 0.9, depthWrite: false,
+    });
+    this.flies = new THREE.InstancedMesh(geo, mat, COUNT);
+    this.flies.frustumCulled = false;
+    this.flies.castShadow = false;
+    this.flies.receiveShadow = false;
+    this.scene.add(this.flies);
+
+    // Each keeps its own drift, bob and blink so the swarm never pulses as
+    // one — which is the thing that would make them read as a shader effect.
+    /**
+     * Placed in the CAMERA'S OWN AXES — ahead, beside, above — not in a box
+     * centred on it.
+     *
+     * A centred box puts two thirds of the swarm behind the lens or out to
+     * the sides: measured, 24 of 90 were ever in frame, and the nearest sat
+     * 3.5 units from the camera where a firefly is a seventeen-pixel glowing
+     * cube in your face. Ahead-only, at 20 to 52 units, they are between one
+     * and seven pixels — which is what a firefly should be.
+     */
+    this._flyData = [];
+    for (let i = 0; i < COUNT; i++) {
+      this._flyData.push({
+        ahead: 20 + Math.random() * 32,      // along the camera's forward
+        side: (Math.random() - 0.5) * 52,    // along its right
+        rise: -9 + Math.random() * 17,       // and plain world up
+        drift: 0.35 + Math.random() * 0.9,
+        phase: Math.random() * Math.PI * 2,
+        bob: 0.6 + Math.random() * 1.6,
+        blink: 0.5 + Math.random() * 1.7,
+        size: 0.5 + Math.random() * 0.5,
+      });
+    }
+    this._flyM = new THREE.Matrix4();
+  }
+
+  _updateFireflies(dt) {
+    if (!this.flies) return;
+    const cam = this.camera.position;
+    const t = this.time;
+    // The camera's own axes this frame, so the swarm sits in front of the
+    // lens wherever the path has turned it.
+    _fwd.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    _fwd.y = 0;
+    if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1);
+    _fwd.normalize();
+    _right.set(_fwd.z, 0, -_fwd.x);
+
+    for (let i = 0; i < this._flyData.length; i++) {
+      const f = this._flyData[i];
+      // A slow circling wander, so they drift rather than slide.
+      f.side += Math.sin(t * f.drift + f.phase) * dt * 1.6;
+      f.ahead += Math.cos(t * f.drift * 0.8 + f.phase) * dt * 1.6;
+      /**
+       * Blinking is done with SCALE, not opacity: all ninety share one
+       * material, so there is no per-instance opacity to animate — and
+       * shrinking to nothing reads as a firefly going out just as well.
+       */
+      const lit = 0.35 + 0.65 * Math.max(0, Math.sin(t * f.blink + f.phase));
+      const s = f.size * lit;
+      this._flyM.makeScale(s, s, s);
+      this._flyM.setPosition(
+        cam.x + _fwd.x * f.ahead + _right.x * f.side,
+        cam.y + f.rise + Math.sin(t * f.bob + f.phase) * 1.4,
+        cam.z + _fwd.z * f.ahead + _right.z * f.side,
+      );
+      this.flies.setMatrixAt(i, this._flyM);
+    }
+    this.flies.instanceMatrix.needsUpdate = true;
+  }
+
   resize(w, h) {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -307,6 +403,7 @@ export class MenuScene {
     // menu no longer keeps a second copy of any of that.
     if (this.world) this.world.update(dt, this.camera.position);
 
+    this._updateFireflies(dt);
     this._updateDuel(dt);
 
     // Hero frog: idles, and now and then hops or does a little flourish.
@@ -353,6 +450,16 @@ export class MenuScene {
     }
     this.hero = null;
     this.duel = null;
+    /**
+     * Dropped before the sweep for the same reason the hero is guarded in
+     * `update`: the loop can call update once more after a teardown, and
+     * writing instance matrices into a disposed buffer is a crash on the
+     * frame the match starts. The geometry and material are the fireflies'
+     * own — nothing else uses them — so the blanket traverse below is the
+     * right thing to free them.
+     */
+    this.flies = null;
+    this._flyData = null;
     // The map gives back its own terrain, batches, water and lanterns. It has
     // to go before the sweep for the same reason the frogs do — it knows what
     // is safe to free and the blanket traverse does not.

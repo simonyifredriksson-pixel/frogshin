@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v111';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v111';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v111';
-import { Input } from './input.js?v=v111';
-import { Audio } from './audio.js?v=v111';
-import { World } from './world.js?v=v111';
-import { Effects } from './effects.js?v=v111';
-import { Atmosphere } from './atmosphere.js?v=v111';
-import { FollowCamera } from './camera.js?v=v111';
-import { Player } from './player.js?v=v111';
-import { RemotePlayer } from './remote.js?v=v111';
-import { HUD } from './hud.js?v=v111';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v111';
-import { FrogModel } from './frog.js?v=v111';
-import { DummyField } from './dummy.js?v=v111';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v111';
-import { ToadModel } from './npc.js?v=v111';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v111';
-import { DungeonRun } from './dungeon.js?v=v111';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v111';
-import { JudgmentRun } from './judgment.js?v=v111';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v111';
-import { COMBO_NAMES } from './ascended.js?v=v111';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v111';
-import { MenuScene } from './menu.js?v=v111';
-import { Economy } from './economy.js?v=v111';
-import { Shop } from './shop.js?v=v111';
-import { Network, NetRole, cleanSkins } from './net.js?v=v111';
-import { Overworld } from './overworld.js?v=v111';
-import { InventoryScreen } from './inventoryui.js?v=v111';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v111';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v111';
-import { Cine } from './cinema.js?v=v111';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v111';
-import { MEMORIES } from './flashbacks.js?v=v111';
-import { GUARDIANS } from './guardians.js?v=v111';
-import { gearOfTier } from './gear.js?v=v111';
-import { Chat } from './chat.js?v=v111';
+import * as THREE from '../lib/three.module.js?v=v112';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v112';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v112';
+import { Input } from './input.js?v=v112';
+import { Audio } from './audio.js?v=v112';
+import { World } from './world.js?v=v112';
+import { Effects } from './effects.js?v=v112';
+import { Atmosphere } from './atmosphere.js?v=v112';
+import { FollowCamera } from './camera.js?v=v112';
+import { Player } from './player.js?v=v112';
+import { RemotePlayer } from './remote.js?v=v112';
+import { HUD } from './hud.js?v=v112';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v112';
+import { FrogModel } from './frog.js?v=v112';
+import { DummyField } from './dummy.js?v=v112';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v112';
+import { ToadModel } from './npc.js?v=v112';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v112';
+import { DungeonRun } from './dungeon.js?v=v112';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v112';
+import { JudgmentRun } from './judgment.js?v=v112';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v112';
+import { COMBO_NAMES } from './ascended.js?v=v112';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v112';
+import { MenuScene } from './menu.js?v=v112';
+import { Economy } from './economy.js?v=v112';
+import { Shop } from './shop.js?v=v112';
+import { Network, NetRole, cleanSkins } from './net.js?v=v112';
+import { Overworld } from './overworld.js?v=v112';
+import { InventoryScreen } from './inventoryui.js?v=v112';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v112';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v112';
+import { Cine } from './cinema.js?v=v112';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v112';
+import { MEMORIES } from './flashbacks.js?v=v112';
+import { GUARDIANS } from './guardians.js?v=v112';
+import { gearOfTier } from './gear.js?v=v112';
+import { Chat } from './chat.js?v=v112';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -302,11 +302,23 @@ class Game {
 
   _buildMenuUI() {
     const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings',
-      'credits', 'dungeon', 'saves', 'erase'];
+      'credits', 'dungeon', 'saves', 'erase', 'croaklands', 'practice',
+      'customize'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
+      /**
+       * `at-home` lets the CSS give the logo its full height on the first
+       * screen and pull it in on the deeper ones, where the card carries its
+       * own heading and two stacked titles is one too many.
+       */
+      $('menu').classList.toggle('at-home', name === 'home');
+      // Each mode screen reads its numbers off the save as it opens, so they
+      // are right on the second visit as well as the first.
+      if (name === 'dungeon') this._renderDungeonStats();
+      if (name === 'croaklands') this._renderRealmStats();
       Audio.uiClick();
     };
+    $('menu').classList.add('at-home');
 
     // Any interaction is a valid gesture to start audio with.
     const arm = () => { Audio.init(); Audio.resume(); Audio.startMenuMusic(); };
@@ -340,6 +352,15 @@ class Game {
     $('btn-howto').onclick = () => this.showPanel('howto');
     $('btn-settings').onclick = () => this.showPanel('settings');
     $('btn-credits').onclick = () => this.showPanel('credits');
+    // The two screens the main menu gained: what was buried under an "OR"
+    // divider, and the name and colour that used to be asked of you before
+    // you had chosen anything.
+    $('btn-practice').onclick = () => this.showPanel('practice');
+    $('btn-customize').onclick = () => this.showPanel('customize');
+    $('btn-customize-shop').onclick = () => {
+      this.shop.render();
+      this.showPanel('shop');
+    };
     for (const b of document.querySelectorAll('.btn-back')) {
       b.onclick = () => {
         Audio.uiBack();
@@ -434,7 +455,15 @@ class Game {
      * there is no reason to keep two answers to the same question in the
      * menu. Solo, offline, and it remembers everything.
      */
-    $('btn-realm').onclick = () => {
+    /**
+     * The button on the main menu now OPENS the Croaklands screen; the one
+     * ON that screen is what starts a game. A main-menu button that took you
+     * straight to a file-picker gave you nothing to decide with — no idea
+     * what the mode was or how far you had got — and no way back out that
+     * was not the file screen's own.
+     */
+    $('btn-realm').onclick = () => this.showPanel('croaklands');
+    $('btn-realm-enter').onclick = () => {
       Audio.uiClick();
       Audio.init(); Audio.resume();
       this._showSaves();
@@ -442,16 +471,16 @@ class Game {
 
     // --- the save files ---
     /**
-     * BACK, from the file screen, goes to PLAY rather than to the home menu.
+     * BACK, from the file screen, goes to THE CROAKLANDS, not home.
      *
      * The generic `.btn-back` handler above sends everything home, which is
-     * right for the leaf panels but wrong here: the player got to this screen
-     * from the Croaklands button on the Play panel, and that is where they
-     * expect back to put them. Assigned after that loop so it wins.
+     * right for the leaf panels but wrong here: the file screen is one step
+     * INSIDE the Croaklands screen, and back should undo one step rather
+     * than the whole journey. Assigned after that loop so it wins.
      */
     const savesBack = $('panel-saves').querySelector('.btn-back');
     if (savesBack) {
-      savesBack.onclick = () => { Audio.uiBack(); this.showPanel('play'); };
+      savesBack.onclick = () => { Audio.uiBack(); this.showPanel('croaklands'); };
     }
     $('btn-erase-no').onclick = () => { Audio.uiBack(); this._showSaves(); };
     $('btn-erase-yes').onclick = () => {
@@ -822,6 +851,79 @@ class Game {
     if (this.scene) this.scene.remove(this._cloneModel.root);
     this._cloneModel.dispose();
     this._cloneModel = null;
+  }
+
+  /**
+   * THE DUNGEON SCREEN'S TWO NUMBERS.
+   *
+   * Both come off the save. There is deliberately no "best time" row: the
+   * game does not time a run, and a `--:--` that can never fill in is worse
+   * than a row that is not there — it reads as a feature that is broken.
+   */
+  _renderDungeonStats() {
+    const TOTAL = 15;
+    const deep = Math.max(0, Math.min(TOTAL, this.economy.dungeonDeepest | 0));
+    $('dg-beaten').textContent = `${deep} / ${TOTAL}`;
+
+    // A bookmark exists only while a run is unfinished, and each mode keeps
+    // its own — so say which mode as well as which room.
+    const cp = this.economy.dungeonRunFor(true);
+    const hard = this.economy.dungeonRunFor(false);
+    const run = cp || hard;
+    $('dg-run').textContent = run
+      ? `GUARDIAN ${Math.max(1, (run.checkpoint | 0) + 1)}`
+      : '—';
+    const sub = $('dg-run').parentElement.querySelector('span');
+    if (sub) {
+      sub.textContent = run
+        ? (cp ? 'SAVED RUN — CHECKPOINTS' : 'SAVED RUN — NO CHECKPOINTS')
+        : 'RUN IN PROGRESS';
+    }
+  }
+
+  /**
+   * The Croaklands screen's summary.
+   *
+   * Built rather than hard-coded because what a returning player wants to
+   * see is their own file, and somebody who has never played wants to see
+   * the size of the thing instead.
+   */
+  _renderRealmStats() {
+    const el = $('realm-stats');
+    if (!el) return;
+    el.textContent = '';
+    const stat = (value, label) => {
+      const d = document.createElement('div');
+      d.className = 'stat';
+      const b = document.createElement('b');
+      b.textContent = value;
+      const s = document.createElement('span');
+      s.textContent = label;
+      d.appendChild(b); d.appendChild(s);
+      el.appendChild(d);
+    };
+
+    /**
+     * The most-played solo file. `list` returns rows whose detail lives on
+     * `meta`, not on the row — reading `s.seconds` off the row itself gives
+     * undefined for every file and silently picks the first one.
+     */
+    let best = null;
+    try {
+      for (const s of this.saves.list('solo') || []) {
+        if (!s || s.empty || !s.meta) continue;
+        if (!best || (s.meta.seconds || 0) > (best.seconds || 0)) best = s.meta;
+      }
+    } catch (e) { best = null; }
+
+    if (best) {
+      stat(best.region || 'THE CROAKLANDS', 'LAST SEEN');
+      stat(playtime(best.seconds || 0), 'PLAYED');
+    } else {
+      // Nothing saved yet: say how big it is instead of showing empty rows.
+      stat('24', 'REGIONS');
+      stat('17', 'ROADS');
+    }
   }
 
   _playStatus(msg, isError) {

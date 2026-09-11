@@ -97,10 +97,22 @@ html, body {
 
 .logo {
   position: relative;
-  margin: 1.2vh 0 2.2vh;
+  /*
+   * ROOM TO BREATHE. The logo used to be crowded up against the top of a
+   * panel that ran off the bottom of the screen; with the menu down to six
+   * buttons there is space for it to be a title rather than a header.
+   *
+   * Scaled in `vh` so it gives ground on a short window instead of pushing
+   * the buttons off the bottom.
+   */
+  margin: clamp(1.2vh, 3.5vh, 6vh) 0 clamp(2vh, 4.5vh, 7vh);
   text-align: center;
   animation: logoFloat 5s ease-in-out infinite;
 }
+/* On the deeper screens the title gives way to the card — the heading there
+   is the card's own, and two headings stacked is one too many. */
+#menu:not(.at-home) .logo { margin: 1vh 0 2vh; }
+#menu:not(.at-home) .logo-eyes { opacity: 0.5; }
 @keyframes logoFloat {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-8px); }
@@ -214,11 +226,23 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: panelIn 0.24s ease-out;
+  /*
+   * Screens arrive rather than appear. Slightly longer and slightly further
+   * than before, with a settling curve — going a screen deeper should feel
+   * like a move, which is most of what makes a menu feel built rather than
+   * assembled.
+   */
+  animation: panelIn 0.3s cubic-bezier(0.18, 0.75, 0.25, 1);
 }
 @keyframes panelIn {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(20px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Anyone who has asked not to be moved about gets the change without it. */
+@media (prefers-reduced-motion: reduce) {
+  .panel.active { animation: none; }
+  .btn, .btn-x, .linkbtn { transition: none; }
+  .btn:hover, .btn-x:hover { transform: none; }
 }
 
 .menu-list {
@@ -366,17 +390,219 @@ html, body {
   font-size: clamp(8px, 1.2vw, 11px);
   color: var(--parch-dim);
 }
-.btn-back { margin-top: 18px; }
 
 .btn-row { display: flex; gap: 12px; }
 .btn-row .btn { flex: 1; }
 
+/* ═══════════════════════════════════════════════════ THE MAIN MENU ══
+   MODE FIRST, DETAIL LATER — see the note over #panel-home in index.html.
+
+   The whole redesign is a hierarchy problem: one screen was carrying six
+   screens' worth of decisions, so nothing on it looked more important than
+   anything else. These rules exist to make three sizes of thing obviously
+   three sizes: the one you came here to press, the two campaigns, and the
+   supporting screens. */
+
+.home-list {
+  width: min(440px, 90vw);
+  gap: 13px;
+}
+
+/* PLAY. The largest thing on the screen, and the only gold one. */
+.btn-hero {
+  padding: clamp(18px, 2.6vh, 26px) 18px;
+  font-size: clamp(13px, 2.2vw, 21px);
+  letter-spacing: 4px;
+  background: linear-gradient(180deg, #e3ac3f 0%, #bd7d1f 56%, #8e5a14 100%);
+  border-color: #3a2306;
+  color: #2a1c05;
+  text-shadow: 0 2px 0 rgba(255,240,190,0.45);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,236,180,0.35),
+    inset 0 5px 0 rgba(255,255,255,0.22),
+    0 6px 0 #4a2f08,
+    0 12px 26px rgba(0,0,0,0.5),
+    0 0 30px rgba(217,162,58,0.24);
+}
+.btn-hero:hover {
+  background: linear-gradient(180deg, #f6c057 0%, #d18d26 56%, #a1681a 100%);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,244,205,0.5),
+    inset 0 5px 0 rgba(255,255,255,0.3),
+    0 10px 0 #4a2f08,
+    0 16px 32px rgba(0,0,0,0.55),
+    0 0 46px rgba(255,196,80,0.4);
+}
+
+/* The two campaigns: same size as each other, each in its own colour, so the
+   green one and the purple one are told apart before the words are read. */
+.btn-mode {
+  padding: clamp(15px, 2vh, 20px) 18px;
+  font-size: clamp(10px, 1.7vw, 15px);
+  letter-spacing: 2px;
+}
+
+/* The supporting screens, four across, deliberately small and quiet. */
+.home-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+  margin-top: 6px;
+}
+.home-row .btn { padding: 13px 4px; letter-spacing: 0; }
+
+/* The two that are neither a mode nor a screen you configure anything on. */
+.home-links {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin-top: 14px;
+}
+.home-links i { color: #46525f; font-style: normal; }
+.linkbtn {
+  background: none; border: 0; padding: 4px 2px;
+  font-family: var(--font-px); font-size: 8px; letter-spacing: 1px;
+  color: #7c8a97;
+  cursor: pointer;
+  transition: color 0.14s ease, text-shadow 0.14s ease;
+}
+.linkbtn:hover { color: var(--gold); text-shadow: 0 0 10px rgba(255,200,90,0.5); }
+
+/* ── the back arrow ──────────────────────────────────────────────────
+   In the card's own corner rather than a full-width button at the bottom.
+   A BACK bar as wide as PLAY reads as another choice of equal weight, and
+   on the long panels you had to scroll past everything to reach it. */
+.btn-x {
+  position: absolute;
+  left: 12px; top: 12px;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  font-family: var(--font-px); font-size: 11px;
+  color: var(--parch-dim);
+  background: rgba(0,0,0,0.35);
+  border: 2px solid #33404e;
+  cursor: pointer;
+  z-index: 5;
+  transition: transform 0.1s ease, color 0.14s, border-color 0.14s,
+              background 0.14s;
+}
+.btn-x:hover {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(0,0,0,0.6);
+  transform: translateX(-3px);
+}
+.btn-x:active { transform: translateX(0) scale(0.94); }
+
+/* ── a choice: one button, one line about it ────────────────────────
+   The unit the new screens are built out of. The old panel had buttons and
+   paragraphs as siblings in one flat column, so nothing said which sentence
+   belonged to which button. */
+.choice {
+  padding: 14px 0 15px;
+  border-bottom: 2px solid rgba(255,255,255,0.055);
+}
+.choice:last-of-type { border-bottom: 0; padding-bottom: 4px; }
+.choice-head {
+  font-family: var(--font-px); font-size: 9px; letter-spacing: 1px;
+  color: var(--jade);
+  margin-bottom: 10px;
+}
+.choice-note {
+  margin-top: 9px;
+  font-size: 16px; line-height: 1.4;
+  color: var(--parch-dim);
+}
+
+/* A label and a control on one line — the map picker inside Create Room. */
+.inline-field {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 11px;
+}
+.inline-field label {
+  flex: 0 0 auto;
+  font-family: var(--font-px); font-size: 8px; letter-spacing: 1px;
+  color: var(--jade);
+}
+.inline-field .btn { flex: 1 1 auto; margin: 0; padding: 10px 12px; }
+
+/* ── a mode screen ──────────────────────────────────────────────────
+   Croaklands, Dungeon, Practice, Customize. A tinted edge carries the
+   mode's identity without tinting the text, which has to stay readable. */
+.card-mode { position: relative; }
+.mode-realm {
+  border-color: #14300f;
+  box-shadow:
+    inset 0 0 0 2px rgba(140,230,110,0.16),
+    inset 0 0 60px rgba(78,154,60,0.14),
+    0 10px 0 #070a0e,
+    0 16px 36px rgba(0,0,0,0.55);
+}
+.mode-dungeon {
+  border-color: #1d1230;
+  box-shadow:
+    inset 0 0 0 2px rgba(170,130,255,0.16),
+    inset 0 0 60px rgba(104,64,180,0.16),
+    0 10px 0 #070a0e,
+    0 16px 36px rgba(0,0,0,0.55);
+}
+.mode-tag {
+  text-align: center;
+  font-family: var(--font-px); font-size: 8px; letter-spacing: 2px;
+  color: var(--jade);
+  margin: -12px 0 16px;
+}
+.mode-dungeon .mode-tag { color: #b79aff; }
+.mode-blurb {
+  text-align: center;
+  font-size: 17px; line-height: 1.45;
+  color: var(--parch-dim);
+  margin: 0 auto 18px;
+  max-width: 44ch;
+}
+/* Compact real numbers instead of another paragraph. */
+.mode-stats {
+  display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.mode-stats:empty { display: none; }
+.mode-stats .stat {
+  flex: 1 1 140px;
+  padding: 11px 8px;
+  text-align: center;
+  background: rgba(0,0,0,0.34);
+  border: 2px solid rgba(255,255,255,0.07);
+}
+.mode-stats .stat b {
+  display: block;
+  font-family: var(--font-px); font-size: 13px;
+  color: var(--parch);
+  margin-bottom: 6px;
+}
+.mode-stats .stat span {
+  font-family: var(--font-px); font-size: 6px; letter-spacing: 1px;
+  color: #7c8a97;
+}
+.mode-realm .stat b { color: #b6e88a; }
+.mode-dungeon .stat b { color: #c9b0ff; }
+/* The one button the screen exists for. */
+.card-mode .btn-hero { margin-top: 4px; }
+
 /* ------------------------------------------------------------------ cards */
 
 .card {
+  /* `relative` so the corner back arrow has something to anchor to. */
+  position: relative;
   width: min(520px, 92vw);
-  padding: 26px 26px 24px;
-  background: linear-gradient(180deg, rgba(24,26,34,0.94), rgba(14,16,22,0.96));
+  padding: 30px 28px 26px;
+  /*
+   * More transparent than it was (0.94/0.96), so the world behind the menu
+   * stays a place you are standing in rather than a wallpaper behind a
+   * dialog. The blur is what keeps text readable through it — without one,
+   * transparency this high turns every paragraph into noise over the trees.
+   */
+  background: linear-gradient(180deg, rgba(20,23,30,0.82), rgba(11,13,18,0.9));
+  backdrop-filter: blur(3px) saturate(0.9);
+  -webkit-backdrop-filter: blur(3px) saturate(0.9);
   border: var(--edge) solid #0a0d12;
   box-shadow:
     inset 0 0 0 2px rgba(255,255,255,0.07),

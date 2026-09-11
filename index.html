@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v111" />
+<link rel="stylesheet" href="css/style.css?v=v112" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -99,21 +99,150 @@
 
     <!-- ─────────────────────────── panels ─────────────────────────── -->
 
-    <!-- HOME -->
+    <!-- ══════════════════════════════════════════════════════════ HOME ══
+         MODE FIRST, DETAIL LATER.
+
+         This screen answers one question — what do you want to do — and
+         nothing else. It used to answer it alongside your ninja name, your
+         frog colour, the map list, a room code box and four paragraphs of
+         description, which is a settings page wearing a main menu's clothes.
+
+         Everything that was on it is still in the game; it lives one screen
+         deeper, next to the thing it belongs to. The map picker is inside
+         Create Room, the name and colour are in Customize, and each mode's
+         description is on that mode's own screen where there is room for it.
+
+         The ladder is deliberate: PLAY is the biggest thing here, the two
+         solo campaigns are next, and the four supporting screens are small.
+         Nothing on this screen has a description, because a button that
+         needs one is a button that is not named well enough. -->
     <div class="panel active" id="panel-home">
-      <nav class="menu-list">
-        <button class="btn btn-main" id="btn-play"><span>PLAY</span></button>
-        <button class="btn btn-main" id="btn-howto"><span>HOW TO PLAY</span></button>
-        <button class="btn btn-main" id="btn-shop"><span>SHOP</span></button>
-        <button class="btn btn-main" id="btn-settings"><span>SETTINGS</span></button>
-        <button class="btn btn-main" id="btn-credits"><span>CREDITS</span></button>
+      <nav class="menu-list home-list">
+        <button class="btn btn-hero" id="btn-play"><span>PLAY</span></button>
+        <button class="btn btn-realm btn-mode" id="btn-realm"><span>THE CROAKLANDS</span></button>
+        <button class="btn btn-dungeon btn-mode" id="btn-dungeon"><span>THE DUNGEON</span></button>
+
+        <div class="home-row">
+          <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
+          <button class="btn btn-quiet" id="btn-customize"><span>CUSTOMIZE</span></button>
+          <button class="btn btn-quiet" id="btn-shop"><span>SHOP</span></button>
+          <button class="btn btn-quiet" id="btn-settings"><span>SETTINGS</span></button>
+        </div>
+
+        <div class="home-links">
+          <button class="linkbtn" id="btn-howto">HOW TO PLAY</button>
+          <i>·</i>
+          <button class="linkbtn" id="btn-credits">CREDITS</button>
+        </div>
       </nav>
     </div>
 
-    <!-- PLAY -->
+    <!-- ══════════════════════════════════════════════════════════ PLAY ══
+         Multiplayer, and only multiplayer. Three ways in, one line of
+         explanation each, in the order people want them.
+
+         THE MAP PICKER LIVES HERE, inside Create Room — not on the main
+         menu, where it was a decision asked of everybody including the
+         people about to play a solo campaign. It is the host's choice, so it
+         sits under the host's button. Joiners never see it, because in a
+         room you join the map is voted for in the lobby. -->
     <div class="panel" id="panel-play">
       <div class="card">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
         <h2 class="card-title">PLAY</h2>
+
+        <div class="choice">
+          <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
+          <p class="choice-note">Jump straight into a public match.</p>
+        </div>
+
+        <div class="choice">
+          <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
+          <p class="choice-note">A private code to share with your friends.</p>
+          <div class="inline-field">
+            <label>MAP</label>
+            <button class="btn btn-quiet map-toggle" id="play-map-toggle">
+              <span id="play-map-current">—</span>
+            </button>
+          </div>
+          <div id="play-maps" class="map-row"></div>
+        </div>
+
+        <div class="choice">
+          <div class="choice-head">JOIN A ROOM</div>
+          <div class="join-row">
+            <input id="input-room" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" spellcheck="false" />
+            <button class="btn" id="btn-join"><span>JOIN</span></button>
+          </div>
+        </div>
+
+        <div id="play-status" class="status"></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════ THE CROAKLANDS ══
+         The open world gets its own screen, and its own colour.
+
+         What was a nine-line paragraph on the main menu is two sentences
+         here, with the shape of the mode carried by the SOLO • STORY • SAVES
+         tag and by how far you have already got — which is information the
+         paragraph never gave and is the thing a returning player actually
+         wants. -->
+    <div class="panel" id="panel-croaklands">
+      <div class="card card-mode mode-realm">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
+        <h2 class="card-title">THE CROAKLANDS</h2>
+        <div class="mode-tag">SOLO &bull; STORY &bull; SAVES</div>
+        <p class="mode-blurb">
+          Explore the Croaklands, discover forgotten ruins, meet villagers,
+          put down the guardians holding the land shut, and find out what
+          really happened to your village.
+        </p>
+        <div class="mode-stats" id="realm-stats"></div>
+        <button class="btn btn-realm btn-hero" id="btn-realm-enter">
+          <span>ENTER THE CROAKLANDS</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ PRACTICE ══
+         The two places nothing is at stake. Both were buried at the bottom
+         of the old Play panel under an "OR" divider. -->
+    <div class="panel" id="panel-practice">
+      <div class="card card-mode">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
+        <h2 class="card-title">PRACTICE</h2>
+        <div class="mode-tag">NOTHING HERE CAN KILL YOU</div>
+
+        <div class="choice">
+          <button class="btn btn-go" id="btn-tutorial"><span>THE FIRST ISLAND</span></button>
+          <p class="choice-note">
+            Nine courses — jumping, dashing, the tongue, the blade, the guard.
+            About ten minutes.
+          </p>
+        </div>
+
+        <div class="choice">
+          <button class="btn" id="btn-solo"><span>ARENA PRACTICE</span></button>
+          <p class="choice-note">
+            The arena, offline and alone. Try every skin and ability for free;
+            no froglets are earned.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ CUSTOMIZE ══
+         Who you are, in one place. The name box and the colour swatches were
+         the first two things on the old Play panel — asked of you before you
+         had chosen what to play, and in the way every time afterwards.
+
+         The shop is reached from here as well as from the main menu, because
+         skins, blades and kunai are the rest of the same question. -->
+    <div class="panel" id="panel-customize">
+      <div class="card card-mode">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
+        <h2 class="card-title">CUSTOMIZE</h2>
 
         <div class="field">
           <label for="input-name">NINJA NAME</label>
@@ -125,70 +254,12 @@
           <div id="color-picker" class="swatches"></div>
         </div>
 
-        <div class="divider"><span>MAP</span></div>
-        <button class="btn btn-quiet map-toggle" id="play-map-toggle">
-          <span>CHOOSE MAP — <b id="play-map-current">—</b></span>
-        </button>
-        <div id="play-maps" class="map-row"></div>
-        <p class="note">
-          The map you take into a room you create. In a room you join, everyone
-          votes for it in the lobby.
+        <div class="divider"><span>SKINS, BLADES AND KUNAI</span></div>
+        <button class="btn btn-go" id="btn-customize-shop"><span>OPEN THE SHOP</span></button>
+        <p class="choice-note">
+          Nine cases and eighty-five skins, bought with froglets — plus the
+          abilities you carry into a match.
         </p>
-
-        <div class="divider"><span>MULTIPLAYER</span></div>
-
-        <div class="btn-row">
-          <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
-          <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
-        </div>
-
-        <div class="join-row">
-          <input id="input-room" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" spellcheck="false" />
-          <button class="btn" id="btn-join"><span>JOIN</span></button>
-        </div>
-
-        <p class="note">
-          Quick Play drops you into the public room <b>FROG</b>. Create Room gives you a
-          private code — share it and your friends join from their own machines.
-        </p>
-
-        <!--
-          The Croaklands sits exactly where Story Mode used to, between the
-          multiplayer block and the dungeon, because it replaced it.
-        -->
-        <div class="divider"><span>THE CROAKLANDS</span></div>
-        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
-        <p class="note">You are a young frog from a village Frogath's army
-           burned; everyone you know was marched away. Cross the Croaklands,
-           put down the guardians holding it shut, and get to his stronghold.
-           Twenty-four regions from the Lily Reach to the Ashen Throne, joined
-           by seventeen roads and four rivers. Towns, villages, dungeons,
-           caves, ruins, secrets, and people who will tell you where to go
-           next. <b>TAB</b> for your bag, <b>M</b> for the map. Solo, and it
-           saves itself.</p>
-
-        <div class="divider"><span>THE DUNGEON</span></div>
-        <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON — 15 BOSSES</span></button>
-        <p class="note">Fifteen guardians, each harder than the last, and
-           something far worse at the bottom. Solo.</p>
-
-        <!--
-          THE FIRST ISLAND.
-
-          It plays itself the very first time the game is opened, so this
-          button is here for the second time onward: somebody coming back
-          after a month, somebody who skipped it, or somebody who wants to
-          practise a parry without a guardian in front of them.
-        -->
-        <div class="divider"><span>OR</span></div>
-        <button class="btn btn-quiet" id="btn-tutorial"><span>THE FIRST ISLAND — HOW TO PLAY</span></button>
-        <p class="note">The beach you woke up on. Nine courses — jumping,
-           dashing, the tongue, the blade, the guard — and nothing on it can
-           kill you. About ten minutes.</p>
-        <button class="btn btn-quiet" id="btn-solo"><span>ARENA PRACTICE (OFFLINE)</span></button>
-
-        <div id="play-status" class="status"></div>
-        <button class="btn btn-back"><span>◀ BACK</span></button>
       </div>
     </div>
 
@@ -216,7 +287,7 @@
            nothing another player does can write over it.</p>
 
         <div id="save-status" class="status"></div>
-        <button class="btn btn-back"><span>◀ BACK</span></button>
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
       </div>
     </div>
 
@@ -272,33 +343,55 @@
       </div>
     </div>
 
-    <!-- DUNGEON: pick how forgiving the run is -->
+    <!-- ═════════════════════════════════════════════════════ THE DUNGEON ══
+         Its own screen and its own colour, with the four-line paragraph cut
+         to two and replaced by the thing that actually changes between
+         visits: how far you have got.
+
+         Both numbers are REAL — they come off the save, not off a mockup.
+         There is no "best time" row because the game does not time a run,
+         and a permanently blank `--:--` is worse than no row at all. -->
     <div class="panel" id="panel-dungeon">
-      <div class="card">
+      <div class="card card-mode mode-dungeon">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
         <h2 class="card-title">THE DUNGEON</h2>
-        <p class="note">
-          Fifteen boss rooms. The first guardian is a shadow of the
-          juggernaut. The fourteenth will take everything you have.
-          At the bottom of the shaft something has been waiting a very long
-          time for someone to reach it.
+        <div class="mode-tag">15 GUARDIANS &bull; ONE SHAFT DOWN</div>
+        <p class="mode-blurb">
+          Fight down through fifteen increasingly difficult guardians. At the
+          bottom, something has been waiting a very long time for somebody to
+          reach it.
         </p>
+
+        <div class="mode-stats">
+          <div class="stat">
+            <b id="dg-beaten">0 / 15</b>
+            <span>GUARDIANS PASSED</span>
+          </div>
+          <div class="stat">
+            <b id="dg-run">—</b>
+            <span>RUN IN PROGRESS</span>
+          </div>
+        </div>
 
         <div class="divider"><span>HOW DO YOU WANT TO RUN IT?</span></div>
 
-        <button class="btn btn-go" id="btn-dungeon-cp">
-          <span>WITH CHECKPOINTS</span>
-        </button>
-        <p class="note">Die and you restart the room you were in. The way to
-           learn the fights.</p>
+        <div class="choice">
+          <button class="btn btn-go" id="btn-dungeon-cp">
+            <span>WITH CHECKPOINTS</span>
+          </button>
+          <p class="choice-note">Die and you restart the room you were in.
+             The way to learn the fights.</p>
+        </div>
 
-        <button class="btn btn-danger" id="btn-dungeon-nocp">
-          <span>NO CHECKPOINTS</span>
-        </button>
-        <p class="note">Die anywhere and you go back to room one. Fifteen
-           rooms, one life at a time.</p>
+        <div class="choice">
+          <button class="btn btn-danger" id="btn-dungeon-nocp">
+            <span>NO CHECKPOINTS</span>
+          </button>
+          <p class="choice-note">Die anywhere and you go back to room one.
+             Fifteen rooms, one life at a time.</p>
+        </div>
 
         <div id="dungeon-status" class="status"></div>
-        <button class="btn btn-back"><span>◀ BACK</span></button>
       </div>
     </div>
 
@@ -324,7 +417,7 @@
         <div id="shop-body"></div>
 
         <div id="shop-status" class="status"></div>
-        <button class="btn btn-back"><span>BACK</span></button>
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
       </div>
     </div>
 
@@ -450,7 +543,7 @@
           </div>
         </div>
 
-        <button class="btn btn-back"><span>◀ BACK</span></button>
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
       </div>
     </div>
 
@@ -494,7 +587,7 @@
           <input id="set-music" type="range" min="0" max="1" step="0.01" />
         </div>
 
-        <button class="btn btn-back"><span>◀ BACK</span></button>
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
       </div>
     </div>
 
@@ -515,7 +608,7 @@
           <p class="small">Built as an original design. Menu composition inspired by
              classic pixel-art adventure title screens.</p>
         </div>
-        <button class="btn btn-back"><span>◀ BACK</span></button>
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
       </div>
     </div>
 
@@ -1117,6 +1210,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v111"></script>
+<script type="module" src="js/main.js?v=v112"></script>
 </body>
 </html>
