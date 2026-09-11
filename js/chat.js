@@ -181,8 +181,39 @@ export class Chat {
     if (text) {
       this.history.push(text);
       if (this.history.length > 40) this.history.shift();
-      this.push({ name: this.selfName(), text, color: this.selfColor(), self: true });
-      try { this.onSend(text); } catch (e) { /* a dead link is not a crash */ }
+      const line = this.push({
+        name: this.selfName(), text, color: this.selfColor(), self: true,
+      });
+
+      /**
+       * DID IT ACTUALLY GO ANYWHERE?
+       *
+       * `onSend` returns null when the line left the machine, or the reason
+       * it did not. Both outcomes are reported, because the whole point of
+       * the feature is that somebody else reads it and the sender is the
+       * only person who can be told otherwise.
+       *
+       * The exception was swallowing failures too: a thrown error looked
+       * exactly like a successful send. It is caught — a dead link must not
+       * take the game down mid-sentence — but it is no longer hidden.
+       */
+      /**
+       * Only a STRING counts as a failure. `onSend` is a callback somebody
+       * else writes, and returning something incidental — the `true` out of
+       * `sendEvent`, the length out of an `Array.push` — must not be read as
+       * an error message. The reason is the message, or there is no reason.
+       */
+      let why = null;
+      try {
+        const r = this.onSend(text);
+        why = typeof r === 'string' && r ? r : null;
+      } catch (e) {
+        why = 'That did not send — the connection errored.';
+      }
+      if (why) {
+        if (line) line.undelivered = true;
+        this.system(why);
+      }
     }
     this.close();
   }
@@ -208,11 +239,13 @@ export class Chat {
    * @param line.color  their frog colour
    * @param line.self   ours, so it can be marked
    * @param line.system a notice from the game rather than a person
+   * @returns the stored line, so the caller can mark it afterwards — which
+   *          is how `submit` flags one that never left the machine.
    */
   push(line) {
-    if (!line) return;
+    if (!line) return null;
     const text = String(line.text == null ? '' : line.text).slice(0, MAX_LEN);
-    if (!text) return;
+    if (!text) return null;
     const name = line.system ? '' : String(line.name || 'Frog').slice(0, 14);
     const t = now();
     const key = name + ' ' + text;
@@ -224,20 +257,25 @@ export class Chat {
       if (l.key !== key || t - l.first > DUPE_AGE) continue;
       l.count++;
       l.t = t;
+      // A repeat is a fresh send: whether THIS one got out is decided again.
+      l.undelivered = false;
       this._render();
       this._armFade();
-      return;
+      return l;
     }
 
-    this.lines.push({
+    const row = {
       name, text, key, count: 1, t, first: t,
       color: css(line.color),
       self: !!line.self,
       system: !!line.system,
-    });
+      undelivered: false,
+    };
+    this.lines.push(row);
     if (this.lines.length > MAX_LINES) this.lines.shift();
     this._render();
     this._armFade();
+    return row;
   }
 
   /** A game notice — somebody joining, a room opening. */
@@ -261,7 +299,8 @@ export class Chat {
       const row = document.createElement('div');
       row.className = 'chat-line'
         + (l.system ? ' system' : '')
-        + (l.self ? ' self' : '');
+        + (l.self ? ' self' : '')
+        + (l.undelivered ? ' undelivered' : '');
       // Shut, a line goes quiet on its own. Open, everything stays readable —
       // you opened it to read.
       if (!this.open && t - l.t > FADE_AFTER) row.classList.add('gone');
@@ -286,6 +325,14 @@ export class Chat {
         n.className = 'chat-count';
         n.textContent = `(${l.count})`;
         row.appendChild(n);
+      }
+      // A line that never left the machine says so, right on itself — so you
+      // can see at a glance which of your messages nobody got.
+      if (l.undelivered) {
+        const x = document.createElement('span');
+        x.className = 'chat-fail';
+        x.textContent = 'NOT SENT';
+        row.appendChild(x);
       }
       this.logEl.appendChild(row);
     }

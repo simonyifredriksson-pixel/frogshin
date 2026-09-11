@@ -37,10 +37,10 @@
  * through a world the whole point of which is that you choose your own.
  */
 
-import { MEMORY_THEME } from './themes.js?v=v110';
-import { Audio } from './audio.js?v=v110';
-import { Cine } from './cinema.js?v=v110';
-import { MemoryScene, STAGE } from './memoryscene.js?v=v110';
+import { MEMORY_THEME } from './themes.js?v=v111';
+import { Audio } from './audio.js?v=v111';
+import { Cine } from './cinema.js?v=v111';
+import { MemoryScene, STAGE } from './memoryscene.js?v=v111';
 
 const $ = (id) => document.getElementById(id);
 

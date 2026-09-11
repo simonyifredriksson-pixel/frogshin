@@ -830,6 +830,16 @@ kbd {
 .chat-count { flex: 0 0 auto; color: #8fa0ae; font-size: 8px; }
 /* A game notice rather than a person. */
 .chat-line.system .chat-text { color: #9fd4ff; }
+/* A line that never left the machine. Dimmed, and it says so. */
+.chat-line.undelivered { opacity: 0.62; }
+.chat-line.undelivered .chat-text { text-decoration: line-through; }
+.chat-fail {
+  flex: 0 0 auto;
+  font-size: 6px; letter-spacing: 1px;
+  color: #e06a5a;
+  border: 1px solid #6a2a22;
+  padding: 1px 3px;
+}
 
 /* ---- the entry row: only there while it is open ---- */
 #chat-entry {

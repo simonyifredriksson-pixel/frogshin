@@ -16,8 +16,8 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v110';
-import { roomCode as makeRoomCode } from './util.js?v=v110';
+import { CFG, BUILD } from './config.js?v=v111';
+import { roomCode as makeRoomCode } from './util.js?v=v111';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -658,11 +658,20 @@ export class Network {
     }
   }
 
-  /** Reliable one-shot action (dash, attack, death, ...). */
+  /**
+   * Reliable one-shot action (dash, attack, death, ...).
+   *
+   * @returns true if it actually went out.
+   *
+   * Most callers do not care — a dash effect nobody sees is a cosmetic loss.
+   * The chat does: a message is worthless if it did not leave the machine,
+   * and the sender is the only person who can be told. See `Chat.submit`.
+   */
   sendEvent(ev) {
-    if (!this.isOnline || !this.connected) return;
+    if (!this.isOnline || !this.connected) return false;
     if (this.isHost) this._broadcast({ m: 'event', id: this.selfId, e: ev });
     else this._send(this.hostConn, { m: 'event', e: ev });
+    return true;
   }
 
   /** Request damage on another player. The victim decides if it lands. */

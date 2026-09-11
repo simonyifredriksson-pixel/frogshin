@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v110';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v110';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v110';
-import { Input } from './input.js?v=v110';
-import { Audio } from './audio.js?v=v110';
-import { World } from './world.js?v=v110';
-import { Effects } from './effects.js?v=v110';
-import { Atmosphere } from './atmosphere.js?v=v110';
-import { FollowCamera } from './camera.js?v=v110';
-import { Player } from './player.js?v=v110';
-import { RemotePlayer } from './remote.js?v=v110';
-import { HUD } from './hud.js?v=v110';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v110';
-import { FrogModel } from './frog.js?v=v110';
-import { DummyField } from './dummy.js?v=v110';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v110';
-import { ToadModel } from './npc.js?v=v110';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v110';
-import { DungeonRun } from './dungeon.js?v=v110';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v110';
-import { JudgmentRun } from './judgment.js?v=v110';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v110';
-import { COMBO_NAMES } from './ascended.js?v=v110';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v110';
-import { MenuScene } from './menu.js?v=v110';
-import { Economy } from './economy.js?v=v110';
-import { Shop } from './shop.js?v=v110';
-import { Network, NetRole, cleanSkins } from './net.js?v=v110';
-import { Overworld } from './overworld.js?v=v110';
-import { InventoryScreen } from './inventoryui.js?v=v110';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v110';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v110';
-import { Cine } from './cinema.js?v=v110';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v110';
-import { MEMORIES } from './flashbacks.js?v=v110';
-import { GUARDIANS } from './guardians.js?v=v110';
-import { gearOfTier } from './gear.js?v=v110';
-import { Chat } from './chat.js?v=v110';
+import * as THREE from '../lib/three.module.js?v=v111';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v111';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v111';
+import { Input } from './input.js?v=v111';
+import { Audio } from './audio.js?v=v111';
+import { World } from './world.js?v=v111';
+import { Effects } from './effects.js?v=v111';
+import { Atmosphere } from './atmosphere.js?v=v111';
+import { FollowCamera } from './camera.js?v=v111';
+import { Player } from './player.js?v=v111';
+import { RemotePlayer } from './remote.js?v=v111';
+import { HUD } from './hud.js?v=v111';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v111';
+import { FrogModel } from './frog.js?v=v111';
+import { DummyField } from './dummy.js?v=v111';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v111';
+import { ToadModel } from './npc.js?v=v111';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v111';
+import { DungeonRun } from './dungeon.js?v=v111';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v111';
+import { JudgmentRun } from './judgment.js?v=v111';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v111';
+import { COMBO_NAMES } from './ascended.js?v=v111';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v111';
+import { MenuScene } from './menu.js?v=v111';
+import { Economy } from './economy.js?v=v111';
+import { Shop } from './shop.js?v=v111';
+import { Network, NetRole, cleanSkins } from './net.js?v=v111';
+import { Overworld } from './overworld.js?v=v111';
+import { InventoryScreen } from './inventoryui.js?v=v111';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v111';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v111';
+import { Cine } from './cinema.js?v=v111';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v111';
+import { MEMORIES } from './flashbacks.js?v=v111';
+import { GUARDIANS } from './guardians.js?v=v111';
+import { gearOfTier } from './gear.js?v=v111';
+import { Chat } from './chat.js?v=v111';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -126,7 +126,36 @@ class Game {
       canOpen: () => this.mode === 'playing' && this.input.locked,
       selfName: () => this.profile.name,
       selfColor: () => this.profile.color,
-      onSend: (text) => this.net.sendEvent({ t: 'chat', s: text }),
+      /**
+       * SEND IT — and say so plainly if it went nowhere.
+       *
+       * Returns null when the line left the machine, or the reason it did
+       * not. The chat shows that reason as a system line and marks the
+       * message undelivered.
+       *
+       * This exists because the first version silently pretended to work: it
+       * echoed your line into your own log with full confidence whether or
+       * not anybody else would ever see it, and the only symptom was other
+       * players not replying. A chat that cannot tell you it failed is worse
+       * than one that does not exist, because you keep talking to nobody.
+       *
+       * The four cases are genuinely different and worth telling apart —
+       * playing alone, still connecting, a link that died, and a room you
+       * are the only one in.
+       */
+      onSend: (text) => {
+        if (!this.net.isOnline) {
+          return 'You are playing offline — nobody else can see that.';
+        }
+        if (!this.net.connected) {
+          return 'Not connected to the room yet — that one did not send.';
+        }
+        if (!this.net.sendEvent({ t: 'chat', s: text })) {
+          return 'The link to the room is down — that one did not send.';
+        }
+        if (this.net.playerCount <= 1) return 'Nobody else is here yet.';
+        return null;
+      },
     });
 
     // The Tab inventory is built once and borrows the renderer for its
