@@ -423,6 +423,23 @@ html, body {
 /* The last section has nothing under it, so it needs a floor of its own. */
 .card-play .btn-row:last-child { margin-bottom: 4px; }
 
+/*
+ * A column of destinations, each with air around it.
+ *
+ * `gap` rather than margins on the buttons: the margin approach leaves the
+ * first and last child's spacing depending on what happens to sit next to
+ * them, and these four want to be evenly spaced whatever order they end up
+ * in. The margin-top the card gives every button is zeroed here so it does
+ * not add to the gap.
+ */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+.stack .btn { margin-top: 0; }
+
 /* A control that belongs to the button above it — the map picker under
    Create Room. Indented, so it reads as part of that choice. */
 .sub {

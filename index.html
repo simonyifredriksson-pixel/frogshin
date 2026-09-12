@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v114" />
+<link rel="stylesheet" href="css/style.css?v=v115" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -151,8 +151,9 @@
           <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
           <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
         </div>
-        <p class="note">Straight into a public match, or a private code to
-           share with your friends.</p>
+        <!-- One line, deliberately. Two costs 23px of height to say the
+             same thing with more words in it. -->
+        <p class="note">A public match, or a private code for your friends.</p>
 
         <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
              choice, so it sits under the host's button rather than being
@@ -185,12 +186,14 @@
              five buttons is more furniture than the things it separates. -->
         <div class="divider"><span>OR</span></div>
 
-        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
-        <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON</span></button>
-
-        <div class="btn-row">
-          <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
+        <!-- One column with a real gap between every one of them. They are
+             four separate destinations, not a row of related options, and
+             buttons that touch read as a segmented control. -->
+        <div class="stack">
+          <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
+          <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON</span></button>
           <button class="btn btn-quiet" id="btn-customize"><span>CUSTOMIZE</span></button>
+          <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
         </div>
       </div>
     </div>
@@ -1217,6 +1220,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v114"></script>
+<script type="module" src="js/main.js?v=v115"></script>
 </body>
 </html>
