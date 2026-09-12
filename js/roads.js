@@ -31,8 +31,8 @@
  * no recursion and no ordering surprise.
  */
 
-import { clamp, smoothstep, lerp } from './util.js?v=v126';
-import { REALM_HALF } from './regions.js?v=v126';
+import { clamp, smoothstep, lerp } from './util.js?v=v127';
+import { REALM_HALF } from './regions.js?v=v127';
 
 /** Steepest a graded road may be, as a rise over run. */
 const MAX_GRADE = 0.26;

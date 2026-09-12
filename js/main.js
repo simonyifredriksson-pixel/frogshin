@@ -5,49 +5,49 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v126';
+import * as THREE from '../lib/three.module.js?v=v127';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v126';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v126';
-import { Input } from './input.js?v=v126';
-import { Audio } from './audio.js?v=v126';
-import { World } from './world.js?v=v126';
-import { Effects } from './effects.js?v=v126';
-import { Atmosphere } from './atmosphere.js?v=v126';
-import { FollowCamera } from './camera.js?v=v126';
-import { Player } from './player.js?v=v126';
-import { RemotePlayer } from './remote.js?v=v126';
-import { HUD } from './hud.js?v=v126';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v126';
-import { FrogModel } from './frog.js?v=v126';
-import { DummyField } from './dummy.js?v=v126';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v126';
-import { ToadModel } from './npc.js?v=v126';
+} from './config.js?v=v127';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v127';
+import { Input } from './input.js?v=v127';
+import { Audio } from './audio.js?v=v127';
+import { World } from './world.js?v=v127';
+import { Effects } from './effects.js?v=v127';
+import { Atmosphere } from './atmosphere.js?v=v127';
+import { FollowCamera } from './camera.js?v=v127';
+import { Player } from './player.js?v=v127';
+import { RemotePlayer } from './remote.js?v=v127';
+import { HUD } from './hud.js?v=v127';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v127';
+import { FrogModel } from './frog.js?v=v127';
+import { DummyField } from './dummy.js?v=v127';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v127';
+import { ToadModel } from './npc.js?v=v127';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v126';
-import { DungeonRun } from './dungeon.js?v=v126';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v126';
-import { JudgmentRun } from './judgment.js?v=v126';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v126';
-import { COMBO_NAMES } from './ascended.js?v=v126';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v126';
-import { MenuScene } from './menu.js?v=v126';
-import { Economy } from './economy.js?v=v126';
-import { Shop } from './shop.js?v=v126';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v126';
-import { Overworld } from './overworld.js?v=v126';
-import { InventoryScreen } from './inventoryui.js?v=v126';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v126';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v126';
-import { Cine } from './cinema.js?v=v126';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v126';
-import { MEMORIES } from './flashbacks.js?v=v126';
-import { GUARDIANS } from './guardians.js?v=v126';
-import { gearOfTier } from './gear.js?v=v126';
-import { Chat } from './chat.js?v=v126';
+} from './skins.js?v=v127';
+import { DungeonRun } from './dungeon.js?v=v127';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v127';
+import { JudgmentRun } from './judgment.js?v=v127';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v127';
+import { COMBO_NAMES } from './ascended.js?v=v127';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v127';
+import { MenuScene } from './menu.js?v=v127';
+import { Economy } from './economy.js?v=v127';
+import { Shop } from './shop.js?v=v127';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v127';
+import { Overworld } from './overworld.js?v=v127';
+import { InventoryScreen } from './inventoryui.js?v=v127';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v127';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v127';
+import { Cine } from './cinema.js?v=v127';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v127';
+import { MEMORIES } from './flashbacks.js?v=v127';
+import { GUARDIANS } from './guardians.js?v=v127';
+import { gearOfTier } from './gear.js?v=v127';
+import { Chat } from './chat.js?v=v127';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1246,24 +1246,89 @@ class Game {
       if (landed) this.hud.damageFlash(clamp(d.dmg / 40, 0.2, 0.9));
     };
 
-    /**
-     * THE ROOM KEEPS HEARING FROM US EVEN WITH THE TAB IN THE BACKGROUND.
-     *
-     * `tickState` rides the frame loop, and a hidden tab has no frame loop
-     * — so alt-tabbing used to stop every packet we send, and since a
-     * player's health is only ever learned from their own broadcasts, we
-     * looked invulnerable to everyone still playing. See
-     * `Network.startHeartbeat`.
-     *
-     * Started once, for the session. It sends nothing while the frame loop
-     * is keeping up, and nothing at all when there is no player to describe
-     * — which is every menu, so a player sitting in the shop is not
-     * broadcasting a stale position into a room they already left.
-     */
-    net.startHeartbeat(() => {
-      if (!this.player || this.mode === 'menu') return null;
-      return this.player.netState();
-    });
+    this._startBackgroundTick();
+  }
+
+  /**
+   * ═══ THE WORLD DOES NOT STOP WHEN YOUR TAB DOES ════════════════════════
+   *
+   * Browsers stop `requestAnimationFrame` COMPLETELY for a tab that is not
+   * visible. Not throttled — stopped. So alt-tabbing away froze everything
+   * the frame loop drives: the round clock, the respawn countdown, and
+   * every state packet we send.
+   *
+   * That is one cause behind two reports that looked unrelated:
+   *
+   *   - "the enemy takes no damage until I alt-tab to them". The damage was
+   *     landing the whole time — `net.onHit` runs off the data channel, not
+   *     the frame loop — but the victim never broadcast it, and a player's
+   *     health is only ever learned from their own packets.
+   *   - "one player's countdown is at 2 and the other hasn't started". A
+   *     mirror runs the countdown locally between syncs, and a hidden tab
+   *     was not running it at all.
+   *
+   * A timer is the fix because timers survive backgrounding where rAF does
+   * not. Hidden tabs clamp them to about once a second, which is far below
+   * a live game's 20/s and entirely adequate for what this carries:
+   * somebody who is alt-tabbed is not moving, so the only things that
+   * change are the clock and their health.
+   *
+   * ── it does NOTHING while the tab is visible ──────────────────────────
+   * Gated on `document.hidden` before anything else, so a visible game is
+   * driven by the frame loop alone and this cannot interleave with it. An
+   * earlier pass gated on "the loop has gone quiet" instead, which is the
+   * same thing in principle and not in practice: it left the door open to
+   * an extra packet landing between two ordinary ones and jarring the
+   * interpolation on everyone else's screen.
+   */
+  _startBackgroundTick() {
+    if (typeof setInterval !== 'function') return;
+    let last = Date.now();
+    setInterval(() => {
+      // The clock advances whether or not we act on it, so becoming visible
+      // again cannot hand the next hidden tick a dt measured in minutes.
+      const now = Date.now();
+      const dt = clamp((now - last) / 1000, 0, 1);
+      last = now;
+      if (typeof document !== 'undefined' && !document.hidden) return;
+      if (this.mode !== 'playing' && this.mode !== 'paused') return;
+      try { this._backgroundTick(dt); } catch (e) { /* a dead tick is not fatal */ }
+    }, 250);
+  }
+
+  /**
+   * One tick of everything that has to keep running with no frame loop.
+   *
+   * Deliberately the same short list the pause branch runs — see the note
+   * in `_updateGame`. A hidden tab and a paused player are the same
+   * situation: the player is not controlling anything, and the world
+   * carries on around them. Nothing here simulates movement, so a frog in a
+   * background tab stands still and cannot be walked through a wall by a
+   * one-second dt.
+   */
+  _backgroundTick(dt) {
+    // The round clock first, so the countdown and the match timer stay with
+    // everyone else's. A mirror runs this locally between syncs.
+    if (this.round) this.round.update(dt, this._playerIds());
+
+    const p = this.player;
+    if (!p || this.isDungeon || this.isRealm) return;
+    if (p.health) {
+      p.health.tickProtection(dt);
+      p.health.tickRespawn(dt);
+    }
+    if (p.deathPending) {
+      p.deathPending = false;
+      this._onLocalDeath();
+    }
+    this._tickRespawn(p);
+    // Knockback taken while nothing integrates it is dropped, not banked.
+    p.vel.set(0, 0, 0);
+    this._drainEvents(p);
+    // Straight to the send: `tickState`'s accumulator is fed by frame times
+    // and this tick is a second long, so it would fire on the first call
+    // anyway — going direct keeps the rate honest at one packet per tick.
+    this.net._pushState(() => p.netState());
   }
 
   /**

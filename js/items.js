@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v126';
-import { CFG } from './config.js?v=v126';
-import { clamp } from './util.js?v=v126';
+import * as THREE from '../lib/three.module.js?v=v127';
+import { CFG } from './config.js?v=v127';
+import { clamp } from './util.js?v=v127';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();

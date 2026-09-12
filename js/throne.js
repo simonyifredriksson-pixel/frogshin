@@ -46,9 +46,9 @@
  * for about four microseconds a frame. The root hides itself past 420 units.
  */
 
-import * as THREE from '../lib/three.module.js?v=v126';
-import { mulberry32, clamp, smoothstep } from './util.js?v=v126';
-import { addFrog } from './frogbuild.js?v=v126';
+import * as THREE from '../lib/three.module.js?v=v127';
+import { mulberry32, clamp, smoothstep } from './util.js?v=v127';
+import { addFrog } from './frogbuild.js?v=v127';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

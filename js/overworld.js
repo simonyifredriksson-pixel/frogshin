@@ -32,43 +32,43 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v126';
-import { CFG } from './config.js?v=v126';
-import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v126';
+import * as THREE from '../lib/three.module.js?v=v127';
+import { CFG } from './config.js?v=v127';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v127';
 import { coronationScript, CarpetWalk, CORONATION_THEME }
-  from './coronation.js?v=v126';
-import { Realm } from './realm.js?v=v126';
-import { Scatter } from './scatter.js?v=v126';
-import { Traversals } from './traverse.js?v=v126';
-import { Sites } from './realmsites.js?v=v126';
-import { Camp } from './mobs.js?v=v126';
-import { DungeonBoss } from './dungeonboss.js?v=v126';
-import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v126';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v126';
+  from './coronation.js?v=v127';
+import { Realm } from './realm.js?v=v127';
+import { Scatter } from './scatter.js?v=v127';
+import { Traversals } from './traverse.js?v=v127';
+import { Sites } from './realmsites.js?v=v127';
+import { Camp } from './mobs.js?v=v127';
+import { DungeonBoss } from './dungeonboss.js?v=v127';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v127';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v127';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v126';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v126';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v126';
+  CONTENT_HALF } from './regions.js?v=v127';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v127';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v127';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v126';
+  mainObjective } from './quests.js?v=v127';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v126';
-import { disposeLandmarkMats } from './landmarks.js?v=v126';
-import { Props, disposePropMats } from './props.js?v=v126';
-import { TRADES, tradeFor, stockOf } from './stalls.js?v=v126';
-import { feelOf, lookOf } from './weapons.js?v=v126';
-import { StallScreen } from './stallui.js?v=v126';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v126';
-import { Ambience } from './ambience.js?v=v126';
-import { Weather } from './weather.js?v=v126';
-import { Audio } from './audio.js?v=v126';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v126';
+  disposeVillagerMats } from './realmquests.js?v=v127';
+import { disposeLandmarkMats } from './landmarks.js?v=v127';
+import { Props, disposePropMats } from './props.js?v=v127';
+import { TRADES, tradeFor, stockOf } from './stalls.js?v=v127';
+import { feelOf, lookOf } from './weapons.js?v=v127';
+import { StallScreen } from './stallui.js?v=v127';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v127';
+import { Ambience } from './ambience.js?v=v127';
+import { Weather } from './weather.js?v=v127';
+import { Audio } from './audio.js?v=v127';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v127';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v126';
-import { Cine } from './cinema.js?v=v126';
-import { recommendedFor, readiness } from './guardians.js?v=v126';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v126';
-import { ThroneArena } from './throne.js?v=v126';
+  MEMORY_COUNT } from './flashbacks.js?v=v127';
+import { Cine } from './cinema.js?v=v127';
+import { recommendedFor, readiness } from './guardians.js?v=v127';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v127';
+import { ThroneArena } from './throne.js?v=v127';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
