@@ -5,47 +5,49 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v121';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v121';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v121';
-import { Input } from './input.js?v=v121';
-import { Audio } from './audio.js?v=v121';
-import { World } from './world.js?v=v121';
-import { Effects } from './effects.js?v=v121';
-import { Atmosphere } from './atmosphere.js?v=v121';
-import { FollowCamera } from './camera.js?v=v121';
-import { Player } from './player.js?v=v121';
-import { RemotePlayer } from './remote.js?v=v121';
-import { HUD } from './hud.js?v=v121';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v121';
-import { FrogModel } from './frog.js?v=v121';
-import { DummyField } from './dummy.js?v=v121';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v121';
-import { ToadModel } from './npc.js?v=v121';
+import * as THREE from '../lib/three.module.js?v=v122';
+import {
+  CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
+} from './config.js?v=v122';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v122';
+import { Input } from './input.js?v=v122';
+import { Audio } from './audio.js?v=v122';
+import { World } from './world.js?v=v122';
+import { Effects } from './effects.js?v=v122';
+import { Atmosphere } from './atmosphere.js?v=v122';
+import { FollowCamera } from './camera.js?v=v122';
+import { Player } from './player.js?v=v122';
+import { RemotePlayer } from './remote.js?v=v122';
+import { HUD } from './hud.js?v=v122';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v122';
+import { FrogModel } from './frog.js?v=v122';
+import { DummyField } from './dummy.js?v=v122';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v122';
+import { ToadModel } from './npc.js?v=v122';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v121';
-import { DungeonRun } from './dungeon.js?v=v121';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v121';
-import { JudgmentRun } from './judgment.js?v=v121';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v121';
-import { COMBO_NAMES } from './ascended.js?v=v121';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v121';
-import { MenuScene } from './menu.js?v=v121';
-import { Economy } from './economy.js?v=v121';
-import { Shop } from './shop.js?v=v121';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v121';
-import { Overworld } from './overworld.js?v=v121';
-import { InventoryScreen } from './inventoryui.js?v=v121';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v121';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v121';
-import { Cine } from './cinema.js?v=v121';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v121';
-import { MEMORIES } from './flashbacks.js?v=v121';
-import { GUARDIANS } from './guardians.js?v=v121';
-import { gearOfTier } from './gear.js?v=v121';
-import { Chat } from './chat.js?v=v121';
+} from './skins.js?v=v122';
+import { DungeonRun } from './dungeon.js?v=v122';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v122';
+import { JudgmentRun } from './judgment.js?v=v122';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v122';
+import { COMBO_NAMES } from './ascended.js?v=v122';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v122';
+import { MenuScene } from './menu.js?v=v122';
+import { Economy } from './economy.js?v=v122';
+import { Shop } from './shop.js?v=v122';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v122';
+import { Overworld } from './overworld.js?v=v122';
+import { InventoryScreen } from './inventoryui.js?v=v122';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v122';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v122';
+import { Cine } from './cinema.js?v=v122';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v122';
+import { MEMORIES } from './flashbacks.js?v=v122';
+import { GUARDIANS } from './guardians.js?v=v122';
+import { gearOfTier } from './gear.js?v=v122';
+import { Chat } from './chat.js?v=v122';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1679,10 +1681,9 @@ class Game {
      * out loud next to "GUARDIAN DOWN".
      */
     this.dungeon.onBossCleared = (room) => {
-      const E = CFG.economy;
       const paid = this.economy.awardOnce(
         `dungeon:${room}`,
-        E.dungeonBase * Math.pow(E.dungeonStep, room),
+        dungeonPayout(room),
         `Room ${room + 1} cleared`,
       );
       if (paid > 0) {

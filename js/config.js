@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v121';
+export const BUILD = 'v122';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -273,18 +273,29 @@ export const CFG = {
     /**
      * ---- the dungeon: FIRST CLEAR ONLY, see Economy.awardOnce ----
      *
-     * `dungeonBase * dungeonStep ^ room`, so room one pays 500 and room
-     * fourteen pays about 12,400 — the fourteen guardians come to roughly
-     * 55,000 between them.
+     * Stated as the two ENDS of the curve rather than as a base and a
+     * growth rate, because these are the only two numbers anybody actually
+     * has an opinion about: what the first room is worth and what the last
+     * one is. The step between them is derived — see `dungeonPayout` — so
+     * the ends stay exactly where they are put even if the room count
+     * changes.
      *
-     * The step is deliberately steeper than the difficulty curve it is paid
-     * against: the bosses grow at `dungeon.boss.healthGrowth` (1.175) and
-     * the reward grows at 1.28, so every room down is worth more per unit of
-     * pain than the one above it. That is what makes going deeper the
-     * obvious move rather than farming whichever room you can already beat.
+     * ── the first rooms pay almost nothing, and should ──────────────────
+     * Room one is the juggernaut at a third of its strength. It is the
+     * tutorial of the dungeon, and 50 froglets is a twentieth of the
+     * cheapest crate — less than a single tag in the arena. An earlier pass
+     * had it at 500 rising to 12,400, which paid out 55,000 for the
+     * fourteen guardians and made the easy half of the dungeon the best
+     * earner in the game.
+     *
+     * The curve between them is steep (about 1.46 a room) and deliberately
+     * much steeper than the difficulty it is paid against — the bosses grow
+     * at `dungeon.boss.healthGrowth`, 1.175 — so froglets per point of boss
+     * health climbs the whole way down. That is what makes pushing deeper
+     * always beat re-clearing whatever room you can already handle.
      */
-    dungeonBase: 500,
-    dungeonStep: 1.28,
+    dungeonFirst: 50,        // room 1 — trivial, and paid like it
+    dungeonLast: 7000,       // room 14 — the last guardian before the throne
     frogathReward: 25000,    // the bottom of the dungeon
     divineReward: 100000,    // the Ascended — the hardest fight in the game
 
@@ -709,3 +720,26 @@ export const NINJA_NAMES = [
   'Ribbit', 'Shadowpad', 'Lilyblade', 'Kero', 'Toadstorm', 'Nightcroak',
   'Bogstep', 'Jadefang', 'Mistleap', 'Pondwraith', 'Tadpole', 'Swampsong',
 ];
+
+/**
+ * WHAT DUNGEON ROOM `room` PAYS, the first time it is ever cleared.
+ *
+ * A geometric curve pinned to both ends: room 0 pays `dungeonFirst`, the
+ * last guardian pays `dungeonLast`, and everything between is a smooth
+ * climb. Derived rather than stored, so the two figures in the config are
+ * the two figures you get — changing the room count re-spaces the middle
+ * instead of quietly moving the bottom of the curve somewhere else.
+ *
+ * The last GUARDIAN is `rooms - 2`, not `rooms - 1`: the final room holds
+ * Frogath, who is not on this curve at all and is paid `frogathReward`.
+ *
+ * Clamped at both ends so a cheat-jumped or out-of-range room cannot
+ * produce a negative exponent or a fortune.
+ */
+export function dungeonPayout(room) {
+  const E = CFG.economy;
+  const last = CFG.dungeon.rooms - 2;
+  if (!(last > 0)) return E.dungeonFirst;
+  const t = Math.max(0, Math.min(last, room | 0)) / last;
+  return Math.round(E.dungeonFirst * Math.pow(E.dungeonLast / E.dungeonFirst, t));
+}
