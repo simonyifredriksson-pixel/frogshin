@@ -5,44 +5,44 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v115';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v115';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v115';
-import { Input } from './input.js?v=v115';
-import { Audio } from './audio.js?v=v115';
-import { World } from './world.js?v=v115';
-import { Effects } from './effects.js?v=v115';
-import { Atmosphere } from './atmosphere.js?v=v115';
-import { FollowCamera } from './camera.js?v=v115';
-import { Player } from './player.js?v=v115';
-import { RemotePlayer } from './remote.js?v=v115';
-import { HUD } from './hud.js?v=v115';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v115';
-import { FrogModel } from './frog.js?v=v115';
-import { DummyField } from './dummy.js?v=v115';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v115';
-import { ToadModel } from './npc.js?v=v115';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v115';
-import { DungeonRun } from './dungeon.js?v=v115';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v115';
-import { JudgmentRun } from './judgment.js?v=v115';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v115';
-import { COMBO_NAMES } from './ascended.js?v=v115';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v115';
-import { MenuScene } from './menu.js?v=v115';
-import { Economy } from './economy.js?v=v115';
-import { Shop } from './shop.js?v=v115';
-import { Network, NetRole, cleanSkins } from './net.js?v=v115';
-import { Overworld } from './overworld.js?v=v115';
-import { InventoryScreen } from './inventoryui.js?v=v115';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v115';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v115';
-import { Cine } from './cinema.js?v=v115';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v115';
-import { MEMORIES } from './flashbacks.js?v=v115';
-import { GUARDIANS } from './guardians.js?v=v115';
-import { gearOfTier } from './gear.js?v=v115';
-import { Chat } from './chat.js?v=v115';
+import * as THREE from '../lib/three.module.js?v=v116';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v116';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v116';
+import { Input } from './input.js?v=v116';
+import { Audio } from './audio.js?v=v116';
+import { World } from './world.js?v=v116';
+import { Effects } from './effects.js?v=v116';
+import { Atmosphere } from './atmosphere.js?v=v116';
+import { FollowCamera } from './camera.js?v=v116';
+import { Player } from './player.js?v=v116';
+import { RemotePlayer } from './remote.js?v=v116';
+import { HUD } from './hud.js?v=v116';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v116';
+import { FrogModel } from './frog.js?v=v116';
+import { DummyField } from './dummy.js?v=v116';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v116';
+import { ToadModel } from './npc.js?v=v116';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v116';
+import { DungeonRun } from './dungeon.js?v=v116';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v116';
+import { JudgmentRun } from './judgment.js?v=v116';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v116';
+import { COMBO_NAMES } from './ascended.js?v=v116';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v116';
+import { MenuScene } from './menu.js?v=v116';
+import { Economy } from './economy.js?v=v116';
+import { Shop } from './shop.js?v=v116';
+import { Network, NetRole, cleanSkins } from './net.js?v=v116';
+import { Overworld } from './overworld.js?v=v116';
+import { InventoryScreen } from './inventoryui.js?v=v116';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v116';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v116';
+import { Cine } from './cinema.js?v=v116';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v116';
+import { MEMORIES } from './flashbacks.js?v=v116';
+import { GUARDIANS } from './guardians.js?v=v116';
+import { gearOfTier } from './gear.js?v=v116';
+import { Chat } from './chat.js?v=v116';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -303,7 +303,7 @@ class Game {
   _buildMenuUI() {
     const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings',
       'credits', 'dungeon', 'saves', 'erase', 'croaklands', 'practice',
-      'customize'];
+      'customize', 'avatar'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       /**
@@ -348,7 +348,10 @@ class Game {
       Audio.uiClick();
       this._toggleMapList('lobby');
     };
-    $('btn-shop').onclick = () => { this.shop.render(); this.showPanel('shop'); };
+    // `openShop`/`openAvatar` rather than `render`, because the skin cards
+    // are drawn on both screens and the Shop has to know which one it is
+    // redrawing when you click one. See `Shop.refresh`.
+    $('btn-shop').onclick = () => { this.shop.openShop(); this.showPanel('shop'); };
     $('btn-howto').onclick = () => this.showPanel('howto');
     $('btn-settings').onclick = () => this.showPanel('settings');
     $('btn-credits').onclick = () => this.showPanel('credits');
@@ -358,8 +361,12 @@ class Game {
     $('btn-practice').onclick = () => this.showPanel('practice');
     $('btn-customize').onclick = () => this.showPanel('customize');
     $('btn-customize-shop').onclick = () => {
-      this.shop.render();
+      this.shop.openShop();
       this.showPanel('shop');
+    };
+    $('btn-avatar').onclick = () => {
+      this.shop.openAvatar();
+      this.showPanel('avatar');
     };
     for (const b of document.querySelectorAll('.btn-back')) {
       b.onclick = () => {
@@ -481,7 +488,7 @@ class Game {
      */
     const backTo = {
       croaklands: 'play', dungeon: 'play', practice: 'play',
-      customize: 'play', saves: 'croaklands',
+      customize: 'play', saves: 'croaklands', avatar: 'customize',
     };
     for (const [from, to] of Object.entries(backTo)) {
       const b = $('panel-' + from).querySelector('.btn-back');

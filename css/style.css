@@ -406,6 +406,37 @@ html, body {
 .card-play { width: min(560px, 92vw); }
 
 /*
+ * NAME AND COLOUR, ON ONE ROW AT THE TOP.
+ *
+ * The name box is given a fixed share and the swatches take the rest, sized
+ * so all ten fit on a SINGLE line — two rows of five would make this block
+ * taller than the buttons underneath it, which is the wrong way round for
+ * something you glance at rather than decide on.
+ */
+.identity {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+.identity .field { margin-bottom: 0; }
+.identity .field:first-child { flex: 0 0 190px; }
+.identity .field:last-child { flex: 1 1 auto; min-width: 0; }
+.identity input { padding: 10px 12px; }
+/* Smaller than the old full-width grid, which is what buys the single row. */
+.identity .swatches { gap: 6px; flex-wrap: nowrap; }
+.identity .swatch-btn { width: 24px; height: 24px; flex: 0 0 24px; }
+
+/* A phone cannot fit ten 24px swatches beside a name box, so there it goes
+   back to stacking and the swatches are allowed to wrap. */
+@media (max-width: 520px) {
+  .identity { display: block; }
+  .identity .field:first-child { margin-bottom: 14px; }
+  .identity .swatches { flex-wrap: wrap; gap: 8px; }
+  .identity .swatch-btn { width: 30px; height: 30px; flex: 0 0 30px; }
+}
+
+/*
  * ROOM TO BREATHE.
  *
  * Every button on this screen is a decision, and decisions need air around
@@ -415,10 +446,18 @@ html, body {
  * go back to being generous.
  */
 .card-play .btn { margin-top: 4px; }
-.card-play .note { margin: 10px 2px 22px; }
-.card-play .divider { margin: 30px 0 18px; }
-.card-play .join-row { margin-top: 18px; }
-.card-play .status { margin-top: 16px; min-height: 20px; }
+.card-play .note { margin: 10px 2px 18px; }
+.card-play .divider { margin: 24px 0 16px; }
+.card-play .join-row { margin-top: 16px; }
+/*
+ * No reserved height. The status line is empty almost always — it is there
+ * for "enter a room code" and connection errors — and holding 20px open for
+ * a message that is not there was pure cost on a screen fighting for room.
+ * It pushes the content down when it has something to say, which is exactly
+ * when you want to notice it.
+ */
+.card-play .status { margin-top: 0; min-height: 0; }
+.card-play .status:not(:empty) { margin-top: 14px; min-height: 20px; }
 .card-play .btn-row { margin-top: 4px; }
 /* The last section has nothing under it, so it needs a floor of its own. */
 .card-play .btn-row:last-child { margin-bottom: 4px; }
@@ -443,7 +482,7 @@ html, body {
 /* A control that belongs to the button above it — the map picker under
    Create Room. Indented, so it reads as part of that choice. */
 .sub {
-  margin: 14px 0 22px 14px;
+  margin: 12px 0 16px 14px;
   padding-left: 14px;
   border-left: 3px solid rgba(255,255,255,0.07);
 }
@@ -1098,15 +1137,38 @@ kbd {
    CRATE OPENING
    ========================================================================== */
 
+/*
+ * IT HAS TO SURVIVE A SHORT WINDOW.
+ *
+ * This was `align-items: center` with no scrolling, which is the classic
+ * flexbox overflow trap: when the content is taller than the box, centring
+ * pushes the top AND bottom past the edges and there is no way to reach
+ * either. A ten-case summary is tall — reel, grid, tally, buttons — so on a
+ * laptop the OPEN 10 MORE and DONE buttons sat below the fold with no
+ * scrollbar, and the overlay could not be dismissed without pressing Escape.
+ *
+ * The fix is `margin: auto` on the child instead of centring the parent: it
+ * centres when there is room to spare and collapses to nothing when there is
+ * not, so the content always starts at the top and the whole thing scrolls.
+ */
 #crate {
   position: fixed; inset: 0;
   z-index: 45;
   display: none;
-  align-items: center; justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 12px;
   background: rgba(4,7,11,0.9);
 }
 #crate.show { display: flex; }
-.crate-inner { width: min(940px, 96vw); text-align: center; }
+.crate-inner {
+  width: min(940px, 96vw);
+  margin: auto 0;           /* centred when it fits, never clipped when not */
+  text-align: center;
+}
 .crate-title {
   font-family: var(--font-px);
   font-size: clamp(12px, 2vw, 18px);
@@ -1555,12 +1617,47 @@ kbd {
   font-size: 15px; color: var(--parch-dim);
 }
 
+/* ── the equip screen's three sections ──────────────────────────────
+   Styled like the shop's own tabs so the two screens read as parts of one
+   game rather than two, but wider and centred — there are three of them and
+   they are the whole navigation of this screen. */
+.av-tabs {
+  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.av-tab {
+  flex: 1 1 150px;
+  padding: 12px 10px;
+  font-family: var(--font-px); font-size: 9px; letter-spacing: 1px;
+  color: var(--parch-dim);
+  background: linear-gradient(180deg, #2a3340, #1a222c);
+  border: 3px solid #0c1219;
+  border-bottom-width: 4px;
+  cursor: pointer;
+  transition: color 0.14s, border-color 0.14s, transform 0.09s ease;
+}
+.av-tab:hover { color: var(--parch); transform: translateY(-2px); }
+.av-tab.active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+  background: linear-gradient(180deg, #35414f, #202a36);
+}
+
 /* A heading per set in the item grid, now that a tab holds three sets. */
 .set-head {
   margin: 22px 0 10px;
   display: flex; align-items: center; gap: 10px;
   font-family: var(--font-px); font-size: 9px;
   letter-spacing: 2px; color: var(--gold);
+}
+/* How many of the group you have, sitting between the name and the rule.
+   The reason to show a set you cannot finish yet is to see how far off it
+   is, and that is a number, not a feeling. */
+.set-head i {
+  font-style: normal;
+  font-size: 8px;
+  color: var(--parch-dim);
+  letter-spacing: 0;
 }
 .set-head::after {
   content: ''; flex: 1 1 auto; height: 3px;

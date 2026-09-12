@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v115" />
+<link rel="stylesheet" href="css/style.css?v=v116" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -121,26 +121,47 @@
          and arena practice. That is six screens' worth of decisions stacked
          into one, and the result was a page you scrolled rather than read.
 
-         Now it is a CHOOSER. Multiplayer sits at the top because it is what
-         PLAY has always meant and it stays two clicks from the main menu;
-         everything else is a button to its own screen, where its description
-         has room to exist. Nothing was removed — the name box, the colour
-         swatches and every paragraph are all still here, one screen deeper,
-         next to the thing they belong to. -->
+         Now it is a CHOOSER. Your name and colour at the top, multiplayer
+         next — that is what PLAY has always meant, and it stays two clicks
+         from the main menu — and every other mode a button to its own
+         screen, where its description has room to exist. Nothing was
+         removed: the four paragraphs that used to live here are on the
+         screens they describe.
+
+         It is built out of the menu's OWN vocabulary — a labelled divider
+         over each section, full-width buttons in one column, a `.note` under
+         the ones that need a word. An earlier pass invented a second
+         language for this one screen, hairline rules and a grid of four
+         differently coloured buttons, and it read as a web form rather than
+         as Frogshin. -->
     <div class="panel" id="panel-play">
       <div class="card card-play">
         <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
         <h2 class="card-title">PLAY</h2>
 
         <!--
-          Built out of the menu's OWN vocabulary: a labelled divider over each
-          section, full-width buttons stacked in one column, and a `.note`
-          under the ones that need a word of explanation. That is what every
-          other screen in this game already looks like, and the first attempt
-          at this screen quietly invented a second language for it — hairline
-          rules between blocks and a two-by-two grid of four differently
-          coloured buttons — which read as a web form rather than as Frogshin.
+          WHO YOU ARE, at the top and always visible.
+
+          Your name and your colour are not a screen you visit, they are
+          something you glance at and adjust on the way into a match — so
+          they sit above the thing you came here to press, with nothing to
+          click to reveal them.
+
+          Side by side to keep them to one row: stacked, the two labels and
+          their controls cost about 150px, which is the difference between
+          this screen fitting a laptop and not.
         -->
+        <div class="identity">
+          <div class="field">
+            <label for="input-name">NINJA NAME</label>
+            <input id="input-name" type="text" maxlength="14" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label>FROG COLOUR</label>
+            <div id="color-picker" class="swatches"></div>
+          </div>
+        </div>
+
         <div class="divider"><span>MULTIPLAYER</span></div>
 
         <!-- Side by side under one caption, exactly as the old panel had
@@ -223,6 +244,34 @@
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════ CUSTOMISE AVATAR ══
+         Everything you own, in one place, with nothing for sale on it.
+
+         Equipping used to happen only inside the SHOP, in among the crate
+         offers and their prices — so changing your frog meant walking
+         through a storefront, and the thing you already owned sat next to a
+         button asking you to buy more.
+
+         Three sections, and within each, a group per CASE the items come
+         from plus an AWARDS group at the bottom for the ones that cannot be
+         bought at all. The headings and the grids are built by
+         `Shop.renderAvatar`. -->
+    <div class="panel" id="panel-avatar">
+      <div class="card wide">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
+        <h2 class="card-title">CUSTOMISE AVATAR</h2>
+
+        <div class="av-tabs">
+          <button class="av-tab active" data-kind="frogs">PLAYER SKINS</button>
+          <button class="av-tab" data-kind="swords">SWORD SKINS</button>
+          <button class="av-tab" data-kind="kunai">KUNAI SKINS</button>
+        </div>
+
+        <div id="avatar-status" class="status"></div>
+        <div id="avatar-body"></div>
+      </div>
+    </div>
+
     <!-- ═══════════════════════════════════════════════════════ PRACTICE ══
          The two places nothing is at stake. Both were buried at the bottom
          of the old Play panel under an "OR" divider. -->
@@ -257,19 +306,16 @@
       <div class="card card-mode">
         <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
         <h2 class="card-title">CUSTOMIZE</h2>
+        <div class="mode-tag">SKINS &bull; BLADES &bull; KUNAI</div>
 
-        <div class="field">
-          <label for="input-name">NINJA NAME</label>
-          <input id="input-name" type="text" maxlength="14" autocomplete="off" spellcheck="false" />
-        </div>
+        <!-- The name box and the colour swatches are NOT here. They live at
+             the top of the Play screen, where they are visible without
+             opening anything — see the note over `.identity`. This screen is
+             about what you are wearing. -->
+        <button class="btn btn-go" id="btn-avatar"><span>CUSTOMISE AVATAR</span></button>
+        <p class="note">Equip your frog, your blade and your kunai.</p>
 
-        <div class="field">
-          <label>FROG COLOUR</label>
-          <div id="color-picker" class="swatches"></div>
-        </div>
-
-        <div class="divider"><span>SKINS, BLADES AND KUNAI</span></div>
-        <button class="btn btn-go" id="btn-customize-shop"><span>OPEN THE SHOP</span></button>
+        <button class="btn" id="btn-customize-shop"><span>OPEN THE SHOP</span></button>
         <p class="note">
           Nine cases and eighty-five skins, bought with froglets — plus the
           abilities you carry into a match.
@@ -1220,6 +1266,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v115"></script>
+<script type="module" src="js/main.js?v=v116"></script>
 </body>
 </html>

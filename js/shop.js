@@ -9,10 +9,10 @@
 import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
-} from './skins.js?v=v115';
-import { Audio } from './audio.js?v=v115';
-import { PX } from './icons.js?v=v115';
-import { CFG } from './config.js?v=v115';
+} from './skins.js?v=v116';
+import { Audio } from './audio.js?v=v116';
+import { PX } from './icons.js?v=v116';
+import { CFG } from './config.js?v=v116';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -341,6 +341,13 @@ export class Shop {
     this.economy = economy;
     this.onChange = onChange || (() => {});
     this.tab = 'swords';
+    /**
+     * Which screen the skin cards are currently drawn on — the shop, or the
+     * equip screen. Both use `_skinCard`, and it has to redraw the one you
+     * are actually looking at when you click one.
+     */
+    this.view = 'shop';
+    this.avatarTab = 'frogs';
     this.opening = false;
     // Trial mode is the practice ring: everything reads as owned, nothing is
     // charged, and equipping writes to a temporary loadout instead of saving.
@@ -352,7 +359,7 @@ export class Shop {
   setTryMode(on) {
     if (this.tryMode === on) return;
     this.tryMode = on;
-    this.render();
+    this.refresh();
   }
 
   _wire() {
@@ -366,6 +373,15 @@ export class Shop {
         this.render();
       });
     }
+    // The equip screen's three sections.
+    for (const b of document.querySelectorAll('.av-tab')) {
+      b.addEventListener('click', () => {
+        this.avatarTab = b.dataset.kind;
+        Audio.uiClick();
+        this.openAvatar();
+      });
+    }
+
     const again = () => {
       const c = this._lastCrate;
       const n = this._lastCount || 1;
@@ -399,10 +415,100 @@ export class Shop {
     });
   }
 
+  /**
+   * Say something, on whichever screen is actually showing.
+   *
+   * The skin cards are drawn on two screens now — the shop and the equip
+   * screen — and "Bog Frog equipped." written into the shop's status line
+   * while you are looking at the equip screen is a message nobody sees.
+   */
   status(msg, isError) {
-    const el = $('shop-status');
+    const el = $(this.view === 'avatar' ? 'avatar-status' : 'shop-status');
+    if (!el) return;
     el.textContent = msg || '';
     el.classList.toggle('error', !!isError);
+  }
+
+  /** Redraw whichever screen the cards are on. */
+  refresh() {
+    if (this.view === 'avatar') this.renderAvatar();
+    else this.render();
+  }
+
+  /** Is this one unlocked? Default skins and trial mode always are. */
+  owns(kind, skin) {
+    return this.tryMode
+      || skin.id === DEFAULT_SKIN[kind]
+      || this.economy.owns(kind, skin.id);
+  }
+
+  openShop() { this.view = 'shop'; this.render(); }
+
+  openAvatar(kind) {
+    this.view = 'avatar';
+    if (kind) this.avatarTab = kind;
+    this.renderAvatar();
+  }
+
+  /**
+   * ═══ CUSTOMISE AVATAR ══════════════════════════════════════════════════
+   *
+   * The equip screen: everything you own, in one place, with nothing for
+   * sale on it.
+   *
+   * Equipping used to happen only inside the SHOP, in among the crate
+   * offers and their prices — so changing your frog meant walking through a
+   * storefront, and the thing you already owned sat next to a button asking
+   * you to buy more.
+   *
+   * GROUPED BY WHERE IT CAME FROM, and the heading is the case's real name
+   * read straight off the crate table rather than a label written out here,
+   * so a set added later names itself. Reward skins have no case, so they
+   * get an AWARDS group of their own at the BOTTOM — they are the things
+   * that cannot be bought, and they read better as the end of the list than
+   * as an interruption in the middle of it.
+   */
+  renderAvatar() {
+    const kind = this.avatarTab || 'frogs';
+    for (const b of document.querySelectorAll('.av-tab')) {
+      b.classList.toggle('active', b.dataset.kind === kind);
+    }
+    const body = $('avatar-body');
+    if (!body) return;
+    body.textContent = '';
+
+    const items = CATALOG[kind] || [];
+    const groupOf = (s) => (s.reward ? 'awards' : setOf(s));
+    const order = [];
+    for (const s of items) {
+      const g = groupOf(s);
+      if (order.indexOf(g) === -1) order.push(g);
+    }
+    order.sort((a, b) => (a === 'awards' ? 1 : 0) - (b === 'awards' ? 1 : 0));
+
+    for (const key of order) {
+      const list = items.filter((s) => groupOf(s) === key);
+      if (!list.length) continue;
+
+      const head = document.createElement('div');
+      head.className = 'set-head';
+      const crate = cratesFor(kind).find((c) => setOf(c) === key);
+      head.textContent = key === 'awards'
+        ? 'AWARDS'
+        : (crate ? crate.name.toUpperCase() : (SET_NAMES[key] || key.toUpperCase()));
+      // How much of the group you have. The reason to show a set you cannot
+      // complete yet is to see how far off you are.
+      const have = list.filter((s) => this.owns(kind, s)).length;
+      const count = document.createElement('i');
+      count.textContent = `${have} / ${list.length}`;
+      head.appendChild(count);
+      body.appendChild(head);
+
+      const grid = document.createElement('div');
+      grid.className = 'skin-grid';
+      for (const s of list) grid.appendChild(this._skinCard(kind, s));
+      body.appendChild(grid);
+    }
   }
 
   // ---------------------------------------------------------------- render
@@ -630,9 +736,7 @@ export class Shop {
   }
 
   _skinCard(kind, skin) {
-    const owned = this.tryMode
-      || skin.id === DEFAULT_SKIN[kind]
-      || this.economy.owns(kind, skin.id);
+    const owned = this.owns(kind, skin);
     const slot = this._slot(kind);
     const current = this.tryMode && this.trial
       ? this.trial[slot]
@@ -675,7 +779,8 @@ export class Shop {
           this.status(`${skin.name} equipped.`);
           this.onChange();
         }
-        this.render();
+        // Redraw whichever screen this card is on, not always the shop.
+        this.refresh();
       };
     }
     return card;
