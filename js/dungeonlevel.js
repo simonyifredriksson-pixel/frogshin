@@ -12,11 +12,11 @@
  * Layout runs along +x: room i is centred at origin.x + i * roomSpacing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v116';
-import { CFG } from './config.js?v=v116';
-import { mulberry32, clamp, lerp } from './util.js?v=v116';
-import { Terrain, CollisionWorld } from './collision.js?v=v116';
-import { lanternGlowTexture } from './world.js?v=v116';
+import * as THREE from '../lib/three.module.js?v=v117';
+import { CFG } from './config.js?v=v117';
+import { mulberry32, clamp, lerp } from './util.js?v=v117';
+import { Terrain, CollisionWorld } from './collision.js?v=v117';
+import { lanternGlowTexture } from './world.js?v=v117';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

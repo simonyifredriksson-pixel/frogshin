@@ -423,17 +423,43 @@ html, body {
 .identity .field:first-child { flex: 0 0 190px; }
 .identity .field:last-child { flex: 1 1 auto; min-width: 0; }
 .identity input { padding: 10px 12px; }
-/* Smaller than the old full-width grid, which is what buys the single row. */
-.identity .swatches { gap: 6px; flex-wrap: nowrap; }
-.identity .swatch-btn { width: 24px; height: 24px; flex: 0 0 24px; }
+/*
+ * THE SWATCHES DIVIDE WHAT IS LEFT — they are not a fixed size.
+ *
+ * They were `flex: 0 0 24px`, which is ten rigid chips plus nine gaps: 294px
+ * against a column that is about 293px on a 600px-wide window. Rigid items
+ * cannot shrink, so the tenth colour simply hung outside the panel.
+ *
+ * `flex: 1 1 0` with `min-width: 0` makes them share the row instead, so the
+ * arithmetic cannot be one pixel wrong at any window width. The height stays
+ * fixed rather than using `aspect-ratio`, because a flexed width and a
+ * definite height together would make the ratio a no-op anyway — and an
+ * unsupported `aspect-ratio` with `height: auto` collapses an empty button
+ * to nothing.
+ */
+.identity .swatches { gap: 5px; flex-wrap: nowrap; width: 100%; }
+.identity .swatch-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  height: 26px;
+  max-width: 30px;
+  border-width: 2px;
+}
 
-/* A phone cannot fit ten 24px swatches beside a name box, so there it goes
-   back to stacking and the swatches are allowed to wrap. */
-@media (max-width: 520px) {
+/*
+ * Below this the row stops being worth it: ten swatches beside a name box
+ * squeeze to about 17px each, which is too small to tell two greens apart.
+ * Stacked, they go back to full size and are allowed to wrap.
+ */
+@media (max-width: 600px) {
   .identity { display: block; }
   .identity .field:first-child { margin-bottom: 14px; }
-  .identity .swatches { flex-wrap: wrap; gap: 8px; }
-  .identity .swatch-btn { width: 30px; height: 30px; flex: 0 0 30px; }
+  .identity .swatches { flex-wrap: wrap; gap: 8px; width: auto; }
+  .identity .swatch-btn {
+    flex: 0 0 32px; width: 32px; height: 32px; max-width: none;
+    border-width: 3px;
+  }
 }
 
 /*
