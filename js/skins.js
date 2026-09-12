@@ -8,37 +8,72 @@
  */
 
 /**
- * Rarity tiers. Weights are relative and follow the familiar steep curve —
- * the top tier is deliberately rare enough to feel like an event.
+ * ═══ RARITY TIERS AND WHAT EACH IS WORTH ════════════════════════════════
  *
- * ── why the weights are RELATIVE ────────────────────────────────────────
- * `rollCrate` totals only the tiers a crate actually contains, so a crate
- * whose floor is Uncommon is genuinely better per roll rather than being a
- * commons machine with the commons deleted. That is what makes the Celestial
- * Forge worth 5,000 froglets: its worst outcome is an Uncommon, and its
- * Legendary chance is about five times the Swampforged one.
+ * Two mechanisms, because the top of the ladder and the bottom of it are
+ * answering different questions. See `tierChances` for the arithmetic.
  *
- * MYTHIC exists for exactly one item — the Astral Sovereign — and at weight
- * 4 against the celestial crate's 2,012 it lands about once in five hundred
- * opens. Anything likelier would not deserve its own tier.
+ * ── the top three are ANCHORED ──────────────────────────────────────────
+ * A Legendary is 0.80% to pull, a Mythic 0.20%, a Secret 0.03% — per item,
+ * in every crate in the game. These are headline numbers a player quotes to
+ * a friend, so they are stated outright rather than falling out of whatever
+ * else happens to be in the pool.
+ *
+ * ── the four below are WEIGHTED ─────────────────────────────────────────
+ * They share whatever the anchored tiers leave, in proportion. That is what
+ * makes a crate whose floor is Uncommon genuinely better per roll rather
+ * than a commons machine with the commons deleted, and it is what the
+ * Celestial Forge's 5,000 froglets buy: no commons at all, two Legendaries
+ * instead of one, and the only Mythic in the game.
+ *
+ * ── WHY THESE FOUR NUMBERS ──────────────────────────────────────────────
+ * They are chosen so the ladder holds at the join. In a five-tier crate
+ * they come out at exactly 62% / 24% / 10% / 3.2%, which puts Epic four
+ * times a Legendary — and the ladder is the whole point of having tiers.
+ *
+ * The previous curve was 7992 / 1598 / 320 / 64, a clean division by five
+ * all the way down, and it could not survive Legendary moving to 0.80%:
+ * Epic landed at 0.6365%, so a Legendary would have been EASIER to pull
+ * than an Epic. Raising the top of a ladder means re-spacing the rungs
+ * under it, or it stops being a ladder.
  */
 export const RARITY = {
-  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', weight: 7992 },
-  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', weight: 1598 },
-  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', weight: 320 },
-  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', weight: 64 },
-  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', weight: 26 },
-  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', weight: 4 },
+  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', weight: 7750 },
+  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', weight: 3000 },
+  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', weight: 1250 },
+  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', weight: 400 },
+  /**
+   * ── THE TOP THREE ARE ANCHORED, NOT WEIGHTED ────────────────────────
+   *
+   * `odds` is a flat PER-ITEM percentage: any one Legendary is 0.80% to
+   * pull, any one Mythic 0.20%, any one Secret 0.03%, out of any crate in
+   * the game, whatever else that crate happens to contain.
+   *
+   * ── why this had to stop being a weight ─────────────────────────────
+   * A weight is only a probability once you know what it is competing
+   * against, and `rollCrate` totals only the tiers a crate actually holds.
+   * Mythic sat at weight 4 in every crate and came out at 0.1988% in the
+   * Celestial cases and 0.0400% in the Eclipse ones — five times rarer for
+   * no reason anybody chose, purely because the Celestial set has no
+   * Common tier to dilute it. It also left Mythic (0.04%) barely rarer
+   * than Secret (0.03%), collapsing two tiers that are meant to be an
+   * order of magnitude apart.
+   *
+   * A headline number is a promise to the player. It cannot be an emergent
+   * property of which other tiers happen to be in the pool, so these three
+   * are now stated directly and the tiers below them share what is left.
+   */
+  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: 0.80 },
+  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 0.20 },
   /**
    * ??? — and it stays ??? until somebody pulls one.
    *
-   * Weight 3 against the Eclipse crates' 10,007 is 0.0300%, which is the
-   * figure these were specified at: about one in 3,336 opens. It is not a
+   * One in 3,333, which is the figure these were specified at. It is not a
    * tier anything else uses, and the three items in it are the only things
    * in the game whose NAME is hidden until it is yours — see `secret` on a
    * skin and `Shop.hidden`.
    */
-  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', weight: 3 },
+  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.03 },
 };
 
 export const RARITY_ORDER = [
@@ -975,25 +1010,88 @@ export function isReward(kind, id) {
   return !!(s && s.reward);
 }
 
+/** The pool split into tiers: `{ rare: [item, item], ... }`. */
+function tiersOf(pool) {
+  const tiers = {};
+  for (const item of pool) (tiers[item.rarity] = tiers[item.rarity] || []).push(item);
+  return tiers;
+}
+
+/**
+ * ═══ WHAT EACH TIER IS ACTUALLY WORTH, IN THIS CRATE ════════════════════
+ *
+ * The single place the odds are decided. `rollCrate` and `crateOdds` both
+ * come through here, so what the shop advertises and what the roller does
+ * cannot drift apart — they are not two implementations of the same rule,
+ * they are one.
+ *
+ * Two kinds of tier:
+ *
+ *   ANCHORED (`odds`)  Legendary, Mythic, Secret. A flat per-item
+ *                      percentage, identical in every crate. A tier with
+ *                      two Legendaries in it is therefore twice as likely
+ *                      to pay out a Legendary — which is the point: the
+ *                      promise is about the ITEM you are chasing, and a
+ *                      set with two of them gives you two shots at 0.80%.
+ *
+ *   WEIGHTED (`weight`) Common through Epic. These share whatever the
+ *                      anchored tiers leave, in proportion — so a crate
+ *                      whose floor is Uncommon genuinely upgrades its
+ *                      commons rather than deleting them.
+ *
+ * @returns `{ tier: probability }` as fractions of 1, summing to 1.
+ */
+function tierChances(tiers) {
+  let anchored = 0;
+  let floatWeight = 0;
+  for (const r of RARITY_ORDER) {
+    if (!tiers[r]) continue;
+    if (RARITY[r].odds !== undefined) anchored += (RARITY[r].odds / 100) * tiers[r].length;
+    else floatWeight += RARITY[r].weight;
+  }
+  /**
+   * A pool could in principle carry so many anchored items that they claim
+   * more than the whole probability space — thirty Mythics would be 6%
+   * each of nothing left over. Nothing in the game is close to that, but
+   * the alternative to scaling here is a negative remainder and a roller
+   * that silently stops returning commons.
+   */
+  const scale = anchored > 1 ? 1 / anchored : 1;
+  const used = anchored * scale;
+  const spare = Math.max(0, 1 - used);
+
+  const out = {};
+  for (const r of RARITY_ORDER) {
+    if (!tiers[r]) continue;
+    out[r] = RARITY[r].odds !== undefined
+      ? (RARITY[r].odds / 100) * tiers[r].length * scale
+      : (floatWeight > 0 ? (RARITY[r].weight / floatWeight) * spare : 0);
+  }
+  return out;
+}
+
 /**
  * Roll one item from a crate.
  *
- * Picks a RARITY first by weight, then an item uniformly within it. Doing it
- * that way keeps the advertised odds exact no matter how many items sit in
- * each tier — adding a second legendary later must not double its chance.
+ * Picks a RARITY first, then an item uniformly within it. Doing it that way
+ * is what makes a per-item anchor exact: one of two Legendaries is
+ * `tier / 2`, and the tier is `0.80% x 2`, so each lands on 0.80% whatever
+ * else changes around it.
  */
 export function rollCrate(crate, rnd = Math.random) {
-  const pool = cratePool(crate);
-  const tiers = {};
-  for (const item of pool) (tiers[item.rarity] = tiers[item.rarity] || []).push(item);
+  const tiers = tiersOf(cratePool(crate));
+  const chance = tierChances(tiers);
 
+  // Rolled against the ACTUAL total rather than against 1. The chances sum
+  // to 1 in exact arithmetic and to a hair under it in floating point, and
+  // that hair is a roll that falls off the end of the loop.
   let total = 0;
-  for (const r of RARITY_ORDER) if (tiers[r]) total += RARITY[r].weight;
+  for (const r of RARITY_ORDER) if (tiers[r]) total += chance[r];
 
   let roll = rnd() * total;
   for (const r of RARITY_ORDER) {
     if (!tiers[r]) continue;
-    roll -= RARITY[r].weight;
+    roll -= chance[r];
     if (roll <= 0) {
       const group = tiers[r];
       return group[Math.floor(rnd() * group.length) % group.length];
@@ -1020,13 +1118,22 @@ export function rollMany(crate, n, rnd = Math.random) {
 /** How many cases you may buy in one go. */
 export const BULK_SIZES = [1, 3, 5, 10];
 
-/** Percentage chance of each tier present in a crate, for the odds display. */
+/**
+ * Percentage chance of each tier present in a crate, for the odds display.
+ *
+ * Reads the same `tierChances` the roller does, so the shop cannot advertise
+ * a number the roller does not honour. `per` is the chance of one SPECIFIC
+ * item in that tier, which is the number a player chasing one thing actually
+ * wants — and for the anchored tiers it is the stated headline figure.
+ */
 export function crateOdds(crate) {
-  const pool = cratePool(crate);
-  const present = new Set(pool.map((i) => i.rarity));
-  let total = 0;
-  for (const r of present) total += RARITY[r].weight;
+  const tiers = tiersOf(cratePool(crate));
+  const chance = tierChances(tiers);
   return RARITY_ORDER
-    .filter((r) => present.has(r))
-    .map((r) => ({ rarity: r, pct: (RARITY[r].weight / total) * 100 }));
+    .filter((r) => tiers[r])
+    .map((r) => ({
+      rarity: r,
+      pct: chance[r] * 100,
+      per: (chance[r] * 100) / tiers[r].length,
+    }));
 }

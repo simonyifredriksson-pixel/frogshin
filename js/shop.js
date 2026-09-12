@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v119';
-import { Audio } from './audio.js?v=v119';
-import { PX } from './icons.js?v=v119';
-import { CFG } from './config.js?v=v119';
+} from './skins.js?v=v120';
+import { Audio } from './audio.js?v=v120';
+import { PX } from './icons.js?v=v120';
+import { CFG } from './config.js?v=v120';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -825,8 +825,8 @@ export class Shop {
     el.className = 'crate-contents';
 
     const pool = cratePool(crate);
-    const pct = {};
-    for (const o of crateOdds(crate)) pct[o.rarity] = o.pct;
+    const pct = {}, per = {};
+    for (const o of crateOdds(crate)) { pct[o.rarity] = o.pct; per[o.rarity] = o.per; }
 
     const owned = pool.filter((s) => this.tryMode || this.economy.owns(crate.kind, s.id));
     const head = document.createElement('div');
@@ -847,11 +847,25 @@ export class Shop {
       const label = document.createElement('div');
       label.className = 'cc-label';
       const p = pct[tier] || 0;
+      /**
+       * THE PERCENTAGE IS THE TIER; THE "1 IN N" IS ONE ITEM.
+       *
+       * Those are different numbers whenever a tier holds more than one
+       * thing, and the one a player actually wants is the second: nobody
+       * is hunting "a legendary", they are hunting the Emperor. The
+       * Celestial cases carry two Legendaries, so the tier pays out 1.60%
+       * of the time while any particular blade is 0.80% — quoting 1 in 63
+       * for that would be true of the tier and wrong about every item in
+       * it. "each" is what makes the distinction readable.
+       */
+      const q = per[tier] || 0;
+      const many = group.length > 1;
       label.innerHTML = `<span style="color:${r.color}">${r.name.toUpperCase()}</span>`
         + `<b>${p.toFixed(p < 1 ? 2 : 1)}%</b>`
         // One in how many. A percentage under a tenth of one percent means
-        // nothing to read; "1 in 503" is a number you can feel.
-        + (p > 0 && p < 5 ? `<i>1 in ${Math.round(100 / p)}</i>` : '');
+        // nothing to read; "1 in 500" is a number you can feel.
+        + (q > 0 && q < 5
+          ? `<i>1 in ${Math.round(100 / q)}${many ? ' each' : ''}</i>` : '');
       row.appendChild(label);
 
       const grid = document.createElement('div');
