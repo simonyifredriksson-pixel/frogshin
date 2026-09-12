@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v118';
-import { CFG } from './config.js?v=v118';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v118';
+import * as THREE from '../lib/three.module.js?v=v119';
+import { CFG } from './config.js?v=v119';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v119';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -144,6 +144,19 @@ const G = {
   cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
   cone: new THREE.ConeGeometry(1, 1, 7),
   torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
+  /**
+   * A PARTIAL ring — a crescent, not a circle.
+   *
+   * The eclipse emblem is a dark disc with a thin arc of light around most
+   * of it, and the gap is the whole read: a complete ring is a badge, an
+   * interrupted one is a body passing in front of a star. Thinner in the
+   * tube than `torus` (0.075 against 0.12) because at emblem scale a 0.12
+   * tube is a doughnut.
+   *
+   * Lies in the XY plane like every TorusGeometry, so it faces +Z with no
+   * rotation — which is exactly where the chest is.
+   */
+  arc: new THREE.TorusGeometry(1, 0.075, 5, 22, Math.PI * 1.42),
 };
 
 // Scratch colours for the divine skin's phase blend, so it allocates none.
@@ -558,6 +571,83 @@ export class FrogModel {
         color: ffx.orbit, transparent: true, opacity: 0.35, depthWrite: false,
       });
     }
+    /**
+     * ══ THE ECLIPSE SET'S MATERIALS ═══════════════════════════════════
+     *
+     * One skin uses these — see `frog_ecl_secret` in js/skins.js — and it
+     * is the only one in the game with a builder to itself.
+     *
+     * ── every animated value here is a COLOUR, never an opacity ────────
+     * `setGhost` walks the whole graph stashing each material's opacity so
+     * it can restore it afterwards, so anything that writes `opacity` every
+     * frame fights the invisibility ability and loses in both directions:
+     * the stash captures a mid-fade value, and the restore is overwritten a
+     * frame later. Colour is untouched by ghosting, and the two effects
+     * that genuinely need to fade — the fragments and the motes — do it by
+     * SCALE, the same way the embers above do and for the same reason.
+     */
+    if (ffx.eclipse) {
+      const plate = new THREE.Color(ffx.obsidian || 0x24223a);
+      const silver = new THREE.Color(ffx.silver || 0xbcc0cf);
+      const energy = new THREE.Color(ffx.energy || 0x9b86f0);
+      // Kept for the animation, which lerps AROUND these rather than
+      // rebuilding a colour from a hex every frame.
+      this._eclEnergy = energy.clone();
+      this._eclSilver = silver.clone();
+
+      // Armour. Lit, with a touch of self-light so it separates from the
+      // body underneath it even on the side facing away from the sun.
+      this.mats.eclPlate = new THREE.MeshLambertMaterial({
+        color: plate, emissive: plate.clone().multiplyScalar(0.18),
+      });
+      // The bevel along the top edge of each plate. A shade LIGHTER, which
+      // is what gives a piece of armour a readable edge instead of a
+      // silhouette that dissolves into the body.
+      this.mats.eclLip = new THREE.MeshLambertMaterial({
+        color: plate.clone().multiplyScalar(1.75),
+      });
+      this.mats.eclSilver = new THREE.MeshLambertMaterial({
+        color: silver, emissive: silver.clone().multiplyScalar(0.12),
+      });
+      // The one true black on the whole skin: the disc at the centre of the
+      // emblem, and the charm hanging off the belt.
+      this.mats.eclVoid = new THREE.MeshBasicMaterial({ color: 0x07060c });
+      /**
+       * Sclera and iris. Basic, so the eyes stay the brightest thing on the
+       * frog whatever the light is doing — they are the focal point.
+       *
+       * SILVER, not white. At 0xe8e6ff over this much of the head they read
+       * as two cartoon eyes; pulled back to a moonlit silver they read as
+       * something looking at you, which is the whole intent. The bright
+       * white is kept for the one highlight dot in each, where a specular
+       * glint belongs.
+       */
+      this.mats.eclEye = new THREE.MeshBasicMaterial({ color: 0xd2d4e8 });
+      this.mats.eclIris = new THREE.MeshBasicMaterial({ color: energy.clone() });
+      // The emblem's crescent and the hairline cracks. Three materials, not
+      // one, so they can pulse out of phase — a single material makes every
+      // crack on the model flash in unison, which reads as a light switch.
+      this.mats.eclEmblem = new THREE.MeshBasicMaterial({ color: energy.clone() });
+      this.mats.eclCrackA = new THREE.MeshBasicMaterial({ color: energy.clone() });
+      this.mats.eclCrackB = new THREE.MeshBasicMaterial({ color: energy.clone() });
+      // Fragments: a dim violet chip. Faded by scale, so a fixed opacity.
+      this.mats.eclFrag = new THREE.MeshBasicMaterial({
+        color: energy.clone().multiplyScalar(0.72),
+        transparent: true, opacity: 0.62, depthWrite: false,
+      });
+      this.mats.eclMote = new THREE.MeshBasicMaterial({
+        color: energy.clone().multiplyScalar(0.85),
+        transparent: true, opacity: 0.5, depthWrite: false,
+      });
+      // The distortion at the feet. Dark, not smoky — it reads as the
+      // ground being wrong rather than as something burning.
+      this.mats.eclShade = new THREE.MeshBasicMaterial({
+        color: 0x120c22, transparent: true, opacity: 0.42, depthWrite: false,
+      });
+      this.mats.eclShadeOut = new THREE.MeshBasicMaterial({
+        color: 0x1a1230, transparent: true, opacity: 0.18, depthWrite: false,
+      });
+    }
 
     this.root = new THREE.Group();          // sits at the player's ground point
     /**
@@ -773,7 +863,22 @@ export class FrogModel {
 
     // Headband across the brow with two trailing tails.
     this.head.add(mesh(G.cyl, this.mats.scarf, 0.455, 0.075, 0.44, 0, 0.10, 0));
-    this.head.add(mesh(G.box, this.mats.gold, 0.14, 0.11, 0.03, 0, 0.10, 0.42));
+    /**
+     * The brow plate, and the sheath fittings in _buildGear, are the frog's
+     * OWN gear drawn in the sword's guard colour — which is fine for every
+     * skin in the game except one. Collected so `_buildEclipse` can restate
+     * them in silver: the Forgotten One has no gold anywhere on it, and a
+     * gold buckle in the middle of its face was the single loudest wrong
+     * note on the model.
+     *
+     * The katana itself is deliberately NOT in this list. Which sword you
+     * carry is your choice, and its guard should stay the colour that sword
+     * says it is.
+     */
+    this._goldTrim = this._goldTrim || [];
+    const brow = mesh(G.box, this.mats.gold, 0.14, 0.11, 0.03, 0, 0.10, 0.42);
+    this._goldTrim.push(brow);
+    this.head.add(brow);
     this.bandTails = [];
     for (const sx of [-1, 1]) {
       const tail = new THREE.Group();
@@ -894,8 +999,13 @@ export class FrogModel {
     this.sheath.rotation.set(0.25, 0, -0.62);
     this.body.add(this.sheath);
     this.sheath.add(mesh(G.box, this.mats.saya, 0.085, 0.80, 0.15, 0, 0.30, 0));
-    this.sheath.add(mesh(G.box, this.mats.gold, 0.095, 0.05, 0.16, 0, 0.68, 0));
-    this.sheath.add(mesh(G.box, this.mats.gold, 0.092, 0.045, 0.158, 0, -0.08, 0));
+    // Koiguchi and kojiri — see the note on `_goldTrim` in _buildHead.
+    this._goldTrim = this._goldTrim || [];
+    for (const [sy, sz, py] of [[0.05, 0.16, 0.68], [0.045, 0.158, -0.08]]) {
+      const fit = mesh(G.box, this.mats.gold, 0.095, sy, sz, 0, py, 0);
+      this._goldTrim.push(fit);
+      this.sheath.add(fit);
+    }
     // Sageo cord tied near the mouth of the scabbard.
     this.sheath.add(mesh(G.cyl, this.mats.grip, 0.10, 0.05, 0.17, 0, 0.60, 0));
 
@@ -1181,7 +1291,299 @@ export class FrogModel {
         e.white.material = M.eyeLit;
       }
     }
+    if (F.eclipse) this._buildEclipse();
     if (F.divine) this._buildDivine();
+  }
+
+  /**
+   * ═══ THE FORGOTTEN ONE ═════════════════════════════════════════════════
+   *
+   * The one skin with a builder of its own. Everything else in the game is
+   * assembled out of the shared fx vocabulary above — horns, a crown, a
+   * halo, spines, orbiting chips — and that vocabulary can only produce
+   * more entries in the same list. This is meant to read as a different
+   * TIER of cosmetic, so it is a different object.
+   *
+   * ── the rules it is built to ──────────────────────────────────────────
+   *  1. It is a FROG. Same proportions, same rig, same hitbox. Nothing here
+   *     touches a collider or a stat, and nothing changes the silhouette by
+   *     more than the thickness of a piece of armour.
+   *  2. The body takes light. See the note on the skin in js/skins.js.
+   *  3. Rarity comes from the armour, the emblem and the eyes — not from
+   *     covering the frog in glow. There are exactly four lit colours on
+   *     the whole model and three of them are hairlines.
+   *  4. Everything is parented to the part it belongs to: the cuirass to
+   *     `girth` so it breathes, the pauldrons to the shoulders so they
+   *     swing, the shin guards to the shins. Armour bolted to the body
+   *     slides over the animation and reads as a decal.
+   *
+   * Every offset below is checked against the shape it sits on. The torso
+   * is an ellipsoid 0.52 x 0.46 x 0.46 at y 0.62; the head is 0.44 x 0.36 x
+   * 0.42; the eyes are mounds of radius 0.23 at (±0.28, 0.26, 0.10) that
+   * bulge to y 0.49. A plate that ignores those is a plate inside the frog.
+   */
+  _buildEclipse() {
+    const M = this.mats;
+    const b = this.body;
+    const g = this.girth;
+    const h = this.head;
+
+    /** Where the cuirass ellipsoid's surface is, at a point on its face. */
+    const CU = { x: 0.455, y: 0.30, z: 0.405, cy: 0.625, cz: 0.155 };
+    const cuirassZ = (x, y) => {
+      const k = 1 - (x / CU.x) ** 2 - ((y - CU.cy) / CU.y) ** 2;
+      return CU.cz + CU.z * Math.sqrt(Math.max(0, k));
+    };
+
+    /**
+     * ── the headpiece ─────────────────────────────────────────────────
+     *
+     * Every gold fitting on the frog's own gear becomes silver. There is no
+     * gold anywhere on this skin, and the brow plate sits dead centre of
+     * the face — see `_goldTrim`.
+     */
+    for (const m of this._goldTrim || []) m.material = M.eclSilver;
+
+    /**
+     * A sleek fitted skullcap, not a hood.
+     *
+     * Low and tight: at x 0 it caps the skull to y 0.43, and by the time it
+     * reaches the eyes at x 0.28 it has drawn down to 0.38 — under their
+     * crown at 0.49 — so it hugs the head and leaves the face open, which
+     * is what a fitted mask does and what a hood cannot.
+     *
+     * The RIM is what makes it read as a separate piece. Without it the cap
+     * is the same darkness as the skull underneath and the two dissolve
+     * into one blob; a band a shade lighter around its base draws the line
+     * between helmet and head, which is the whole silhouette.
+     */
+    h.add(mesh(G.sphere, M.eclPlate, 0.455, 0.245, 0.405, 0, 0.185, -0.045));
+    h.add(mesh(G.wrap, M.eclLip, 0.462, 0.028, 0.412, 0, 0.205, -0.045));
+    // One silver seam front to back along the crest, clear of the cap's
+    // crown at 0.430 so it sits ON the helmet rather than inside it.
+    h.add(mesh(G.box, M.eclSilver, 0.030, 0.030, 0.34, 0, 0.437, -0.07));
+
+    /**
+     * Cheek guards, BELOW the eyes.
+     *
+     * The eye mounds span x 0.05 to 0.51 and reach down to y 0.03, so
+     * anything at eye height and outboard of the skull is inside an
+     * eyeball. At y -0.07 the mound is not there at all and the guard has
+     * the side of the jaw to itself.
+     *
+     * There are no temple studs any more. Two silver chips floating beside
+     * the eyes read as debris stuck to the face, and the brief asked for a
+     * simple silhouette — the cap, the guards and one brow plate is the
+     * whole headpiece.
+     */
+    for (const sx of [-1, 1]) {
+      h.add(mesh(G.box, M.eclPlate, 0.050, 0.170, 0.215,
+        sx * 0.368, -0.070, 0.045, 0, 0, sx * -0.13));
+      // A hairline along the guard's top edge, in the LIP colour rather
+      // than in silver: silver here reads as a chip stuck to the jaw, and
+      // the face is allowed exactly one bright line — the brow plate.
+      h.add(mesh(G.box, M.eclLip, 0.052, 0.016, 0.218,
+        sx * 0.368, 0.014, 0.045, 0, 0, sx * -0.13));
+    }
+
+    /**
+     * ── the eyes ──────────────────────────────────────────────────────
+     *
+     * Silver-white, with a small violet centre. The default pupil is 0.105
+     * x 0.135 and nearly fills the white; shrunk to 0.072 it becomes an
+     * IRIS with sclera around it, which is what makes an eye read as
+     * looking at something rather than as a hole.
+     *
+     * Deliberately not enlarged. The brief for this skin was "bright but
+     * not enormous", and the frog's eyes are already big.
+     */
+    for (const e of this.eyes) {
+      e.white.material = M.eclEye;
+      e.pupil.material = M.eclIris;
+      e.pupil.scale.set(0.082, 0.108, 0.082);
+      e.pupil.position.z = 0.215;
+    }
+
+    // ── chest: a fitted cuirass, standing a tenth proud of the torso ────
+    //
+    // In `girth`, with the belly and the gi, so a croak swells all three
+    // together — see _buildTorso. Its nose lands at z 0.560 against the
+    // belly's 0.530, so the pale belly stays behind it at every point.
+    g.add(mesh(G.lowSphere, M.eclPlate, CU.x, CU.y, CU.z, 0, CU.cy, CU.cz));
+    // The bevel along its top edge, and a gorget filling the neck gap
+    // between the torso (0.443 at that height) and the skull (0.388).
+    g.add(mesh(G.wrap, M.eclLip, 0.445, 0.030, 0.395, 0, 0.905, 0.145));
+    b.add(mesh(G.wrap, M.eclPlate, 0.462, 0.085, 0.435, 0, 0.868, 0));
+    b.add(mesh(G.wrap, M.eclSilver, 0.452, 0.020, 0.426, 0, 0.922, 0));
+
+    /**
+     * ── THE ECLIPSE EMBLEM ────────────────────────────────────────────
+     *
+     * A dark disc with a thin crescent of light around most of it. Three
+     * parts and about 0.3 units across: it is a maker's mark on a
+     * breastplate, not a logo — the brief was explicit that it must not be
+     * a giant glowing badge, and the crescent is the only part of it that
+     * is lit at all.
+     *
+     * The crescent is rotated so its gap sits at the lower right, which is
+     * what makes it read as something passing in FRONT of a light rather
+     * than as a broken ring.
+     *
+     * `eclEmblem` is its own material because the emblem brightens when
+     * the player moves or attacks and the cracks do not — see `update`.
+     */
+    const emY = 0.665;
+    const emZ = cuirassZ(0, emY);
+    g.add(mesh(G.cyl, M.eclVoid, 0.100, 0.020, 0.100, 0, emY, emZ + 0.012, Math.PI / 2));
+    g.add(mesh(G.torus, M.eclSilver, 0.114, 0.114, 0.114, 0, emY, emZ + 0.006));
+    g.add(mesh(G.arc, M.eclEmblem, 0.150, 0.150, 0.150, 0, emY, emZ + 0.002, 0, 0, 2.55));
+
+    /**
+     * ── hairline cracks ───────────────────────────────────────────────
+     *
+     * Ancient energy leaking through the armour. Three on the chest, one
+     * along each pauldron, one down each shin guard — seven lines, none
+     * longer than a seventh of a unit, each sixty-thousandths thick.
+     *
+     * Every one sits on the surface of the plate it is on, computed rather
+     * than eyeballed: a crack a hundredth of a unit inside an opaque
+     * cuirass is not a crack.
+     */
+    for (const [x, y, len, tilt, mat] of [
+      [-0.175, 0.745, 0.130, 0.42, M.eclCrackA],
+      [0.205, 0.700, 0.105, -0.52, M.eclCrackB],
+      [-0.240, 0.565, 0.090, -0.30, M.eclCrackA],
+    ]) {
+      g.add(mesh(G.box, mat, 0.016, len, 0.016, x, y, cuirassZ(x, y) + 0.008, 0, 0, tilt));
+    }
+
+    // ── shoulders: small, angular, canted outward ───────────────────────
+    //
+    // Flatter than the generic pauldron on purpose (0.095 tall against
+    // 0.18). The brief asked for small angular pieces, and a dome twice
+    // that height is the thing it asked to avoid.
+    for (const arm of this.arms) {
+      const sx = arm.side;
+      const tilt = sx * 0.24;
+      arm.shoulder.add(mesh(G.box, M.eclPlate, 0.245, 0.095, 0.225, 0, -0.035, 0, 0, 0, tilt));
+      arm.shoulder.add(mesh(G.box, M.eclLip, 0.255, 0.022, 0.235, 0, -0.092, 0, 0, 0, tilt));
+      arm.shoulder.add(mesh(G.box, M.eclSilver, 0.040, 0.028, 0.230,
+        sx * 0.095, -0.010, 0, 0, 0, tilt));
+      arm.shoulder.add(mesh(G.box, M.eclCrackB, 0.014, 0.018, 0.165,
+        sx * 0.035, 0.016, 0, 0, 0, tilt));
+      // Two silver bands over the forearm wraps. The forearm is a 0.10
+      // capsule, so 0.118 clears it and reads as a band rather than a tube.
+      arm.fore.add(mesh(G.wrap, M.eclSilver, 0.118, 0.020, 0.118, 0, -0.105, 0));
+      arm.fore.add(mesh(G.wrap, M.eclSilver, 0.113, 0.017, 0.113, 0, -0.205, 0));
+    }
+
+    // ── legs: a plate on the outer thigh, a guard down the shin ─────────
+    for (const leg of this.legs) {
+      const sx = leg.side;
+      leg.hip.add(mesh(G.box, M.eclPlate, 0.070, 0.150, 0.165,
+        sx * 0.170, -0.130, -0.015, 0, 0, sx * 0.14));
+      leg.shin.add(mesh(G.box, M.eclPlate, 0.125, 0.185, 0.055, 0, -0.140, 0.095, -0.05));
+      leg.shin.add(mesh(G.box, M.eclLip, 0.130, 0.020, 0.050, 0, -0.048, 0.102, -0.05));
+      leg.shin.add(mesh(G.box, M.eclCrackA, 0.013, 0.090, 0.013, 0, -0.150, 0.150, -0.05));
+    }
+
+    /**
+     * ── the charm on the belt ─────────────────────────────────────────
+     *
+     * Two silver links and a tiny eclipse — the emblem again, a fifth of
+     * the size. Its own group so it can swing a little in the idle, which
+     * is most of what sells a hanging object as hanging.
+     *
+     * Hung at the front right hip and pushed clear of the gi, which is a
+     * cylinder of radius 0.53 around the middle: at x 0.27 the gi's surface
+     * is at z 0.456, so 0.40 would be inside it and 0.50 is not.
+     */
+    this.eclCharm = new THREE.Group();
+    this.eclCharm.position.set(0.27, 0.455, 0.385);
+    b.add(this.eclCharm);
+    this.eclCharm.add(mesh(G.box, M.eclSilver, 0.020, 0.055, 0.020, 0, -0.032, 0));
+    this.eclCharm.add(mesh(G.box, M.eclSilver, 0.018, 0.050, 0.018, 0, -0.080, 0));
+    this.eclCharm.add(mesh(G.torus, M.eclSilver, 0.058, 0.058, 0.058, 0, -0.135, 0));
+    this.eclCharm.add(mesh(G.cyl, M.eclVoid, 0.046, 0.016, 0.046, 0, -0.135, 0.008, Math.PI / 2));
+
+    /**
+     * ── three fragments ───────────────────────────────────────────────
+     *
+     * Slow, and not always there. Each turns at about a fifth of a radian
+     * a second — a lap takes half a minute — and runs a fade cycle of its
+     * own, so at any moment one or two of the three are visible and
+     * occasionally none are. That is the difference between a character
+     * with fragments around it and a character inside a particle system.
+     *
+     * Faded by SCALE. See the note on the materials above.
+     */
+    this.eclFrags = [];
+    for (let i = 0; i < 3; i++) {
+      const size = 0.055 + (i % 2) * 0.018;
+      const m = mesh(G.box, M.eclFrag, size, size * 1.35, size * 0.7, 0, 0, 0);
+      m.castShadow = false;
+      m.visible = false;
+      b.add(m);
+      this.eclFrags.push({
+        mesh: m,
+        size,
+        a: (i / 3) * Math.PI * 2,
+        /**
+         * CLOSE IN. They orbit just off the shoulders, not in a wide ring
+         * around the frog: at 0.95 the outermost was nearly a body-width
+         * out and read as a halo of debris, which is the thing the brief
+         * ruled out. At 0.68 they sit inside the silhouette the arms
+         * already make, so the character's footprint is unchanged.
+         */
+        r: 0.64 + (i % 3) * 0.07,
+        y: 0.68 + i * 0.17,
+        spin: 0.19 + (i % 3) * 0.045,
+        // Long, and coprime-ish, so the three never sync up into a pulse.
+        period: 9.5 + i * 1.7,
+        t: i * 3.1,
+      });
+    }
+
+    /**
+     * ── five motes ────────────────────────────────────────────────────
+     *
+     * Very tiny, drifting up and out. Three hundredths of a unit — at
+     * arm's length they are a pixel — and a full rise takes four seconds,
+     * so what you see is the occasional speck leaving the frog rather than
+     * a column of smoke.
+     */
+    this.eclMotes = [];
+    for (let i = 0; i < 5; i++) {
+      const m = mesh(G.box, M.eclMote, 0.030, 0.030, 0.030, 0, 0, 0);
+      m.castShadow = false;
+      b.add(m);
+      this.eclMotes.push({
+        mesh: m,
+        a: (i / 5) * Math.PI * 2,
+        r: 0.22 + (i % 3) * 0.07,
+        t: i / 5,
+        rate: 0.21 + (i % 4) * 0.028,
+      });
+    }
+
+    /**
+     * ── the distortion at the feet ────────────────────────────────────
+     *
+     * Two flat discs, the outer one nearly invisible. Parented to `lift`
+     * rather than to `body`: `body` carries the breath and the hop, and a
+     * shadow that bobs with the frog's chest is not on the ground.
+     */
+    this.eclShade = mesh(G.cyl, M.eclShade, 0.50, 0.010, 0.50, 0, 0.030, 0);
+    this.eclShade.castShadow = false;
+    this.lift.add(this.eclShade);
+    this.eclShadeOut = mesh(G.cyl, M.eclShadeOut, 0.62, 0.008, 0.62, 0, 0.018, 0);
+    this.eclShadeOut.castShadow = false;
+    this.lift.add(this.eclShadeOut);
+
+    // Idle gesture clock — see the note in `update`.
+    this.eclipse = true;
+    this.eclGestureIn = 7 + Math.random() * 7;
+    this.eclGesture = 0;
   }
 
   /**
@@ -1861,6 +2263,23 @@ export class FrogModel {
       const worldYaw = Math.atan2(dx, dz);
       headTiltY = clamp(((worldYaw - this.root.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI, -0.8, 0.8);
     }
+    /**
+     * THE FORGOTTEN ONE occasionally looks up.
+     *
+     * Fired from `_animateEclipse` on a seven-to-fourteen second clock and
+     * only while standing, so it reads as a thought rather than a loop. It
+     * is ADDED to whatever the head was going to do and then damped like
+     * everything else, so there is nothing to cancel when the frog starts
+     * moving mid-gesture — the target simply changes underneath it.
+     *
+     * Small on purpose: 0.26 radians is about fifteen degrees. A calm,
+     * extremely powerful character glances at the sky; it does not perform.
+     */
+    if (this.eclGesture > 0) {
+      const k = Math.sin(this.eclGesture * Math.PI);
+      headTiltX -= 0.26 * k;
+      headTiltY += 0.10 * k;
+    }
     this.head.rotation.x = dampAngle(this.head.rotation.x, headTiltX, 12, dt);
     this.head.rotation.y = dampAngle(this.head.rotation.y, headTiltY, 12, dt);
 
@@ -1925,6 +2344,7 @@ export class FrogModel {
         s.mesh.rotation.y += dt * 2.2;
       }
     }
+    if (this.eclipse) this._animateEclipse(dt, t, s, stance, speed);
     if (this.divine) this._animateDivine(dt, t);
 
     // Throat pulse — a frog is never quite still.
@@ -2017,6 +2437,162 @@ export class FrogModel {
 
     // ---- tongue ----------------------------------------------------------
     this._updateTongue(dt, s);
+  }
+
+  /**
+   * ═══ THE FORGOTTEN ONE, MOVING ═════════════════════════════════════════
+   *
+   * Six small things, none of which is a particle system:
+   *
+   *   the eyes shimmer        a slow brightening of the iris, nothing else
+   *   the emblem answers      brighter while moving or attacking
+   *   the cracks pulse        two hairline sets, out of phase
+   *   three fragments drift   in and out, at a fifth of a radian a second
+   *   five motes rise         a speck at a time
+   *   the ground distorts     two discs, breathing
+   *
+   * Plus the gesture clock, read by the head block in `update`.
+   *
+   * Everything animated here is a COLOUR or a SCALE. Nothing writes
+   * `opacity`, because `setGhost` owns that — see the note on the materials
+   * in the constructor.
+   */
+  _animateEclipse(dt, t, s, stance, speed) {
+    const M = this.mats;
+
+    /**
+     * The iris. A slow breath between two-thirds and full, which at this
+     * size is a shimmer rather than a blink — the eye stays lit the whole
+     * time and only its intensity moves.
+     *
+     * Both eyes share the material and therefore shimmer together, which is
+     * correct: two eyes catching the light independently reads as a fault.
+     */
+    const shimmer = 0.68 + (0.5 + Math.sin(t * 1.45) * 0.5) * 0.32;
+    M.eclIris.color.copy(this._eclEnergy).multiplyScalar(shimmer);
+
+    /**
+     * The emblem answers the player.
+     *
+     * Dim while standing, brighter while moving, brightest through a swing.
+     * `attackT` counts down through the swing, so it is at its strongest on
+     * the frame the blade starts moving and has faded by the recovery.
+     *
+     * The range is deliberately narrow — 0.55 to 1.25 of the base colour.
+     * The brief was that the emblem should become SLIGHTLY brighter, and an
+     * emblem that switches from dark to blazing is a light, not a mark.
+     */
+    const run = clamp(speed / 12, 0, 1);
+    const swing = clamp(s.attackT || 0, 0, 1);
+    const emb = 0.55 + run * 0.30 + swing * 0.40
+      + Math.sin(t * 0.9) * 0.05;
+    M.eclEmblem.color.copy(this._eclEnergy).multiplyScalar(emb);
+
+    /**
+     * The cracks. Two sets on long, unequal periods, so what you see is one
+     * line somewhere on the armour coming up as another goes down — energy
+     * moving through it rather than a row of lamps on a timer.
+     *
+     * They bottom out at a quarter rather than at zero: a crack that goes
+     * out entirely leaves the armour looking chipped.
+     */
+    M.eclCrackA.color.copy(this._eclEnergy)
+      .multiplyScalar(0.28 + (0.5 + Math.sin(t * 0.62) * 0.5) * 0.72);
+    M.eclCrackB.color.copy(this._eclEnergy)
+      .multiplyScalar(0.28 + (0.5 + Math.sin(t * 0.47 + 2.2) * 0.5) * 0.72);
+
+    /**
+     * Fragments. Each runs its own cycle: a long hidden stretch, then a
+     * fade up, a while orbiting, and a fade down. `k` is the visible
+     * fraction, and it multiplies the build scale rather than replacing it
+     * — the same mistake the embers made once, which turned nine specks
+     * into nine unit cubes.
+     */
+    for (const f of this.eclFrags) {
+      f.t += dt;
+      if (f.t >= f.period) f.t -= f.period;
+      f.a += dt * f.spin;
+      /**
+       * Visible for the middle 44% of the cycle, easing in and out.
+       *
+       * Measured, not guessed: at 56% all three were up together 36% of
+       * the time, which is a permanent ring by another name. At 44% that
+       * falls to 22%, the average drops from 1.64 fragments to 1.27, and
+       * for better than a third of the time there are none at all — so
+       * the usual sight is one fragment, occasionally two.
+       */
+      const p = f.t / f.period;
+      let k = 0;
+      if (p > 0.28 && p < 0.72) k = Math.sin(((p - 0.28) / 0.44) * Math.PI);
+      f.mesh.visible = k > 0.02;
+      if (!f.mesh.visible) continue;
+      f.mesh.position.set(
+        Math.cos(f.a) * f.r,
+        f.y + Math.sin(t * 0.7 + f.a) * 0.055,
+        Math.sin(f.a) * f.r,
+      );
+      f.mesh.rotation.y += dt * 0.42;
+      f.mesh.rotation.x += dt * 0.27;
+      f.mesh.scale.set(f.size * k, f.size * 1.35 * k, f.size * 0.7 * k);
+    }
+
+    // Motes: one rise each, staggered, fading out by scale near the top.
+    for (const m of this.eclMotes) {
+      m.t += dt * m.rate;
+      if (m.t >= 1) m.t -= 1;
+      m.a += dt * 0.22;
+      const k = 1 - m.t;
+      m.mesh.position.set(
+        Math.cos(m.a) * m.r * (0.85 + m.t * 0.55),
+        0.26 + m.t * 1.20,
+        Math.sin(m.a) * m.r * (0.85 + m.t * 0.55),
+      );
+      m.mesh.scale.setScalar(0.030 * Math.max(0.05, k * k));
+    }
+
+    /**
+     * The ground. Two discs turning against each other and breathing, which
+     * at this opacity reads as the air over the frog's feet being wrong
+     * rather than as smoke coming off it.
+     *
+     * It tightens when the frog moves: a distortion that stays the same
+     * size whatever the player does is a decal on the floor.
+     */
+    if (this.eclShade) {
+      const br = 1 + Math.sin(t * 1.1) * 0.06 - run * 0.18;
+      this.eclShade.scale.set(0.50 * br, 0.010, 0.50 * br);
+      this.eclShade.rotation.y += dt * 0.25;
+      this.eclShadeOut.scale.set(0.62 * br * 1.04, 0.008, 0.62 * br * 1.04);
+      this.eclShadeOut.rotation.y -= dt * 0.16;
+    }
+
+    // The charm swings a little, and more when the frog is moving.
+    if (this.eclCharm) {
+      const sway = Math.sin(t * 2.1) * 0.10 + Math.sin(this.stride) * 0.22 * run;
+      this.eclCharm.rotation.x = damp(this.eclCharm.rotation.x, sway, 9, dt);
+      this.eclCharm.rotation.z = damp(this.eclCharm.rotation.z,
+        Math.sin(t * 1.6) * 0.07, 7, dt);
+    }
+
+    /**
+     * The gesture clock: a glance upward, every seven to fourteen seconds,
+     * and only while genuinely standing still.
+     *
+     * The countdown runs ONLY in stance, so a player who is moving is not
+     * quietly accruing gestures that all fire the moment they stop. The
+     * gesture itself is allowed to finish whatever happens — it is a
+     * quarter-radian offset that damps out on its own if the frog starts
+     * running mid-glance.
+     */
+    if (this.eclGesture > 0) {
+      this.eclGesture = Math.max(0, this.eclGesture - dt * 0.5);
+    } else if (stance) {
+      this.eclGestureIn -= dt;
+      if (this.eclGestureIn <= 0) {
+        this.eclGesture = 1;
+        this.eclGestureIn = 7 + Math.random() * 7;
+      }
+    }
   }
 
   /** Three-hit katana combo: horizontal, reverse horizontal, overhead. */

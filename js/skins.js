@@ -45,6 +45,39 @@ export const RARITY_ORDER = [
   'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'secret',
 ];
 
+/**
+ * ═══ THE ECLIPSE SET'S MATERIALS ════════════════════════════════════════
+ *
+ * The three ??? items are one set, and a set is a MATERIAL before it is a
+ * silhouette. These seven colours are the whole palette of all three, which
+ * is why they are written once here rather than typed out three times: a
+ * frog, a sword and a kunai that agree to the hex digit read as forged from
+ * the same thing, and three hand-picked near-blacks do not.
+ *
+ *   obsidian  the body and the blades. NOT black — 0x1c1b26 still takes
+ *             light, so the form reads. The first pass at this set was
+ *             0x07070a everywhere and rendered as a frog-shaped hole: no
+ *             shading, no silhouette, nothing to look at.
+ *   plate     the armour, a shade lighter and pushed toward violet so the
+ *             armour separates from the body it is worn over.
+ *   silver    trim. Muted, not chrome — a little of it, in thin lines.
+ *   violet    cloth: the obi, the headband, the scarf.
+ *   energy    the eclipse emblem, the cracks, the centre of the eye. The
+ *             ONLY bright colour in the set, and it is used sparingly.
+ *   cold      the cutting edge and the sclera. Very slightly blue-white.
+ *   void      the one true black, and it is 0.2 units wide: the disc at the
+ *             centre of the eclipse emblem.
+ */
+const ECL = {
+  obsidian: 0x1c1b26,
+  plate:    0x24223a,
+  silver:   0xbcc0cf,
+  violet:   0x312a52,
+  energy:   0x9b86f0,
+  cold:     0xe8e6ff,
+  void:     0x07060c,
+};
+
 // ---------------------------------------------------------------- swords
 
 /**
@@ -261,16 +294,22 @@ export const SWORD_SKINS = [
   /**
    * ??? — ECLIPSE'S EDGE.
    *
-   * Almost entirely black with one cold crack down the blade, and fragments
-   * of itself turning in the air around it. `secret` is what hides the name
-   * and the picture until it is yours.
+   * Obsidian, a silver ring for a guard, and three thin violet cracks up the
+   * flat — the same three materials the armour and the kunai are made of, so
+   * the set reads as one object split three ways.
+   *
+   * ── it used to be pitch black with ten orbiting chips ─────────────────
+   * Which is the cheap way to say "rare" and it did not work: the blade had
+   * no shading at all, and the chips were the only thing you could see. Now
+   * the blade is the thing you see and there are THREE fragments, slow.
    */
   { id: 'sword_ecl_secret', name: "Eclipse's Edge", rarity: 'secret', set: 'eclipse',
     secret: true,
-    blade: 0x050508, edge: 0xffffff, guard: 0x0a0a10, grip: 0x020204, glow: 0x0a0a14,
+    blade: ECL.obsidian, edge: ECL.cold, guard: ECL.silver, grip: 0x141320,
+    glow: 0x16122a,
     fx: {
-      shape: 'broad', tsuba: 'none', runes: 0xffffff,
-      orbit: 0xffffff, orbitN: 10, long: 1.3,
+      shape: 'broad', tsuba: 'ring', runes: ECL.energy,
+      orbit: ECL.energy, orbitN: 3, long: 1.25, tassel: ECL.violet,
     } },
 ];
 
@@ -428,8 +467,8 @@ export const KUNAI_SKINS = [
    */
   { id: 'kunai_ecl_secret', name: 'Eclipse Shard', rarity: 'secret', set: 'eclipse',
     secret: true,
-    blade: 0x050508, facet: 0xffffff, wrap: 0x0a0a10, ring: 0x020204,
-    fx: { shape: 'crystal', glow: true, ribbon: 0x2a2a3a, big: 1.35 } },
+    blade: ECL.obsidian, facet: ECL.cold, wrap: 0x141320, ring: ECL.silver,
+    fx: { shape: 'crystal', glow: true, ribbon: ECL.energy, big: 1.25 } },
 ];
 
 // ------------------------------------------------------------------ frog
@@ -689,28 +728,56 @@ export const FROG_SKINS = [
       halo: 0xd8d0ff, halo2: true, horns: 4, spikes: 6, emissive: 0x1a1040,
     } },
   /**
-   * ??? — THE FORGOTTEN ONE.
+   * ══ ??? — THE FORGOTTEN ONE ═══════════════════════════════════════════
    *
-   * A frog-shaped hole, with hairline cracks of white energy running over
-   * it. No armour tint, no aura colour but white, and `emissive: 0` so it
-   * refuses even the ambient light every other skin picks up — it should
-   * read as an absence with something alive inside it.
+   * The rarest thing in the game, and the ONLY skin that does not go through
+   * the generic fx list. `eclipse: true` runs a builder of its own — see
+   * `_buildEclipse` in js/frog.js — because everything below the top of the
+   * ladder is assembled from the same vocabulary of horns, crowns, haloes
+   * and spikes, and a skin built out of that vocabulary can only ever be
+   * another entry in it.
+   *
+   * ── WHY THE OLD ONE WAS WRONG ─────────────────────────────────────────
+   * It was `skin: 0x07070a` with `emissive: 0` and nine effects bolted on:
+   * a crown, four horns, six spines, two haloes, eight orbiting chips, a
+   * white aura, rising sparks and stars. Two separate failures, both fatal.
+   *
+   * The body had no SHADING. A Lambert material at 0x07070a lit by this
+   * game's sky returns almost the same number on every face, so the torso,
+   * the head and the legs were one flat silhouette with no form in it — you
+   * could not see that it was a frog, only where it was.
+   *
+   * And the effects were doing the work the DESIGN should do. Anything can
+   * have more particles. Rarity that reads across a map comes from the
+   * silhouette and the material, and every one of those nine things was
+   * noise laid over a shape nobody could see.
+   *
+   * ── WHAT IT IS NOW ────────────────────────────────────────────────────
+   * Obsidian that takes light, over a violet under-layer, wearing a fitted
+   * celestial ninja harness: a sleek skullcap, a cuirass with the eclipse
+   * emblem on it, small angular pauldrons, silver arm bands, shin guards, a
+   * charm on the belt. Silver-white eyes with a violet centre that shimmers.
+   * Three fragments that drift in and out, five motes, hairline cracks that
+   * pulse, and a low distortion at the feet. That is the whole effect list,
+   * and none of it is bright.
    */
   { id: 'frog_ecl_secret', name: 'The Forgotten One', rarity: 'secret', set: 'eclipse',
     secret: true,
-    skin: 0x07070a, belly: 0x141420, cloth: 0x030305, scarf: 0x0a0a10,
+    skin: ECL.obsidian,
+    belly: 0x2b2743,
+    cloth: 0x100f18,
+    scarf: ECL.violet,
     fx: {
-      plates: 0x0a0a10, pattern: 0xffffff, eyeGlow: 0xffffff,
-      embers: 0xffffff, stars: 0xffffff, crown: 1.9, aura: 0xffffff,
+      eclipse: true,
+      obsidian: ECL.plate,
+      silver: ECL.silver,
+      energy: ECL.energy,
       /**
-       * It has to out-rank the Fallen Celestial standing next to it, and a
-       * palette alone cannot do that against something gold and haloed. So
-       * it takes every top-tier tell there is — halo, second ring, orbit —
-       * and renders all of them in white on a body that is pure black.
-       * It is not brighter than the mythic; it has more of everything.
+       * A hair of self-light so the shadowed side never falls to pure
+       * black. This is what keeps the form readable at dusk and indoors —
+       * without it the skin is legible only where the sun happens to be.
        */
-      halo: 0xffffff, halo2: true, orbit: 0xffffff, orbitN: 8,
-      horns: 4, spikes: 6, emissive: 0x000000,
+      emissive: 0x08070f,
     } },
 ];
 

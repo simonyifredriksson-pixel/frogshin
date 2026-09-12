@@ -44,11 +44,11 @@
  * already sets, and nothing here is unavoidable.
  */
 
-import * as THREE from '../lib/three.module.js?v=v118';
-import { CFG } from './config.js?v=v118';
-import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v118';
-import { GUARDIANS, buildGuardian } from './guardians.js?v=v118';
-import { Audio } from './audio.js?v=v118';
+import * as THREE from '../lib/three.module.js?v=v119';
+import { CFG } from './config.js?v=v119';
+import { clamp, lerp, damp, dampAngle, lookYaw } from './util.js?v=v119';
+import { GUARDIANS, buildGuardian } from './guardians.js?v=v119';
+import { Audio } from './audio.js?v=v119';
 
 const _to = new THREE.Vector3();
 const _tmp = new THREE.Vector3();

@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v118';
-import { Audio } from './audio.js?v=v118';
-import { PX } from './icons.js?v=v118';
-import { CFG } from './config.js?v=v118';
+} from './skins.js?v=v119';
+import { Audio } from './audio.js?v=v119';
+import { PX } from './icons.js?v=v119';
+import { CFG } from './config.js?v=v119';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -218,8 +218,10 @@ function kunaiSVG(s) {
  */
 function frogSVG(s) {
   const f = s.fx || {};
-  const eye = f.eyeGlow ? hex(f.eyeGlow) : '#12121a';
-  const white = f.eyeGlow ? hex(f.eyeGlow) : '#fefbe8';
+  // The Forgotten One's eyes are the card's focal point too: a cold white
+  // sclera with a small violet centre, exactly as the rig builds them.
+  const eye = f.eclipse ? hex(f.energy) : (f.eyeGlow ? hex(f.eyeGlow) : '#12121a');
+  const white = f.eclipse ? '#e8e6ff' : (f.eyeGlow ? hex(f.eyeGlow) : '#fefbe8');
   const halo = f.halo
     ? `<ellipse cx="32" cy="8" rx="17" ry="4" fill="none"
         stroke="${hex(f.halo)}" stroke-width="3"/>`
@@ -299,8 +301,63 @@ function frogSVG(s) {
         height="6" fill="${hex(f.orbit)}" opacity="0.3"/>`).join('')
     : '';
 
+  /**
+   * ── THE FORGOTTEN ONE'S CARD ────────────────────────────────────────
+   *
+   * Drawn part for part against the rig — skullcap, brow bar, cuirass,
+   * emblem, pauldrons, arm bands, two fragments — because this is the one
+   * item in the game you cannot inspect before buying. A card that showed
+   * a dark frog and handed over an armoured one would be a lie told at
+   * one in three thousand three hundred.
+   *
+   * `shape-rendering: crispEdges` is on the whole sheet, so the emblem is
+   * built from a filled disc, a ring and an arc rather than from a
+   * gradient — the same three parts, in the same three colours, as the
+   * plate on the frog's chest.
+   */
+  const eclipse = f.eclipse ? `
+    <rect x="13" y="6" width="38" height="8" fill="${hex(f.obsidian)}"/>
+    <rect x="10" y="10" width="44" height="4" fill="${hex(f.obsidian)}"/>
+    <rect x="30" y="4" width="4" height="9" fill="${hex(f.silver)}"/>
+    <rect x="11" y="14" width="42" height="2" fill="${hex(f.silver)}"/>
+    <rect x="8" y="22" width="11" height="6" fill="${hex(f.obsidian)}"/>
+    <rect x="45" y="22" width="11" height="6" fill="${hex(f.obsidian)}"/>
+    <rect x="8" y="28" width="11" height="2" fill="${hex(f.silver)}"/>
+    <rect x="45" y="28" width="11" height="2" fill="${hex(f.silver)}"/>
+    <rect x="18" y="25" width="28" height="15" fill="${hex(f.obsidian)}"/>
+    <rect x="18" y="25" width="28" height="2" fill="${hex(f.silver)}"
+      opacity="0.5"/>
+    <circle cx="32" cy="32" r="6.2" fill="none" stroke="${hex(f.energy)}"
+      stroke-width="2.2" stroke-dasharray="29 10"/>
+    <circle cx="32" cy="32" r="4.5" fill="#07060c" stroke="${hex(f.silver)}"
+      stroke-width="1.2"/>
+    <rect x="22" y="28" width="1.5" height="6" fill="${hex(f.energy)}"
+      opacity="0.85"/>
+    <rect x="41" y="30" width="1.5" height="5" fill="${hex(f.energy)}"
+      opacity="0.55"/>
+    <rect x="16" y="40" width="32" height="3" fill="${hex(s.scarf)}"/>
+    <rect x="37" y="43" width="2" height="4" fill="${hex(f.silver)}"/>
+    <rect x="35" y="47" width="6" height="3" fill="${hex(f.silver)}"/>
+    <rect x="36" y="48" width="4" height="1" fill="#07060c"/>
+    <rect x="5" y="33" width="8" height="2" fill="${hex(f.silver)}"/>
+    <rect x="51" y="33" width="8" height="2" fill="${hex(f.silver)}"/>
+    <rect x="22" y="47" width="6" height="7" fill="${hex(f.obsidian)}"/>
+    <rect x="36" y="47" width="6" height="7" fill="${hex(f.obsidian)}"/>
+    <rect x="22" y="47" width="6" height="2" fill="${hex(f.silver)}"/>
+    <rect x="36" y="47" width="6" height="2" fill="${hex(f.silver)}"/>
+    <rect x="4" y="19" width="3" height="4" fill="${hex(f.energy)}"
+      opacity="0.5"/>
+    <rect x="57" y="41" width="3" height="4" fill="${hex(f.energy)}"
+      opacity="0.35"/>`
+    : '';
+  // The distortion at the feet goes BEHIND everything, like the aura does.
+  const eclipseBack = f.eclipse
+    ? `<ellipse cx="32" cy="57" rx="19" ry="4" fill="#1a1230" opacity="0.55"/>
+       <ellipse cx="32" cy="57" rx="13" ry="3" fill="#120c22" opacity="0.7"/>`
+    : '';
+
   return `<svg viewBox="0 0 64 64" shape-rendering="crispEdges" aria-hidden="true">
-    ${aura}${orbit}${halo}${hood}${fins}${spikes}${horns}
+    ${eclipseBack}${aura}${orbit}${halo}${hood}${fins}${spikes}${horns}
     <rect x="10" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
     <rect x="44" y="14" width="10" height="9" fill="${hex(s.skin)}"/>
     <rect x="12" y="16" width="6" height="5" fill="${white}"/>
@@ -314,7 +371,7 @@ function frogSVG(s) {
     <rect x="24" y="44" width="16" height="8" fill="${hex(s.belly)}"/>
     <rect x="14" y="38" width="36" height="4" fill="${hex(s.cloth)}"/>
     ${plates}${moss}${stars}${shield}${crown}
-    ${pattern}
+    ${pattern}${eclipse}
   </svg>`;
 }
 
