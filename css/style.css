@@ -101,10 +101,16 @@ html, body {
   text-align: center;
   animation: logoFloat 5s ease-in-out infinite;
 }
-/* Off the home screen the title gives a little ground to the card — the
-   heading there is the card's own, and two stacked is one too many. The home
-   screen itself is untouched. */
-#menu:not(.at-home) .logo { margin: 0.8vh 0 1.6vh; }
+/* Off the home screen the title gives ground to the card — the heading there
+   is the card's own, two stacked is one too many, and the ~40px it hands
+   back is what keeps the Play screen inside the window instead of behind a
+   scrollbar. The home screen itself is untouched. */
+#menu:not(.at-home) .logo {
+  margin: 0.6vh 0 1.2vh;
+  transform: scale(0.82);
+  transform-origin: 50% 50%;
+  animation: none;                 /* it is a header here, not the title */
+}
 #menu:not(.at-home) .logo-eyes { opacity: 0.55; }
 @keyframes logoFloat {
   0%, 100% { transform: translateY(0); }
@@ -391,18 +397,41 @@ html, body {
    The home menu is untouched. This is the screen that was doing too much —
    see the note over #panel-play in index.html.
 
-   The job here is to make three kinds of thing look like three kinds of
-   thing: the match you are about to join, the solo modes behind it, and the
-   one button each mode screen exists for. */
+   It is built out of the menu's EXISTING parts: `.divider`, `.btn`, `.note`,
+   `.btn-row`. The job of the rules below is spacing, not new furniture. An
+   earlier pass invented hairline-ruled blocks and a two-by-two grid of four
+   differently coloured buttons, and the result looked like a settings form
+   that had wandered into a fantasy game. */
 
-/* The solo modes, two across: a button each and no descriptions. */
-.mode-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 4px;
+.card-play { width: min(560px, 92vw); }
+
+/*
+ * ROOM TO BREATHE.
+ *
+ * Every button on this screen is a decision, and decisions need air around
+ * them. These are the gaps the old menu had between its sections — the
+ * crowding came from the amount of CONTENT on the page, not from tight
+ * spacing, so removing four paragraphs is what fixed it and the rhythm can
+ * go back to being generous.
+ */
+.card-play .btn { margin-top: 4px; }
+.card-play .note { margin: 10px 2px 22px; }
+.card-play .divider { margin: 30px 0 18px; }
+.card-play .join-row { margin-top: 18px; }
+.card-play .status { margin-top: 16px; min-height: 20px; }
+.card-play .btn-row { margin-top: 4px; }
+/* The last section has nothing under it, so it needs a floor of its own. */
+.card-play .btn-row:last-child { margin-bottom: 4px; }
+
+/* A control that belongs to the button above it — the map picker under
+   Create Room. Indented, so it reads as part of that choice. */
+.sub {
+  margin: 14px 0 22px 14px;
+  padding-left: 14px;
+  border-left: 3px solid rgba(255,255,255,0.07);
 }
-.mode-grid .btn { margin: 0; }
+.sub .map-toggle { margin-bottom: 0; }
+.sub .map-row { margin-top: 10px; margin-bottom: 0; }
 
 /* The one button a mode screen exists for — ENTER THE CROAKLANDS and so on.
    The only gold thing on its screen, and the biggest. */
@@ -457,38 +486,6 @@ html, body {
   transform: translateX(-3px);
 }
 .btn-x:active { transform: translateX(0) scale(0.94); }
-
-/* ── a choice: one button, one line about it ────────────────────────
-   The unit the new screens are built out of. The old panel had buttons and
-   paragraphs as siblings in one flat column, so nothing said which sentence
-   belonged to which button. */
-.choice {
-  padding: 14px 0 15px;
-  border-bottom: 2px solid rgba(255,255,255,0.055);
-}
-.choice:last-of-type { border-bottom: 0; padding-bottom: 4px; }
-.choice-head {
-  font-family: var(--font-px); font-size: 9px; letter-spacing: 1px;
-  color: var(--jade);
-  margin-bottom: 10px;
-}
-.choice-note {
-  margin-top: 9px;
-  font-size: 16px; line-height: 1.4;
-  color: var(--parch-dim);
-}
-
-/* A label and a control on one line — the map picker inside Create Room. */
-.inline-field {
-  display: flex; align-items: center; gap: 10px;
-  margin-top: 11px;
-}
-.inline-field label {
-  flex: 0 0 auto;
-  font-family: var(--font-px); font-size: 8px; letter-spacing: 1px;
-  color: var(--jade);
-}
-.inline-field .btn { flex: 1 1 auto; margin: 0; padding: 10px 12px; }
 
 /* ── a mode screen ──────────────────────────────────────────────────
    Croaklands, Dungeon, Practice, Customize. A tinted edge carries the
@@ -549,8 +546,14 @@ html, body {
 }
 .mode-realm .stat b { color: #b6e88a; }
 .mode-dungeon .stat b { color: #c9b0ff; }
+/* The mode screens breathe on the same rhythm as Play, so moving between
+   them does not feel like moving between two different games. */
+.card-mode .btn { margin-top: 4px; }
+.card-mode .note { margin: 10px 2px 22px; }
+.card-mode .divider { margin: 28px 0 18px; }
+.card-mode .note:last-child { margin-bottom: 2px; }
 /* The one button the screen exists for. */
-.card-mode .btn-hero { margin-top: 4px; }
+.card-mode .btn-hero { margin-top: 8px; }
 
 /* ------------------------------------------------------------------ cards */
 

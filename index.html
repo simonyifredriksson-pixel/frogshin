@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v113" />
+<link rel="stylesheet" href="css/style.css?v=v114" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -128,49 +128,67 @@
          swatches and every paragraph are all still here, one screen deeper,
          next to the thing they belong to. -->
     <div class="panel" id="panel-play">
-      <div class="card">
+      <div class="card card-play">
         <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
         <h2 class="card-title">PLAY</h2>
 
-        <div class="choice">
-          <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
-          <p class="choice-note">Jump straight into a public match.</p>
-        </div>
+        <!--
+          Built out of the menu's OWN vocabulary: a labelled divider over each
+          section, full-width buttons stacked in one column, and a `.note`
+          under the ones that need a word of explanation. That is what every
+          other screen in this game already looks like, and the first attempt
+          at this screen quietly invented a second language for it — hairline
+          rules between blocks and a two-by-two grid of four differently
+          coloured buttons — which read as a web form rather than as Frogshin.
+        -->
+        <div class="divider"><span>MULTIPLAYER</span></div>
 
-        <div class="choice">
+        <!-- Side by side under one caption, exactly as the old panel had
+             them. They are the same kind of decision made two ways, and
+             stacking them with a sentence each cost a hundred pixels of
+             height to say twice what one line says once. -->
+        <div class="btn-row">
+          <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
           <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
-          <p class="choice-note">A private code to share with your friends.</p>
-          <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
-               choice, so it sits under the host's button rather than being
-               asked of everybody on the way past. Somebody joining a room
-               never sees it, because there the map is voted for in the
-               lobby, which keeps a picker of its own. -->
-          <div class="inline-field">
-            <label>MAP</label>
-            <button class="btn btn-quiet map-toggle" id="play-map-toggle">
-              <span id="play-map-current">—</span>
-            </button>
-          </div>
+        </div>
+        <p class="note">Straight into a public match, or a private code to
+           share with your friends.</p>
+
+        <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
+             choice, so it sits under the host's button rather than being
+             asked of everybody on the way past. Somebody joining a room never
+             sees it, because there the map is voted for in the lobby, which
+             keeps a picker of its own. -->
+        <div class="sub">
+          <button class="btn btn-quiet map-toggle" id="play-map-toggle">
+            <span>MAP — <b id="play-map-current">—</b></span>
+          </button>
           <div id="play-maps" class="map-row"></div>
         </div>
 
-        <div class="choice">
-          <div class="choice-head">JOIN A ROOM</div>
-          <div class="join-row">
-            <input id="input-room" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" spellcheck="false" />
-            <button class="btn" id="btn-join"><span>JOIN</span></button>
-          </div>
+        <!-- No caption under this one: the box says ROOM CODE and the button
+             says JOIN. A sentence repeating that is the kind of line that
+             made the old panel long. -->
+        <div class="join-row">
+          <input id="input-room" type="text" maxlength="6" placeholder="ROOM CODE" autocomplete="off" spellcheck="false" />
+          <button class="btn" id="btn-join"><span>JOIN</span></button>
         </div>
 
         <div id="play-status" class="status"></div>
 
-        <!-- The solo modes: a button each, and not a word more. What each
-             one IS belongs on its own screen, which is where the paragraphs
-             that used to live here have gone. -->
-        <div class="divider"><span>OR PLAY ALONE</span></div>
-        <div class="mode-grid">
-          <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
-          <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON</span></button>
+        <!-- The rest: a button each, and not a word more. What each one IS
+             belongs on its own screen, which is where the four paragraphs
+             that used to live here have gone.
+
+             One "OR" divider rather than a heading per group — the same one
+             the old panel used before its solo buttons. Two headings for
+             five buttons is more furniture than the things it separates. -->
+        <div class="divider"><span>OR</span></div>
+
+        <button class="btn btn-realm" id="btn-realm"><span>THE CROAKLANDS</span></button>
+        <button class="btn btn-dungeon" id="btn-dungeon"><span>THE DUNGEON</span></button>
+
+        <div class="btn-row">
           <button class="btn btn-quiet" id="btn-practice"><span>PRACTICE</span></button>
           <button class="btn btn-quiet" id="btn-customize"><span>CUSTOMIZE</span></button>
         </div>
@@ -211,21 +229,17 @@
         <h2 class="card-title">PRACTICE</h2>
         <div class="mode-tag">NOTHING HERE CAN KILL YOU</div>
 
-        <div class="choice">
-          <button class="btn btn-go" id="btn-tutorial"><span>THE FIRST ISLAND</span></button>
-          <p class="choice-note">
-            Nine courses — jumping, dashing, the tongue, the blade, the guard.
-            About ten minutes.
-          </p>
-        </div>
+        <button class="btn btn-go" id="btn-tutorial"><span>THE FIRST ISLAND</span></button>
+        <p class="note">
+          Nine courses — jumping, dashing, the tongue, the blade, the guard.
+          About ten minutes.
+        </p>
 
-        <div class="choice">
-          <button class="btn" id="btn-solo"><span>ARENA PRACTICE</span></button>
-          <p class="choice-note">
-            The arena, offline and alone. Try every skin and ability for free;
-            no froglets are earned.
-          </p>
-        </div>
+        <button class="btn" id="btn-solo"><span>ARENA PRACTICE</span></button>
+        <p class="note">
+          The arena, offline and alone. Try every skin and ability for free;
+          no froglets are earned.
+        </p>
       </div>
     </div>
 
@@ -253,7 +267,7 @@
 
         <div class="divider"><span>SKINS, BLADES AND KUNAI</span></div>
         <button class="btn btn-go" id="btn-customize-shop"><span>OPEN THE SHOP</span></button>
-        <p class="choice-note">
+        <p class="note">
           Nine cases and eighty-five skins, bought with froglets — plus the
           abilities you carry into a match.
         </p>
@@ -372,21 +386,17 @@
 
         <div class="divider"><span>HOW DO YOU WANT TO RUN IT?</span></div>
 
-        <div class="choice">
-          <button class="btn btn-go" id="btn-dungeon-cp">
-            <span>WITH CHECKPOINTS</span>
-          </button>
-          <p class="choice-note">Die and you restart the room you were in.
-             The way to learn the fights.</p>
-        </div>
+        <button class="btn btn-go" id="btn-dungeon-cp">
+          <span>WITH CHECKPOINTS</span>
+        </button>
+        <p class="note">Die and you restart the room you were in. The way to
+           learn the fights.</p>
 
-        <div class="choice">
-          <button class="btn btn-danger" id="btn-dungeon-nocp">
-            <span>NO CHECKPOINTS</span>
-          </button>
-          <p class="choice-note">Die anywhere and you go back to room one.
-             Fifteen rooms, one life at a time.</p>
-        </div>
+        <button class="btn btn-danger" id="btn-dungeon-nocp">
+          <span>NO CHECKPOINTS</span>
+        </button>
+        <p class="note">Die anywhere and you go back to room one. Fifteen
+           rooms, one life at a time.</p>
 
         <div id="dungeon-status" class="status"></div>
       </div>
@@ -1207,6 +1217,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v113"></script>
+<script type="module" src="js/main.js?v=v114"></script>
 </body>
 </html>
