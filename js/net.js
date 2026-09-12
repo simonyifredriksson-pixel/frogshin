@@ -16,8 +16,9 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v117';
-import { roomCode as makeRoomCode } from './util.js?v=v117';
+import { CFG, BUILD } from './config.js?v=v118';
+import { roomCode as makeRoomCode } from './util.js?v=v118';
+import { ECLIPSE_TITLE } from './skins.js?v=v118';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -39,6 +40,22 @@ export function cleanSkins(s) {
   const id = (v) => (typeof v === 'string' && v.length <= 40 ? v : null);
   const out = { frog: id(s.frog), sword: id(s.sword), kunai: id(s.kunai) };
   return (out.frog || out.sword || out.kunai) ? out : null;
+}
+
+/**
+ * A PLAYER'S TITLE — validated as an exact match, never sanitised as text.
+ *
+ * There is exactly one title in the game: the Eclipse. A title is drawn
+ * beside somebody's name in everyone else's lobby, so accepting free text
+ * here would be handing every peer a line of writing on every other peer's
+ * screen — a much bigger thing than a name, which at least sits on a frog
+ * you can see. You either have the title or you do not.
+ *
+ * Unrecognised values become `null` rather than an error, so an older build
+ * or a newer one simply shows no title.
+ */
+export function cleanTitle(t) {
+  return t === ECLIPSE_TITLE ? ECLIPSE_TITLE : null;
 }
 
 /**
@@ -140,6 +157,28 @@ export class Network {
   get isHost() { return this.role === NetRole.HOST; }
   get isOnline() { return this.role !== NetRole.OFFLINE; }
   get playerCount() { return 1 + this.profiles.size; }
+
+  /**
+   * EVERYONE IN THE ROOM, us first — for the lobby list.
+   *
+   * Built from `profiles`, which both host and client keep up to date, so
+   * one getter serves both roles. `you` marks our own row; the rest is what
+   * arrived over the wire and has already been through `cleanTitle`.
+   */
+  get lobbyList() {
+    const me = this.profile || {};
+    const out = [{
+      id: this.selfId,
+      name: me.name || 'Frog',
+      color: me.color || 0x6cc24a,
+      title: cleanTitle(me.title),
+      you: true,
+    }];
+    for (const [id, p] of this.profiles) {
+      out.push({ id, name: p.name, color: p.color, title: p.title || null, you: false });
+    }
+    return out;
+  }
 
   _status(msg) {
     this.status = msg;
@@ -303,6 +342,7 @@ export class Network {
           // right frog the moment it hears about us rather than a default
           // one that gets replaced a beat later.
           skins: profile.skins || null,
+          title: profile.title || null,
         },
       });
       this.hostConn = conn;
@@ -328,6 +368,7 @@ export class Network {
         this._send(conn, {
           m: 'hello', name: profile.name, color: profile.color,
           uid: this.uid, v: BUILD, skins: profile.skins || null,
+          title: profile.title || null,
         });
         this._status(`Connected to room ${this.room}`);
         if (this.onReady) this.onReady({ role: this.role, room: this.room });
@@ -453,6 +494,7 @@ export class Network {
         uid: meta.uid || null,
         kills: 0, deaths: 0,
         skins: cleanSkins(meta.skins),
+        title: cleanTitle(meta.title),
       };
       this.profiles.set(conn.peer, prof);
 
@@ -465,7 +507,7 @@ export class Network {
       // Tell everyone else about the newcomer.
       this._broadcast({
         m: 'join', id: conn.peer, name: prof.name, color: prof.color,
-        skins: prof.skins,
+        skins: prof.skins, title: prof.title,
       }, conn.peer);
 
       if (this.onJoin) this.onJoin(conn.peer, prof);
@@ -502,9 +544,14 @@ export class Network {
       name: this.profile.name,
       color: this.profile.color,
       skins: cleanSkins(this.profile.skins),
+      title: cleanTitle(this.profile.title),
     }];
     for (const [id, p] of this.profiles) {
-      if (id !== exceptId) roster.push({ id, name: p.name, color: p.color, skins: p.skins });
+      if (id !== exceptId) {
+        roster.push({
+          id, name: p.name, color: p.color, skins: p.skins, title: p.title,
+        });
+      }
     }
     return roster;
   }
@@ -533,6 +580,7 @@ export class Network {
           // Metadata already carried these; `hello` is the fallback for a
           // link that arrived without it, exactly as with `uid` below.
           if (d.skins) prof.skins = cleanSkins(d.skins);
+          if (d.title !== undefined) prof.title = cleanTitle(d.title);
           // Metadata is the normal carrier for the client tag; this is the
           // fallback for a link that arrived without it.
           if (d.uid && !prof.uid) { prof.uid = d.uid; this._retireOldSlot(d.uid, from); }
@@ -586,6 +634,7 @@ export class Network {
           this.profiles.set(p.id, {
             name: p.name, color: p.color, kills: 0, deaths: 0,
             skins: cleanSkins(p.skins),
+            title: cleanTitle(p.title),
           });
           if (this.onJoin) this.onJoin(p.id, this.profiles.get(p.id));
         }
@@ -595,6 +644,7 @@ export class Network {
         this.profiles.set(d.id, {
           name: d.name, color: d.color, kills: 0, deaths: 0,
           skins: cleanSkins(d.skins),
+          title: cleanTitle(d.title),
         });
         if (this.onJoin) this.onJoin(d.id, this.profiles.get(d.id));
         this._status(`Room ${this.room} — ${this.playerCount} frogs`);

@@ -5,44 +5,47 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v117';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v117';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v117';
-import { Input } from './input.js?v=v117';
-import { Audio } from './audio.js?v=v117';
-import { World } from './world.js?v=v117';
-import { Effects } from './effects.js?v=v117';
-import { Atmosphere } from './atmosphere.js?v=v117';
-import { FollowCamera } from './camera.js?v=v117';
-import { Player } from './player.js?v=v117';
-import { RemotePlayer } from './remote.js?v=v117';
-import { HUD } from './hud.js?v=v117';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v117';
-import { FrogModel } from './frog.js?v=v117';
-import { DummyField } from './dummy.js?v=v117';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v117';
-import { ToadModel } from './npc.js?v=v117';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v117';
-import { DungeonRun } from './dungeon.js?v=v117';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v117';
-import { JudgmentRun } from './judgment.js?v=v117';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v117';
-import { COMBO_NAMES } from './ascended.js?v=v117';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v117';
-import { MenuScene } from './menu.js?v=v117';
-import { Economy } from './economy.js?v=v117';
-import { Shop } from './shop.js?v=v117';
-import { Network, NetRole, cleanSkins } from './net.js?v=v117';
-import { Overworld } from './overworld.js?v=v117';
-import { InventoryScreen } from './inventoryui.js?v=v117';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v117';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v117';
-import { Cine } from './cinema.js?v=v117';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v117';
-import { MEMORIES } from './flashbacks.js?v=v117';
-import { GUARDIANS } from './guardians.js?v=v117';
-import { gearOfTier } from './gear.js?v=v117';
-import { Chat } from './chat.js?v=v117';
+import * as THREE from '../lib/three.module.js?v=v118';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v118';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v118';
+import { Input } from './input.js?v=v118';
+import { Audio } from './audio.js?v=v118';
+import { World } from './world.js?v=v118';
+import { Effects } from './effects.js?v=v118';
+import { Atmosphere } from './atmosphere.js?v=v118';
+import { FollowCamera } from './camera.js?v=v118';
+import { Player } from './player.js?v=v118';
+import { RemotePlayer } from './remote.js?v=v118';
+import { HUD } from './hud.js?v=v118';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v118';
+import { FrogModel } from './frog.js?v=v118';
+import { DummyField } from './dummy.js?v=v118';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v118';
+import { ToadModel } from './npc.js?v=v118';
+import {
+  findSkin, DEFAULT_SKIN, CATALOG, RARITY,
+  ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
+} from './skins.js?v=v118';
+import { DungeonRun } from './dungeon.js?v=v118';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v118';
+import { JudgmentRun } from './judgment.js?v=v118';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v118';
+import { COMBO_NAMES } from './ascended.js?v=v118';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v118';
+import { MenuScene } from './menu.js?v=v118';
+import { Economy } from './economy.js?v=v118';
+import { Shop } from './shop.js?v=v118';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v118';
+import { Overworld } from './overworld.js?v=v118';
+import { InventoryScreen } from './inventoryui.js?v=v118';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v118';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v118';
+import { Cine } from './cinema.js?v=v118';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v118';
+import { MEMORIES } from './flashbacks.js?v=v118';
+import { GUARDIANS } from './guardians.js?v=v118';
+import { gearOfTier } from './gear.js?v=v118';
+import { Chat } from './chat.js?v=v118';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -295,6 +298,16 @@ class Game {
         sword: this.economy.equipped.sword || DEFAULT_SKIN.swords,
         kunai: this.economy.equipped.kunai || DEFAULT_SKIN.kunai,
       },
+      /**
+       * THE ONE TITLE — sent only if all three Eclipse secrets are owned.
+       *
+       * Derived here rather than stored, so it cannot fall out of step with
+       * the collection: sell the save, edit the save, start a new one, and
+       * the title follows what you actually have. The receiving end checks
+       * it against the same constant (see `cleanTitle` in net.js), so this
+       * is a claim that is verified, not one that is trusted.
+       */
+      title: eclipseFound(this.economy) ? ECLIPSE_TITLE : null,
     };
   }
 
@@ -713,7 +726,55 @@ class Game {
       : (n === 1
         ? 'Waiting for friends — they join with the code above'
         : 'Ready when you are');
+    this._renderRoster();
     this._renderMapPicker('lobby-maps', true);
+  }
+
+  /**
+   * WHO IS IN THE ROOM, by name, with their title.
+   *
+   * Offline there is nobody to show it to, so the list is left empty and
+   * CSS collapses it — a one-row list of yourself is furniture.
+   *
+   * Names come off the wire, so they go in as `textContent`. The title does
+   * not: `net.cleanTitle` has already reduced it to one known constant or
+   * null, which is exactly why it is safe to draw at all.
+   */
+  _renderRoster() {
+    const box = $('lobby-roster');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!this.net.isOnline || this.net.playerCount < 2) return;
+    for (const p of this.net.lobbyList) {
+      const row = document.createElement('div');
+      row.className = 'lr-row';
+      const col = '#' + (p.color >>> 0).toString(16).padStart(6, '0');
+      row.style.borderLeftColor = col;
+
+      const dot = document.createElement('span');
+      dot.className = 'lr-dot';
+      dot.style.background = col;
+      row.appendChild(dot);
+
+      const name = document.createElement('span');
+      name.className = 'lr-name';
+      name.textContent = p.name || 'Frog';
+      row.appendChild(name);
+
+      if (p.you) {
+        const you = document.createElement('span');
+        you.className = 'lr-you';
+        you.textContent = '(YOU)';
+        row.appendChild(you);
+      }
+      if (p.title) {
+        const t = document.createElement('span');
+        t.className = 'lr-title';
+        t.textContent = `[${p.title}]`;
+        row.appendChild(t);
+      }
+      box.appendChild(row);
+    }
   }
 
   /**
@@ -854,6 +915,28 @@ class Game {
     if (JSON.stringify(ids) !== this._sentSkins) {
       this._sentSkins = JSON.stringify(ids);
       this.net.sendEvent({ t: 'skins', s: ids });
+    }
+
+    /**
+     * AND THE TITLE, on the same terms.
+     *
+     * It normally arrives with the introduction, which covers everybody who
+     * already had it when they joined. This covers the other case, and it
+     * is the case that matters: finishing the set from the pause menu, in a
+     * room, with the people you want to show it to already watching.
+     *
+     * `onChange` fires after every crate reveal, so the moment the third
+     * secret lands this runs — once, because the comparison below only
+     * sends when it has actually changed.
+     */
+    const title = eclipseFound(this.economy) ? ECLIPSE_TITLE : null;
+    if (title !== this._sentTitle) {
+      this._sentTitle = title;
+      // Our own copy too, or the roster would show everyone else's title
+      // and not ours — `lobbyList` reads this for the "(YOU)" row.
+      if (this.net.profile) this.net.profile.title = title;
+      this.net.sendEvent({ t: 'title', s: title });
+      this._refreshLobby();
     }
   }
 
@@ -1035,6 +1118,20 @@ class Game {
         if (parked) parked.skins = ids;
         const r = this.remotes.get(id);
         if (r && r.setSkins) r.setSkins(ids);
+        return;
+      }
+      /**
+       * SOMEBODY EARNED THE TITLE mid-match.
+       *
+       * Through `cleanTitle` like every other route, so a peer on a hacked
+       * build can announce nothing but the one real title. The lobby is
+       * refreshed because that is the screen it is drawn on, and a player
+       * can be sitting in it while someone else opens cases.
+       */
+      if (ev.t === 'title') {
+        const prof = this.net.profiles.get(id);
+        if (prof) prof.title = cleanTitle(ev.s);
+        this._refreshLobby();
         return;
       }
       if (ev.t === 'chat') {
@@ -3179,7 +3276,109 @@ class Game {
       this.net.sendEvent({ t: 'froglets', to: '*', n });
       this._cheatNote(`Sent ${n} froglets to ${this.remotes.size} player(s).`);
     };
+    // ---- item picker ----
+    $('cheat-kind').onchange = () => this._cheatItems();
+    $('cheat-item-give').onclick = () => this._cheatGive(false);
+    $('cheat-item-equip').onclick = () => this._cheatGive(true);
+    $('cheat-item-cutscene').onclick = () => {
+      const { kind, skin } = this._cheatPick();
+      if (!skin) return this._cheatNote('Pick an item first.');
+      // Closing the menu matters: the sequence takes over the screen, and
+      // watching it through a developer panel is not watching it.
+      this._toggleCheats(false);
+      if (!this.shop.previewOpen(kind, skin)) {
+        this._toggleCheats(true);
+        return this._cheatNote('A case is already open.');
+      }
+      return null;
+    };
+    $('cheat-item-all').onclick = () => {
+      let n = 0;
+      for (const kind of ['frogs', 'swords', 'kunai']) {
+        for (const s of CATALOG[kind]) if (this.economy.unlock(kind, s.id)) n++;
+      }
+      this.economy.save();
+      this._cheatItems();
+      this._cheatNote(`${n} newly unlocked. Everything is yours.`);
+    };
+    $('cheat-item-eclipse').onclick = () => {
+      for (const [kind, id] of Object.entries(ECLIPSE_SET)) {
+        this.economy.unlock(kind, id);
+      }
+      this.economy.save();
+      this._cheatItems();
+      this._cheatNote(`All three secrets granted — you are [${ECLIPSE_TITLE}]. `
+        + 'Rejoin a room for other players to see it.');
+    };
+    /**
+     * The counterpart, and the one that is actually hard to do by hand:
+     * testing what a collection screen looks like EMPTY, and putting the
+     * ??? back so the reveal can be watched a second time.
+     */
+    $('cheat-item-wipe').onclick = () => {
+      for (const kind of ['frogs', 'swords', 'kunai']) this.economy.owned[kind] = [];
+      this.economy.equipped.frog = DEFAULT_SKIN.frogs;
+      this.economy.equipped.sword = DEFAULT_SKIN.swords;
+      this.economy.equipped.kunai = DEFAULT_SKIN.kunai;
+      this.economy.save();
+      this.shop.refresh();
+      this._applySkins();
+      this._cheatItems();
+      this._cheatNote('Collection cleared. Every secret is a ??? again.');
+    };
+
     $('cheat-close').onclick = () => this._toggleCheats(false);
+  }
+
+  /**
+   * THE ITEM PICKER — every skin of the chosen kind, in one dropdown.
+   *
+   * Secrets are listed by their REAL names here, unlike everywhere else in
+   * the game. This is the developer menu: its whole job is to reach the
+   * things the rest of the UI is deliberately hiding.
+   */
+  _cheatItems() {
+    const sel = $('cheat-item');
+    if (!sel) return;
+    const kind = $('cheat-kind').value || 'frogs';
+    const keep = sel.value;
+    sel.innerHTML = '';
+    for (const s of CATALOG[kind] || []) {
+      const o = document.createElement('option');
+      o.value = s.id;
+      const tier = (RARITY[s.rarity] || {}).name || s.rarity;
+      const mark = this.economy.owns(kind, s.id) ? '✓ ' : '';
+      o.textContent = `${mark}${s.name} — ${tier.toUpperCase()}`
+        + (s.secret ? ' ???' : '');
+      sel.appendChild(o);
+    }
+    // Keep the selection across a refresh where it still exists, so granting
+    // an item does not bounce the list back to the top.
+    if (keep && sel.querySelector(`[value="${keep}"]`)) sel.value = keep;
+  }
+
+  /** What the two dropdowns currently name. */
+  _cheatPick() {
+    const kind = ($('cheat-kind') || {}).value || 'frogs';
+    const id = ($('cheat-item') || {}).value || '';
+    const skin = (CATALOG[kind] || []).find((s) => s.id === id) || null;
+    return { kind, skin };
+  }
+
+  _cheatGive(equip) {
+    const { kind, skin } = this._cheatPick();
+    if (!skin) return this._cheatNote('Pick an item first.');
+    const fresh = this.economy.unlock(kind, skin.id);
+    if (equip) {
+      const slot = kind === 'swords' ? 'sword' : (kind === 'frogs' ? 'frog' : 'kunai');
+      this.economy.equipped[slot] = skin.id;
+    }
+    this.economy.save();
+    this.shop.refresh();
+    this._applySkins();
+    this._cheatItems();
+    return this._cheatNote(`${skin.name} ${fresh ? 'unlocked' : '(already owned)'}`
+      + (equip ? ' and equipped.' : '.'));
   }
 
   /** Rebuild the per-player grant buttons. Called whenever the menu opens. */
@@ -3308,7 +3507,10 @@ class Game {
   _toggleCheats(open) {
     if (open === this.cheatsOpen) return;
     this.cheatsOpen = open;
-    if (open) this._cheatPlayers();      // who is here can change between opens
+    if (open) {
+      this._cheatPlayers();              // who is here can change between opens
+      this._cheatItems();                // and what is owned changes too
+    }
     $('cheats').classList.toggle('show', open);
     this._cheatRefresh();
     if (open) {

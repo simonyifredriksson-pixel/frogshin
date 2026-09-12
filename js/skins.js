@@ -29,10 +29,20 @@ export const RARITY = {
   epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', weight: 64 },
   legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', weight: 26 },
   mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', weight: 4 },
+  /**
+   * ??? — and it stays ??? until somebody pulls one.
+   *
+   * Weight 3 against the Eclipse crates' 10,007 is 0.0300%, which is the
+   * figure these were specified at: about one in 3,336 opens. It is not a
+   * tier anything else uses, and the three items in it are the only things
+   * in the game whose NAME is hidden until it is yours — see `secret` on a
+   * skin and `Shop.hidden`.
+   */
+  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', weight: 3 },
 };
 
 export const RARITY_ORDER = [
-  'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic',
+  'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'secret',
 ];
 
 // ---------------------------------------------------------------- swords
@@ -203,6 +213,65 @@ export const SWORD_SKINS = [
       aura: 0xffd76b, tassel: 0xffd24a, long: 1.4,
       orbit: 0xffd76b, orbitN: 8,
     } },
+
+  /**
+   * ═══ THE ECLIPSE COLLECTION ═════════════════════════════════════════
+   *
+   * Black, bruised violet, and a cold crack of light. The set gets less
+   * legible as it climbs — the commons are plain dark steel, the legendary
+   * burns like a corona, and the mythic is a hole with a star in it.
+   *
+   * `sword_ecl_dusk` is the one the brief called "Moonfang". There is
+   * already a Moonfang in the Celestial set, and two swords sharing a name
+   * in one shop is a bug you hit while reading, not while playing — so this
+   * one is Duskfang. Same idea, no collision.
+   */
+  { id: 'sword_ecl_nightsteel', name: 'Nightsteel Blade', rarity: 'common', set: 'eclipse',
+    blade: 0x3a3f4a, edge: 0x6a7280, guard: 0x24272e, grip: 0x12141a, glow: 0x14161c,
+    fx: { shape: 'katana', tsuba: 'disc' } },
+  { id: 'sword_ecl_shadow', name: 'Shadow Katana', rarity: 'common', set: 'eclipse',
+    blade: 0x24242e, edge: 0x50506a, guard: 0x1a1a22, grip: 0x0e0e14, glow: 0x101018,
+    fx: { shape: 'katana', tsuba: 'square' } },
+  { id: 'sword_ecl_dusk', name: 'Duskfang', rarity: 'uncommon', set: 'eclipse',
+    blade: 0x6a7490, edge: 0xb8c4e0, guard: 0x3a4258, grip: 0x141826, glow: 0x2a3044,
+    fx: { shape: 'fang', tsuba: 'ring', runes: 0x9ab0e0 } },
+  { id: 'sword_ecl_edge', name: 'Eclipse Edge', rarity: 'rare', set: 'eclipse',
+    blade: 0x2a2438, edge: 0xffb43a, guard: 0x4a3a1a, grip: 0x120e1e, glow: 0x6a4a10,
+    fx: { shape: 'curved', tsuba: 'ring', runes: 0xffb43a } },
+  { id: 'sword_ecl_voidfang', name: 'Voidfang', rarity: 'rare', set: 'eclipse',
+    blade: 0x1a1426, edge: 0xa87aff, guard: 0x3a2a5a, grip: 0x0d0a16, glow: 0x4a2a8a,
+    fx: { shape: 'fang', tsuba: 'cross', runes: 0xa87aff, aura: 0x7a4ad0 } },
+  { id: 'sword_ecl_darkstar', name: 'Darkstar Reaver', rarity: 'epic', set: 'eclipse',
+    blade: 0x141020, edge: 0xc0a8ff, guard: 0x2a2048, grip: 0x0a0812, glow: 0x5a3aa8,
+    fx: {
+      shape: 'broad', tsuba: 'cross', runes: 0x8f6aff, aura: 0x5a3aa8, long: 1.2,
+    } },
+  { id: 'sword_ecl_warden', name: 'Eclipse Warden Blade', rarity: 'legendary', set: 'eclipse',
+    blade: 0x1a1a22, edge: 0xffd76b, guard: 0xffb43a, grip: 0x241806, glow: 0xff9a2a,
+    fx: {
+      shape: 'broad', tsuba: 'ring', glow: true, runes: 0xffb43a,
+      aura: 0xff9a2a, tassel: 0xffb43a, long: 1.25,
+    } },
+  { id: 'sword_ecl_fallen', name: 'Fallen Star', rarity: 'mythic', set: 'eclipse',
+    blade: 0x0f0d18, edge: 0xffffff, guard: 0xd8d0ff, grip: 0x1a1040, glow: 0xbfa8ff,
+    fx: {
+      shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+      aura: 0xbfa8ff, tassel: 0xd8d0ff, long: 1.35,
+    } },
+  /**
+   * ??? — ECLIPSE'S EDGE.
+   *
+   * Almost entirely black with one cold crack down the blade, and fragments
+   * of itself turning in the air around it. `secret` is what hides the name
+   * and the picture until it is yours.
+   */
+  { id: 'sword_ecl_secret', name: "Eclipse's Edge", rarity: 'secret', set: 'eclipse',
+    secret: true,
+    blade: 0x050508, edge: 0xffffff, guard: 0x0a0a10, grip: 0x020204, glow: 0x0a0a14,
+    fx: {
+      shape: 'broad', tsuba: 'none', runes: 0xffffff,
+      orbit: 0xffffff, orbitN: 10, long: 1.3,
+    } },
 ];
 
 // ----------------------------------------------------------------- kunai
@@ -316,6 +385,51 @@ export const KUNAI_SKINS = [
   { id: 'kunai_prime',   name: 'Astral Kunai Prime', rarity: 'mythic', set: 'celestial',
     blade: 0xffffff, facet: 0xffd76b, wrap: 0xffd24a, ring: 0x1a1e38,
     fx: { shape: 'crystal', glow: true, ribbon: 0xffd76b, big: 1.4 } },
+
+  /**
+   * ═══ THE ECLIPSE COLLECTION ═════════════════════════════════════════
+   *
+   * Two names moved. The brief's "Moon Kunai" collides with the Celestial
+   * set's, so this one is Dusk Kunai; and its Legendary and its secret were
+   * BOTH called Eclipse Shard, in the same crate. The secret keeps the name
+   * — it is the one that matters, and it is the set piece — so the
+   * legendary is Eclipse Sliver.
+   */
+  { id: 'kunai_ecl_shadow', name: 'Shadow Kunai', rarity: 'common', set: 'eclipse',
+    blade: 0x24242e, facet: 0x50506a, wrap: 0x1a1a22, ring: 0x0e0e14,
+    fx: { shape: 'classic' } },
+  { id: 'kunai_ecl_night', name: 'Night Kunai', rarity: 'common', set: 'eclipse',
+    blade: 0x1e2438, facet: 0x6a7490, wrap: 0x2a3450, ring: 0x0f1220,
+    fx: { shape: 'needle' } },
+  { id: 'kunai_ecl_dusk', name: 'Dusk Kunai', rarity: 'uncommon', set: 'eclipse',
+    blade: 0x3a4258, facet: 0xb8c4e0, wrap: 0x6a7490, ring: 0x141826,
+    fx: { shape: 'broad', ribbon: 0x9ab0e0 } },
+  { id: 'kunai_ecl_eclipse', name: 'Eclipse Kunai', rarity: 'rare', set: 'eclipse',
+    blade: 0x2a2438, facet: 0xffb43a, wrap: 0x6a4a10, ring: 0x120e1e,
+    fx: { shape: 'classic', ribbon: 0xffb43a, big: 1.1 } },
+  { id: 'kunai_ecl_void', name: 'Void Fang', rarity: 'rare', set: 'eclipse',
+    blade: 0x1a1426, facet: 0xa87aff, wrap: 0x4a2a8a, ring: 0x0d0a16,
+    fx: { shape: 'needle', glow: true, ribbon: 0xa87aff } },
+  { id: 'kunai_ecl_darkstar', name: 'Darkstar Kunai', rarity: 'epic', set: 'eclipse',
+    blade: 0x141020, facet: 0xc0a8ff, wrap: 0x5a3aa8, ring: 0x0a0812,
+    fx: { shape: 'star', glow: true, ribbon: 0x8f6aff } },
+  { id: 'kunai_ecl_sliver', name: 'Eclipse Sliver', rarity: 'legendary', set: 'eclipse',
+    blade: 0x1a1a22, facet: 0xffd76b, wrap: 0xffb43a, ring: 0x241806,
+    fx: { shape: 'crystal', glow: true, ribbon: 0xff9a2a, big: 1.2 } },
+  { id: 'kunai_ecl_fallen', name: 'Fallen Star Kunai', rarity: 'mythic', set: 'eclipse',
+    blade: 0x0f0d18, facet: 0xffffff, wrap: 0xd8d0ff, ring: 0x1a1040,
+    fx: { shape: 'crystal', glow: true, ribbon: 0xbfa8ff, big: 1.3 } },
+  /**
+   * ??? — THE ECLIPSE SHARD.
+   *
+   * Not a blade: a piece of the thing itself. Black crystal with one cold
+   * crack through it, and the streamer behind it is DARKER than the air, so
+   * a thrown one drags a shadow rather than a light.
+   */
+  { id: 'kunai_ecl_secret', name: 'Eclipse Shard', rarity: 'secret', set: 'eclipse',
+    secret: true,
+    blade: 0x050508, facet: 0xffffff, wrap: 0x0a0a10, ring: 0x020204,
+    fx: { shape: 'crystal', glow: true, ribbon: 0x2a2a3a, big: 1.35 } },
 ];
 
 // ------------------------------------------------------------------ frog
@@ -529,6 +643,75 @@ export const FROG_SKINS = [
       crown: 1.8, pattern: 0xffe98a, eyeGlow: 0xffffff, aura: 0xffd76b,
       halo: 0xfff3c4, halo2: true, horns: 4, spikes: 6, emissive: 0x2a2060,
     } },
+
+  /**
+   * ═══ THE ECLIPSE COLLECTION ═════════════════════════════════════════
+   *
+   * The ladder here is DARKNESS rather than ornament: each one is a little
+   * less lit than the last, and what light they do carry moves from cold
+   * blue through violet to a corona and finally to bare white cracks.
+   */
+  { id: 'frog_ecl_shadow', name: 'Shadow Frog', rarity: 'common', set: 'eclipse',
+    skin: 0x2a2a34, belly: 0x8a8a9a, cloth: 0x14141a, scarf: 0x3a3a4a,
+    fx: {} },
+  { id: 'frog_ecl_night', name: 'Night Frog', rarity: 'common', set: 'eclipse',
+    skin: 0x1e2438, belly: 0x7a86a8, cloth: 0x0f1220, scarf: 0x2a3450,
+    fx: { spikes: 3 } },
+  { id: 'frog_ecl_scout', name: 'Eclipse Scout', rarity: 'uncommon', set: 'eclipse',
+    skin: 0x2e3450, belly: 0x8a94b8, cloth: 0x161a2c, scarf: 0x6a5ad0,
+    fx: { fins: true, plates: 0x22283f, emissive: 0x101425 } },
+  { id: 'frog_ecl_void', name: 'Void Walker', rarity: 'rare', set: 'eclipse',
+    skin: 0x1a1426, belly: 0x6a5a8a, cloth: 0x0d0a16, scarf: 0x7a4ad0,
+    fx: {
+      plates: 0x20182f, pattern: 0xa87aff, eyeGlow: 0xa87aff, spikes: 5,
+      emissive: 0x160e26,
+    } },
+  { id: 'frog_ecl_ronin', name: 'Astral Ronin', rarity: 'rare', set: 'eclipse',
+    skin: 0x2a2440, belly: 0x9a8ac0, cloth: 0x14102a, scarf: 0xc9a227,
+    fx: { plates: 0x241d3a, pattern: 0xffd24a, horns: 2, emissive: 0x140f28 } },
+  { id: 'frog_ecl_darkstar', name: 'Darkstar Frog', rarity: 'epic', set: 'eclipse',
+    skin: 0x141020, belly: 0x7a6aa8, cloth: 0x0a0812, scarf: 0x8f6aff,
+    fx: {
+      plates: 0x1a1430, stars: 0xc0a8ff, pattern: 0x8f6aff,
+      eyeGlow: 0xc0a8ff, aura: 0x5a3aa8, spikes: 6, emissive: 0x18102e,
+    } },
+  { id: 'frog_ecl_warden', name: 'Eclipse Warden', rarity: 'legendary', set: 'eclipse',
+    skin: 0x1a1a22, belly: 0xc8c0a8, cloth: 0x0c0c12, scarf: 0xffb43a,
+    fx: {
+      plates: 0x2a2a34, crown: 1.5, pattern: 0xffb43a, eyeGlow: 0xffd76b,
+      aura: 0xff9a2a, halo: 0xffb43a, horns: 2, spikes: 5, emissive: 0x241806,
+    } },
+  { id: 'frog_ecl_fallen', name: 'Fallen Celestial', rarity: 'mythic', set: 'eclipse',
+    skin: 0x0f0d18, belly: 0xd8d0f0, cloth: 0x070610, scarf: 0xffffff,
+    fx: {
+      plates: 0x1a1830, embers: 0xbfa8ff, stars: 0xffffff, crown: 1.7,
+      pattern: 0xffffff, eyeGlow: 0xffffff, aura: 0x7a5ad0,
+      halo: 0xd8d0ff, halo2: true, horns: 4, spikes: 6, emissive: 0x1a1040,
+    } },
+  /**
+   * ??? — THE FORGOTTEN ONE.
+   *
+   * A frog-shaped hole, with hairline cracks of white energy running over
+   * it. No armour tint, no aura colour but white, and `emissive: 0` so it
+   * refuses even the ambient light every other skin picks up — it should
+   * read as an absence with something alive inside it.
+   */
+  { id: 'frog_ecl_secret', name: 'The Forgotten One', rarity: 'secret', set: 'eclipse',
+    secret: true,
+    skin: 0x07070a, belly: 0x141420, cloth: 0x030305, scarf: 0x0a0a10,
+    fx: {
+      plates: 0x0a0a10, pattern: 0xffffff, eyeGlow: 0xffffff,
+      embers: 0xffffff, stars: 0xffffff, crown: 1.9, aura: 0xffffff,
+      /**
+       * It has to out-rank the Fallen Celestial standing next to it, and a
+       * palette alone cannot do that against something gold and haloed. So
+       * it takes every top-tier tell there is — halo, second ring, orbit —
+       * and renders all of them in white on a body that is pure black.
+       * It is not brighter than the mythic; it has more of everything.
+       */
+      halo: 0xffffff, halo2: true, orbit: 0xffffff, orbitN: 8,
+      horns: 4, spikes: 6, emissive: 0x000000,
+    } },
 ];
 
 /** Catalog lookup by the same keys the Economy stores unlocks under. */
@@ -632,7 +815,68 @@ export const CRATES = [
     blurb: 'Ancient gold, blue fire, and the rarest frog anybody owns.',
     color: '#ffd24a', anim: 'celestial',
   },
+  /**
+   * ── THE ECLIPSE COLLECTION ────────────────────────────────────────
+   *
+   * Three crates that are meant to be opened as a SET. Each hides one ???
+   * at 0.03%, the three of them are pieces of the same thing, and owning
+   * all three is the only way to the title — see `eclipseFound`.
+   */
+  {
+    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 2500,
+    name: 'Eclipse Kunai Crate',
+    blurb: 'Nine blades cut from the dark. One of them is not a blade.',
+    color: '#a87aff', anim: 'eclipse',
+  },
+  {
+    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 3500,
+    name: 'Eclipse Sword Crate',
+    blurb: 'Nightsteel, void and corona — and something with no name yet.',
+    color: '#8f6aff', anim: 'eclipse',
+  },
+  {
+    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 5000,
+    name: 'Forbidden Frog Crate',
+    blurb: 'An old power nobody was supposed to dig back up.',
+    color: '#ffb43a', anim: 'eclipse',
+  },
 ];
+
+/**
+ * ═══ THE ECLIPSE, THE FOURTH SECRET ═══════════════════════════════════
+ *
+ * The three ??? items, and the title you get for holding all three.
+ *
+ * DERIVED, never stored. A flag saved alongside them could drift out of
+ * step with the collection it describes — the honest answer to "have they
+ * found the Eclipse" is "do they own these three", asked fresh every time.
+ */
+export const ECLIPSE_SET = {
+  frogs: 'frog_ecl_secret',
+  swords: 'sword_ecl_secret',
+  kunai: 'kunai_ecl_secret',
+};
+
+export const ECLIPSE_TITLE = 'THE ONE WHO FOUND THE ECLIPSE';
+
+/** Which of the three somebody has, and whether that is all of them. */
+export function eclipseProgress(economy) {
+  const have = [];
+  const missing = [];
+  for (const [kind, id] of Object.entries(ECLIPSE_SET)) {
+    (economy && economy.owns(kind, id) ? have : missing).push(id);
+  }
+  return { have: have.length, total: 3, missing, complete: missing.length === 0 };
+}
+
+export function eclipseFound(economy) {
+  return eclipseProgress(economy).complete;
+}
+
+/** Every secret item, for the collection screens and the tests. */
+export function secretsOf(kind) {
+  return (CATALOG[kind] || []).filter((s) => s.secret);
+}
 
 export function crateById(id) { return CRATES.find((c) => c.id === id) || null; }
 

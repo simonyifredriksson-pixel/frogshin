@@ -33,7 +33,7 @@
  * `setTheme` — this is the one import this file has, and it is here to stop
  * a missing field becoming a NaN becoming a thrown TypeError.
  */
-import { asTheme } from './themes.js?v=v117';
+import { asTheme } from './themes.js?v=v118';
 
 const TRACKS = {
   phase1: 'audio/frogath-phase1.mp3',
@@ -486,6 +486,62 @@ export class AudioEngine {
     this.tone({ freq: 1320, dur: 1.5, type: 'triangle', volume: 0.14, attack: 0.06 });
     this.tone({ freq: 220, to: 440, dur: 1.6, type: 'sawtooth', volume: 0.10, cutoff: 900 });
     this.noise({ dur: 1.4, volume: 0.12, filter: 6000, filterTo: 800, q: 0.8 });
+  }
+
+  /**
+   * ── the eclipse ───────────────────────────────────────────────────────
+   *
+   * The secret sequence is built on ABSENCE, so its sounds go the other way
+   * from every other crate noise in here. Nothing bright, nothing that
+   * resolves; a low bed that grows under a room that has gone quiet.
+   */
+
+  /** The moment the light goes. Sub-bass and a long breath downward. */
+  eclipseFall() {
+    this.tone({ freq: 110, to: 41, dur: 2.6, type: 'sine', volume: 0.26, attack: 0.5 });
+    this.tone({ freq: 55, to: 27, dur: 3.0, type: 'triangle', volume: 0.18, attack: 0.8 });
+    this.noise({ dur: 2.8, volume: 0.10, filter: 900, filterTo: 140, q: 0.5, attack: 0.9 });
+  }
+
+  /** The presence. A minor cluster that hangs without ever settling. */
+  eclipsePresence() {
+    this.tone({ freq: 146.8, dur: 3.2, type: 'sine', volume: 0.13, attack: 0.7 });
+    this.tone({ freq: 174.6, dur: 3.2, type: 'sine', volume: 0.11, attack: 0.9 });
+    this.tone({ freq: 220, dur: 3.4, type: 'triangle', volume: 0.08, attack: 1.2 });
+    this.noise({ dur: 3.0, volume: 0.06, filter: 260, filterTo: 520, q: 0.7, attack: 1.0 });
+  }
+
+  /** The item lands. The only bright thing in the whole sequence. */
+  eclipseReveal() {
+    this.tone({ freq: 73.4, to: 587, dur: 1.8, type: 'sawtooth', volume: 0.16, cutoff: 2600, attack: 0.04 });
+    this.tone({ freq: 1174, dur: 1.9, type: 'sine', volume: 0.17, attack: 0.02 });
+    this.tone({ freq: 1760, dur: 1.9, type: 'triangle', volume: 0.10, attack: 0.10 });
+    this.noise({ dur: 1.6, volume: 0.14, filter: 7000, filterTo: 600, q: 0.8 });
+  }
+
+  /**
+   * Pull the music down out of the way, and put it back.
+   *
+   * Rides `musicBus` rather than `volumes.music`, so the player's own music
+   * setting is never touched — duck and restore are presentation, and a
+   * cutscene interrupted half way must not leave a changed slider behind.
+   */
+  duckMusic(level = 0.12, secs = 1.2) {
+    if (!this.ready || !this.musicBus) return;
+    const t = this.ctx.currentTime;
+    const g = this.musicBus.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(this.volumes.music * level, t + secs);
+  }
+
+  unduckMusic(secs = 1.2) {
+    if (!this.ready || !this.musicBus) return;
+    const t = this.ctx.currentTime;
+    const g = this.musicBus.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(this.volumes.music, t + secs);
   }
 
   // ---------------------------------------------------------------- ambient

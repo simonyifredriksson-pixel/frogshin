@@ -1415,6 +1415,32 @@ kbd {
 }
 #crate.anim-celestial.staging .sc-lid { animation: sc-pop 0.5s ease-out 1.2s forwards; }
 
+/* ---- eclipse: no light, no flourish, just a slow open ----
+   The Eclipse cases deliberately do NOT put on a show when they open. Every
+   other set announces itself; this one is quiet, so that the one time in
+   three thousand something IS in there, the change is unmistakable. */
+#crate.anim-eclipse.staging .stage-crate {
+  animation: sc-drift 1.4s ease-in-out 1;
+  filter: saturate(0.5) brightness(0.8);
+}
+#crate.anim-eclipse.staging .sc-body,
+#crate.anim-eclipse.staging .sc-lid {
+  background: linear-gradient(180deg, #1b1b26 0%, #111119 55%, #08080d 100%);
+  border-color: #05050a;
+  box-shadow: inset 0 3px 0 rgba(190,180,230,0.10), 0 6px 0 #000;
+}
+#crate.anim-eclipse.staging .sc-lock { background: #5a5270; }
+#crate.anim-eclipse.staging .sc-crack {
+  background: #cfc6ee;
+  box-shadow: 0 0 14px rgba(140,120,200,0.55);
+  animation: sc-seam 1.0s ease-out 0.55s forwards;
+}
+#crate.anim-eclipse.staging .sc-lid { animation: sc-pop 0.6s ease-out 1.1s forwards; }
+@keyframes sc-drift {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-9px); }
+}
+
 @keyframes sc-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px) rotate(-1.5deg); }
@@ -1488,6 +1514,180 @@ kbd {
 @keyframes cs-twinkle { 0%,100% { opacity: 1; } 50% { opacity: 0.72; } }
 /* The reveal card has to sit over both of them. */
 .crate-inner { position: relative; z-index: 1; }
+
+/* ═══════════════════════════════════════════════════ THE SECRET SEQUENCE ══
+   What a ??? looks like coming out of a case.
+
+   ── why it is built the way it is ───────────────────────────────────────
+   Everything here starts at `opacity: 0` and is switched on by an `.on`
+   class that shop.js adds one beat at a time. The alternative — six CSS
+   animation delays — puts the timeline in two files, and a timeline split
+   across two files is a timeline nobody can read or change. The transitions
+   are long (0.8–1.6s) because the whole sequence is about things ARRIVING
+   slowly; nothing in here snaps.
+
+   The layer covers the overlay and hides the shop underneath it. That is
+   the point: the case, the reel, the froglet counter and the buttons all go
+   away, and for eight seconds there is nothing on screen but the sky. */
+.crate-eclipse {
+  position: absolute; inset: 0;
+  z-index: 4;
+  display: none;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 18px;
+  padding: 24px 16px;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+#crate.eclipsing .crate-eclipse { display: flex; }
+#crate.eclipsing.ec-dark .crate-eclipse { opacity: 1; }
+/* While the sequence runs, the shop panel beneath it is not merely covered
+   — it is switched off, so a stray tab or click cannot reach a button that
+   is meant to be gone. */
+#crate.eclipsing .crate-inner { visibility: hidden; }
+
+/* The eclipse itself: a black disc with a corona burning around the rim.
+   Drawn as a shadow ring rather than a gradient so the edge stays hard —
+   a soft-edged eclipse reads as a blurred moon. */
+.ec-disc {
+  width: 0; height: 0;
+  border-radius: 50%;
+  background: #000;
+  box-shadow: 0 0 0 0 rgba(0,0,0,0);
+  opacity: 0;
+  transition: width 2.2s cubic-bezier(0.2,0.7,0.2,1),
+              height 2.2s cubic-bezier(0.2,0.7,0.2,1),
+              opacity 1.2s ease, box-shadow 2.2s ease;
+}
+.ec-disc.on {
+  width: 172px; height: 172px;
+  opacity: 1;
+  box-shadow:
+    0 0 0 3px rgba(226,214,255,0.95),
+    0 0 26px 8px rgba(168,140,255,0.55),
+    0 0 90px 34px rgba(110,86,190,0.35);
+  animation: ec-breathe 4.5s ease-in-out infinite 2.2s;
+}
+@keyframes ec-breathe {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.35); }
+}
+
+/* The case, still shut, hanging in front of it. */
+.ec-crate {
+  position: relative;
+  width: 96px; height: 76px;
+  opacity: 0;
+  transition: opacity 1.2s ease, transform 2.6s ease;
+  transform: translateY(26px);
+}
+.ec-crate.on { opacity: 1; transform: translateY(-6px); animation: ec-hover 3.6s ease-in-out infinite 2.6s; }
+@keyframes ec-hover {
+  0%, 100% { transform: translateY(-6px) rotate(-1.5deg); }
+  50%      { transform: translateY(-20px) rotate(1.5deg); }
+}
+.ecc-body, .ecc-lid {
+  position: absolute; left: 0; right: 0;
+  background: linear-gradient(180deg, #1b1b26 0%, #0e0e15 60%, #06060a 100%);
+  border: 3px solid #000;
+  box-shadow: 0 0 18px rgba(150,120,220,0.35);
+}
+.ecc-body { top: 20px; bottom: 0; }
+.ecc-lid  { top: 0; height: 22px; }
+
+/* The two lines. Wide letter-spacing and a long fade: this is the part that
+   is supposed to make somebody stop and read. */
+.ec-line, .ec-tag {
+  font-family: var(--font-px);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 1.6s ease, letter-spacing 1.6s ease;
+}
+.ec-line {
+  font-size: 13px; line-height: 1.9;
+  color: #e2d6ff;
+  letter-spacing: 10px;
+  max-width: 620px;
+  text-shadow: 0 0 18px rgba(168,140,255,0.8);
+}
+.ec-line.on { opacity: 1; letter-spacing: 3px; }
+.ec-tag {
+  font-size: 10px;
+  color: #b9a6e8;
+  letter-spacing: 6px;
+}
+.ec-tag.on { opacity: 1; letter-spacing: 4px; }
+
+/* The ??? box, before it becomes the real thing. */
+.ec-mystery {
+  width: 116px; height: 116px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 1.0s ease, transform 1.0s cubic-bezier(0.2,1.4,0.4,1);
+  filter: drop-shadow(0 0 20px rgba(168,140,255,0.65));
+}
+.ec-mystery.on { opacity: 1; transform: scale(1); }
+.ec-mystery svg { width: 100%; height: 100%; }
+
+/* Reduced motion: the beats still happen — you still get the sequence and
+   the reveal — but nothing loops, drifts or breathes. */
+@media (prefers-reduced-motion: reduce) {
+  .ec-disc.on, .ec-crate.on { animation: none; }
+}
+
+/* The line on the reveal card the day the set completes. */
+.cr-title {
+  display: none;
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-family: var(--font-px); font-size: 9px;
+  letter-spacing: 3px; line-height: 1.8;
+  color: #e2d6ff;
+  border: 2px solid #4a3f70;
+  background: rgba(30,22,54,0.7);
+  text-shadow: 0 0 14px rgba(168,140,255,0.7);
+}
+.cr-title.show { display: block; }
+
+/* ══════════════════════════════════════════════════════ the lobby roster ══
+   Names, and the one title the game has. */
+/* Capped and scrolling. A full room is eight names, and eight names left
+   to grow would push PLAY ARENA off the bottom of a short window — the
+   list is there to be glanced at, not to own the screen. */
+.lobby-roster {
+  display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px;
+  max-height: 168px; overflow-y: auto;
+}
+.lobby-roster:empty { display: none; }
+.lr-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px;
+  background: rgba(0,0,0,0.22);
+  border-left: 4px solid #6cc24a;
+  text-align: left;
+}
+.lr-dot { width: 12px; height: 12px; flex: 0 0 12px; border-radius: 2px; }
+.lr-name { font-family: var(--font-px); font-size: 9px; letter-spacing: 1px; }
+.lr-you { font-family: var(--font-px); font-size: 7px; opacity: 0.55; }
+/* The title wraps to its own line on a narrow card rather than squashing
+   the name it belongs to. */
+.lr-title {
+  font-family: var(--font-px); font-size: 7px;
+  letter-spacing: 2px;
+  color: #e2d6ff;
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid #4a3f70;
+  background: rgba(30,22,54,0.8);
+  text-shadow: 0 0 10px rgba(168,140,255,0.75);
+}
+@media (max-width: 520px) {
+  .lr-row { flex-wrap: wrap; }
+  .lr-title { margin-left: 0; flex-basis: 100%; }
+}
 
 /* ─────────────────────────────────────────────── multi-case buys ──  */
 .crate-sub {
@@ -2103,6 +2303,20 @@ kbd {
   text-align: center;
 }
 .cheat-num:focus { outline: none; border-color: #3ad17a; }
+/* The item picker's two dropdowns. `min-width: 0` because a <select> has a
+   wide intrinsic width and a flex child that ignores it pushes the row past
+   the panel — the same trap the colour swatches fell into. */
+.cheat-sel {
+  flex: 1 1 0; min-width: 0;
+  padding: 9px 6px;
+  background: #101823;
+  border: 2px solid #2f4257;
+  color: #cfe0d8;
+  font-family: var(--font-px);
+  font-size: 8px;
+}
+.cheat-sel.wide { flex: 2 1 0; }
+.cheat-sel:focus { outline: none; border-color: #3ad17a; }
 /* One row per other player in the room. */
 #cheat-players { display: grid; gap: 5px; margin-bottom: 9px; }
 #cheat-players:empty { display: none; }

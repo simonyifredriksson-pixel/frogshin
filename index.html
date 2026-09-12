@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v117" />
+<link rel="stylesheet" href="css/style.css?v=v118" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -378,6 +378,10 @@
         <div class="lobby-players">
           <b id="lobby-count">1</b> frog<span id="lobby-plural"></span> in the room
         </div>
+
+        <!-- Who is actually here, by name. The count alone could not show a
+             TITLE, and a title nobody else ever sees is not a title. -->
+        <div id="lobby-roster" class="lobby-roster"></div>
 
         <!-- Map first, then the mode is voted for in-game once everyone has
              loaded. Doing it in this order is deliberate: the world has to be
@@ -1061,6 +1065,31 @@
     <!-- One button per other player in the room, rebuilt when the menu opens. -->
     <div id="cheat-players"></div>
 
+    <!-- ════════════════════════════════════════════════════ ITEM PICKER ══
+         Play-testing only, and deliberately plain: two dropdowns and three
+         buttons. It exists so a cutscene that fires once in three thousand
+         opens can be watched on demand, and so a skin can be put on a frog
+         without rolling for it. -->
+    <div class="cheat-sep"><span>ITEMS</span></div>
+    <div class="cheat-row">
+      <select class="cheat-sel" id="cheat-kind">
+        <option value="frogs">FROG SKINS</option>
+        <option value="swords">SWORD SKINS</option>
+        <option value="kunai">KUNAI SKINS</option>
+      </select>
+      <select class="cheat-sel wide" id="cheat-item"></select>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-item-give">GIVE</button>
+      <button class="cheat-btn" id="cheat-item-equip">GIVE + EQUIP</button>
+      <button class="cheat-btn" id="cheat-item-cutscene">PLAY CUTSCENE</button>
+    </div>
+    <div class="cheat-row">
+      <button class="cheat-btn" id="cheat-item-all">UNLOCK EVERYTHING</button>
+      <button class="cheat-btn" id="cheat-item-eclipse">GRANT ECLIPSE SET</button>
+      <button class="cheat-btn" id="cheat-item-wipe">LOCK EVERYTHING</button>
+    </div>
+
     <div class="cheat-note" id="cheat-note"></div>
 
     <button class="cheat-btn wide" id="cheat-close">CLOSE</button>
@@ -1120,6 +1149,26 @@
 <div id="crate">
   <div class="crate-mist" id="crate-mist"></div>
   <div class="crate-stars" id="crate-stars"></div>
+
+  <!-- ═══════════════════════════════════════════════ THE SECRET SEQUENCE ══
+       Shown INSTEAD of the reel when a ??? comes out — roughly one open in
+       three thousand. Every piece starts invisible and is switched on one
+       beat at a time by shop.js, so the whole timeline lives in one place
+       in the code rather than being split across six animation delays.
+
+       It sits above `.crate-inner` and covers the overlay, because the whole
+       point of it is that the shop goes away. -->
+  <div class="crate-eclipse" id="crate-eclipse">
+    <div class="ec-disc" id="ec-disc"></div>
+    <div class="ec-crate" id="ec-crate">
+      <div class="ecc-body"></div>
+      <div class="ecc-lid"></div>
+    </div>
+    <div class="ec-line" id="ec-line">AN UNKNOWN PRESENCE HAS BEEN DISCOVERED</div>
+    <div class="ec-mystery" id="ec-mystery"></div>
+    <div class="ec-tag" id="ec-tag">SECRET ITEM</div>
+  </div>
+
   <div class="crate-inner">
     <div class="crate-title" id="crate-title">OPENING</div>
 
@@ -1153,6 +1202,8 @@
       <div class="cr-art" id="cr-art"></div>
       <div class="cr-name" id="cr-name">—</div>
       <div class="cr-dupe" id="cr-dupe"></div>
+      <!-- Only ever shown on the open that completes all three secrets. -->
+      <div class="cr-title" id="cr-title"></div>
       <div class="crate-actions">
         <button class="btn btn-go" id="crate-again"><span>OPEN ANOTHER</span></button>
         <button class="btn" id="crate-close"><span>DONE</span></button>
@@ -1266,6 +1317,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v117"></script>
+<script type="module" src="js/main.js?v=v118"></script>
 </body>
 </html>
