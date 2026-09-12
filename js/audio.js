@@ -33,7 +33,7 @@
  * `setTheme` — this is the one import this file has, and it is here to stop
  * a missing field becoming a NaN becoming a thrown TypeError.
  */
-import { asTheme } from './themes.js?v=v120';
+import { asTheme } from './themes.js?v=v121';
 
 const TRACKS = {
   phase1: 'audio/frogath-phase1.mp3',

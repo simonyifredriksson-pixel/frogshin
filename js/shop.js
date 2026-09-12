@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v120';
-import { Audio } from './audio.js?v=v120';
-import { PX } from './icons.js?v=v120';
-import { CFG } from './config.js?v=v120';
+} from './skins.js?v=v121';
+import { Audio } from './audio.js?v=v121';
+import { PX } from './icons.js?v=v121';
+import { CFG } from './config.js?v=v121';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -1174,12 +1174,25 @@ export class Shop {
     strip.style.transform = 'translateX(0px)';
     strip.innerHTML = '';
 
+    /**
+     * THE FILLER GOES THROUGH THE MASK TOO.
+     *
+     * This was the one place a ??? could still give itself away. The strip
+     * is filled at random from the crate's whole pool, and that pool holds
+     * the secret — so roughly one card in nine of every reel was The
+     * Forgotten One, under its real name, with its real art, scrolling past
+     * the marker of a player who has never pulled one.
+     *
+     * The prize at WIN_INDEX never needs masking: a secret does not reach
+     * the reel at all, it branches to `_eclipseReveal` before this runs.
+     */
     for (let i = 0; i < COUNT; i++) {
       const item = i === WIN_INDEX ? won : pool[Math.floor(Math.random() * pool.length)];
+      const face = this.faceOf(crate.kind, item);
       const el = document.createElement('div');
       el.className = 'reel-item';
-      el.style.borderBottomColor = RARITY[item.rarity].color;
-      el.innerHTML = previewSVG(crate.kind, item) + `<span>${item.name}</span>`;
+      el.style.borderBottomColor = face.color;
+      el.innerHTML = face.svg + `<span>${face.name}</span>`;
       strip.appendChild(el);
     }
 
@@ -1546,13 +1559,18 @@ export class Shop {
     const rank = (e) => RARITY_ORDER.indexOf(e.item.rarity);
     const grid = $('cb-grid');
     grid.innerHTML = '';
+    // Through the mask like everywhere else. Anything in this grid has just
+    // been unlocked, so a secret here shows its real name — but routing it
+    // by hand is how the reel above ended up leaking, and there is no
+    // reason for this to be the one call site that knows better.
     for (const e of batch.slice().sort((a, b) => rank(b) - rank(a))) {
       const r = RARITY[e.item.rarity];
+      const face = this.faceOf(crate.kind, e.item);
       const card = document.createElement('div');
       card.className = 'cb-item' + (e.dupe ? '' : ' fresh');
-      card.style.borderBottomColor = r.color;
-      card.innerHTML = previewSVG(crate.kind, e.item)
-        + `<span>${e.item.name}</span>`
+      card.style.borderBottomColor = face.color;
+      card.innerHTML = face.svg
+        + `<span>${face.name}</span>`
         + `<span style="color:${r.color}">${e.dupe ? 'DUPE' : 'NEW'}</span>`;
       grid.appendChild(card);
     }

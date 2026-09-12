@@ -6,9 +6,9 @@
  * crisp contact shadows without the cost of shadowing the whole 420-unit map.
  */
 
-import * as THREE from '../lib/three.module.js?v=v120';
-import { CFG } from './config.js?v=v120';
-import { mulberry32 } from './util.js?v=v120';
+import * as THREE from '../lib/three.module.js?v=v121';
+import { CFG } from './config.js?v=v121';
+import { mulberry32 } from './util.js?v=v121';
 
 const SKY_VERT = `
   varying vec3 vWorld;

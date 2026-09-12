@@ -11,7 +11,7 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v120';
+import { CFG } from './config.js?v=v121';
 
 export class Economy {
   constructor() {
@@ -59,6 +59,18 @@ export class Economy {
      * that can answer "how far have I got" after one does.
      */
     this.dungeonDeepest = 0;
+    /**
+     * ONE-OFF BOUNTIES ALREADY PAID, by key. See `awardOnce`.
+     *
+     * Beating a dungeon guardian for the first time is worth thousands of
+     * froglets; beating the same guardian on your ninth run is worth
+     * nothing, or the dungeon becomes a farm and every price in the shop is
+     * a fiction. A flat list of keys rather than a boolean per boss because
+     * the same rule covers Frogath, the Ascended, the realm guardians and
+     * the island — one mechanism, and adding a bounty later needs no new
+     * save field.
+     */
+    this.bounties = [];
     /**
      * The open world's whole save, as one opaque blob.
      *
@@ -133,6 +145,15 @@ export class Economy {
         if (r) marks.push(r.checkpoint);
       }
       this.dungeonDeepest = Math.max(0, ...marks);
+      /**
+       * Sanitised on the way in: it comes from localStorage, which a player
+       * can edit, and an entry that is not a short string would sit in the
+       * list forever blocking nothing and confusing everything. Capped so a
+       * hand-edited save cannot grow without bound.
+       */
+      this.bounties = Array.isArray(d.bounties)
+        ? d.bounties.filter((k) => typeof k === 'string' && k.length <= 40).slice(0, 400)
+        : [];
     } catch (e) {
       // Corrupt or blocked storage must never stop the game starting.
       console.warn('[frogshin] could not read saved progress:', e);
@@ -155,6 +176,7 @@ export class Economy {
         ascendedBeaten: this.ascendedBeaten,
         dungeonRuns: this.dungeonRuns,
         dungeonDeepest: this.dungeonDeepest,
+        bounties: this.bounties,
         realm: this.realm,
       }));
     } catch (e) {
@@ -265,6 +287,40 @@ export class Economy {
     this.save();
     return n;
   }
+
+  /**
+   * ══ PAY A BOUNTY THAT IS ONLY EVER PAID ONCE ═══════════════════════════
+   *
+   * First kills, and nothing else. The dungeon's fourteen guardians pay out
+   * on a curve that reaches five figures by the bottom, Frogath pays 25,000
+   * and the Ascended 100,000 — numbers that only work because you can never
+   * collect them twice. Awarded repeatedly they would not be a reward for
+   * beating the game, they would be the only sensible way to earn, and
+   * every crate price in the shop would be theatre.
+   *
+   * Recorded BEFORE the award so a throw inside `award` cannot leave a
+   * bounty payable again, and saved immediately: this is exactly the moment
+   * a player closes the tab in triumph.
+   *
+   * Note it goes through `award`, so the solo-practice earning gate still
+   * applies — and in that case the key is NOT burned, because nothing was
+   * paid. Practising a boss must not silently consume its first kill.
+   *
+   * @returns the amount actually paid; 0 if already claimed or not earning.
+   */
+  awardOnce(key, amount, reason) {
+    if (!key || !this.earning) return 0;
+    if (this.bounties.indexOf(key) !== -1) return 0;
+    const n = Math.round(amount);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    this.bounties.push(key);
+    this.award(n, reason);
+    this.save();
+    return n;
+  }
+
+  /** Has this one-off bounty already been collected? */
+  claimed(key) { return this.bounties.indexOf(key) !== -1; }
 
   canAfford(cost) { return this.froglets >= cost; }
 

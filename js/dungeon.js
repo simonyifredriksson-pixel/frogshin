@@ -13,13 +13,13 @@
  * entrance and his own file.
  */
 
-import * as THREE from '../lib/three.module.js?v=v120';
-import { CFG } from './config.js?v=v120';
-import { clamp } from './util.js?v=v120';
-import { DungeonLevel } from './dungeonlevel.js?v=v120';
-import { DungeonBoss } from './dungeonboss.js?v=v120';
-import { Frogath } from './frogath.js?v=v120';
-import { Audio } from './audio.js?v=v120';
+import * as THREE from '../lib/three.module.js?v=v121';
+import { CFG } from './config.js?v=v121';
+import { clamp } from './util.js?v=v121';
+import { DungeonLevel } from './dungeonlevel.js?v=v121';
+import { DungeonBoss } from './dungeonboss.js?v=v121';
+import { Frogath } from './frogath.js?v=v121';
+import { Audio } from './audio.js?v=v121';
 
 const _v = new THREE.Vector3();
 
@@ -297,6 +297,15 @@ export class DungeonRun {
     // The way on opens and lights up; the way back stays shut.
     this.level.openExit(this.room);
     this.hud.hideBossBar();
+    /**
+     * WHO IS DOWN, so somebody else can pay for it.
+     *
+     * A callback rather than a call into the economy, like `onVictory` and
+     * `onCrystal` above it: this file runs a fight and knows nothing about
+     * froglets, and the one place that decides what a first kill is worth
+     * should be the one place that knows the prices.
+     */
+    if (this.onBossCleared) this.onBossCleared(this.room);
     this.hud.announce('GUARDIAN DOWN', 'good');
     Audio.stopBossMusic();
     Audio.refreshed(player.pos);

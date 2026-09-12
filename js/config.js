@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v120';
+export const BUILD = 'v121';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -242,14 +242,55 @@ export const CFG = {
   },
 
   // -------------------------------------------------------------- economy
+  /**
+   * ═══ WHAT THINGS PAY ════════════════════════════════════════════════════
+   *
+   * One rule runs through all of it: THE HARDER IT IS, THE MORE IT PAYS.
+   * Being the one juggernaut against a room beats being one of the room;
+   * room fourteen of the dungeon beats room one; and the two bosses that
+   * end the game pay more than everything else put together.
+   *
+   * ── arena vs dungeon are DECOUPLED ────────────────────────────────────
+   * The dungeon and the open world used to be priced as multiples of
+   * `roundWinReward` — Frogath was `roundWinReward * 10`. That made the
+   * arena's round payout a hidden multiplier on the whole game: nudging it
+   * from 100 to 300 would have silently tripled Frogath, the Ascended, every
+   * realm guardian and the island. Each now has its own number.
+   */
   economy: {
     storageKey: 'frogshin.economy',
-    tagReward: 100,          // per player tagged or infected
-    roundWinReward: 100,     // your side won the round
-    taggerWinReward: 300,    // won while it was you doing the chasing
-    infectorStartWinReward: 200,  // started as an infector and the infection won
+
+    // ---- the arena, per round. Repeatable, so these stay modest. ----
+    tagReward: 250,          // per player tagged or infected
+    roundWinReward: 300,     // your side won the round
+    taggerWinReward: 800,    // won while it was you doing the chasing
+    infectorStartWinReward: 500,  // started as an infector and it won
+    survivorReward: 300,     // lasted the round without being caught
+    ffaWinReward: 500,       // top of the scoreboard, on your own
     onlineInterval: 900,     // 15 minutes...
     onlineReward: 250,       // ...pays this much
+
+    /**
+     * ---- the dungeon: FIRST CLEAR ONLY, see Economy.awardOnce ----
+     *
+     * `dungeonBase * dungeonStep ^ room`, so room one pays 500 and room
+     * fourteen pays about 12,400 — the fourteen guardians come to roughly
+     * 55,000 between them.
+     *
+     * The step is deliberately steeper than the difficulty curve it is paid
+     * against: the bosses grow at `dungeon.boss.healthGrowth` (1.175) and
+     * the reward grows at 1.28, so every room down is worth more per unit of
+     * pain than the one above it. That is what makes going deeper the
+     * obvious move rather than farming whichever room you can already beat.
+     */
+    dungeonBase: 500,
+    dungeonStep: 1.28,
+    frogathReward: 25000,    // the bottom of the dungeon
+    divineReward: 100000,    // the Ascended — the hardest fight in the game
+
+    // ---- the open world: also first time only ----
+    guardianReward: 1500,    // per realm guardian, x (1 + its tier)
+    islandReward: 750,       // reaching the end of the First Island
   },
 
   // ------------------------------------------------------------ abilities

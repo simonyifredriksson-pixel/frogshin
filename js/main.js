@@ -5,47 +5,47 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v120';
-import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v120';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v120';
-import { Input } from './input.js?v=v120';
-import { Audio } from './audio.js?v=v120';
-import { World } from './world.js?v=v120';
-import { Effects } from './effects.js?v=v120';
-import { Atmosphere } from './atmosphere.js?v=v120';
-import { FollowCamera } from './camera.js?v=v120';
-import { Player } from './player.js?v=v120';
-import { RemotePlayer } from './remote.js?v=v120';
-import { HUD } from './hud.js?v=v120';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v120';
-import { FrogModel } from './frog.js?v=v120';
-import { DummyField } from './dummy.js?v=v120';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v120';
-import { ToadModel } from './npc.js?v=v120';
+import * as THREE from '../lib/three.module.js?v=v121';
+import { CFG, BUILD, FROG_COLORS, NINJA_NAMES } from './config.js?v=v121';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v121';
+import { Input } from './input.js?v=v121';
+import { Audio } from './audio.js?v=v121';
+import { World } from './world.js?v=v121';
+import { Effects } from './effects.js?v=v121';
+import { Atmosphere } from './atmosphere.js?v=v121';
+import { FollowCamera } from './camera.js?v=v121';
+import { Player } from './player.js?v=v121';
+import { RemotePlayer } from './remote.js?v=v121';
+import { HUD } from './hud.js?v=v121';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v121';
+import { FrogModel } from './frog.js?v=v121';
+import { DummyField } from './dummy.js?v=v121';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v121';
+import { ToadModel } from './npc.js?v=v121';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v120';
-import { DungeonRun } from './dungeon.js?v=v120';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v120';
-import { JudgmentRun } from './judgment.js?v=v120';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v120';
-import { COMBO_NAMES } from './ascended.js?v=v120';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v120';
-import { MenuScene } from './menu.js?v=v120';
-import { Economy } from './economy.js?v=v120';
-import { Shop } from './shop.js?v=v120';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v120';
-import { Overworld } from './overworld.js?v=v120';
-import { InventoryScreen } from './inventoryui.js?v=v120';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v120';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v120';
-import { Cine } from './cinema.js?v=v120';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v120';
-import { MEMORIES } from './flashbacks.js?v=v120';
-import { GUARDIANS } from './guardians.js?v=v120';
-import { gearOfTier } from './gear.js?v=v120';
-import { Chat } from './chat.js?v=v120';
+} from './skins.js?v=v121';
+import { DungeonRun } from './dungeon.js?v=v121';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v121';
+import { JudgmentRun } from './judgment.js?v=v121';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v121';
+import { COMBO_NAMES } from './ascended.js?v=v121';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v121';
+import { MenuScene } from './menu.js?v=v121';
+import { Economy } from './economy.js?v=v121';
+import { Shop } from './shop.js?v=v121';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v121';
+import { Overworld } from './overworld.js?v=v121';
+import { InventoryScreen } from './inventoryui.js?v=v121';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v121';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v121';
+import { Cine } from './cinema.js?v=v121';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v121';
+import { MEMORIES } from './flashbacks.js?v=v121';
+import { GUARDIANS } from './guardians.js?v=v121';
+import { gearOfTier } from './gear.js?v=v121';
+import { Chat } from './chat.js?v=v121';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1668,6 +1668,30 @@ class Game {
       this.economy.setDungeonRun(mode, room);
 
     /**
+     * ── A GUARDIAN'S FIRST KILL PAYS ──────────────────────────────────
+     *
+     * Keyed on the ROOM, not on the mode, so beating room six with
+     * checkpoints and then again without does not pay twice. The bounty is
+     * for having beaten that guardian, and you only do that once.
+     *
+     * The toast is worth having: `award` queues a purse popup, but a
+     * five-figure payout during a boss death animation deserves to be said
+     * out loud next to "GUARDIAN DOWN".
+     */
+    this.dungeon.onBossCleared = (room) => {
+      const E = CFG.economy;
+      const paid = this.economy.awardOnce(
+        `dungeon:${room}`,
+        E.dungeonBase * Math.pow(E.dungeonStep, room),
+        `Room ${room + 1} cleared`,
+      );
+      if (paid > 0) {
+        this.hud.toast(`+${paid.toLocaleString('en-GB')} froglets — `
+          + 'first time down here', 4);
+      }
+    };
+
+    /**
      * Offer to pick the run up where it was left, before it starts.
      *
      * Only THIS mode's bookmark is looked at. Dying at room seven with
@@ -2390,7 +2414,10 @@ class Game {
 
     this.judgment.onVictory = () => {
       this.economy.ascendedBeaten = true;
-      this.economy.award(CFG.economy.roundWinReward * 40, 'THE ASCENDED FALLS');
+      // The biggest single payout in the game, and it is paid once. He is
+      // the hardest fight there is; beating him twice is a victory lap.
+      this.economy.awardOnce('divine', CFG.economy.divineReward,
+        'THE ASCENDED FALLS');
       // The rarest thing in the game: his own form, both of them. There is
       // no crate that can produce this.
       const gotFrog = this.economy.unlock('frogs', 'frog_divine');
@@ -2616,7 +2643,7 @@ class Game {
     this.settings.tutorialDone = true;
     this.saveSettings();
     if (why === 'finished') {
-      this.economy.award(CFG.economy.roundWinReward, 'THE FIRST ISLAND');
+      this.economy.awardOnce('island', CFG.economy.islandReward, 'THE FIRST ISLAND');
       this.economy.save();
     }
     this.hud.setFade(1, 1.0);
@@ -2853,7 +2880,7 @@ class Game {
   _awardFrogathSkin() {
     const gotFrog = this.economy.unlock('frogs', 'frog_frogath');
     const gotSword = this.economy.unlock('swords', 'sword_frogath');
-    this.economy.award(CFG.economy.roundWinReward * 10, 'FROGATH DEFEATED');
+    this.economy.awardOnce('frogath', CFG.economy.frogathReward, 'FROGATH DEFEATED');
     if (gotFrog || gotSword) {
       this.hud.toast(
         'UNLOCKED — Frogath\'s hide and his blade of light. Equip them in the shop.',
@@ -4575,8 +4602,10 @@ class Game {
       // Top of the scoreboard takes the round.
       let best = this.player.kills;
       for (const r of this.remotes.values()) best = Math.max(best, r.kills || 0);
+      // Winning a free-for-all is beating everybody at once with nobody
+      // helping, so it pays more than carrying a team to a win.
       if (this.player.kills >= best && best > 0) {
-        this.economy.award(E.roundWinReward, 'Round won');
+        this.economy.award(E.ffaWinReward, 'Round won');
       }
       return;
     }
@@ -4585,7 +4614,7 @@ class Game {
       if (wasIt) this.economy.award(E.taggerWinReward, 'Won as tagger');
       if (startedIt) this.economy.award(E.infectorStartWinReward, 'Starting infector');
     } else if (R.outcome === 'survivors') {
-      if (!wasIt) this.economy.award(E.roundWinReward, 'Survived');
+      if (!wasIt) this.economy.award(E.survivorReward, 'Survived');
     }
   }
 

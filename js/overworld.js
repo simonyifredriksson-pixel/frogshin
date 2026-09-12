@@ -32,43 +32,43 @@
  * is one blob in `Economy`, so there is no way for half of it to survive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v120';
-import { CFG } from './config.js?v=v120';
-import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v120';
+import * as THREE from '../lib/three.module.js?v=v121';
+import { CFG } from './config.js?v=v121';
+import { clamp, damp, dampAngle, lookYaw, mulberry32 } from './util.js?v=v121';
 import { coronationScript, CarpetWalk, CORONATION_THEME }
-  from './coronation.js?v=v120';
-import { Realm } from './realm.js?v=v120';
-import { Scatter } from './scatter.js?v=v120';
-import { Traversals } from './traverse.js?v=v120';
-import { Sites } from './realmsites.js?v=v120';
-import { Camp } from './mobs.js?v=v120';
-import { DungeonBoss } from './dungeonboss.js?v=v120';
-import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v120';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v120';
+  from './coronation.js?v=v121';
+import { Realm } from './realm.js?v=v121';
+import { Scatter } from './scatter.js?v=v121';
+import { Traversals } from './traverse.js?v=v121';
+import { Sites } from './realmsites.js?v=v121';
+import { Camp } from './mobs.js?v=v121';
+import { DungeonBoss } from './dungeonboss.js?v=v121';
+import { Frogath, FROGATH_THRONE_SPEECH } from './frogath.js?v=v121';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v121';
 import { REGIONS, REGION_BY_ID, SEA, regionAt, regionOpen,
-  CONTENT_HALF } from './regions.js?v=v120';
-import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v120';
-import { GEAR_BY_ID, rollLoot } from './gear.js?v=v120';
+  CONTENT_HALF } from './regions.js?v=v121';
+import { Progress, HEART, BASE, MAX_KUNAI } from './progression.js?v=v121';
+import { GEAR_BY_ID, rollLoot } from './gear.js?v=v121';
 import { QUEST_BY_ID, SECRETS, npcSays, questProgress, shutBecause,
-  mainObjective } from './quests.js?v=v120';
+  mainObjective } from './quests.js?v=v121';
 import { People, Life, Dialogue, Journal, grantReward, TALK_RANGE,
-  disposeVillagerMats } from './realmquests.js?v=v120';
-import { disposeLandmarkMats } from './landmarks.js?v=v120';
-import { Props, disposePropMats } from './props.js?v=v120';
-import { TRADES, tradeFor, stockOf } from './stalls.js?v=v120';
-import { feelOf, lookOf } from './weapons.js?v=v120';
-import { StallScreen } from './stallui.js?v=v120';
-import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v120';
-import { Ambience } from './ambience.js?v=v120';
-import { Weather } from './weather.js?v=v120';
-import { Audio } from './audio.js?v=v120';
-import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v120';
+  disposeVillagerMats } from './realmquests.js?v=v121';
+import { disposeLandmarkMats } from './landmarks.js?v=v121';
+import { Props, disposePropMats } from './props.js?v=v121';
+import { TRADES, tradeFor, stockOf } from './stalls.js?v=v121';
+import { feelOf, lookOf } from './weapons.js?v=v121';
+import { StallScreen } from './stallui.js?v=v121';
+import { LORE_BY_ID, LORE_BY_SITE, LORE_COUNT, loreRead } from './lore.js?v=v121';
+import { Ambience } from './ambience.js?v=v121';
+import { Weather } from './weather.js?v=v121';
+import { Audio } from './audio.js?v=v121';
+import { regionTheme, settlementTheme, bossTheme } from './themes.js?v=v121';
 import { Flashbacks, memoryStage, memoriesFound,
-  MEMORY_COUNT } from './flashbacks.js?v=v120';
-import { Cine } from './cinema.js?v=v120';
-import { recommendedFor, readiness } from './guardians.js?v=v120';
-import { Wakewood, WOOD_R } from './wakewood.js?v=v120';
-import { ThroneArena } from './throne.js?v=v120';
+  MEMORY_COUNT } from './flashbacks.js?v=v121';
+import { Cine } from './cinema.js?v=v121';
+import { recommendedFor, readiness } from './guardians.js?v=v121';
+import { Wakewood, WOOD_R } from './wakewood.js?v=v121';
+import { ThroneArena } from './throne.js?v=v121';
 
 const $ = (id) => document.getElementById(id);
 const _v = new THREE.Vector3();
@@ -2231,7 +2231,17 @@ export class Overworld {
       this.hud.toast(`${s.name} is taking the boards down.`, 8);
     }
     this._announceLevels(r);
-    this.economy.award(CFG.economy.roundWinReward * (1 + e.tier), 'GUARDIAN DOWN');
+    /**
+     * Scaled by the guardian's tier — a tier-four guardian is worth five
+     * times a tier-zero one, because it is.
+     *
+     * NOT an `awardOnce`, unlike the dungeon. A realm guardian already
+     * cannot be farmed: they do not respawn, and the only way to face one
+     * again is to erase the world and walk the whole main line a second
+     * time. Gating it globally would mean a replay paid nothing, which
+     * punishes the one thing this reward is for.
+     */
+    this.economy.award(CFG.economy.guardianReward * (1 + e.tier), 'GUARDIAN DOWN');
     this.applyStats();
     // Beating one heals you up. The next region is a long walk, and arriving
     // at it on four health is not a difficulty curve, it is a chore.
