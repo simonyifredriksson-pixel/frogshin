@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v122';
+export const BUILD = 'v123';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -273,29 +273,31 @@ export const CFG = {
     /**
      * ---- the dungeon: FIRST CLEAR ONLY, see Economy.awardOnce ----
      *
-     * Stated as the two ENDS of the curve rather than as a base and a
-     * growth rate, because these are the only two numbers anybody actually
-     * has an opinion about: what the first room is worth and what the last
-     * one is. The step between them is derived — see `dungeonPayout` — so
-     * the ends stay exactly where they are put even if the room count
-     * changes.
+     * One entry per guardian, room 1 to room 14, WRITTEN OUT rather than
+     * generated. A geometric curve produced the right shape and horrible
+     * numbers — 107, 229, 4,786 — and a reward is a thing a player reads
+     * off the screen and repeats to a friend. Round numbers are worth more
+     * than a tidy formula.
      *
-     * ── the first rooms pay almost nothing, and should ──────────────────
-     * Room one is the juggernaut at a third of its strength. It is the
-     * tutorial of the dungeon, and 50 froglets is a twentieth of the
-     * cheapest crate — less than a single tag in the arena. An earlier pass
-     * had it at 500 rising to 12,400, which paid out 55,000 for the
-     * fourteen guardians and made the easy half of the dungeon the best
-     * earner in the game.
+     * ── the shape ───────────────────────────────────────────────────────
+     * Room one is the juggernaut at a third of its strength: the dungeon's
+     * tutorial, paid 50, which is less than a single tag in the arena. The
+     * first six rooms come to 875 between them — under one cheap crate for
+     * clearing the easy half. It then roughly doubles every two rooms to
+     * 7,000 at the last guardian.
      *
-     * The curve between them is steep (about 1.46 a room) and deliberately
-     * much steeper than the difficulty it is paid against — the bosses grow
-     * at `dungeon.boss.healthGrowth`, 1.175 — so froglets per point of boss
-     * health climbs the whole way down. That is what makes pushing deeper
-     * always beat re-clearing whatever room you can already handle.
+     * ── THE INVARIANT THAT MATTERS ──────────────────────────────────────
+     * Froglets per point of boss health has to rise at EVERY step. The
+     * bosses grow at `dungeon.boss.healthGrowth` (1.175 a room), and this
+     * table outruns that the whole way down: 0.20 per hp at room one to
+     * 3.44 at room fourteen. That is what stops the best earner in the game
+     * being whichever shallow room you can already clear. Edit a number
+     * here and the test suite checks that property again.
      */
-    dungeonFirst: 50,        // room 1 — trivial, and paid like it
-    dungeonLast: 7000,       // room 14 — the last guardian before the throne
+    dungeonRewards: [
+      50, 75, 100, 150, 200, 300, 500,
+      700, 1000, 1500, 2000, 3000, 5000, 7000,
+    ],
     frogathReward: 25000,    // the bottom of the dungeon
     divineReward: 100000,    // the Ascended — the hardest fight in the game
 
@@ -724,22 +726,17 @@ export const NINJA_NAMES = [
 /**
  * WHAT DUNGEON ROOM `room` PAYS, the first time it is ever cleared.
  *
- * A geometric curve pinned to both ends: room 0 pays `dungeonFirst`, the
- * last guardian pays `dungeonLast`, and everything between is a smooth
- * climb. Derived rather than stored, so the two figures in the config are
- * the two figures you get — changing the room count re-spaces the middle
- * instead of quietly moving the bottom of the curve somewhere else.
+ * A lookup into `economy.dungeonRewards`, clamped at both ends so a
+ * cheat-jumped or out-of-range room reads a real entry instead of
+ * `undefined` — which would otherwise reach `awardOnce` as NaN and silently
+ * pay nothing while still burning the bounty.
  *
- * The last GUARDIAN is `rooms - 2`, not `rooms - 1`: the final room holds
- * Frogath, who is not on this curve at all and is paid `frogathReward`.
- *
- * Clamped at both ends so a cheat-jumped or out-of-range room cannot
- * produce a negative exponent or a fortune.
+ * The last GUARDIAN is room `rooms - 2`, not `rooms - 1`: the final room
+ * holds Frogath, who is not on this table and is paid `frogathReward`.
  */
 export function dungeonPayout(room) {
-  const E = CFG.economy;
-  const last = CFG.dungeon.rooms - 2;
-  if (!(last > 0)) return E.dungeonFirst;
-  const t = Math.max(0, Math.min(last, room | 0)) / last;
-  return Math.round(E.dungeonFirst * Math.pow(E.dungeonLast / E.dungeonFirst, t));
+  const table = CFG.economy.dungeonRewards;
+  if (!table || !table.length) return 0;
+  const i = Math.max(0, Math.min(table.length - 1, room | 0));
+  return table[i];
 }
