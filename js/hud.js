@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v124';
-import { CFG } from './config.js?v=v124';
-import { staminaBand } from './stamina.js?v=v124';
-import { modeAvailable } from './rounds.js?v=v124';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v124';
-import { Audio } from './audio.js?v=v124';
-import { PX, setIcon } from './icons.js?v=v124';
+import { clamp } from './util.js?v=v125';
+import { CFG } from './config.js?v=v125';
+import { staminaBand } from './stamina.js?v=v125';
+import { modeAvailable } from './rounds.js?v=v125';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v125';
+import { Audio } from './audio.js?v=v125';
+import { PX, setIcon } from './icons.js?v=v125';
 
 const $ = (id) => document.getElementById(id);
 
@@ -182,6 +182,17 @@ export class HUD {
     this.setCinematic(false);
     this.setSubtitle('');
     this.setPickupPrompt(false);
+    /**
+     * The practice ring's "T — TRY SKINS & ABILITIES" prompt.
+     *
+     * It belongs to solo arena practice and to nothing else, and it was the
+     * one mode-owned overlay this sweep did not take down. The ring only
+     * exists in the arena world, so once you left practice with the prompt
+     * up, the code that hides it stopped running — and it sat on screen
+     * through an entire dungeon run. Exactly the leak the note above
+     * describes, and the reason this function exists.
+     */
+    this.setRingPrompt(false);
     this.setAlert(0, false);
     this.setFade(0, 0);
     this.setCritical(false);

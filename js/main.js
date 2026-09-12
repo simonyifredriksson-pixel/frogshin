@@ -5,49 +5,49 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v124';
+import * as THREE from '../lib/three.module.js?v=v125';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v124';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v124';
-import { Input } from './input.js?v=v124';
-import { Audio } from './audio.js?v=v124';
-import { World } from './world.js?v=v124';
-import { Effects } from './effects.js?v=v124';
-import { Atmosphere } from './atmosphere.js?v=v124';
-import { FollowCamera } from './camera.js?v=v124';
-import { Player } from './player.js?v=v124';
-import { RemotePlayer } from './remote.js?v=v124';
-import { HUD } from './hud.js?v=v124';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v124';
-import { FrogModel } from './frog.js?v=v124';
-import { DummyField } from './dummy.js?v=v124';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v124';
-import { ToadModel } from './npc.js?v=v124';
+} from './config.js?v=v125';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v125';
+import { Input } from './input.js?v=v125';
+import { Audio } from './audio.js?v=v125';
+import { World } from './world.js?v=v125';
+import { Effects } from './effects.js?v=v125';
+import { Atmosphere } from './atmosphere.js?v=v125';
+import { FollowCamera } from './camera.js?v=v125';
+import { Player } from './player.js?v=v125';
+import { RemotePlayer } from './remote.js?v=v125';
+import { HUD } from './hud.js?v=v125';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v125';
+import { FrogModel } from './frog.js?v=v125';
+import { DummyField } from './dummy.js?v=v125';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v125';
+import { ToadModel } from './npc.js?v=v125';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v124';
-import { DungeonRun } from './dungeon.js?v=v124';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v124';
-import { JudgmentRun } from './judgment.js?v=v124';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v124';
-import { COMBO_NAMES } from './ascended.js?v=v124';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v124';
-import { MenuScene } from './menu.js?v=v124';
-import { Economy } from './economy.js?v=v124';
-import { Shop } from './shop.js?v=v124';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v124';
-import { Overworld } from './overworld.js?v=v124';
-import { InventoryScreen } from './inventoryui.js?v=v124';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v124';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v124';
-import { Cine } from './cinema.js?v=v124';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v124';
-import { MEMORIES } from './flashbacks.js?v=v124';
-import { GUARDIANS } from './guardians.js?v=v124';
-import { gearOfTier } from './gear.js?v=v124';
-import { Chat } from './chat.js?v=v124';
+} from './skins.js?v=v125';
+import { DungeonRun } from './dungeon.js?v=v125';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v125';
+import { JudgmentRun } from './judgment.js?v=v125';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v125';
+import { COMBO_NAMES } from './ascended.js?v=v125';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v125';
+import { MenuScene } from './menu.js?v=v125';
+import { Economy } from './economy.js?v=v125';
+import { Shop } from './shop.js?v=v125';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v125';
+import { Overworld } from './overworld.js?v=v125';
+import { InventoryScreen } from './inventoryui.js?v=v125';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v125';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v125';
+import { Cine } from './cinema.js?v=v125';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v125';
+import { MEMORIES } from './flashbacks.js?v=v125';
+import { GUARDIANS } from './guardians.js?v=v125';
+import { gearOfTier } from './gear.js?v=v125';
+import { Chat } from './chat.js?v=v125';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -3984,7 +3984,20 @@ class Game {
   _updatePracticeRing(p) {
     const ring = this.world && this.world.practiceRing;
     const soloPractice = this.isSoloPractice;
-    if (!ring) return;
+    /**
+     * NO RING MEANS NO PROMPT — and the prompt has to be taken down on the
+     * way out, not merely left alone.
+     *
+     * Only the arena world builds a practice ring. Walk into it, then quit
+     * and start the dungeon or the Croaklands, and this used to return here
+     * on every frame with the prompt still lit — so "T — TRY SKINS" sat
+     * over a boss fight in a world that has no ring in it.
+     */
+    if (!ring) {
+      if (this._inRing) this._exitPracticeRing();
+      else this.hud.setRingPrompt(false);
+      return;
+    }
     // Only exists in practice; in a real match it is not even drawn.
     if (ring.group.visible !== soloPractice) ring.group.visible = soloPractice;
     if (!soloPractice) {
@@ -4031,6 +4044,10 @@ class Game {
   _endTrial() {
     this._inRing = false;
     this._tryPanelOpen = false;
+    // Hand back the prompt with everything else the ring lent you. It is
+    // also swept by `hud.resetOverlays`, and both are worth having: this is
+    // the one that fires when a match ends without the HUD being reset.
+    this.hud.setRingPrompt(false);
     this.shop.setTryMode(false);
     if (this.shop.clearTrial()) this._applySkins();
   }
