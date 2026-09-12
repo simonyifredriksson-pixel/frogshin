@@ -16,9 +16,9 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v125';
-import { roomCode as makeRoomCode } from './util.js?v=v125';
-import { ECLIPSE_TITLE } from './skins.js?v=v125';
+import { CFG, BUILD } from './config.js?v=v126';
+import { roomCode as makeRoomCode } from './util.js?v=v126';
+import { ECLIPSE_TITLE } from './skins.js?v=v126';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -152,6 +152,8 @@ export class Network {
     this.uid = CLIENT_UID;          // who we are across connections, see above
     this._brokerTimer = null;       // "the matchmaker never answered" guard
     this._quick = null;             // in-flight Quick Play attempt, see quickPlay()
+    this._heartbeat = null;         // hidden-tab state pump, see startHeartbeat
+    this._lastSent = 0;             // when a state packet last actually went out
   }
 
   get isHost() { return this.role === NetRole.HOST; }
@@ -699,13 +701,60 @@ export class Network {
     const interval = 1 / CFG.net.sendRate;
     if (this._sendAccum < interval) return;
     this._sendAccum = 0;
+    this._pushState(getState);
+  }
 
+  /** The send itself, shared by the frame loop and the heartbeat below. */
+  _pushState(getState) {
+    if (!this.isOnline || !this.connected) return;
     const s = getState();
+    if (!s) return;
+    this._lastSent = Date.now();
     if (this.isHost) {
       this._broadcast({ m: 'state', id: this.selfId, s });
     } else if (this.hostConn) {
       this._send(this.hostConn, { m: 'state', s });
     }
+  }
+
+  /**
+   * ═══ KEEP TALKING WHILE THE TAB IS HIDDEN ══════════════════════════════
+   *
+   * `tickState` is driven by the frame loop, and browsers stop
+   * `requestAnimationFrame` COMPLETELY for a tab that is not visible. So a
+   * player who alt-tabs away stops broadcasting entirely — and because
+   * everyone else only learns their health from those packets, that player
+   * appears to take no damage at all. Hit them, nothing happens; alt-tab to
+   * their window and the missing health lands all at once.
+   *
+   * It reads exactly like invulnerability, and it is not a pause bug —
+   * `receiveHit` runs off the data channel and had been applying the damage
+   * the whole time. It is only that nobody was told.
+   *
+   * A timer is the fix because timers survive backgrounding where rAF does
+   * not. Browsers clamp a hidden tab's interval to about once a second,
+   * which is far below the 20/s of a live game and completely adequate for
+   * what it has to carry: somebody who is alt-tabbed is not moving, so the
+   * only thing that changes is their health and whether they are still
+   * alive.
+   *
+   * It never doubles the send rate. The heartbeat only fires when the frame
+   * loop has gone quiet for longer than the normal interval, so while the
+   * tab is visible this costs one comparison a second and sends nothing.
+   */
+  startHeartbeat(getState) {
+    this.stopHeartbeat();
+    if (typeof setInterval !== 'function') return;
+    const quiet = Math.max(250, (1 / CFG.net.sendRate) * 1000 * 4);
+    this._heartbeat = setInterval(() => {
+      if (this._destroyed || !this.isOnline || !this.connected) return;
+      if (Date.now() - (this._lastSent || 0) < quiet) return;
+      try { this._pushState(getState); } catch (e) { /* a dead frame is not fatal */ }
+    }, 250);
+  }
+
+  stopHeartbeat() {
+    if (this._heartbeat) { clearInterval(this._heartbeat); this._heartbeat = null; }
   }
 
   /**
@@ -786,6 +835,7 @@ export class Network {
 
   disconnect() {
     this._destroyed = true;
+    this.stopHeartbeat();    // or it keeps pumping into a closed room
     this._quick = null;      // abandon any Quick Play retry in flight
     for (const conn of this.connections.values()) {
       try { conn.close(); } catch (e) { /* noop */ }

@@ -8,9 +8,9 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v125';
-import { CFG } from './config.js?v=v125';
-import { clamp } from './util.js?v=v125';
+import * as THREE from '../lib/three.module.js?v=v126';
+import { CFG } from './config.js?v=v126';
+import { clamp } from './util.js?v=v126';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -317,6 +317,22 @@ export class Health {
     if (this.invulnerable > 0) this.invulnerable -= dt;
   }
 
+  /**
+   * The respawn countdown, split out for exactly the reason `tickProtection`
+   * above it was: the game loop runs this directly while the game is PAUSED.
+   *
+   * A paused player can be hit and can die — see the note in
+   * `Game._updateGame` — but `update` is part of the movement step and does
+   * not run behind the menu, so the clock that brings them back never
+   * started. They stayed a corpse until they unpaused.
+   *
+   * Called by `update` on the normal path and by the loop on the paused one,
+   * never both in one frame, or the wait would run out at twice the rate.
+   */
+  tickRespawn(dt) {
+    if (this.dead) this.respawnTimer -= dt;
+  }
+
   update(dt) {
     this.justDied = false;
     this.justHurt = 0;
@@ -324,7 +340,7 @@ export class Health {
     this.tickProtection(dt);
 
     if (this.dead) {
-      this.respawnTimer -= dt;
+      this.tickRespawn(dt);
       return;
     }
     // Out-of-combat regeneration so a fight can't leave you permanently crippled.

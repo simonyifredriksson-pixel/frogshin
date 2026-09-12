@@ -5,49 +5,49 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v125';
+import * as THREE from '../lib/three.module.js?v=v126';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v125';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v125';
-import { Input } from './input.js?v=v125';
-import { Audio } from './audio.js?v=v125';
-import { World } from './world.js?v=v125';
-import { Effects } from './effects.js?v=v125';
-import { Atmosphere } from './atmosphere.js?v=v125';
-import { FollowCamera } from './camera.js?v=v125';
-import { Player } from './player.js?v=v125';
-import { RemotePlayer } from './remote.js?v=v125';
-import { HUD } from './hud.js?v=v125';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v125';
-import { FrogModel } from './frog.js?v=v125';
-import { DummyField } from './dummy.js?v=v125';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v125';
-import { ToadModel } from './npc.js?v=v125';
+} from './config.js?v=v126';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v126';
+import { Input } from './input.js?v=v126';
+import { Audio } from './audio.js?v=v126';
+import { World } from './world.js?v=v126';
+import { Effects } from './effects.js?v=v126';
+import { Atmosphere } from './atmosphere.js?v=v126';
+import { FollowCamera } from './camera.js?v=v126';
+import { Player } from './player.js?v=v126';
+import { RemotePlayer } from './remote.js?v=v126';
+import { HUD } from './hud.js?v=v126';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v126';
+import { FrogModel } from './frog.js?v=v126';
+import { DummyField } from './dummy.js?v=v126';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v126';
+import { ToadModel } from './npc.js?v=v126';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v125';
-import { DungeonRun } from './dungeon.js?v=v125';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v125';
-import { JudgmentRun } from './judgment.js?v=v125';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v125';
-import { COMBO_NAMES } from './ascended.js?v=v125';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v125';
-import { MenuScene } from './menu.js?v=v125';
-import { Economy } from './economy.js?v=v125';
-import { Shop } from './shop.js?v=v125';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v125';
-import { Overworld } from './overworld.js?v=v125';
-import { InventoryScreen } from './inventoryui.js?v=v125';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v125';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v125';
-import { Cine } from './cinema.js?v=v125';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v125';
-import { MEMORIES } from './flashbacks.js?v=v125';
-import { GUARDIANS } from './guardians.js?v=v125';
-import { gearOfTier } from './gear.js?v=v125';
-import { Chat } from './chat.js?v=v125';
+} from './skins.js?v=v126';
+import { DungeonRun } from './dungeon.js?v=v126';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v126';
+import { JudgmentRun } from './judgment.js?v=v126';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v126';
+import { COMBO_NAMES } from './ascended.js?v=v126';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v126';
+import { MenuScene } from './menu.js?v=v126';
+import { Economy } from './economy.js?v=v126';
+import { Shop } from './shop.js?v=v126';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v126';
+import { Overworld } from './overworld.js?v=v126';
+import { InventoryScreen } from './inventoryui.js?v=v126';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v126';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v126';
+import { Cine } from './cinema.js?v=v126';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v126';
+import { MEMORIES } from './flashbacks.js?v=v126';
+import { GUARDIANS } from './guardians.js?v=v126';
+import { gearOfTier } from './gear.js?v=v126';
+import { Chat } from './chat.js?v=v126';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1245,6 +1245,25 @@ class Game {
       // Death itself is picked up from `deathPending` in the game loop.
       if (landed) this.hud.damageFlash(clamp(d.dmg / 40, 0.2, 0.9));
     };
+
+    /**
+     * THE ROOM KEEPS HEARING FROM US EVEN WITH THE TAB IN THE BACKGROUND.
+     *
+     * `tickState` rides the frame loop, and a hidden tab has no frame loop
+     * — so alt-tabbing used to stop every packet we send, and since a
+     * player's health is only ever learned from their own broadcasts, we
+     * looked invulnerable to everyone still playing. See
+     * `Network.startHeartbeat`.
+     *
+     * Started once, for the session. It sends nothing while the frame loop
+     * is keeping up, and nothing at all when there is no player to describe
+     * — which is every menu, so a player sitting in the shop is not
+     * broadcasting a stale position into a room they already left.
+     */
+    net.startHeartbeat(() => {
+      if (!this.player || this.mode === 'menu') return null;
+      return this.player.netState();
+    });
   }
 
   /**
@@ -4065,6 +4084,47 @@ class Game {
     this.hud.setRingPrompt(false);
   }
 
+  /**
+   * A DEAD LOCAL PLAYER: count it down, and bring them back.
+   *
+   * In a juggernaut round dying is elimination rather than a respawn, so the
+   * request goes out and the spectator switch happens in `_onEliminate`,
+   * once the authority has agreed.
+   *
+   * ── why this is a method ──────────────────────────────────────────────
+   * It is called from BOTH the paused and the unpaused path. It used to be
+   * written inline inside `if (!paused)`, which is the same shape as every
+   * other pause bug in this file: a paused player could be hit and could
+   * die, but nothing counted them back in, so they lay dead behind the menu
+   * until they unpaused. Sharing one copy is what stops the two paths
+   * drifting apart again.
+   *
+   * The countdown itself is NOT ticked here — `Health.update` does it on the
+   * normal path and the loop does it directly while paused. See
+   * `Health.tickRespawn`.
+   */
+  _tickRespawn(p) {
+    if (!p || !p.health) return;
+    if (!p.health.dead) { this._elimAsked = false; return; }
+
+    if (this.round && this.round.isJuggernautMode && this.round.playing) {
+      if (!this._elimAsked) {
+        this._elimAsked = true;
+        this._requestEliminate(p.id);
+      }
+      return;
+    }
+
+    this.hud.showRespawn(p.health.respawnTimer, this._killerName);
+    if (p.health.respawnTimer <= 0) {
+      p.spawn(this._safeSpawn());
+      this._refillArenaKunai();
+      this.followCam.snapTo(p.pos);
+      this.hud.hideRespawn();
+      this._killerName = null;
+    }
+  }
+
   _updateGame(dt, t) {
     const paused = this.frozen;
     const p = this.player;
@@ -4101,13 +4161,32 @@ class Game {
      * abilities, the camera. Those are the things pausing is for.
      */
     if (paused && p) {
-      if (p.health) p.health.tickProtection(dt);
+      if (p.health) {
+        p.health.tickProtection(dt);
+        // And the clock that brings you back. Without this a player who
+        // died behind the menu stayed dead: the hit landed, the death
+        // resolved and was broadcast, and then nothing ever counted down.
+        p.health.tickRespawn(dt);
+      }
       // A death that arrived between frames resolves now, rather than being
       // held back until the pause menu closes.
       if (p.deathPending) {
         p.deathPending = false;
         this._onLocalDeath();
       }
+      /**
+       * Die, wait, and come back — all behind the pause menu.
+       *
+       * The same call the unpaused path makes, so the two cannot drift. You
+       * respawn at a spawn point with the camera already there, and the
+       * state broadcast below carries it out to the room, so on everyone
+       * else's screen a paused player dies and returns exactly like anybody
+       * else. Pausing stops your control, not your presence.
+       */
+      this._tickRespawn(p);
+      // And the bar actually moves, so the damage is something you can SEE
+      // happening rather than something you discover on unpausing.
+      this._updateVitals();
       /**
        * Knockback taken while paused is DROPPED, not banked.
        *
@@ -4169,28 +4248,7 @@ class Game {
         this._onLocalDeath();
       }
 
-      // Respawn handling. In a juggernaut round dying is elimination, not a
-      // respawn — so the request goes out and the spectator switch happens in
-      // _onEliminate, once the authority has agreed.
-      if (p.health.dead) {
-        if (this.round.isJuggernautMode && this.round.playing) {
-          if (!this._elimAsked) {
-            this._elimAsked = true;
-            this._requestEliminate(p.id);
-          }
-        } else {
-          this.hud.showRespawn(p.health.respawnTimer, this._killerName);
-          if (p.health.respawnTimer <= 0) {
-            p.spawn(this._safeSpawn());
-            this._refillArenaKunai();
-            this.followCam.snapTo(p.pos);
-            this.hud.hideRespawn();
-            this._killerName = null;
-          }
-        }
-      } else {
-        this._elimAsked = false;
-      }
+      this._tickRespawn(p);
 
       this._drainEvents(p);
       this._sweepGhosts(t);
@@ -4932,10 +4990,34 @@ class Game {
     Audio.setUnderwater(false);
   }
 
-  _updateHud(dt, speed) {
+  /**
+   * ═══ THE PART OF THE HUD THAT RUNS EVEN WHILE PAUSED ═══════════════════
+   *
+   * Your health, and nothing else.
+   *
+   * A paused player genuinely does take damage — `net.onHit` applies it
+   * straight off the data channel, which is not part of the frame loop, so
+   * the hit lands whatever the game is doing and a paused player can be
+   * killed by packets alone. But `_updateHud` lives in the unpaused branch,
+   * so the BAR never redrew: you took the damage, you saw the red flash the
+   * packet fires, and the number sat at 100 until you unpaused. It read
+   * exactly like taking no damage at all, and that is how it was reported.
+   *
+   * Only the vitals. Stamina, the hotbar, the pickup prompt and the ability
+   * cues are all about what YOU are doing, and pausing is for stopping
+   * that. This is about what the world is doing to you, which does not
+   * stop.
+   */
+  _updateVitals() {
     const p = this.player;
+    if (!p || !p.health) return;
     this.hud.setHealth(p.health.fraction);
     this.hud.setCritical(p.health.fraction < 0.28 && !p.health.dead);
+  }
+
+  _updateHud(dt, speed) {
+    const p = this.player;
+    this._updateVitals();
     this.hud.setStamina(p.stamina.fraction, p.stamina.exhausted);
 
     // Audible bookends for the lockout so the rule is learnable without

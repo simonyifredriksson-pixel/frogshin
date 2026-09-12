@@ -39,7 +39,7 @@
  * 8% better is not.
  */
 
-import { GEAR_BY_ID } from './gear.js?v=v125';
+import { GEAR_BY_ID } from './gear.js?v=v126';
 
 /**
  * ═══ THE CLASSES ════════════════════════════════════════════════════════
