@@ -52,10 +52,10 @@
  * the critical path touches one, which the tests also check.
  */
 
-import * as THREE from '../lib/three.module.js?v=v123';
-import { clamp, mulberry32, lookYaw } from './util.js?v=v123';
-import { REGION_BY_ID } from './regions.js?v=v123';
-import { ROADS, RIVERS } from './roads.js?v=v123';
+import * as THREE from '../lib/three.module.js?v=v124';
+import { clamp, mulberry32, lookYaw } from './util.js?v=v124';
+import { REGION_BY_ID } from './regions.js?v=v124';
+import { ROADS, RIVERS } from './roads.js?v=v124';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

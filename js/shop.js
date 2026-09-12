@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v123';
-import { Audio } from './audio.js?v=v123';
-import { PX } from './icons.js?v=v123';
-import { CFG } from './config.js?v=v123';
+} from './skins.js?v=v124';
+import { Audio } from './audio.js?v=v124';
+import { PX } from './icons.js?v=v124';
+import { CFG } from './config.js?v=v124';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -573,11 +573,14 @@ export class Shop {
     return !!skin.secret && !this.owns(kind, skin);
   }
 
+  /** A blank ???. One definition, so every mask looks identical. */
+  mysteryFace() {
+    return { name: '???', svg: MYSTERY_SVG, tier: '???', color: RARITY.secret.color };
+  }
+
   /** The name, picture and tier to show — masked while it is still a ???. */
   faceOf(kind, skin) {
-    if (this.hidden(kind, skin)) {
-      return { name: '???', svg: MYSTERY_SVG, tier: '???', color: RARITY.secret.color };
-    }
+    if (this.hidden(kind, skin)) return this.mysteryFace();
     const r = RARITY[skin.rarity];
     return {
       name: skin.name,
@@ -585,6 +588,26 @@ export class Shop {
       tier: skin.reward ? 'REWARD' : r.name,
       color: r.color,
     };
+  }
+
+  /**
+   * THE FACE FOR A CARD ON THE SPINNING REEL.
+   *
+   * A secret is ALWAYS a ??? here — owned or not, trial mode or not. This
+   * is the one place that ignores ownership, and it is deliberate.
+   *
+   * The reel is a slot machine, and what a card on it is for is the tease
+   * as it goes past. Once you own the Forgotten One its real face carries
+   * no information on a spinning strip; all it does is spoil the item for
+   * anyone watching over your shoulder and flatten the one card in the
+   * whole game that is supposed to make you lean in. A ??? flying past is
+   * the point of it being a ???.
+   *
+   * The reveal at the end is unaffected: that runs after `economy.unlock`
+   * and shows you exactly what you got.
+   */
+  reelFaceOf(kind, skin) {
+    return skin.secret ? this.mysteryFace() : this.faceOf(kind, skin);
   }
 
   openShop() { this.view = 'shop'; this.render(); }
@@ -1175,20 +1198,20 @@ export class Shop {
     strip.innerHTML = '';
 
     /**
-     * THE FILLER GOES THROUGH THE MASK TOO.
+     * EVERY CARD GOES THROUGH THE REEL MASK.
      *
-     * This was the one place a ??? could still give itself away. The strip
-     * is filled at random from the crate's whole pool, and that pool holds
-     * the secret — so roughly one card in nine of every reel was The
-     * Forgotten One, under its real name, with its real art, scrolling past
-     * the marker of a player who has never pulled one.
+     * The strip is filled at random from the crate's whole pool, and that
+     * pool holds the secret — so about one card in nine of every Eclipse
+     * reel is the Forgotten One. `reelFaceOf` makes it a ??? on all of
+     * them, whether or not you already own it; see the note on that method
+     * for why the reel ignores ownership when nothing else does.
      *
-     * The prize at WIN_INDEX never needs masking: a secret does not reach
-     * the reel at all, it branches to `_eclipseReveal` before this runs.
+     * The prize at WIN_INDEX is never a secret: one branches to
+     * `_eclipseReveal` before this runs.
      */
     for (let i = 0; i < COUNT; i++) {
       const item = i === WIN_INDEX ? won : pool[Math.floor(Math.random() * pool.length)];
-      const face = this.faceOf(crate.kind, item);
+      const face = this.reelFaceOf(crate.kind, item);
       const el = document.createElement('div');
       el.className = 'reel-item';
       el.style.borderBottomColor = face.color;
