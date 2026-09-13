@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v132';
+import * as THREE from '../lib/three.module.js?v=v133';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v132';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v132';
-import { Input } from './input.js?v=v132';
-import { Audio } from './audio.js?v=v132';
-import { World } from './world.js?v=v132';
-import { Effects } from './effects.js?v=v132';
-import { Atmosphere } from './atmosphere.js?v=v132';
-import { FollowCamera } from './camera.js?v=v132';
-import { Player } from './player.js?v=v132';
+} from './config.js?v=v133';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v133';
+import { Input } from './input.js?v=v133';
+import { Audio } from './audio.js?v=v133';
+import { World } from './world.js?v=v133';
+import { Effects } from './effects.js?v=v133';
+import { Atmosphere } from './atmosphere.js?v=v133';
+import { FollowCamera } from './camera.js?v=v133';
+import { Player } from './player.js?v=v133';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
-  escrowCost, validate, payouts, refundable, describePrize,
-} from './tournament.js?v=v132';
+  escrowCost, validate, payouts, refundable, describePrize, teamSize,
+} from './tournament.js?v=v133';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v132';
-import { RemotePlayer } from './remote.js?v=v132';
-import { HUD } from './hud.js?v=v132';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v132';
-import { FrogModel } from './frog.js?v=v132';
-import { DummyField } from './dummy.js?v=v132';
+import { coneHit } from './combat.js?v=v133';
+import { RemotePlayer } from './remote.js?v=v133';
+import { HUD } from './hud.js?v=v133';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v133';
+import { FrogModel } from './frog.js?v=v133';
+import { DummyField } from './dummy.js?v=v133';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v132';
-import { ToadModel } from './npc.js?v=v132';
+} from './rounds.js?v=v133';
+import { ToadModel } from './npc.js?v=v133';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v132';
-import { DungeonRun } from './dungeon.js?v=v132';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v132';
-import { JudgmentRun } from './judgment.js?v=v132';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v132';
-import { COMBO_NAMES } from './ascended.js?v=v132';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v132';
-import { MenuScene } from './menu.js?v=v132';
-import { Economy } from './economy.js?v=v132';
-import { Shop } from './shop.js?v=v132';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v132';
-import { Overworld } from './overworld.js?v=v132';
-import { InventoryScreen } from './inventoryui.js?v=v132';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v132';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v132';
-import { Cine } from './cinema.js?v=v132';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v132';
-import { MEMORIES } from './flashbacks.js?v=v132';
-import { GUARDIANS } from './guardians.js?v=v132';
-import { gearOfTier } from './gear.js?v=v132';
-import { Chat } from './chat.js?v=v132';
+} from './skins.js?v=v133';
+import { DungeonRun } from './dungeon.js?v=v133';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v133';
+import { JudgmentRun } from './judgment.js?v=v133';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v133';
+import { COMBO_NAMES } from './ascended.js?v=v133';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v133';
+import { MenuScene } from './menu.js?v=v133';
+import { Economy } from './economy.js?v=v133';
+import { Shop } from './shop.js?v=v133';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v133';
+import { Overworld } from './overworld.js?v=v133';
+import { InventoryScreen } from './inventoryui.js?v=v133';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v133';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v133';
+import { Cine } from './cinema.js?v=v133';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v133';
+import { MEMORIES } from './flashbacks.js?v=v133';
+import { GUARDIANS } from './guardians.js?v=v133';
+import { gearOfTier } from './gear.js?v=v133';
+import { Chat } from './chat.js?v=v133';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -922,6 +922,8 @@ class Game {
      */
     const named = t.prize.id ? findSkin(t.prize.slot, t.prize.id) : null;
     this._running.label = describePrize(t, named && named.name);
+    // The match plays what was paid for. No vote — see `forceMode`.
+    if (this.round) this.round.forceMode(t.mode, teamSize(t));
     this._announcePrize();
     this.showPanel('lobby');
     this._refreshLobby();
@@ -1012,6 +1014,9 @@ class Game {
   _abandonTournament() {
     const t = this._running;
     this._running = null;
+    // The room gets its vote back — an ordinary match after a tournament
+    // must not still be locked to the mode the tournament was staked on.
+    if (this.round) this.round.forceMode(null);
     if (!t || !t.paid || t.settled) return;
     if (t.prize.kind === PRIZE.SKIN) {
       this.economy.unlock(t.prize.slot, t.prize.id);
@@ -1024,16 +1029,19 @@ class Game {
   /** Receive a prize — froglets, or the skin itself. */
   _takePrize(w) {
     if (!w) return;
+    const place = w.place === 1 ? '1ST PLACE'
+      : (w.place === 2 ? '2ND PLACE' : (w.place === 3 ? '3RD PLACE' : ''));
     if (w.kind === PRIZE.SKIN) {
       if (this.economy.unlock(w.slot, w.itemId)) {
         const s = findSkin(w.slot, w.itemId);
-        this.hud.toast(`TOURNAMENT PRIZE — ${s ? s.name : 'a skin'} is yours`, 6);
+        this.hud.showPrize(`${s ? s.name.toUpperCase() : 'A SKIN'}`
+          + (place ? `\n${place}` : ''));
         this.shop.refresh();
       }
     } else if (w.amount > 0) {
       this.economy.grant(w.amount, `Tournament — place ${w.place}`);
-      this.hud.toast(
-        `TOURNAMENT PRIZE — ${w.amount.toLocaleString('en-GB')} froglets`, 6);
+      this.hud.showPrize(`${w.amount.toLocaleString('en-GB')} FROGLETS`
+        + (place ? `\n${place}` : ''));
     }
   }
 
@@ -4668,9 +4676,17 @@ class Game {
       const look = this.input.takeLook();
       if (this.input.locked) this.followCam.look(look.dx, look.dy);
 
-      // Scoreboard while Tab is held.
-      this.hud.showScoreboard(this.input.down('Tab'));
-      if (this.input.down('Tab')) this._refreshScoreboard();
+      /**
+       * Scoreboard while Tab is held — and all the way through the results.
+       *
+       * The ENDING clause matters: this line runs every frame, so without it
+       * the leaderboard raised by `_onPhaseChange` would be taken straight
+       * back down on the next one, and the match would end on nothing.
+       */
+      const results = this.round.phase === PHASE.ENDING;
+      const wantBoard = results || this.input.down('Tab');
+      this.hud.showScoreboard(wantBoard);
+      if (wantBoard) this._refreshScoreboard();
 
       // ---- round flow (the clock itself ticked above, pause or not) ----
       // Team score is tallied from everyone's own kill counters, which each
@@ -5087,6 +5103,20 @@ class Game {
 
     if (phase === PHASE.VOTING) {
       this.myVote = null;
+      /**
+       * A TOURNAMENT HAS NOTHING TO VOTE ON.
+       *
+       * The mode was chosen and paid for when the prize was staked, so the
+       * round resolves on its very next tick — see `RoundManager.forceMode`.
+       * Showing the vote screen for that one frame would flash a panel up
+       * and tear the mouse out of the player's hands for nothing.
+       */
+      if (this.round.forced) {
+        this.hud.showVote(false);
+        this.hud.hideRound();
+        this.hud.clearAnnounce();
+        return;
+      }
       this.hud.showVote(true);
       this.hud.hideRound();
       this.hud.clearAnnounce();
@@ -5130,6 +5160,20 @@ class Game {
     } else if (phase === PHASE.ENDING) {
       this.hud.announce(this.round.result || 'ROUND OVER', 'good', true);
       Audio.refreshed(this.player.pos);
+      /**
+       * THE LEADERBOARD, without anybody having to hold Tab for it.
+       *
+       * The scoreboard already sorts by kills and marks your own row — it
+       * IS the leaderboard, so this shows the one that exists rather than
+       * building a second one that could disagree with it. The result line
+       * above it names the winning side in a team match; the table under it
+       * says who actually did the work.
+       *
+       * It stays up until the next phase change, which is the vote screen
+       * or the next countdown — both of which clear it.
+       */
+      this._refreshScoreboard();
+      this.hud.showScoreboard(true);
       this._awardRoundEnd();
       // The round is decided, so spectating is over — you rejoin the world
       // for the results and the next vote.

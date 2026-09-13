@@ -17,8 +17,8 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v132';
-import { clamp } from './util.js?v=v132';
+import { CFG } from './config.js?v=v133';
+import { clamp } from './util.js?v=v133';
 
 export const MODES = {
   TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',
@@ -123,6 +123,8 @@ export class RoundManager {
     this.result = '';
     this.roundNumber = 0;
     this._syncAccum = 0;
+    /** Set by `forceMode` when a tournament has already decided the mode. */
+    this.forced = null;
     /**
      * Solo practice: free-for-all rules with none of the ceremony.
      *
@@ -216,6 +218,16 @@ export class RoundManager {
 
   /** Winning mode, plus the most popular tagger count among its voters. */
   _resolveVote(playerCount) {
+    /**
+     * A tournament's mode is not up for a vote — the prize was staked
+     * against it. `modeAvailable` is deliberately not consulted: the host
+     * chose a size when they staked, and a room that is briefly one player
+     * short must not silently become a different game than the one people
+     * are playing for.
+     */
+    if (this.forced) {
+      return { mode: this.forced.mode, taggerCount: this.forced.taggerCount };
+    }
     let bestMode = null;
     let bestVotes = -1;
     // Deterministic order so a tie always resolves the same way everywhere.
@@ -265,6 +277,8 @@ export class RoundManager {
 
     switch (this.phase) {
       case PHASE.VOTING: {
+        // A tournament has nothing to vote on — see `forceMode`.
+        if (this.forced) { this._beginRound(playerIds); break; }
         // Start early once everyone present has voted.
         const everyoneVoted = playerIds.length > 0 &&
           playerIds.every((id) => this.votes.has(id));
@@ -360,7 +374,35 @@ export class RoundManager {
     // Everyone comes back for the next round — spectating never carries over.
     this.eliminated.clear();
     this.juggernaut = null;
-    this._setPhase(PHASE.VOTING, CFG.rounds.voteTime);
+    /**
+     * A forced mode still passes THROUGH voting, for one tick.
+     *
+     * `_beginRound` is the only place that deals teams, picks taggers and
+     * chooses a juggernaut — jumping straight to STARTING would skip all of
+     * it and start a team match with nobody on a team. So the phase is set
+     * as normal and `update` resolves it on the very next tick, with a
+     * zero-length timer so nothing counts down.
+     *
+     * The vote SCREEN never appears: main.js checks `forced` before showing
+     * it. A screen that flashes up and vanishes reads as a bug.
+     */
+    this._setPhase(PHASE.VOTING, this.forced ? 0 : CFG.rounds.voteTime);
+  }
+
+  /**
+   * ═══ LOCK THE MODE AND SKIP THE VOTE ═══════════════════════════════════
+   *
+   * A tournament plays what the host paid for. There is nothing to vote on:
+   * the prize was staked against a specific mode, and letting the room vote
+   * it away would mean the money was put up for one game and spent on
+   * another. So the vote never happens and the match starts straight into
+   * the countdown.
+   *
+   * `null` hands the room back its vote — used when the tournament is over
+   * or abandoned, so an ordinary room that follows it behaves normally.
+   */
+  forceMode(mode, teamSize) {
+    this.forced = mode ? { mode, taggerCount: clamp(teamSize || 1, 1, MAX_TEAM_SIZE) } : null;
   }
 
   _beginRound(playerIds) {
@@ -534,6 +576,10 @@ export class RoundManager {
       jh: this.juggernautHealth || 1,
       el: Array.from(this.eliminated),
       n: this.roundNumber,
+      // Whether the mode is locked by a tournament. Mirrors never resolve a
+      // vote, but they do decide whether to put the vote screen up — and a
+      // guest watching a tournament must not see it flash either.
+      f: this.forced ? 1 : 0,
     };
   }
 
@@ -560,6 +606,8 @@ export class RoundManager {
     this.taggers = new Set(s.tg || []);
     this.juggernaut = s.jg || null;
     this.juggernautHealth = s.jh || 1;
+    // UI only on this side — a mirror never resolves a vote. See `serialize`.
+    this.forced = s.f ? { mode: s.m, taggerCount: s.tc } : null;
 
     // Fire onEliminate for anyone newly out, so mirrors get the same
     // announcement and spectator switch the authority already made.

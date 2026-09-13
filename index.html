@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v132" />
+<link rel="stylesheet" href="css/style.css?v=v133" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -946,6 +946,16 @@
   <div id="combo"></div>
   <div id="toast"></div>
 
+  <!-- WHAT YOU JUST WON.
+       Its own banner rather than the round-result announce, which is
+       occupying the centre of the screen at exactly the moment a tournament
+       pays out — two things sharing one element means one of them is never
+       seen, and it would be this one. -->
+  <div id="prize-banner">
+    <b>YOU RECEIVED</b>
+    <span id="prize-what"></span>
+  </div>
+
   <!--
     BOSS BANTER — a line thrown out mid-fight.
 
@@ -1421,6 +1431,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v132"></script>
+<script type="module" src="js/main.js?v=v133"></script>
 </body>
 </html>

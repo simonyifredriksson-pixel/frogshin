@@ -7,8 +7,8 @@
  * free of networking while still feeling responsive.
  */
 
-import * as THREE from '../lib/three.module.js?v=v132';
-import { damp } from './util.js?v=v132';
+import * as THREE from '../lib/three.module.js?v=v133';
+import { damp } from './util.js?v=v133';
 
 const BURLAP = 0xc9ac72;
 const BURLAP_DARK = 0xa88c56;

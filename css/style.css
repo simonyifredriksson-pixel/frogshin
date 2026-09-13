@@ -1683,6 +1683,47 @@ kbd {
 }
 .cr-title.show { display: block; }
 
+/* ══════════════════════════════════════════════════════ YOU RECEIVED ══
+   Sits BELOW the round result rather than over it — the two appear at the
+   same moment and the result is the headline; this is the consequence. */
+/* A prize arrives at the same moment the results leaderboard does, and the
+   leaderboard owns the middle of the screen — so this sits under it, in the
+   gap above the hotbar, rather than across the rows it is congratulating
+   you for. */
+#prize-banner {
+  position: fixed;
+  left: 50%; bottom: 15%;
+  transform: translate(-50%, 0);
+  z-index: 42;
+  display: none;
+  padding: 16px 26px;
+  text-align: center;
+  pointer-events: none;
+  background: rgba(8,12,18,0.88);
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.55), 0 10px 0 rgba(0,0,0,0.35);
+}
+#prize-banner.show { display: block; animation: prize-in 0.45s ease-out; }
+#prize-banner b {
+  display: block;
+  font-family: var(--font-px); font-size: 9px;
+  letter-spacing: 4px; color: var(--parch-dim);
+  margin-bottom: 9px;
+}
+#prize-what {
+  display: block;
+  /* The place is sent on a second line, so newlines have to survive. */
+  white-space: pre-line;
+  font-family: var(--font-px); font-size: 15px;
+  letter-spacing: 2px; line-height: 1.7;
+  color: #7ee07e;
+  text-shadow: 0 0 16px rgba(126,224,126,0.55);
+}
+@keyframes prize-in {
+  0%   { opacity: 0; transform: translate(-50%, 22px) scale(0.94); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
 /* What the room is playing for, in the lobby. Hidden until something is
    actually staked — an empty prize line is furniture. */
 #lobby-prize { display: none; }

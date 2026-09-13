@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v132';
-import { CFG } from './config.js?v=v132';
-import { staminaBand } from './stamina.js?v=v132';
-import { modeAvailable } from './rounds.js?v=v132';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v132';
-import { Audio } from './audio.js?v=v132';
-import { PX, setIcon } from './icons.js?v=v132';
+import { clamp } from './util.js?v=v133';
+import { CFG } from './config.js?v=v133';
+import { staminaBand } from './stamina.js?v=v133';
+import { modeAvailable } from './rounds.js?v=v133';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v133';
+import { Audio } from './audio.js?v=v133';
+import { PX, setIcon } from './icons.js?v=v133';
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,6 +81,10 @@ export class HUD {
     this.onSlotClick = null;
     this.comboEl = $('combo');
     this.speedEl = $('speed-lines');
+
+    this.prizeEl = $('prize-banner');
+    this.prizeWhat = $('prize-what');
+    this._prizeTimer = 0;
 
     this._hitTimer = 0;
     this._vignetteLevel = 0;
@@ -182,6 +186,9 @@ export class HUD {
     this.setCinematic(false);
     this.setSubtitle('');
     this.setPickupPrompt(false);
+    // A prize banner belongs to the match it was won in.
+    if (this.prizeEl) this.prizeEl.classList.remove('show');
+    this._prizeTimer = 0;
     /**
      * The practice ring's "T — TRY SKINS & ABILITIES" prompt.
      *
@@ -744,6 +751,26 @@ export class HUD {
     this._toastTimer = duration;
   }
 
+  /**
+   * ═══ YOU RECEIVED ____ ═════════════════════════════════════════════════
+   *
+   * Winning something is the biggest thing that happens in a tournament, and
+   * a toast is the smallest thing this HUD can say. A toast is for "+10
+   * kunai" — it slides in at the edge and is gone in under three seconds,
+   * which is not how you tell somebody they just won a skin off another
+   * player.
+   *
+   * Its own banner rather than `announce`, which the round result is already
+   * using at that exact moment: two things fighting over one element means
+   * one of them is not seen, and it would be this one.
+   */
+  showPrize(what, duration = 7) {
+    if (!this.prizeEl) return;
+    this.prizeWhat.textContent = what;
+    this.prizeEl.classList.add('show');
+    this._prizeTimer = duration;
+  }
+
   // -------------------------------------------------------------- overlays
 
   showRespawn(seconds, killerName) {
@@ -803,6 +830,10 @@ export class HUD {
       this.vignette.style.opacity = this._vignetteLevel * 0.85;
     }
 
+    if (this._prizeTimer > 0) {
+      this._prizeTimer -= dt;
+      if (this._prizeTimer <= 0 && this.prizeEl) this.prizeEl.classList.remove('show');
+    }
     if (this._toastTimer > 0) {
       this._toastTimer -= dt;
       if (this._toastTimer <= 0) this.toastEl.classList.remove('show');
