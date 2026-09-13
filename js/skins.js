@@ -81,6 +81,44 @@ export const RARITY_ORDER = [
 ];
 
 /**
+ * ═══ WHAT A DUPLICATE IS WORTH ═══════════════════════════════════════════
+ *
+ * Pull something you already own and you are handed froglets instead. Every
+ * open gives you SOMETHING, which is the difference between a case you stop
+ * buying once your collection fills up and one that always has a floor.
+ *
+ * ── two axes ──────────────────────────────────────────────────────────
+ * A frog skin is worth more than a sword, and a sword more than a kunai —
+ * the same order their cases are priced in, because it is the same
+ * judgement about how much of the frog you are actually looking at. The
+ * ratio is taken straight from the three commons: 500 / 400 / 250.
+ *
+ * Mythic and Secret are FLAT across all three. At that end the tier is the
+ * whole story; nobody who pulls a second Astral Sovereign cares that it is
+ * a sword rather than a frog.
+ *
+ * ── it must never pay to farm ─────────────────────────────────────────
+ * The ceiling on all of this is that a player who owns everything must not
+ * profit by opening cases. Worked against every case in the game, the best
+ * return is about 47% on the cheapest kunai case — a real consolation, and
+ * comfortably short of a machine that prints froglets. The test suite
+ * recomputes that for every case, so a generous edit here fails loudly
+ * rather than quietly turning the shop into an income.
+ */
+const DUPE_BASE = {
+  common: 500, uncommon: 1000, rare: 2000, epic: 4000, legendary: 8000,
+};
+const DUPE_FLAT = { mythic: 20000, secret: 50000 };
+const DUPE_KIND = { frogs: 1, swords: 0.8, kunai: 0.5 };
+
+/** Froglets handed over for a duplicate of this kind and tier. */
+export function dupeValue(kind, rarity) {
+  if (DUPE_FLAT[rarity] !== undefined) return DUPE_FLAT[rarity];
+  const base = DUPE_BASE[rarity] || 0;
+  return Math.round(base * (DUPE_KIND[kind] === undefined ? 1 : DUPE_KIND[kind]));
+}
+
+/**
  * ═══ THE ECLIPSE SET'S MATERIALS ════════════════════════════════════════
  *
  * The three ??? items are one set, and a set is a MATERIAL before it is a

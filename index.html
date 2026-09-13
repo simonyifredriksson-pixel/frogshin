@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v130" />
+<link rel="stylesheet" href="css/style.css?v=v131" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -168,13 +168,21 @@
              them. They are the same kind of decision made two ways, and
              stacking them with a sentence each cost a hundred pixels of
              height to say twice what one line says once. -->
+        <!-- Three ways to start a multiplayer match, ON ONE ROW.
+             TOURNAMENT went here rather than on a line of its own with a
+             caption under it: the play screen was measured at 967px and a
+             1080p window has about 1,080 to give, so a fourth row and a
+             second note put it over and made the whole screen scroll. The
+             row was already two buttons of the same kind of decision; it is
+             three now and costs nothing in height. -->
         <div class="btn-row">
           <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
           <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
+          <button class="btn" id="btn-tournament"><span>TOURNAMENT</span></button>
         </div>
         <!-- One line, deliberately. Two costs 23px of height to say the
              same thing with more words in it. -->
-        <p class="note">A public match, or a private code for your friends.</p>
+        <p class="note">A public match, a private code, or a staked room.</p>
 
         <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
              choice, so it sits under the host's button rather than being
@@ -362,6 +370,89 @@
           <button class="btn btn-danger" id="btn-erase-yes"><span>DELETE FOREVER</span></button>
           <button class="btn btn-quiet" id="btn-erase-no"><span>KEEP IT</span></button>
         </div>
+      </div>
+    </div>
+
+    <!-- ═════════════════════════════════════════════════ HOST TOURNAMENT ══
+         A room with something real staked on it.
+
+         One screen rather than a wizard: every question is short, they all
+         affect the number at the bottom, and a five-step flow that ends in
+         "you cannot afford this" would have asked four questions for
+         nothing. The cost line updates as you go, so the answer is always
+         in front of you.
+
+         The stake is taken when you press OPEN, not when somebody wins —
+         see the note in js/tournament.js. -->
+    <div class="panel" id="panel-tournament">
+      <div class="card card-play">
+        <button class="btn-x btn-back" title="Back" aria-label="Back">◀</button>
+        <h2 class="card-title">HOST TOURNAMENT</h2>
+
+        <div class="divider"><span>THE MATCH</span></div>
+        <div class="tr-row">
+          <label>MODE</label>
+          <div class="tr-opts" id="tr-mode"></div>
+        </div>
+        <div class="tr-row">
+          <label>PLAYERS</label>
+          <div class="tr-opts" id="tr-size"></div>
+        </div>
+        <div class="tr-row">
+          <label>TEAMS</label>
+          <div class="tr-opts" id="tr-teams"></div>
+        </div>
+
+        <div class="divider"><span>THE PRIZE</span></div>
+        <div class="tr-row">
+          <label>PUT UP</label>
+          <div class="tr-opts" id="tr-kind"></div>
+        </div>
+
+        <!-- Froglets: one amount, or three for a podium. -->
+        <div id="tr-froglets">
+          <div class="tr-row" id="tr-amount-row">
+            <label>AMOUNT</label>
+            <input id="tr-amount" type="number" min="1" max="9999999" step="500" value="5000" />
+          </div>
+          <div id="tr-podium-rows">
+            <div class="tr-row">
+              <label>1ST PLACE</label>
+              <input id="tr-p1" type="number" min="0" max="9999999" step="500" value="5000" />
+            </div>
+            <div class="tr-row">
+              <label>2ND PLACE</label>
+              <input id="tr-p2" type="number" min="0" max="9999999" step="500" value="2500" />
+            </div>
+            <div class="tr-row">
+              <label>3RD PLACE</label>
+              <input id="tr-p3" type="number" min="0" max="9999999" step="500" value="1000" />
+            </div>
+          </div>
+        </div>
+
+        <!-- A skin: pick one you own. Winner-takes-all only — there is one
+             of it, so it cannot be split across a podium or a team. -->
+        <div id="tr-skin-pick">
+          <button class="btn btn-quiet" id="tr-choose-skin">
+            <span>CHOOSE AWARD — <b id="tr-skin-name">none</b></span>
+          </button>
+          <div id="tr-skin-grid" class="skin-grid"></div>
+        </div>
+
+        <div class="divider"><span>WHO WINS IT</span></div>
+        <div class="tr-row">
+          <label>SPLIT</label>
+          <div class="tr-opts" id="tr-split"></div>
+        </div>
+
+        <!-- The number that matters, and it is never more than one glance
+             away from any control that changes it. -->
+        <div class="tr-cost" id="tr-cost"></div>
+        <p class="note" id="tr-prize-line"></p>
+
+        <button class="btn btn-go" id="tr-open"><span>OPEN TOURNAMENT</span></button>
+        <div id="tr-status" class="status"></div>
       </div>
     </div>
 
@@ -1322,6 +1413,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v130"></script>
+<script type="module" src="js/main.js?v=v131"></script>
 </body>
 </html>

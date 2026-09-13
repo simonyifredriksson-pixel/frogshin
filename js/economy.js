@@ -11,7 +11,10 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v130';
+import { CFG } from './config.js?v=v131';
+// Only for `revoke`: a staked skin that was being worn falls back to the
+// default rather than leaving the player in something they no longer own.
+import { DEFAULT_SKIN } from './skins.js?v=v131';
 
 export class Economy {
   constructor() {
@@ -344,6 +347,32 @@ export class Economy {
     if (!this.owned[kind]) this.owned[kind] = [];
     if (this.owns(kind, id)) return false;
     this.owned[kind].push(id);
+    this._dirty = true;
+    this.save();
+    return true;
+  }
+
+  /**
+   * STOP OWNING A SKIN.
+   *
+   * The other half of a tournament's escrow: a host who stakes a skin gives
+   * it up the moment the tournament opens, and the winner is handed it at
+   * the end. One skin, one holder — paying out at the end without taking it
+   * away at the start would put the same item on two frogs.
+   *
+   * Anything equipped goes back to the default, because wearing something
+   * you no longer own is exactly the state this is here to prevent.
+   *
+   * @returns true if it was owned and now is not.
+   */
+  revoke(kind, id) {
+    const list = this.owned[kind];
+    if (!list) return false;
+    const i = list.indexOf(id);
+    if (i === -1) return false;
+    list.splice(i, 1);
+    const slot = kind === 'swords' ? 'sword' : (kind === 'frogs' ? 'frog' : 'kunai');
+    if (this.equipped[slot] === id) this.equipped[slot] = DEFAULT_SKIN[kind];
     this._dirty = true;
     this.save();
     return true;

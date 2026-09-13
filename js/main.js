@@ -5,52 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v130';
+import * as THREE from '../lib/three.module.js?v=v131';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v130';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v130';
-import { Input } from './input.js?v=v130';
-import { Audio } from './audio.js?v=v130';
-import { World } from './world.js?v=v130';
-import { Effects } from './effects.js?v=v130';
-import { Atmosphere } from './atmosphere.js?v=v130';
-import { FollowCamera } from './camera.js?v=v130';
-import { Player } from './player.js?v=v130';
+} from './config.js?v=v131';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v131';
+import { Input } from './input.js?v=v131';
+import { Audio } from './audio.js?v=v131';
+import { World } from './world.js?v=v131';
+import { Effects } from './effects.js?v=v131';
+import { Atmosphere } from './atmosphere.js?v=v131';
+import { FollowCamera } from './camera.js?v=v131';
+import { Player } from './player.js?v=v131';
+import {
+  PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
+  escrowCost, validate, payouts, refundable, describePrize,
+} from './tournament.js?v=v131';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v130';
-import { RemotePlayer } from './remote.js?v=v130';
-import { HUD } from './hud.js?v=v130';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v130';
-import { FrogModel } from './frog.js?v=v130';
-import { DummyField } from './dummy.js?v=v130';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v130';
-import { ToadModel } from './npc.js?v=v130';
+import { coneHit } from './combat.js?v=v131';
+import { RemotePlayer } from './remote.js?v=v131';
+import { HUD } from './hud.js?v=v131';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v131';
+import { FrogModel } from './frog.js?v=v131';
+import { DummyField } from './dummy.js?v=v131';
+import {
+  RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
+} from './rounds.js?v=v131';
+import { ToadModel } from './npc.js?v=v131';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v130';
-import { DungeonRun } from './dungeon.js?v=v130';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v130';
-import { JudgmentRun } from './judgment.js?v=v130';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v130';
-import { COMBO_NAMES } from './ascended.js?v=v130';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v130';
-import { MenuScene } from './menu.js?v=v130';
-import { Economy } from './economy.js?v=v130';
-import { Shop } from './shop.js?v=v130';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v130';
-import { Overworld } from './overworld.js?v=v130';
-import { InventoryScreen } from './inventoryui.js?v=v130';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v130';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v130';
-import { Cine } from './cinema.js?v=v130';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v130';
-import { MEMORIES } from './flashbacks.js?v=v130';
-import { GUARDIANS } from './guardians.js?v=v130';
-import { gearOfTier } from './gear.js?v=v130';
-import { Chat } from './chat.js?v=v130';
+} from './skins.js?v=v131';
+import { DungeonRun } from './dungeon.js?v=v131';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v131';
+import { JudgmentRun } from './judgment.js?v=v131';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v131';
+import { COMBO_NAMES } from './ascended.js?v=v131';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v131';
+import { MenuScene } from './menu.js?v=v131';
+import { Economy } from './economy.js?v=v131';
+import { Shop } from './shop.js?v=v131';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v131';
+import { Overworld } from './overworld.js?v=v131';
+import { InventoryScreen } from './inventoryui.js?v=v131';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v131';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v131';
+import { Cine } from './cinema.js?v=v131';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v131';
+import { MEMORIES } from './flashbacks.js?v=v131';
+import { GUARDIANS } from './guardians.js?v=v131';
+import { gearOfTier } from './gear.js?v=v131';
+import { Chat } from './chat.js?v=v131';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -321,7 +327,7 @@ class Game {
   _buildMenuUI() {
     const panels = ['home', 'play', 'lobby', 'shop', 'howto', 'settings',
       'credits', 'dungeon', 'saves', 'erase', 'croaklands', 'practice',
-      'customize', 'avatar'];
+      'customize', 'avatar', 'tournament'];
     this.showPanel = (name) => {
       for (const p of panels) $('panel-' + p).classList.toggle('active', p === name);
       /**
@@ -443,6 +449,10 @@ class Game {
     // Creating or joining a room lands in a LOBBY rather than launching
     // straight into a match, so the host has a moment to choose.
     $('btn-host').onclick = () => { this.pendingMode = null; this._connect('host', null); };
+    $('btn-tournament').onclick = () => {
+      Audio.uiClick();
+      this._openTournament();
+    };
     $('btn-join').onclick = () => {
       const code = roomInput.value.trim();
       if (!code) { this._playStatus('Enter a room code to join.', true); return; }
@@ -507,6 +517,7 @@ class Game {
     const backTo = {
       croaklands: 'play', dungeon: 'play', practice: 'play',
       customize: 'play', saves: 'croaklands', avatar: 'customize',
+      tournament: 'play',
     };
     for (const [from, to] of Object.entries(backTo)) {
       const b = $('panel-' + from).querySelector('.btn-back');
@@ -708,6 +719,293 @@ class Game {
       ? 'realm' : 'prologue';
     if (this.net.isOnline && kind === 'solo') this.net.disconnect();
     this._enterGame();
+  }
+
+  /**
+   * ═══ HOST A TOURNAMENT ═════════════════════════════════════════════════
+   *
+   * The setup screen. Every control writes into `this._tourney`, and every
+   * change redraws the whole panel — it is a form of eleven controls, and
+   * rebuilding it costs nothing next to keeping eleven listeners in step
+   * with a shared object.
+   *
+   * Nothing is spent here. `_openTournamentRoom` is where the stake is
+   * taken, and it is taken before the room exists so a host who cannot
+   * afford it never gets a code to hand out.
+   */
+  _openTournament() {
+    if (!this._tourney) this._tourney = blankTournament();
+    this._tourneySkinPick = false;
+    this.showPanel('tournament');
+    this._renderTournament();
+  }
+
+  _renderTournament() {
+    const t = this._tourney;
+    const eco = this.economy;
+
+    /** One row of mutually exclusive buttons. */
+    const opts = (host, items, current, pick) => {
+      const el = $(host);
+      if (!el) return;
+      el.innerHTML = '';
+      for (const [value, label] of items) {
+        const b = document.createElement('button');
+        b.className = 'tr-opt' + (value === current ? ' on' : '');
+        b.textContent = label;
+        b.onclick = () => { Audio.uiClick(); pick(value); this._renderTournament(); };
+        el.appendChild(b);
+      }
+    };
+
+    opts('tr-mode', TOURNEY_MODES.map((m) => [m, MODE_INFO[m].name]), t.mode,
+      (v) => {
+        t.mode = v;
+        // Teams only exist in the team mode, and the team split only makes
+        // sense with sides to split between.
+        if (v !== MODES.TEAM) { t.teams = false; if (t.split === SPLIT.TEAM) t.split = SPLIT.WINNER; }
+      });
+    opts('tr-size', SIZES.map((n) => [n, String(n)]), t.size, (v) => { t.size = v; });
+    opts('tr-teams', [[false, 'OFF'], [true, 'ON']], t.teams, (v) => {
+      t.teams = v;
+      if (v) t.mode = MODES.TEAM;
+      else if (t.split === SPLIT.TEAM) t.split = SPLIT.WINNER;
+    });
+    opts('tr-kind', [[PRIZE.FROGLETS, 'FROGLETS'], [PRIZE.SKIN, 'A SKIN']],
+      t.prize.kind, (v) => {
+        t.prize.kind = v;
+        // One skin cannot be split three ways, so choosing one forces the
+        // only split it can honour. See `validate`.
+        if (v === PRIZE.SKIN) t.split = SPLIT.WINNER;
+      });
+
+    const splits = [[SPLIT.WINNER, 'TOP KILLS']];
+    if (t.prize.kind === PRIZE.FROGLETS) {
+      splits.push([SPLIT.PODIUM, '1ST/2ND/3RD']);
+      if (t.teams) splits.push([SPLIT.TEAM, 'EACH WINNER']);
+    }
+    opts('tr-split', splits, t.split, (v) => { t.split = v; });
+
+    // Only the editor for the prize you are actually putting up.
+    const froglets = t.prize.kind === PRIZE.FROGLETS;
+    $('tr-froglets').classList.toggle('hidden', !froglets);
+    $('tr-skin-pick').classList.toggle('hidden', froglets);
+    $('tr-podium-rows').classList.toggle('hidden', t.split !== SPLIT.PODIUM);
+    $('tr-amount-row').classList.toggle('hidden', t.split === SPLIT.PODIUM);
+
+    const num = (id, value, set) => {
+      const el = $(id);
+      if (!el) return;
+      el.value = value;
+      el.oninput = () => { set(Math.max(0, Math.round(Number(el.value) || 0))); this._tourneyCost(); };
+      el.onchange = () => this._renderTournament();
+    };
+    num('tr-amount', t.prize.amount, (v) => { t.prize.amount = v; });
+    num('tr-p1', t.podium[0], (v) => { t.podium[0] = v; });
+    num('tr-p2', t.podium[1], (v) => { t.podium[1] = v; });
+    num('tr-p3', t.podium[2], (v) => { t.podium[2] = v; });
+
+    // The skin picker: everything you own, and nothing you do not.
+    const staked = t.prize.id ? findSkin(t.prize.slot, t.prize.id) : null;
+    $('tr-open').onclick = () => this._openTournamentRoom();
+    $('tr-skin-name').textContent = staked ? staked.name : 'none';
+    $('tr-choose-skin').onclick = () => {
+      Audio.uiClick();
+      this._tourneySkinPick = !this._tourneySkinPick;
+      this._renderTournament();
+    };
+    const grid = $('tr-skin-grid');
+    grid.classList.toggle('hidden', froglets || !this._tourneySkinPick);
+    grid.innerHTML = '';
+    if (!froglets && this._tourneySkinPick) {
+      let any = false;
+      for (const kind of ['frogs', 'swords', 'kunai']) {
+        for (const s of CATALOG[kind]) {
+          // The default skins are not property — everybody has them, and
+          // staking one would be staking nothing.
+          if (s.id === DEFAULT_SKIN[kind] || !eco.owns(kind, s.id)) continue;
+          any = true;
+          const card = this.shop._skinCard(kind, s);
+          card.onclick = () => {
+            Audio.uiClick();
+            t.prize.slot = kind;
+            t.prize.id = s.id;
+            this._tourneySkinPick = false;
+            this._renderTournament();
+          };
+          card.classList.toggle('equipped', t.prize.id === s.id);
+          grid.appendChild(card);
+        }
+      }
+      if (!any) {
+        const p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'You do not own a skin to put up yet — open a case first.';
+        grid.appendChild(p);
+      }
+    }
+
+    this._tourneyCost();
+  }
+
+  /** The running total, and whether the host can actually cover it. */
+  _tourneyCost() {
+    const t = this._tourney;
+    const cost = escrowCost(t);
+    const el = $('tr-cost');
+    const skin = t.prize.kind === PRIZE.SKIN;
+    const short = !skin && !this.economy.canAfford(cost);
+    el.classList.toggle('short', short);
+    el.textContent = skin
+      ? 'YOU PUT UP THE SKIN — you stop owning it now'
+      : `YOU PUT UP ${cost.toLocaleString('en-GB')} FROGLETS`;
+    const named = t.prize.id ? findSkin(t.prize.slot, t.prize.id) : null;
+    $('tr-prize-line').textContent = describePrize(t, named && named.name);
+    return cost;
+  }
+
+  /**
+   * ═══ THE STAKE IS TAKEN HERE ═══════════════════════════════════════════
+   *
+   * Before the room is opened, not after somebody wins it. A host paid at
+   * the END could stake ten thousand, spend it during the match, and the
+   * winner would still be paid — ten thousand froglets that did not exist.
+   * Taking it now makes the whole thing a transfer.
+   *
+   * And it is the last moment anything is checked: `validate` runs against
+   * the live wallet, so a host who spent their froglets on the shop screen
+   * between configuring and opening is told, rather than opening a
+   * tournament it cannot pay out.
+   */
+  _openTournamentRoom() {
+    const t = this._tourney;
+    const why = validate(t, this.economy);
+    if (why) {
+      Audio.uiBack();
+      $('tr-status').textContent = why;
+      $('tr-status').classList.add('bad');
+      return;
+    }
+    $('tr-status').classList.remove('bad');
+
+    if (t.prize.kind === PRIZE.SKIN) {
+      if (!this.economy.revoke(t.prize.slot, t.prize.id)) {
+        $('tr-status').textContent = 'You no longer own that skin.';
+        return;
+      }
+      this._applySkins();          // it may have been the one you were wearing
+    } else if (!this.economy.spend(escrowCost(t))) {
+      $('tr-status').textContent = 'You cannot cover that prize.';
+      return;
+    }
+
+    /**
+     * A snapshot, taken at the moment of payment.
+     *
+     * The setup screen keeps mutating `this._tourney`, and the thing that
+     * pays out at the end must be what was actually paid FOR — not whatever
+     * the host last fiddled with while waiting in the lobby.
+     */
+    this._running = JSON.parse(JSON.stringify(t));
+    this._running.paid = true;
+    this.pendingMode = 'arena';
+    this._connect('host', null);
+  }
+
+  /**
+   * ═══ PAYING A TOURNAMENT OUT ═══════════════════════════════════════════
+   *
+   * Run once, by the host, when the match ends. Everything owed goes out as
+   * `prize` events; whatever the result did not reach comes back to the
+   * host — see `refundable`, which is why a podium played by two people
+   * does not quietly destroy the third prize.
+   */
+  _payTournament() {
+    const t = this._running;
+    if (!t || !t.paid || t.settled) return;
+    t.settled = true;
+
+    const players = [{
+      id: this.player.id,
+      name: this.settings.name || 'You',
+      kills: this.player.kills || 0,
+      team: this.round ? this.round.teamOf(this.player.id) : -1,
+    }];
+    for (const [id, r] of this.remotes) {
+      players.push({
+        id, name: r.name, kills: r.kills || 0,
+        team: this.round ? this.round.teamOf(id) : -1,
+      });
+    }
+
+    const owed = payouts(t, players);
+    for (const w of owed) {
+      if (w.id === this.player.id) {
+        // The host won their own tournament. Nothing was minted — they are
+        // simply getting their own stake back.
+        this._takePrize(w);
+      } else {
+        this.net.sendEvent({ t: 'prize', to: w.id, p: w });
+      }
+    }
+
+    const back = refundable(t, players);
+    if (back === -1) {
+      // A skin nobody won goes home whole.
+      this.economy.unlock(t.prize.slot, t.prize.id);
+      this.economy.save();
+      this.hud.toast('Nobody scored — your skin is back', 4);
+    } else if (back > 0) {
+      this.economy.grant(back, 'Tournament — unclaimed');
+    }
+
+    const names = owed
+      .map((w) => (w.id === this.player.id ? 'you' : this.net.nameOf(w.id)))
+      .join(', ');
+    this.hud.toast(owed.length
+      ? `Tournament paid out to ${names}`
+      : 'Tournament ended with no winner', 5);
+  }
+
+  /**
+   * LEAVING BEFORE IT WAS PLAYED GIVES THE STAKE BACK.
+   *
+   * The host pays when the room opens, which is right — see
+   * `_openTournamentRoom` — but it means a tournament abandoned in the
+   * lobby has taken real froglets for a match nobody played. That is not a
+   * prize anybody won, it is a fee for changing your mind.
+   *
+   * Only refunds an UNSETTLED tournament. Once `_payTournament` has run the
+   * money is already where it belongs, and handing the stake back on top
+   * would pay the prize twice — the exact duplication escrow exists to
+   * prevent.
+   */
+  _abandonTournament() {
+    const t = this._running;
+    this._running = null;
+    if (!t || !t.paid || t.settled) return;
+    if (t.prize.kind === PRIZE.SKIN) {
+      this.economy.unlock(t.prize.slot, t.prize.id);
+      this.economy.save();
+    } else {
+      this.economy.grant(escrowCost(t), 'Tournament cancelled');
+    }
+  }
+
+  /** Receive a prize — froglets, or the skin itself. */
+  _takePrize(w) {
+    if (!w) return;
+    if (w.kind === PRIZE.SKIN) {
+      if (this.economy.unlock(w.slot, w.itemId)) {
+        const s = findSkin(w.slot, w.itemId);
+        this.hud.toast(`TOURNAMENT PRIZE — ${s ? s.name : 'a skin'} is yours`, 6);
+        this.shop.refresh();
+      }
+    } else if (w.amount > 0) {
+      this.economy.grant(w.amount, `Tournament — place ${w.place}`);
+      this.hud.toast(
+        `TOURNAMENT PRIZE — ${w.amount.toLocaleString('en-GB')} froglets`, 6);
+    }
   }
 
   /** Show the pre-match lobby and keep its player count live. */
@@ -1142,6 +1440,18 @@ class Game {
        * a peer cannot cancel an ability it does not own beyond having
        * actually hit the thing.
        */
+      /**
+       * A TOURNAMENT PRIZE, sent by the host at the end of the match.
+       *
+       * Trusted on arrival, and it has to be: the host is the only machine
+       * that knows what was staked, and they have already paid for it. The
+       * `to` check is what stops one player's prize landing in everybody's
+       * wallet — the event is broadcast to the room like every other.
+       */
+      if (ev.t === 'prize') {
+        if (ev.to === this.player.id) this._takePrize(ev.p);
+        return;
+      }
       if (ev.t === 'clonehit') {
         if (ev.to === this.player.id && this.player.killClone()) {
           const c = this.player.pos;
@@ -3806,6 +4116,7 @@ class Game {
     // The next match starts as an ordinary frog, whatever this one ended as.
     this._jugModelOn = false;
     this._elimAsked = false;
+    this._abandonTournament();
     this._endTrial();
     this._dropClone();
     this.input.releaseLock();
@@ -4774,6 +5085,16 @@ class Game {
     const E = CFG.economy;
     if (!R || this._paidRound === R.roundNumber) return;
     this._paidRound = R.roundNumber;
+
+    /**
+     * A TOURNAMENT SETTLES ON THE FIRST ROUND THAT ENDS.
+     *
+     * Only the host pays — they are the one holding the stake — and only
+     * once, which `_payTournament` guards with its own `settled` flag. The
+     * ordinary round rewards below still happen; the tournament prize is on
+     * top of them, not instead.
+     */
+    if (this._running && this.net.isHost) this._payTournament();
 
     const me = this.player.id;
     const wasIt = R.isTagger(me);

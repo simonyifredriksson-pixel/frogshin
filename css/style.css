@@ -1683,6 +1683,65 @@ kbd {
 }
 .cr-title.show { display: block; }
 
+/* ═══════════════════════════════════════════════════ HOST A TOURNAMENT ══
+   Built from the menu's own vocabulary — labelled dividers, a label and a
+   control per row — rather than a second visual language for one screen.
+   Every row is `label | control`, so the eye runs down one column of
+   questions and one column of answers. */
+.tr-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 9px;
+}
+.tr-row > label {
+  flex: 0 0 108px;
+  font-family: var(--font-px); font-size: 8px;
+  letter-spacing: 1px; color: var(--parch-dim);
+}
+/* `min-width: 0` so a row of options wraps inside the card instead of
+   pushing it wide — the trap the colour swatches fell into. */
+.tr-opts { flex: 1 1 0; min-width: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.tr-opt {
+  flex: 1 1 0; min-width: 54px;
+  padding: 8px 6px;
+  background: #1b2431;
+  border: 2px solid #2f4257;
+  color: var(--parch-dim);
+  font-family: var(--font-px); font-size: 8px;
+  letter-spacing: 1px; cursor: pointer;
+}
+.tr-opt:hover { color: var(--parch); border-color: #3f5a78; }
+.tr-opt.on {
+  color: #12202c; border-color: var(--gold);
+  background: linear-gradient(180deg, #ffd76b, #d9a227);
+}
+.tr-row input[type="number"] {
+  flex: 1 1 0; min-width: 0;
+  padding: 9px 8px;
+  background: #101823;
+  border: 2px solid #2f4257;
+  color: #7ee07e;
+  font-family: var(--font-px); font-size: 10px;
+}
+.tr-row input[type="number"]:focus { outline: none; border-color: var(--gold); }
+
+/* The running total. Big, green, and impossible to miss — it is the only
+   number on the screen that leaves your account. */
+.tr-cost {
+  margin: 14px 0 4px;
+  padding: 11px;
+  text-align: center;
+  font-family: var(--font-px); font-size: 11px;
+  letter-spacing: 1px; color: #7ee07e;
+  background: rgba(0,0,0,0.3);
+  border: 3px solid #26313d;
+}
+.tr-cost.short { color: #ff7a6b; border-color: #5a2b2b; }
+/* Only one of the two prize editors is up at a time. */
+#tr-froglets.hidden, #tr-skin-pick.hidden,
+#tr-podium-rows.hidden, #tr-amount-row.hidden { display: none; }
+#tr-skin-grid { max-height: 268px; overflow-y: auto; margin-top: 10px; }
+#tr-skin-grid.hidden { display: none; }
+
 /* ══════════════════════════════════════════════════════ the lobby roster ══
    Names, and the one title the game has. */
 /* Capped and scrolling. A full room is eight names, and eight names left

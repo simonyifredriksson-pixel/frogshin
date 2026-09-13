@@ -9,11 +9,11 @@
 import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
-  ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v130';
-import { Audio } from './audio.js?v=v130';
-import { PX } from './icons.js?v=v130';
-import { CFG } from './config.js?v=v130';
+  ECLIPSE_TITLE, eclipseProgress, dupeValue,
+} from './skins.js?v=v131';
+import { Audio } from './audio.js?v=v131';
+import { PX } from './icons.js?v=v131';
+import { CFG } from './config.js?v=v131';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -1486,14 +1486,25 @@ export class Shop {
     // one open that completes it, and never again.
     const wasComplete = eclipseProgress(this.economy).complete;
     const dupe = !this.economy.unlock(crate.kind, won.id);
-    (this._batch = this._batch || []).push({ item: won, dupe });
+    /**
+     * A DUPLICATE PAYS OUT instead of being nothing.
+     *
+     * `grant` rather than `award`: `award` is the earning path and is
+     * switched off in solo practice, and this is not earnings — it is
+     * change from froglets you have already spent. Swallowing it because
+     * the case happened to be opened from a paused practice match would be
+     * taking the money twice.
+     */
+    const back = dupe ? dupeValue(crate.kind, won.rarity) : 0;
+    if (back > 0) this.economy.grant(back, 'Duplicate');
+    (this._batch = this._batch || []).push({ item: won, dupe, back });
 
     $('cr-rarity').textContent = r.name.toUpperCase();
     $('cr-rarity').style.color = r.color;
     $('cr-art').innerHTML = previewSVG(crate.kind, won);
     $('cr-name').textContent = won.name;
     $('cr-dupe').textContent = dupe
-      ? 'You already owned this one.'
+      ? `You already owned this one — +${back.toLocaleString('en-GB')} froglets.`
       : 'Added to your collection.';
 
     /**
@@ -1621,9 +1632,13 @@ export class Shop {
         + `${counts[k]}× ${RARITY[k].name}</span>`).join('');
 
     const fresh = batch.filter((e) => !e.dupe).length;
+    // What the duplicates were worth, totalled — after ten opens that is
+    // the number somebody actually wants, not how many of them there were.
+    const back = batch.reduce((a, e) => a + (e.back || 0), 0);
+    const paid = back > 0 ? `  ·  +${back.toLocaleString('en-GB')} FROGLETS` : '';
     this._sub(fresh
-      ? `${fresh} NEW  ·  ${batch.length - fresh} ALREADY OWNED`
-      : 'ALL DUPLICATES. IT HAPPENS.');
+      ? `${fresh} NEW  ·  ${batch.length - fresh} ALREADY OWNED${paid}`
+      : `ALL DUPLICATES${paid}`);
     $('crate-again2').querySelector('span').textContent
       = `OPEN ${batch.length} MORE`;
     $('crate-batch').classList.add('show');
