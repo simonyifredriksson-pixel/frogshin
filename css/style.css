@@ -901,22 +901,51 @@ kbd {
   border-color: #6b4a10;
 }
 
-/* ---- crate offer ---- */
-.crate-offer {
-  display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
-  padding: 18px;
-  /* Three cases stack in every tab now, so they need real air between them
-     — at 18px they read as one long slab with lines through it. */
-  margin-bottom: 30px;
+/* ═══════════════════════════════════════════════════════ THE CASE SHOP ══
+   Every case in the game, four to a row, grouped by set.
+
+   It used to be one wide row per case — the box on the left, a blurb and a
+   line of odds in the middle, the buy buttons on the right — stacked three
+   deep under a tab per category, with a grid of every skin below them. At
+   twelve cases that is a page you scroll for a minute. As tiles they all
+   fit at once, which is what lets you compare them, and the blurb and the
+   odds moved into the drawer where somebody who is actually deciding will
+   open them anyway.
+
+   `auto-fill` rather than a fixed four: the card is 176px at its narrowest
+   and the grid simply carries fewer per row as the card narrows, so this
+   works down to a phone without a breakpoint. */
+.crate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+.crate-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 9px;
+  padding: 14px 12px;
   background: rgba(0,0,0,0.3);
   border: 3px solid #26313d;
+  /* The lit border is the only thing saying which drawer below is open. */
+  transition: border-color 0.12s ease;
 }
-.crate-offer:last-child { margin-bottom: 0; }
-/* The case and its "what's inside" button travel together. */
-.crate-side {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; align-items: center; gap: 7px;
+.crate-card.open { border-color: var(--gold); }
+.cc-title {
+  font-family: var(--font-px); font-size: 9px; color: var(--gold);
+  letter-spacing: 1px; line-height: 1.6; text-align: center;
+  /* Two lines, always — a one-line name must not make its tile shorter
+     than the three beside it. */
+  min-height: 30px;
+  display: flex; align-items: center;
 }
+.cc-cost {
+  font-family: var(--font-px); font-size: 11px;
+  color: #7ee07e;                 /* froglet green, as everywhere else */
+  letter-spacing: 1px;
+}
+.crate-card .cc-open { width: 100%; margin: 0; }
+.crate-card .crate-bulk { width: 100%; margin: 0; }
 .crate-box {
   width: 108px; height: 82px;
   position: relative;
@@ -960,20 +989,9 @@ kbd {
   border: 3px solid #cfd6de;
   border-bottom: 0;
 }
-.crate-meta { flex: 1 1 240px; }
-.crate-meta h3 {
-  font-family: var(--font-px); font-size: 12px; color: var(--gold);
-  letter-spacing: 1px; margin-bottom: 8px;
-}
-.crate-meta p { font-size: 17px; color: var(--parch-dim); margin-bottom: 10px; }
-.crate-odds { display: flex; gap: 10px; flex-wrap: wrap; }
-.crate-odds span {
-  font-family: var(--font-px); font-size: 8px;
-  padding: 3px 6px; border-bottom: 3px solid currentColor;
-}
-.crate-buy { flex: 0 0 auto; text-align: center; }
-.crate-buy .btn { width: 190px; margin-bottom: 8px; }
-.crate-price { font-family: var(--font-px); font-size: 10px; color: var(--parch-dim); }
+/* The blurb, the odds strip and the wide buy column that went with the old
+   one-row-per-case layout are gone with it. The blurb and the odds live in
+   the contents drawer now; the price and the buttons are on the tile. */
 
 /* ---- item grid ---- */
 .skin-grid {
@@ -1777,7 +1795,7 @@ kbd {
 }
 .crate-peek-btn:hover { border-color: var(--gold); color: var(--parch); }
 .crate-peek-btn i { font-style: normal; font-size: 8px; line-height: 1; }
-.crate-offer.open .crate-peek-btn { border-color: var(--gold); color: var(--gold); }
+.crate-card.open .crate-peek-btn { border-color: var(--gold); color: var(--gold); }
 
 /* Full width of the offer panel, below the case, the blurb and the buttons. */
 .crate-contents {

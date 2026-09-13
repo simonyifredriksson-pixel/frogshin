@@ -8,12 +8,12 @@
 
 import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
-  rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
+  CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress,
-} from './skins.js?v=v127';
-import { Audio } from './audio.js?v=v127';
-import { PX } from './icons.js?v=v127';
-import { CFG } from './config.js?v=v127';
+} from './skins.js?v=v128';
+import { Audio } from './audio.js?v=v128';
+import { PX } from './icons.js?v=v128';
+import { CFG } from './config.js?v=v128';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -456,7 +456,9 @@ export class Shop {
   constructor(economy, onChange) {
     this.economy = economy;
     this.onChange = onChange || (() => {});
-    this.tab = 'swords';
+    // The shop has one page of cases and a page of abilities. Equipping
+    // happens on CUSTOMISE AVATAR and nowhere else.
+    this.tab = 'crates';
     /**
      * Which screen the skin cards are currently drawn on — the shop, or the
      * equip screen. Both use `_skinCard`, and it has to redraw the one you
@@ -687,76 +689,108 @@ export class Shop {
     const body = $('shop-body');
     body.innerHTML = '';
     if (this.tab === 'abilities') this._renderAbilities(body);
-    else this._renderSkins(body, this.tab);
+    else this._renderCrates(body);
   }
 
-  _renderSkins(body, kind) {
-    for (const crate of cratesFor(kind)) body.appendChild(this._crateOffer(crate));
-
-    /**
-     * The items, GROUPED BY SET.
-     *
-     * Three cases fill this tab now. One flat grid of thirty cards would
-     * give no clue which case drops which, and a set that you cannot see the
-     * boundaries of is not a set — it is a pile.
-     *
-     * Sets are listed in catalogue order rather than from a fixed list, so
-     * adding a fourth one later needs no change here.
-     */
-    const items = CATALOG[kind] || [];
+  /**
+   * ═══ THE CASE SHOP ═════════════════════════════════════════════════════
+   *
+   * Every case in the game, on one page, grouped by the set it belongs to.
+   *
+   * ── what this replaced ────────────────────────────────────────────────
+   * A tab per category, each holding that category's cases followed by a
+   * grid of all thirty-six skins in it, priced, with an EQUIP button on
+   * every one you owned. The same items then appeared again on CUSTOMISE
+   * AVATAR. Two screens showing the same thing is two screens to keep in
+   * step, and it left the shop with no clear job: half storefront, half
+   * wardrobe. Now the shop sells cases and the avatar screen wears things,
+   * and neither has an opinion about the other.
+   *
+   * ── one page, not three tabs ──────────────────────────────────────────
+   * With the item grids gone a per-category tab would hold four cases and
+   * nothing else — three near-empty screens to click between. All twelve fit
+   * at once, and seeing the Eclipse cases sitting under the Celestial ones
+   * is most of what makes a set read as a set.
+   *
+   * Sets come from the crate table in catalogue order, so adding a fifth one
+   * needs no change here.
+   */
+  _renderCrates(body) {
     const order = [];
-    for (const s of items) {
-      const set = setOf(s);
-      if (order.indexOf(set) === -1) order.push(set);
+    for (const c of CRATES) {
+      const s = setOf(c);
+      if (order.indexOf(s) === -1) order.push(s);
     }
+
     for (const set of order) {
+      const mine = CRATES.filter((c) => setOf(c) === set);
+      if (!mine.length) continue;
+
       const head = document.createElement('div');
       head.className = 'set-head';
       head.textContent = SET_NAMES[set] || set.toUpperCase();
+      // How much of the whole set you have, across all three categories —
+      // the one number that says whether a set is worth more of your money.
+      const have = mine.reduce((n, c) => n + cratePool(c)
+        .filter((s) => this.economy.owns(c.kind, s.id)).length, 0);
+      const total = mine.reduce((n, c) => n + cratePool(c).length, 0);
+      const count = document.createElement('i');
+      count.textContent = `${have} / ${total}`;
+      head.appendChild(count);
       body.appendChild(head);
+
       const grid = document.createElement('div');
-      grid.className = 'skin-grid';
-      for (const skin of items) {
-        if (setOf(skin) === set) grid.appendChild(this._skinCard(kind, skin));
-      }
+      grid.className = 'crate-grid';
+      for (const c of mine) grid.appendChild(this._crateCard(c));
       body.appendChild(grid);
+
+      /**
+       * The contents drawer opens BELOW the row rather than inside the card.
+       * A card that grew to hold nine item previews would be four times the
+       * height of the three beside it and shove the whole grid out of shape;
+       * full width under the row it belongs to keeps the cases lined up and
+       * gives the previews somewhere to breathe.
+       */
+      for (const c of mine) {
+        if (this._peek && this._peek.has(c.id)) {
+          body.appendChild(this._crateContents(c));
+        }
+      }
     }
   }
 
-  _crateOffer(crate) {
-    const wrap = document.createElement('div');
-    wrap.className = 'crate-offer';
-    /**
-     * The contents drawer's open/shut state is kept on the Shop, not on the
-     * element. `render()` rebuilds this whole panel on every purchase and
-     * every equip, so state living in the DOM would slam the drawer shut the
-     * moment you bought anything with it open.
-     */
-    const peeking = this._peek && this._peek.has(crate.id);
-    if (peeking) wrap.classList.add('open');
+  /**
+   * ONE CASE, as a tile in the grid.
+   *
+   * Name, the case itself, the price, and how to buy it — in that order,
+   * because that is the order the decision is made in. Everything else the
+   * old wide row carried (the blurb, the per-tier odds) is one click away in
+   * the contents drawer, which is where somebody who has decided to look
+   * properly is already going.
+   */
+  _crateCard(crate) {
+    const peeking = !!(this._peek && this._peek.has(crate.id));
+    const card = document.createElement('div');
+    card.className = 'crate-card' + (peeking ? ' open' : '');
 
-    const side = document.createElement('div');
-    side.className = 'crate-side';
+    const name = document.createElement('div');
+    name.className = 'cc-title';
+    name.textContent = crate.name;
+    card.appendChild(name);
 
     const box = document.createElement('div');
-    // The case looks like its set here too, so you can tell them apart in
-    // the shop and not only once one is already open.
     box.className = 'crate-box' + (setOf(crate) === 'base' ? '' : ' ' + setOf(crate));
     box.style.setProperty('--crate-color', crate.color);
     box.innerHTML = '<div class="crate-lock"></div>';
-    side.appendChild(box);
+    card.appendChild(box);
 
     /**
      * CLICK THE CASE TO SEE WHAT IS IN IT.
      *
      * Deliberately not the OPEN CASE button — that one spends money. A case
      * you can inspect before buying is the difference between a gamble and a
-     * choice, and the odds on the card only say how often a tier comes up,
-     * not which nine things are in it.
-     *
-     * The caption is not decoration: a box that does something when you
-     * click it and gives no sign of that is a secret, so it says so and the
-     * chevron says which way it goes.
+     * choice, and the odds only say how often a tier comes up, not which
+     * nine things are in it.
      */
     const peek = document.createElement('button');
     peek.className = 'crate-peek-btn';
@@ -770,38 +804,27 @@ export class Shop {
     };
     peek.onclick = toggle;
     box.onclick = toggle;
-    side.appendChild(peek);
-    wrap.appendChild(side);
+    card.appendChild(peek);
 
-    const meta = document.createElement('div');
-    meta.className = 'crate-meta';
-    const odds = crateOdds(crate)
-      .map((o) => `<span style="color:${RARITY[o.rarity].color}">`
-        + `${RARITY[o.rarity].name} ${o.pct.toFixed(o.pct < 1 ? 2 : 1)}%</span>`)
-      .join('');
-    meta.innerHTML = `<h3>${crate.name}</h3><p>${crate.blurb}</p>`
-      + `<div class="crate-odds">${odds}</div>`;
-    wrap.appendChild(meta);
+    // The price in froglet green, the way every price in the game is shown.
+    const price = document.createElement('div');
+    price.className = 'cc-cost';
+    price.textContent = crate.price.toLocaleString('en-GB');
+    card.appendChild(price);
 
-    const buy = document.createElement('div');
-    buy.className = 'crate-buy';
     const btn = document.createElement('button');
-    btn.className = 'btn btn-go';
+    btn.className = 'btn btn-go cc-open';
     btn.innerHTML = '<span>OPEN CASE</span>';
     btn.onclick = () => this.buyCrate(crate, 1);
-    buy.appendChild(btn);
-    const price = document.createElement('div');
-    price.className = 'crate-price';
-    price.textContent = crate.price.toLocaleString('en-GB') + ' FROGLETS';
-    buy.appendChild(price);
+    card.appendChild(btn);
 
     /**
      * BULK BUYS. Same case, several at a time.
      *
      * Charged at the plain multiple with no discount — this buys SPEED, not
      * a better deal. A ten-pack at a discount would make opening one at a
-     * time the wrong move, and then the ×1 button is just a trap for anyone
-     * who wanted to watch the animation.
+     * time the wrong move, and then the ×1 button is a trap for anybody who
+     * wanted to watch the animation.
      */
     const bulk = document.createElement('div');
     bulk.className = 'crate-bulk';
@@ -814,18 +837,10 @@ export class Shop {
       b.onclick = () => this.buyCrate(crate, n);
       bulk.appendChild(b);
     }
-    buy.appendChild(bulk);
-    const note = document.createElement('div');
-    note.className = 'crate-bulk-note';
-    note.textContent = BULK_SIZES.filter((n) => n > 1)
-      .map((n) => `×${n} ${(crate.price * n).toLocaleString('en-GB')}`)
-      .join('  ·  ');
-    buy.appendChild(note);
-
-    wrap.appendChild(buy);
-    if (peeking) wrap.appendChild(this._crateContents(crate));
-    return wrap;
+    card.appendChild(bulk);
+    return card;
   }
+
 
   /**
    * WHAT IS IN A CASE, tier by tier, with the odds on each.
