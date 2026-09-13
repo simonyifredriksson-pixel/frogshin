@@ -19,12 +19,12 @@
  * posed on the dais, and the two sparring in front of it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v139';
-import { lerp, lookYaw } from './util.js?v=v139';
-import { Atmosphere } from './atmosphere.js?v=v139';
-import { FrogModel } from './frog.js?v=v139';
-import { World } from './world.js?v=v139';
-import { DEFAULT_MAP } from './maps.js?v=v139';
+import * as THREE from '../lib/three.module.js?v=v140';
+import { lerp, lookYaw } from './util.js?v=v140';
+import { Atmosphere } from './atmosphere.js?v=v140';
+import { FrogModel } from './frog.js?v=v140';
+import { World } from './world.js?v=v140';
+import { DEFAULT_MAP } from './maps.js?v=v140';
 
 const _v = new THREE.Vector3();
 const _ray = new THREE.Raycaster();

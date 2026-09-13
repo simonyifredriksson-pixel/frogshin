@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v139';
+import * as THREE from '../lib/three.module.js?v=v140';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v139';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v139';
-import { Input } from './input.js?v=v139';
-import { Audio } from './audio.js?v=v139';
-import { World } from './world.js?v=v139';
-import { Effects } from './effects.js?v=v139';
-import { Atmosphere } from './atmosphere.js?v=v139';
-import { FollowCamera } from './camera.js?v=v139';
-import { Player } from './player.js?v=v139';
+} from './config.js?v=v140';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v140';
+import { Input } from './input.js?v=v140';
+import { Audio } from './audio.js?v=v140';
+import { World } from './world.js?v=v140';
+import { Effects } from './effects.js?v=v140';
+import { Atmosphere } from './atmosphere.js?v=v140';
+import { FollowCamera } from './camera.js?v=v140';
+import { Player } from './player.js?v=v140';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v139';
+} from './tournament.js?v=v140';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v139';
-import { RemotePlayer } from './remote.js?v=v139';
-import { HUD } from './hud.js?v=v139';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v139';
-import { FrogModel } from './frog.js?v=v139';
-import { DummyField } from './dummy.js?v=v139';
+import { coneHit } from './combat.js?v=v140';
+import { RemotePlayer } from './remote.js?v=v140';
+import { HUD } from './hud.js?v=v140';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v140';
+import { FrogModel } from './frog.js?v=v140';
+import { DummyField } from './dummy.js?v=v140';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v139';
-import { ToadModel } from './npc.js?v=v139';
+} from './rounds.js?v=v140';
+import { ToadModel } from './npc.js?v=v140';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v139';
-import { DungeonRun } from './dungeon.js?v=v139';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v139';
-import { JudgmentRun } from './judgment.js?v=v139';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v139';
-import { COMBO_NAMES } from './ascended.js?v=v139';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v139';
-import { MenuScene } from './menu.js?v=v139';
-import { Economy } from './economy.js?v=v139';
-import { Shop } from './shop.js?v=v139';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v139';
-import { Overworld } from './overworld.js?v=v139';
-import { InventoryScreen } from './inventoryui.js?v=v139';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v139';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v139';
-import { Cine } from './cinema.js?v=v139';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v139';
-import { MEMORIES } from './flashbacks.js?v=v139';
-import { GUARDIANS } from './guardians.js?v=v139';
-import { gearOfTier } from './gear.js?v=v139';
-import { Chat } from './chat.js?v=v139';
+} from './skins.js?v=v140';
+import { DungeonRun } from './dungeon.js?v=v140';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v140';
+import { JudgmentRun } from './judgment.js?v=v140';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v140';
+import { COMBO_NAMES } from './ascended.js?v=v140';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v140';
+import { MenuScene } from './menu.js?v=v140';
+import { Economy } from './economy.js?v=v140';
+import { Shop } from './shop.js?v=v140';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v140';
+import { Overworld } from './overworld.js?v=v140';
+import { InventoryScreen } from './inventoryui.js?v=v140';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v140';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v140';
+import { Cine } from './cinema.js?v=v140';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v140';
+import { MEMORIES } from './flashbacks.js?v=v140';
+import { GUARDIANS } from './guardians.js?v=v140';
+import { gearOfTier } from './gear.js?v=v140';
+import { Chat } from './chat.js?v=v140';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -405,27 +405,65 @@ class Game {
       this.shop.openAvatar();
       this.showPanel('avatar');
     };
-    for (const b of document.querySelectorAll('.btn-back')) {
-      b.onclick = () => {
-        Audio.uiBack();
-        // The practice ring's try-out panel returns straight to the match.
-        if (this._tryPanelOpen) {
-          this._tryPanelOpen = false;
-          $('menu').classList.remove('show');
-          this.showPanel('home');
-          return;
-        }
-        // Settings opened from the pause menu must go BACK to the pause menu.
-        // Dropping to the main menu used to leave the match half-exited, so
-        // pressing Play again restarted the level from scratch.
-        if (this._settingsFromPause) {
-          this._settingsFromPause = false;
-          $('menu').classList.remove('show');
-          $('pause').classList.add('show');
-          return;
-        }
+    /**
+     * ═══ ONE BACK BUTTON, WHEREVER IT IS ═══════════════════════════════
+     *
+     * Every `.btn-back` on every panel ends up here, and the only thing
+     * that differs between them is which panel `back` means.
+     *
+     * ── the bug this closes ───────────────────────────────────────────
+     * There used to be two passes: this one, which knew how to get you out
+     * of the practice ring and out of the pause menu, and a second loop
+     * below that re-assigned `onclick` for the panels with a specific
+     * destination. The second pass OVERWROTE the first, so on exactly
+     * those panels the escapes were gone.
+     *
+     * That is what made the ring's equip screen unusable. Back from it
+     * went to CUSTOMISE instead of to the match, and back again went to
+     * PLAY — so pressing back twice inside a live practice session put the
+     * whole main menu on screen over the top of it.
+     *
+     * Now there is one handler and the destination is an argument, so the
+     * two escapes below cannot be lost by adding a panel to the table.
+     */
+    const goBack = (to) => {
+      Audio.uiBack();
+      /**
+       * The practice ring's try-out panel returns straight to the match.
+       * It is not a menu screen you navigated to — it is a thing you
+       * opened with T while standing in a circle, and the way out of it is
+       * back to where you were standing.
+       */
+      if (this._tryPanelOpen) {
+        this._tryPanelOpen = false;
+        $('menu').classList.remove('show');
         this.showPanel('home');
-      };
+        /**
+         * And take the mouse back.
+         *
+         * `_syncPause` opens the pause menu whenever the game is playing
+         * and the pointer is not locked — and `_tryPanelOpen` was the flag
+         * holding it off. Clearing that flag while still unlocked meant
+         * closing the equip screen dropped you onto the pause menu instead
+         * of back into the ring. The click on this button is the user
+         * gesture the lock needs.
+         */
+        this.input.requestLock();
+        return;
+      }
+      // Settings opened from the pause menu must go BACK to the pause menu.
+      // Dropping to the main menu used to leave the match half-exited, so
+      // pressing Play again restarted the level from scratch.
+      if (this._settingsFromPause) {
+        this._settingsFromPause = false;
+        $('menu').classList.remove('show');
+        $('pause').classList.add('show');
+        return;
+      }
+      this.showPanel(to || 'home');
+    };
+    for (const b of document.querySelectorAll('.btn-back')) {
+      b.onclick = () => goBack('home');
     }
 
     // --- identity ---
@@ -534,9 +572,11 @@ class Game {
       // not to PLAY — the room already exists and you have not left it.
       tournament: 'lobby',
     };
+    // Through `goBack`, so a panel with a destination still knows how to
+    // get out of the practice ring and the pause menu. See the note there.
     for (const [from, to] of Object.entries(backTo)) {
       const b = $('panel-' + from).querySelector('.btn-back');
-      if (b) b.onclick = () => { Audio.uiBack(); this.showPanel(to); };
+      if (b) b.onclick = () => goBack(to);
     }
     $('btn-erase-no').onclick = () => { Audio.uiBack(); this._showSaves(); };
     $('btn-erase-yes').onclick = () => {
