@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v138';
-import { CFG } from './config.js?v=v138';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v138';
-import { FrogModel } from './frog.js?v=v138';
-import { Grapple, GrappleState } from './grapple.js?v=v138';
-import { Combat, Health } from './combat.js?v=v138';
-import { Stamina } from './stamina.js?v=v138';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v138';
-import { Audio } from './audio.js?v=v138';
+import * as THREE from '../lib/three.module.js?v=v139';
+import { CFG } from './config.js?v=v139';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v139';
+import { FrogModel } from './frog.js?v=v139';
+import { Grapple, GrappleState } from './grapple.js?v=v139';
+import { Combat, Health } from './combat.js?v=v139';
+import { Stamina } from './stamina.js?v=v139';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v139';
+import { Audio } from './audio.js?v=v139';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v138';
+} from './abilities.js?v=v139';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1283,7 +1283,9 @@ export class Player {
    * see `CFG.abilities.earthshell` for why that trade is the ability.
    */
   _raiseShell(A) {
-    this.shell = { left: A.duration, struck: 0, hits: 0 };
+    // `yaw` is the heading the carving keeps for as long as it stands —
+    // see `sealedInStone` and the freeze in `_updateFacing`.
+    this.shell = { left: A.duration, struck: 0, hits: 0, yaw: this.yaw };
     // A guard and a shell are the same idea and must not stack; the stone is
     // strictly better, so it takes over.
     if (this.parrying) this._dropParry();
@@ -1307,19 +1309,23 @@ export class Player {
   /**
    * ═══ SEALED IN STONE ═══════════════════════════════════════════════════
    *
-   * You are a statue. You do not move and you do not LOOK.
+   * You are a statue. The statue does not turn — but YOU can still look.
    *
-   * The controls were already sealed — see the `sealed` branch in `update`,
-   * which eats every press — but the mouse was not, because mouse look does
-   * not go through the player at all: each mode's frame loop calls
-   * `followCam.look` directly. So a player encased in a solid block of rock
-   * could still swivel the camera round on the spot, and the stone read as
-   * a costume rather than as being stuck inside something.
+   * The camera stays free on purpose: four seconds locked to one heading is
+   * a long time to be unable to see who is coming, and the whole point of
+   * the shell is to buy you a moment to read the fight. What must not
+   * happen is the carving swinging round to follow the mouse, which turns
+   * a block of rock back into a costume.
    *
-   * ── the lightning chain is NOT covered by this ────────────────────────
-   * Deliberately. `_beginStep` aims the next link off `this.yaw`, so the
-   * camera is the one control that has to stay live during a chain — it is
-   * how you choose where to go next.
+   * ── what was actually turning it ──────────────────────────────────────
+   * Not the camera. `_updateFacing` only writes `yaw` when there is
+   * movement input, and the wish direction is CAMERA-RELATIVE — so holding
+   * a direction key while sealed spun the statue to wherever you were
+   * looking. The keys are eaten by the `sealed` branch in `update`, but
+   * `moveAxis` is read before that branch and `hasInput` was true anyway.
+   *
+   * So the facing is frozen at the heading it was cast on, and `_raiseShell`
+   * is what records it.
    */
   get sealedInStone() { return !!this.shell; }
 
@@ -2608,6 +2614,20 @@ export class Player {
   }
 
   _updateFacing(dt, hasInput, cam, dashing) {
+    /**
+     * A statue holds its heading. Set outright rather than damped, because
+     * damping toward a frozen target still lets the last frame of turn
+     * bleed through — and stone that drifts a few degrees after it closes
+     * is more unsettling than stone that swings.
+     *
+     * The camera is untouched by this: look wherever you like, the carving
+     * stays where it was cast. See `sealedInStone`.
+     */
+    if (this.shell) {
+      this.yaw = this.shell.yaw;
+      this.visualYaw = this.shell.yaw;
+      return;
+    }
     let target = this.yaw;
     if (this.combat.attacking) {
       target = this.yaw;                       // locked by the swing

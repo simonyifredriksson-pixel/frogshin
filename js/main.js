@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v138';
+import * as THREE from '../lib/three.module.js?v=v139';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v138';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v138';
-import { Input } from './input.js?v=v138';
-import { Audio } from './audio.js?v=v138';
-import { World } from './world.js?v=v138';
-import { Effects } from './effects.js?v=v138';
-import { Atmosphere } from './atmosphere.js?v=v138';
-import { FollowCamera } from './camera.js?v=v138';
-import { Player } from './player.js?v=v138';
+} from './config.js?v=v139';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v139';
+import { Input } from './input.js?v=v139';
+import { Audio } from './audio.js?v=v139';
+import { World } from './world.js?v=v139';
+import { Effects } from './effects.js?v=v139';
+import { Atmosphere } from './atmosphere.js?v=v139';
+import { FollowCamera } from './camera.js?v=v139';
+import { Player } from './player.js?v=v139';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v138';
+} from './tournament.js?v=v139';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v138';
-import { RemotePlayer } from './remote.js?v=v138';
-import { HUD } from './hud.js?v=v138';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v138';
-import { FrogModel } from './frog.js?v=v138';
-import { DummyField } from './dummy.js?v=v138';
+import { coneHit } from './combat.js?v=v139';
+import { RemotePlayer } from './remote.js?v=v139';
+import { HUD } from './hud.js?v=v139';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v139';
+import { FrogModel } from './frog.js?v=v139';
+import { DummyField } from './dummy.js?v=v139';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v138';
-import { ToadModel } from './npc.js?v=v138';
+} from './rounds.js?v=v139';
+import { ToadModel } from './npc.js?v=v139';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v138';
-import { DungeonRun } from './dungeon.js?v=v138';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v138';
-import { JudgmentRun } from './judgment.js?v=v138';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v138';
-import { COMBO_NAMES } from './ascended.js?v=v138';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v138';
-import { MenuScene } from './menu.js?v=v138';
-import { Economy } from './economy.js?v=v138';
-import { Shop } from './shop.js?v=v138';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v138';
-import { Overworld } from './overworld.js?v=v138';
-import { InventoryScreen } from './inventoryui.js?v=v138';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v138';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v138';
-import { Cine } from './cinema.js?v=v138';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v138';
-import { MEMORIES } from './flashbacks.js?v=v138';
-import { GUARDIANS } from './guardians.js?v=v138';
-import { gearOfTier } from './gear.js?v=v138';
-import { Chat } from './chat.js?v=v138';
+} from './skins.js?v=v139';
+import { DungeonRun } from './dungeon.js?v=v139';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v139';
+import { JudgmentRun } from './judgment.js?v=v139';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v139';
+import { COMBO_NAMES } from './ascended.js?v=v139';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v139';
+import { MenuScene } from './menu.js?v=v139';
+import { Economy } from './economy.js?v=v139';
+import { Shop } from './shop.js?v=v139';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v139';
+import { Overworld } from './overworld.js?v=v139';
+import { InventoryScreen } from './inventoryui.js?v=v139';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v139';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v139';
+import { Cine } from './cinema.js?v=v139';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v139';
+import { MEMORIES } from './flashbacks.js?v=v139';
+import { GUARDIANS } from './guardians.js?v=v139';
+import { gearOfTier } from './gear.js?v=v139';
+import { Chat } from './chat.js?v=v139';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -2605,7 +2605,7 @@ class Game {
 
     if (!held) {
       const look = this.input.takeLook();
-      if (this.input.locked && !p.cinematic && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+      if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
       p.update(sdt, this.input, this.followCam, targets);
       this._voidGuard(p, sdt, VOID_Y, HEAVEN.playerAt);
       this.kunaiSystem.update(sdt, targets);
@@ -2803,7 +2803,7 @@ class Game {
     }
 
     const look = this.input.takeLook();
-    if (this.input.locked && !p.cinematic && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
 
     const targets = ow.targets();
     p.update(dt, this.input, this.followCam, targets);
@@ -3144,7 +3144,7 @@ class Game {
     }
 
     const look = this.input.takeLook();
-    if (this.input.locked && !p.cinematic && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
 
     const targets = isle.targets([]);
     p.update(dt, this.input, this.followCam, targets);
@@ -3358,7 +3358,7 @@ class Game {
     if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
 
     const look = this.input.takeLook();
-    if (this.input.locked && !p.cinematic && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
 
     const targets = [];
     const boss = this.judgment.bossTarget();
@@ -3402,7 +3402,7 @@ class Game {
     if (this.frozen) { this.renderer.render(this.scene, this.camera); return; }
 
     const look = this.input.takeLook();
-    if (this.input.locked && !p.cinematic && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+    if (this.input.locked && !p.cinematic) this.followCam.look(look.dx, look.dy);
 
     // The boss is the only target in the room, and it uses the same hit
     // plumbing every other target does.
@@ -4805,8 +4805,7 @@ class Game {
     if (!paused) {
       // Mouse look.
       const look = this.input.takeLook();
-      // Not while sealed in stone — see Player.sealedInStone.
-      if (this.input.locked && !p.sealedInStone) this.followCam.look(look.dx, look.dy);
+      if (this.input.locked) this.followCam.look(look.dx, look.dy);
 
       /**
        * Scoreboard while Tab is held — and all the way through the results.
