@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
-import { CFG } from './config.js?v=v133';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v133';
-import { FrogModel } from './frog.js?v=v133';
-import { ToadModel } from './npc.js?v=v133';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v133';
-import { Audio } from './audio.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
+import { CFG } from './config.js?v=v134';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v134';
+import { FrogModel } from './frog.js?v=v134';
+import { ToadModel } from './npc.js?v=v134';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v134';
+import { Audio } from './audio.js?v=v134';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -93,6 +93,12 @@ export class RemotePlayer {
     this.spawned = false;
     this.ascendT = 0;          // divine-skin transformation progress
     this.dashFxTimer = 0;
+    // The three chained abilities, as seen from outside. See `_applyMeta`.
+    this.shelled = false;
+    this.shellHot = false;
+    this.stepping = false;
+    this.trapping = false;
+    this.trapTip = null;
     this.speed = 0;
     this._prev = new THREE.Vector3();
   }
@@ -188,6 +194,53 @@ export class RemotePlayer {
         // The pop is worth showing even for a vanish you are about to lose
         // sight of — it tells you WHERE they went invisible.
         _tmp.set(ev.x, ev.y + 1.0, ev.z);
+
+        /**
+         * EARTH SHELL is three events on one name, because what a watcher
+         * needs to see is not "they used an ability" but which of raise,
+         * crumble and BURST just happened — only the third is a reason to
+         * be somewhere else. `ev.s` says which: 1 up, 0 down, 2 burst.
+         */
+        if (ev.a === 'earthshell') {
+          if (ev.s === 2) {
+            const A = CFG.abilities.earthshell;
+            this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xd8a760, true);
+            this.effects.puff(_tmp, 0xb98a52, 34, 13);
+            Audio.tone({
+              freq: 220, to: 70, dur: 0.5, type: 'square', volume: 0.24, pos: _tmp,
+            });
+          } else if (ev.s === 1) {
+            this.effects.ring(_tmp, 0.6, 3.2, 0.42, 0xb98a52, true);
+            this.effects.puff(_tmp, 0x8a6a44, 24, 7);
+            Audio.tone({
+              freq: 150, to: 60, dur: 0.42, type: 'square', volume: 0.16, pos: _tmp,
+            });
+          } else {
+            this.effects.puff(_tmp, 0x7a5f3e, 16, 4);
+          }
+          break;
+        }
+
+        if (ev.a === 'lightningstep') {
+          // Only the cast is announced; the steps themselves are visible as
+          // the trail in `update`, which is driven by the state bit and so
+          // cannot be lost to a dropped event.
+          if (ev.s === 1) {
+            this.effects.ring(_tmp, 0.3, 3.0, 0.3, 0xfff27a, true);
+            this.effects.puff(_tmp, 0xfff27a, 22, 9);
+            Audio.tone({
+              freq: 1400, to: 300, dur: 0.16, type: 'sawtooth', volume: 0.2, pos: _tmp,
+            });
+          }
+          break;
+        }
+
+        if (ev.a === 'tonguetrap') {
+          this.effects.puff(_tmp, 0xef7d9d, 14, 5);
+          Audio.tongueFire(_tmp);
+          break;
+        }
+
         const col = ev.a === 'invisibility' ? 0x8fd8ff : 0x9a7aff;
         this.effects.puff(_tmp, col, 20, 5);
         this.effects.ring(_tmp, 0.4, 3.4, 0.45, col, true);
@@ -277,6 +330,18 @@ export class RemotePlayer {
     }
     if (this.attackTimer > 0) this.attackTimer -= dt;
 
+    /**
+     * The arc they leave behind.
+     *
+     * Driven off the state bit rather than off their speed: a lightning
+     * step writes position directly and covers twenty units in a tenth of a
+     * second, so by the time the interpolator has smoothed that into a
+     * "speed" the step is already over.
+     */
+    if (this.stepping) {
+      this.effects.dashTrail(this.pos, _dir.set(0, 1, 0), 0xfff27a);
+    }
+
     this.model.root.position.copy(this.pos);
     this.model.setFacing(this.yaw);
 
@@ -288,8 +353,18 @@ export class RemotePlayer {
       dashT: Math.max(0, this.dashFxTimer),
       attackT: this.attackDuration ? clamp(this.attackTimer / this.attackDuration, 0, 1) : 0,
       attackIndex: this.attackIndex,
-      grappling: this.grappleActive,
-      tongueTo: this.grappleActive ? this.grappleTip : null,
+      /**
+       * One tongue, two users. `trapTip` is where a Tongue Trap is reaching
+       * and wins over the grapple, because the trap cancels the grapple on
+       * cast — if both are set, the grapple's tip is stale.
+       */
+      grappling: !!this.trapTip || this.grappleActive,
+      tongueTo: this.trapTip || (this.grappleActive ? this.grappleTip : null),
+      // Sealed in stone, and whether their counter window is open. The
+      // second one is the tell an opponent is meant to read and back off
+      // from, so it has to cross the wire — see `Player.netState`.
+      shell: this.shelled,
+      shellHot: this.shellHot,
       wallSliding: false,
       sprinting: this.sprinting,
       swimming: this.swimming,
@@ -535,6 +610,26 @@ export class RemotePlayer {
       this.grappleTip.set(s.gr[1], s.gr[2], s.gr[3]);
     } else {
       this.grappleActive = false;
+    }
+
+    /**
+     * The three chained abilities, unpacked from the one byte they travel
+     * in — see `Player.netState` for what the bits mean.
+     *
+     * `shelled` matters most: a player sealed in stone has to LOOK sealed
+     * in stone, or their opponent experiences the block as their own hits
+     * mysteriously failing to land.
+     */
+    const ab = s.ab || 0;
+    this.shelled = !!(ab & 1);
+    this.stepping = !!(ab & 2);
+    this.shellHot = !!(ab & 4);
+    this.trapping = !!(ab & 8);
+    if (s.tt) {
+      if (!this.trapTip) this.trapTip = new THREE.Vector3();
+      this.trapTip.set(s.tt[0], s.tt[1], s.tt[2]);
+    } else {
+      this.trapTip = null;
     }
   }
 

@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
-import { CFG } from './config.js?v=v133';
-import { clamp } from './util.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
+import { CFG } from './config.js?v=v134';
+import { clamp } from './util.js?v=v134';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -32,6 +32,12 @@ export const ITEMS = {
   // rather than selecting them — there is nothing else to do with one.
   invisibility: { id: 'invisibility', name: 'Vanish', infinite: true, ability: true },
   shadowclone: { id: 'shadowclone', name: 'Clone', infinite: true, ability: true },
+  // Earth Shell and Lightning Step answer a SECOND press of the same key —
+  // release the stone, continue the chain. `_useAbility` catches that before
+  // the cooldown check, so they need nothing special here.
+  earthshell: { id: 'earthshell', name: 'Shell', infinite: true, ability: true },
+  tonguetrap: { id: 'tonguetrap', name: 'Trap', infinite: true, ability: true },
+  lightningstep: { id: 'lightningstep', name: 'Step', infinite: true, ability: true },
   /**
    * The open world's quick meal.
    *
@@ -82,6 +88,49 @@ export const ITEM_ICONS = {
       <rect x="19" y="22" width="10" height="4"/>
     </g>
     <g fill="#12121a"><rect x="20" y="14" width="3" height="3"/><rect x="26" y="14" width="3" height="3"/></g>
+  </svg>`,
+  // A boulder with a frog sealed in it — the eyes are the only tell that
+  // there is anybody in there, which is exactly the read the ability wants.
+  earthshell: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <g fill="#6f5637">
+      <rect x="9" y="5" width="14" height="3"/><rect x="6" y="8" width="20" height="4"/>
+      <rect x="4" y="12" width="24" height="11"/><rect x="6" y="23" width="20" height="4"/>
+    </g>
+    <g fill="#8a6a44">
+      <rect x="9" y="8" width="8" height="3"/><rect x="7" y="12" width="6" height="5"/>
+      <rect x="18" y="19" width="7" height="4"/>
+    </g>
+    <g fill="#4a3925">
+      <rect x="4" y="19" width="5" height="4"/><rect x="21" y="12" width="5" height="4"/>
+      <rect x="13" y="23" width="6" height="4"/>
+    </g>
+    <g fill="#c6f06a"><rect x="11" y="15" width="3" height="3"/><rect x="18" y="15" width="3" height="3"/></g>
+  </svg>`,
+  // The tongue, out and hooked.
+  tonguetrap: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <g fill="#6cc24a">
+      <rect x="2" y="9" width="9" height="4"/><rect x="1" y="13" width="11" height="9"/>
+      <rect x="2" y="22" width="9" height="3"/>
+    </g>
+    <g fill="#12121a"><rect x="4" y="15" width="3" height="3"/></g>
+    <g fill="#ef7d9d">
+      <rect x="12" y="17" width="12" height="3"/><rect x="22" y="14" width="3" height="6"/>
+      <rect x="24" y="12" width="4" height="3"/>
+    </g>
+    <g fill="#ffd2de"><rect x="27" y="9" width="4" height="4"/></g>
+  </svg>`,
+  // A bolt, stepping between two points.
+  lightningstep: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
+    <g fill="#fff27a">
+      <rect x="15" y="2" width="8" height="4"/><rect x="12" y="6" width="8" height="4"/>
+      <rect x="9" y="10" width="10" height="4"/><rect x="15" y="14" width="9" height="4"/>
+      <rect x="12" y="18" width="8" height="4"/><rect x="9" y="22" width="8" height="4"/>
+      <rect x="7" y="26" width="7" height="4"/>
+    </g>
+    <g fill="#ffffff" opacity="0.85">
+      <rect x="15" y="6" width="4" height="4"/><rect x="15" y="18" width="4" height="4"/>
+    </g>
+    <g fill="#9ad8ff"><rect x="2" y="4" width="4" height="4"/><rect x="26" y="24" width="4" height="4"/></g>
   </svg>`,
   meal: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
     <ellipse cx="16" cy="20" rx="12" ry="7" fill="#8b6b3a"/>

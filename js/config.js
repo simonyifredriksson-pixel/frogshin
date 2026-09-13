@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v133';
+export const BUILD = 'v134';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -348,6 +348,120 @@ export const CFG = {
        * the body as much as for the damage.
        */
       damage: 0.6,
+    },
+
+    /**
+     * ═══ EARTH SHELL ═════════════════════════════════════════════════════
+     *
+     * Stone closes over you and nothing gets through. The catch is that it
+     * is a COMMITMENT, not a raised guard: you cannot move, swing, throw or
+     * look while it is up, and it comes down on its own clock. A parry is
+     * something you flick; this is something you decide.
+     *
+     * ── the release is the whole ability ──────────────────────────────────
+     * Letting it lapse does nothing but waste twelve seconds. Releasing at
+     * the right MOMENT bursts the shell outward — you launch forward and
+     * everything near you is thrown off. Two moments count as right:
+     *
+     *   1. Just after the shell eats a blow (`counterWindow`). This is the
+     *      reactive one — block, then answer, which is what the ability is
+     *      really for.
+     *   2. The last `lateWindow` seconds before it lapses. This is the one
+     *      you can practise alone and the one that works when nobody is
+     *      obliging enough to attack you.
+     *
+     * Without (2) the ability would be dead weight against anyone who
+     * simply waits you out, which is the obvious counter and would make it
+     * a trap rather than a choice.
+     */
+    earthshell: {
+      duration: 4.0,         // how long the stone can hold before it lapses
+      cooldown: 12,
+      counterWindow: 0.55,   // release window opened by absorbing a hit
+      lateWindow: 0.7,       // release window before it lapses on its own
+      /**
+       * The burst. `launch` is forward speed, `lift` the hop that sells it,
+       * `radius`/`knock` throw everyone else off, and `damage` is small on
+       * purpose — this is a disengage and a re-opening, not a kill.
+       */
+      launch: 42,
+      lift: 7.5,
+      radius: 7.0,
+      knock: 26,
+      damage: 14,
+      invulnerable: 0.45,    // i-frames carried out of the burst
+    },
+
+    /**
+     * ═══ TONGUE TRAP ═════════════════════════════════════════════════════
+     *
+     * The tongue the frog already grapples with, aimed at a person. It
+     * catches whoever is in front of you, drags them into your reach and
+     * the katana comes round on its own.
+     *
+     * ── why it is a cone and not a line ───────────────────────────────────
+     * A hitscan line at this range would be a snipe. The cone is narrow
+     * enough that you must actually be facing your target and wide enough
+     * that it is not a pixel test, which puts the ability where it belongs:
+     * a close-to-mid opener, not a ranged pick.
+     *
+     * The pull is capped at `pullTo` rather than being a fixed impulse, so
+     * it lands the victim at the same place every time — at the end of your
+     * blade. A raw impulse would drag a light target through you and leave
+     * a heavy one out of reach.
+     */
+    tonguetrap: {
+      cooldown: 10,
+      range: 26,             // furthest the tongue will reach for someone
+      arc: 0.42,             // half-angle of the catching cone, radians
+      travel: 0.16,          // seconds the tongue takes to get there
+      hold: 0.22,            // beat it holds them before the strike
+      pullTo: 3.0,           // where the drag ends: just inside katana reach
+      damage: 24,            // the automatic strike at the end of the drag
+      /**
+       * Nothing can be caught twice in a row by the same frog inside this,
+       * so two people with tongues cannot hold one player in the air
+       * forever. It is the same idea as tag immunity.
+       */
+      immunity: 1.6,
+    },
+
+    /**
+     * ═══ LIGHTNING STEP ══════════════════════════════════════════════════
+     *
+     * You become the arc, not the frog. Each press throws you to a target,
+     * you hang there for a heartbeat, and the next press throws you on.
+     *
+     * ── the first step is free, the rest are earned ───────────────────────
+     * Firing the ability takes you to the first target automatically. Every
+     * step after that needs a press inside `window` seconds — miss it and
+     * the chain ends then and there with the finishing slash. So the floor
+     * of the ability is "a dash that does 20", and the ceiling is four of
+     * them strung together by somebody with the timing for it. That gap is
+     * the whole point; an ability that does its best work on its own has no
+     * skill in it.
+     *
+     * ── against a boss ────────────────────────────────────────────────────
+     * A boss is one target, so chaining round it would be four free hits
+     * from nowhere. Instead it offers `bossPoints` standing points around
+     * itself and you chain between THOSE, striking from a new angle each
+     * time. Same mobility, same damage, but you are on the floor next to it
+     * between steps where it can reach you — mobility and damage, not an
+     * instant win.
+     */
+    lightningstep: {
+      cooldown: 12,
+      maxTargets: 4,
+      range: 26,             // how far the first target may be
+      linkRange: 22,         // and each hop after that
+      damage: 20,
+      travel: 0.09,          // seconds in the air between points — very fast
+      window: 0.38,          // to press again, or the chain ends
+      hang: 0.06,            // beat on arrival before the window opens
+      finisher: 1.5,         // the last strike multiplies the per-target hit
+      invulnerable: 0.25,    // carried a moment past the last step
+      bossPoints: 4,         // standing points offered around a boss
+      bossRadius: 7.5,       // how far out those points sit
     },
   },
 

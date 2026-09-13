@@ -52,10 +52,10 @@
  * the critical path touches one, which the tests also check.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
-import { clamp, mulberry32, lookYaw } from './util.js?v=v133';
-import { REGION_BY_ID } from './regions.js?v=v133';
-import { ROADS, RIVERS } from './roads.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
+import { clamp, mulberry32, lookYaw } from './util.js?v=v134';
+import { REGION_BY_ID } from './regions.js?v=v134';
+import { ROADS, RIVERS } from './roads.js?v=v134';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -358,6 +358,14 @@ class Lashing {
        * for a rope.
        */
       isDummy: true,
+      /**
+       * But NOT something an ability may grab or chain to.
+       *
+       * A blade cutting this rope is the whole mechanism; a tongue dragging
+       * it off the cliff, or a lightning chain treating two of them as
+       * stepping stones, is not. See `targetable` in js/abilities.js.
+       */
+      noAbility: true,
       hitbox: {
         bodyOffset: 0, bodyRadius: 1.6,
         headOffset: 0.6, headRadius: 1.2,

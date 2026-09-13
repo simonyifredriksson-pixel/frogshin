@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v133';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v133';
-import { Input } from './input.js?v=v133';
-import { Audio } from './audio.js?v=v133';
-import { World } from './world.js?v=v133';
-import { Effects } from './effects.js?v=v133';
-import { Atmosphere } from './atmosphere.js?v=v133';
-import { FollowCamera } from './camera.js?v=v133';
-import { Player } from './player.js?v=v133';
+} from './config.js?v=v134';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v134';
+import { Input } from './input.js?v=v134';
+import { Audio } from './audio.js?v=v134';
+import { World } from './world.js?v=v134';
+import { Effects } from './effects.js?v=v134';
+import { Atmosphere } from './atmosphere.js?v=v134';
+import { FollowCamera } from './camera.js?v=v134';
+import { Player } from './player.js?v=v134';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v133';
+} from './tournament.js?v=v134';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v133';
-import { RemotePlayer } from './remote.js?v=v133';
-import { HUD } from './hud.js?v=v133';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v133';
-import { FrogModel } from './frog.js?v=v133';
-import { DummyField } from './dummy.js?v=v133';
+import { coneHit } from './combat.js?v=v134';
+import { RemotePlayer } from './remote.js?v=v134';
+import { HUD } from './hud.js?v=v134';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v134';
+import { FrogModel } from './frog.js?v=v134';
+import { DummyField } from './dummy.js?v=v134';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v133';
-import { ToadModel } from './npc.js?v=v133';
+} from './rounds.js?v=v134';
+import { ToadModel } from './npc.js?v=v134';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v133';
-import { DungeonRun } from './dungeon.js?v=v133';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v133';
-import { JudgmentRun } from './judgment.js?v=v133';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v133';
-import { COMBO_NAMES } from './ascended.js?v=v133';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v133';
-import { MenuScene } from './menu.js?v=v133';
-import { Economy } from './economy.js?v=v133';
-import { Shop } from './shop.js?v=v133';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v133';
-import { Overworld } from './overworld.js?v=v133';
-import { InventoryScreen } from './inventoryui.js?v=v133';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v133';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v133';
-import { Cine } from './cinema.js?v=v133';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v133';
-import { MEMORIES } from './flashbacks.js?v=v133';
-import { GUARDIANS } from './guardians.js?v=v133';
-import { gearOfTier } from './gear.js?v=v133';
-import { Chat } from './chat.js?v=v133';
+} from './skins.js?v=v134';
+import { DungeonRun } from './dungeon.js?v=v134';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v134';
+import { JudgmentRun } from './judgment.js?v=v134';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v134';
+import { COMBO_NAMES } from './ascended.js?v=v134';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v134';
+import { MenuScene } from './menu.js?v=v134';
+import { Economy } from './economy.js?v=v134';
+import { Shop } from './shop.js?v=v134';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v134';
+import { Overworld } from './overworld.js?v=v134';
+import { InventoryScreen } from './inventoryui.js?v=v134';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v134';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v134';
+import { Cine } from './cinema.js?v=v134';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v134';
+import { MEMORIES } from './flashbacks.js?v=v134';
+import { GUARDIANS } from './guardians.js?v=v134';
+import { gearOfTier } from './gear.js?v=v134';
+import { Chat } from './chat.js?v=v134';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1983,6 +1983,33 @@ class Game {
       else if (this.player.inventory.select(i)) Audio.uiClick();
     };
 
+    /**
+     * WHAT THE AIMED ABILITIES ARE ALLOWED TO GRAB.
+     *
+     * Tongue Trap and Lightning Step reach out and pick somebody, so unlike
+     * a swing they need to know about teams BEFORE they commit — a sword
+     * that bounces off a team-mate costs you a swing, but a tongue that
+     * locks onto one costs you the whole ability and its cooldown.
+     *
+     * Only the arena has sides, so only the arena sets this. Everywhere
+     * else the default stands: if you can hit it, you can grab it.
+     */
+    this.player.onIsHostile = (t) => {
+      if (!t || t.id === this.player.id) return false;
+      /**
+       * A shadow clone belongs to whoever cast it — see `_arenaTargets`,
+       * which lists them as `clone:<owner id>`. It is a real body and a
+       * legal target, but it inherits its OWNER'S side: grabbing a
+       * team-mate's decoy has to be as impossible as grabbing the
+       * team-mate, or the tongue has a way round friendly fire.
+       */
+      const owner = typeof t.id === 'string' && t.id.startsWith('clone:')
+        ? t.id.slice(6) : t.id;
+      if (owner === this.player.id) return false;
+      if (this.round && this.round.areAllies(this.player.id, owner)) return false;
+      return true;
+    };
+
     this._setupRounds(authority);
     this.player.spawn(this._safeSpawn());
     this.followCam.snapTo(this.player.pos);
@@ -2608,6 +2635,18 @@ class Game {
   _prologueHit(damage, from) {
     const p = this.player;
     if (!p || p.health.dead || p.health.protected || p.dashTimer > 0) return;
+    /**
+     * Stone stops it outright and opens the counter window instead of being
+     * spent. Checked before the guard for the same reason it is in
+     * `receiveHit`: the shell is strictly stronger and the two must never
+     * both fire on one blow.
+     */
+    if (p.shell) {
+      const dx = p.pos.x - (from ? from.x : p.pos.x);
+      const dz = p.pos.z - (from ? from.z : p.pos.z);
+      p.shellAbsorb(-dx, -dz);
+      return;
+    }
     if (p.parrying) {
       p.justParried = 0.2;
       p._parryTook();
@@ -2806,6 +2845,18 @@ class Game {
   _realmHit(damage, from) {
     const p = this.player;
     if (!p || p.health.dead || p.health.protected || p.dashTimer > 0) return;
+    /**
+     * Stone stops it outright and opens the counter window instead of being
+     * spent. Checked before the guard for the same reason it is in
+     * `receiveHit`: the shell is strictly stronger and the two must never
+     * both fire on one blow.
+     */
+    if (p.shell) {
+      const dx = p.pos.x - (from ? from.x : p.pos.x);
+      const dz = p.pos.z - (from ? from.z : p.pos.z);
+      p.shellAbsorb(-dx, -dz);
+      return;
+    }
     if (p.parrying) {
       p.justParried = 0.2;
       // The blow is turned; the guard comes down for `afterHit` seconds. The
@@ -5617,7 +5668,14 @@ class Game {
 
     // Hotbar redraws when the inventory changes — or every frame while an
     // ability is running or recharging, since that shade has to actually move.
-    const actives = { invisibility: p.invisibleT, shadowclone: p.cloneT };
+    const actives = {
+      invisibility: p.invisibleT,
+      shadowclone: p.cloneT,
+      // The shell is the only one of the three that RUNS — the other two
+      // resolve in a fraction of a second, and a bar that empties faster
+      // than the eye can follow is noise rather than feedback.
+      earthshell: p.shell ? p.shell.left : 0,
+    };
     const busy = p.inventory.equippedAbilities()
       .some((id) => (p.abilityCd[id] || 0) > 0 || (actives[id] || 0) > 0);
     if (p.inventory.dirty || busy || this._hbBusy) {

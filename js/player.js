@@ -7,15 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
-import { CFG } from './config.js?v=v133';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v133';
-import { FrogModel } from './frog.js?v=v133';
-import { Grapple, GrappleState } from './grapple.js?v=v133';
-import { Combat, Health } from './combat.js?v=v133';
-import { Stamina } from './stamina.js?v=v133';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v133';
-import { Audio } from './audio.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
+import { CFG } from './config.js?v=v134';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v134';
+import { FrogModel } from './frog.js?v=v134';
+import { Grapple, GrappleState } from './grapple.js?v=v134';
+import { Combat, Health } from './combat.js?v=v134';
+import { Stamina } from './stamina.js?v=v134';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v134';
+import { Audio } from './audio.js?v=v134';
+// The rules the three chained abilities run on — what may be targeted, what
+// counts as a perfect release, where a step lands. See js/abilities.js.
+import {
+  SHELL, shellPerfect, shellRelease, shellBurst,
+  pickTongueTarget, tonguePullPoint,
+  nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
+} from './abilities.js?v=v134';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -100,6 +107,21 @@ export class Player {
     this._thrDir = new THREE.Vector3(0, 0, -1);
     this._cloneMoving = false;
     this._cloneWasAttacking = false;
+
+    /**
+     * EARTH SHELL — `{ left, struck, burst }` while the stone is up, else
+     * null. `struck` is the counter window a blocked blow opened; `burst` is
+     * the tail after it goes off, kept so the model and the network have
+     * something to show while you are still flying.
+     */
+    this.shell = null;
+    this.shellBurst = 0;
+    /** TONGUE TRAP — `{ target, phase, t, to }` while a catch is in flight. */
+    this.trap = null;
+    /** id -> seconds of "cannot be caught again", so nobody is juggled. */
+    this.trapImmune = new Map();
+    /** LIGHTNING STEP — the chain state machine; see `_updateStep`. */
+    this.step = null;
 
     // Frogath the Divine's two forms. Cosmetic; see setDivinePhase.
     this.divinePhase = 1;
@@ -220,6 +242,10 @@ export class Player {
     this.invisibleT = 0;
     this.cloneT = 0;
     this.cloneTrail.length = 0;
+    this.shell = null;
+    this.shellBurst = 0;
+    this.trap = null;
+    this.step = null;
     this.leapCharge = 0;
     this.leapCooldown = 0;
     // Frogath the Divine goes back to his first form on every respawn: the
@@ -325,6 +351,28 @@ export class Player {
       dt: this.dashTimer > 0 ? 1 : 0,
       sw: this.inWater ? 1 : 0,
       sp: this.sprinting ? 1 : 0,
+      /**
+       * The three chained abilities, as one byte of "what is this frog
+       * doing" rather than three fields.
+       *
+       * Watchers need these for the same reason they need the clone: an
+       * opponent sealed in stone must LOOK sealed in stone, or the shell
+       * reads as a bug where your hits stop landing for no reason. Bit 4
+       * marks the counter window, which is the tell that a good player is
+       * supposed to be able to see and step back from.
+       */
+      ab: (this.shell ? 1 : 0)
+        | (this.step ? 2 : 0)
+        | (this.shell && this.shell.struck > 0 ? 4 : 0)
+        | (this.trap ? 8 : 0)
+        | (this.shellBurst > 0 ? 16 : 0),
+      // Where the tongue is reaching, so watchers see the same line the
+      // thrower does. Only sent while one is actually out.
+      tt: this.trap && this.trap.target ? [
+        r2(this.trap.target.pos.x),
+        r2(this.trap.target.pos.y + 1.0),
+        r2(this.trap.target.pos.z),
+      ] : null,
       // How far through the story this player is, so others know whether
       // they should be visible yet. 0 in the arena.
       st: this.storyPhaseCode || 0,
@@ -399,7 +447,44 @@ export class Player {
     }
 
     // ---- ability inputs -------------------------------------------------
-    if (active) {
+    /**
+     * Stone means stone. While the shell is up you may do exactly one thing
+     * — let it go — and every other action is refused.
+     *
+     * The presses are still CONSUMED (see the note on the procession lock
+     * below): skipping `consume` would leave them in the buffer and the
+     * frog would dash, swing and throw all at once the instant the shell
+     * came down, from wherever the player had been mashing.
+     */
+    const sealed = !!this.shell || !!this.step;
+    if (active && sealed) {
+      input.consume('Space');
+      input.consume('KeyQ');
+      input.consume('KeyG');
+      input.consume('KeyE');
+      input.consume('MouseRight');
+      input.takeWheel();
+      this.jumpHeld = false;
+      /**
+       * ONE BUTTON, AND IT MEANS "NOW".
+       *
+       * Left mouse releases the shell and continues the lightning chain.
+       * The ability's own hotbar key does the same — see `_useAbility` —
+       * but both of these are fighting moves with a window measured in
+       * fractions of a second, and reaching for a number key mid-exchange
+       * is how you miss it.
+       */
+      const now = this.shell ? 'earthshell' : 'lightningstep';
+      const answer = () => {
+        if (this.shell) this._releaseShell(); else this._stepOnward();
+      };
+      if (input.consumeAttack()) answer();
+      for (let i = 0; i < SLOT_KEYS.length; i++) {
+        if (!input.consume(SLOT_KEYS[i])) continue;
+        const slot = this.inventory.slots[i];
+        if (slot && slot.item.id === now) answer();
+      }
+    } else if (active) {
       if (input.consume('Space')) this.jumpBuffer = CFG.move.jumpBuffer;
       this.jumpHeld = input.down('Space');
       /**
@@ -487,6 +572,30 @@ export class Player {
     if (this.dashCooldown > 0) this.dashCooldown -= dt;
     if (this.dashTimer > 0) this.dashTimer -= dt;
 
+    // ---- the three chained abilities ------------------------------------
+    this._updateShell(dt, cam);
+    this._updateTrap(dt, cam);
+
+    /**
+     * A LIGHTNING STEP OWNS THE BODY OUTRIGHT.
+     *
+     * Position is written straight from the chain, so gravity, friction,
+     * steering and collision all have to stay out of it — being an arc of
+     * lightning is precisely not being a frog subject to physics. The early
+     * return is what guarantees that rather than a pile of flags checked in
+     * six places further down.
+     *
+     * The model still updates, because a frog frozen mid-pose while it
+     * crosses the arena looks like the game has hung.
+     */
+    if (this.step) {
+      this._updateStep(dt, cam);
+      this.visualYaw = this.yaw;
+      this.model.root.position.set(this.pos.x, this.pos.y, this.pos.z);
+      this._updateModel(dt, false);
+      return;
+    }
+
     // ---- jump -----------------------------------------------------------
     if (this.jumpBuffer > 0) this._tryJump(_wish, hasInput);
 
@@ -497,7 +606,15 @@ export class Player {
 
     // ---- horizontal movement -------------------------------------------
     const dashing = this.dashTimer > 0;
-    if (this.inWater && !dashing) {
+    if (this.shell) {
+      /**
+       * Rooted. Gravity below still runs, so a shell raised in mid-air
+       * drops like the boulder it looks like — which is both the right
+       * picture and the reason the ability is not an air-stall.
+       */
+      this.vel.x = 0;
+      this.vel.z = 0;
+    } else if (this.inWater && !dashing) {
       this._swim(dt, cam, _axis, active);
     } else if (dashing) {
       // The dash fully overrides steering; that's what makes it feel decisive.
@@ -1021,6 +1138,20 @@ export class Player {
   _useAbility(id) {
     const A = CFG.abilities[id];
     if (!A) return;
+
+    /**
+     * ═══ A SECOND PRESS IS NOT A SECOND CAST ═══════════════════════════
+     *
+     * Two of these abilities are answered rather than fired: the shell is
+     * released, and the lightning chain is continued. Both of those are the
+     * same key pressed again, so the re-press has to be caught BEFORE the
+     * cooldown check — the cooldown is already running by then, and the
+     * player would get the "not ready" buzz for pressing exactly the key
+     * the ability just told them to press.
+     */
+    if (id === 'earthshell' && this.shell) { this._releaseShell(); return; }
+    if (id === 'lightningstep' && this.step) { this._stepOnward(); return; }
+
     if ((this.abilityCd[id] || 0) > 0) {
       if (!this._abilityCue || this._abilityCue <= 0) {
         this._abilityCue = 0.4;
@@ -1028,6 +1159,22 @@ export class Player {
       }
       return;
     }
+
+    /**
+     * ═══ A CAST THAT FINDS NOTHING IS NOT A CAST ═══════════════════════
+     *
+     * The two aimed abilities can refuse, and a refusal must cost nothing —
+     * no cooldown, no flash, no sound beyond the small "that did not take"
+     * cue they play themselves. An ability that swallows twelve seconds for
+     * being pointed at empty air is experienced as broken however carefully
+     * the behaviour is written down.
+     *
+     * They are therefore attempted BEFORE the cooldown is charged, and they
+     * return false to mean "nothing happened".
+     */
+    if (id === 'lightningstep' && !this._castLightningStep(A)) return;
+    if (id === 'tonguetrap' && !this._castTongueTrap(A)) return;
+
     this.abilityCd[id] = A.cooldown;
 
     if (id === 'invisibility') {
@@ -1054,7 +1201,615 @@ export class Player {
         t: 'abil', a: 'shadowclone',
         x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
       });
+    } else if (id === 'earthshell') {
+      this._raiseShell(A);
     }
+  }
+
+  /** Announce an ability to the room, so everyone sees the same flash. */
+  _abilEvent(a, extra) {
+    const ev = {
+      t: 'abil', a,
+      x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z),
+    };
+    if (extra) for (const k in extra) ev[k] = extra[k];
+    this.events.push(ev);
+  }
+
+  /**
+   * The cue for an ability that declined to fire.
+   *
+   * Deliberately the same sound as pressing one on cooldown: in both cases
+   * the answer is "not now", and inventing a second failure noise only asks
+   * the player to learn the difference between two kinds of nothing.
+   */
+  _abilityRefused() {
+    if (!this._abilityCue || this._abilityCue <= 0) {
+      this._abilityCue = 0.4;
+      Audio.uiBack();
+    }
+    return false;
+  }
+
+  /** What this frog is allowed to point an ability at. */
+  _abilityOpts() {
+    return {
+      hostile: (t) => this._isHostileTarget(t),
+      los: (from, t) => this._hasLineTo(from, t),
+    };
+  }
+
+  /**
+   * Is this something the abilities should be willing to grab or chain to?
+   *
+   * Your own clone and your own teammates are not. The check is delegated
+   * to the game through `onIsHostile` when one is set, because only the game
+   * knows about rounds and teams — offline, everything that can be hit is
+   * fair game, which is what a practice session wants.
+   */
+  _isHostileTarget(t) {
+    if (!t || t.id === this.id) return false;
+    if (this.onIsHostile) return !!this.onIsHostile(t);
+    return true;
+  }
+
+  /**
+   * Clear line from here to a target's middle.
+   *
+   * Grapple anchors are floating hint points rather than geometry, so a hit
+   * on one is not a wall — without that exclusion every anchor in the level
+   * would cast a shadow that abilities could not reach through.
+   */
+  _hasLineTo(from, t) {
+    if (!this.collision || !this.collision.raycast) return true;
+    const ax = from.x, ay = (from.y || 0) + 1.0, az = from.z;
+    const bx = t.pos.x;
+    const by = t.pos.y + ((t.hitbox && t.hitbox.bodyOffset) || 1.0);
+    const bz = t.pos.z;
+    const dx = bx - ax, dy = by - ay, dz = bz - az;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 1e-4) return true;
+    const hit = this.collision.raycast(
+      ax, ay, az, dx / len, dy / len, dz / len, len - 0.4);
+    return !hit || hit.tag === 'anchor';
+  }
+
+  // ------------------------------------------------------------ earth shell
+
+  /**
+   * ═══ EARTH SHELL ═══════════════════════════════════════════════════════
+   *
+   * Stone closes over you. Nothing gets through and you can do nothing —
+   * see `CFG.abilities.earthshell` for why that trade is the ability.
+   */
+  _raiseShell(A) {
+    this.shell = { left: A.duration, struck: 0, hits: 0 };
+    // A guard and a shell are the same idea and must not stack; the stone is
+    // strictly better, so it takes over.
+    if (this.parrying) this._dropParry();
+    this.grapple.cancel();
+    this.dashTimer = 0;
+    this.combat.reset();
+    _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
+    this.effects.ring(_tmp, 0.6, 3.2, 0.42, 0xb98a52, true);
+    this.effects.puff(_tmp, 0x8a6a44, 26, 7);
+    Audio.tone({ freq: 150, to: 60, dur: 0.42, type: 'square', volume: 0.2, pos: this.pos });
+    this._abilEvent('earthshell', { s: 1 });
+  }
+
+  /**
+   * A blow the stone turned aside.
+   *
+   * The counter window opens HERE rather than on a timer, because this is
+   * the moment the ability is built around: something hit you, and now you
+   * have half a second to answer it. Called from `receiveHit` and from the
+   * single-player damage path, so both kinds of attacker open it.
+   */
+  shellAbsorb(kx, kz) {
+    if (!this.shell) return false;
+    const A = CFG.abilities.earthshell;
+    this.shell.struck = A.counterWindow;
+    this.shell.hits++;
+    const len = Math.hypot(kx, kz) || 1;
+    _tmp.set(this.pos.x + (kx / len) * 0.9, this.pos.y + 1.0, this.pos.z + (kz / len) * 0.9);
+    this.effects.hitBurst(_tmp, { x: -kx / len, y: 0, z: -kz / len }, true);
+    this.effects.puff(_tmp, 0xb98a52, 10, 5);
+    Audio.parry(this.pos);
+    return true;
+  }
+
+  /**
+   * Let the stone go.
+   *
+   * Inside a window this is the burst the ability exists for; outside one it
+   * simply crumbles. The cooldown is untouched either way — it started when
+   * you cast, so a wasted shell costs exactly what a perfect one does. That
+   * is what makes the timing worth learning rather than worth retrying.
+   */
+  _releaseShell() {
+    const A = CFG.abilities.earthshell;
+    const kind = shellRelease(this.shell, A);
+    const shell = this.shell;
+    this.shell = null;
+    if (kind !== SHELL.PERFECT) {
+      _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
+      this.effects.puff(_tmp, 0x7a5f3e, 16, 4);
+      Audio.tone({ freq: 90, to: 40, dur: 0.3, type: 'square', volume: 0.12, pos: this.pos });
+      this._abilEvent('earthshell', { s: 0 });
+      return;
+    }
+
+    // ---- the burst ----
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    this.vel.x = fx * A.launch;
+    this.vel.z = fz * A.launch;
+    this.vel.y = Math.max(this.vel.y, 0) + A.lift;
+    this.health.invulnerable = Math.max(this.health.invulnerable, A.invulnerable);
+    this.shellBurst = 0.35;
+    this.dashCharges = CFG.dash.airCharges;
+
+    _tmp.set(this.pos.x, this.pos.y + 0.8, this.pos.z);
+    this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xd8a760, true);
+    this.effects.puff(_tmp, 0xb98a52, 34, 13);
+    this.effects.dashBurst(this.pos, { x: fx, y: 0, z: fz }, 0xd8a760);
+    Audio.tone({ freq: 220, to: 70, dur: 0.5, type: 'square', volume: 0.28, pos: this.pos });
+    Audio.dash(this.pos);
+
+    this._shellShove(A, shell);
+    this._abilEvent('earthshell', { s: 2 });
+  }
+
+  /** Throw everyone near the burst off, and chip them for it. */
+  _shellShove(A, shell) {
+    const hits = shellBurst(this.pos, this._targets, A, this._abilityOpts());
+    for (const h of hits) {
+      // Falls off with distance: standing next to the stone is the mistake,
+      // being in the neighbourhood is not.
+      const k = 1 - (h.dist / A.radius) * 0.55;
+      const dmg = Math.max(1, Math.round(A.damage * k * this.damageMultiplier));
+      this._dealAbilityHit(h.target, dmg,
+        h.dirX * A.knock * k, A.knock * 0.28, h.dirZ * A.knock * k, 0);
+      _tmp.set(h.target.pos.x, h.target.pos.y + 1.0, h.target.pos.z);
+      this.effects.damageNumber(_tmp, dmg, false);
+    }
+    if (shell && shell.hits > 0 && hits.length) Audio.slash(this.pos, 2);
+  }
+
+  /**
+   * ═══ ONE WAY TO HURT SOMEBODY ══════════════════════════════════════════
+   *
+   * All three abilities land their damage through here, and here does
+   * exactly what `_applyHits` does for the katana, because there is only one
+   * damage path in this game and an ability that invents a second one will
+   * disagree with it.
+   *
+   * The rule is: a training dummy is hit on the spot, and EVERYTHING ELSE
+   * is queued as a `hit` event. Whoever is running the current mode drains
+   * that queue — the arena sends it to the victim's machine, the Croaklands
+   * looks the id up in this frame's target list, the dungeon hands it to
+   * the boss. Calling `onHit` here as well as queuing would double every
+   * blow in every one of those modes.
+   */
+  _dealAbilityHit(target, dmg, kx, ky, kz, combo) {
+    if (!target || target.dead) return;
+    if (target.isDummy) {
+      if (target.onHit) target.onHit(dmg, kx, kz, false, target.pos, 'melee');
+      return;
+    }
+    this.events.push({
+      t: 'hit', id: target.id, dmg,
+      kx: r2(kx), ky: r2(ky), kz: r2(kz), c: combo,
+    });
+  }
+
+  _updateShell(dt, cam) {
+    if (this.shellBurst > 0) this.shellBurst -= dt;
+    if (!this.shell) return;
+    const A = CFG.abilities.earthshell;
+    this.shell.left -= dt;
+    if (this.shell.struck > 0) this.shell.struck -= dt;
+
+    // Dust while the stone sits, so it reads as a solid object and not a tint.
+    if (Math.random() < dt * 8) {
+      _tmp.set(
+        this.pos.x + (Math.random() - 0.5) * 2.2,
+        this.pos.y + Math.random() * 1.6,
+        this.pos.z + (Math.random() - 0.5) * 2.2);
+      this.effects.puff(_tmp, 0x8a6a44, 2, 1.2);
+    }
+
+    // The moment the window opens, say so — the player cannot see a timer.
+    const open = shellPerfect(this.shell, A);
+    if (open && !this.shell.cued) {
+      this.shell.cued = true;
+      Audio.tone({ freq: 660, to: 880, dur: 0.12, type: 'square', volume: 0.15, pos: this.pos });
+      if (cam) cam.shake(0.08);
+    } else if (!open) {
+      this.shell.cued = false;
+    }
+
+    if (this.shell.left <= 0) {
+      // Lapsed. Same crumble as a mistimed release — see `_releaseShell`.
+      this.shell = null;
+      _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
+      this.effects.puff(_tmp, 0x7a5f3e, 18, 4);
+      Audio.tone({ freq: 90, to: 40, dur: 0.3, type: 'square', volume: 0.12, pos: this.pos });
+      this._abilEvent('earthshell', { s: 0 });
+    }
+  }
+
+  // ----------------------------------------------------------- tongue trap
+
+  /**
+   * ═══ TONGUE TRAP ═══════════════════════════════════════════════════════
+   *
+   * The same tongue the grapple uses, aimed at a person: it catches, drags
+   * them to the end of your blade, and the blade comes round on its own.
+   */
+  _castTongueTrap(A) {
+    const victim = pickTongueTarget(
+      this.pos, this.yaw, this._targets, A,
+      Object.assign(this._abilityOpts(), {
+        immune: (t) => (this.trapImmune.get(t.id) || 0) > 0,
+      }));
+    if (!victim) return this._abilityRefused();
+
+    this.trap = {
+      id: victim.id, target: victim, phase: 'out', t: 0,
+      to: tonguePullPoint(this.pos, victim, A),
+    };
+    this.grapple.cancel();
+    // Face what you caught — the strike at the end has to land, and the
+    // tongue coming out sideways from the mouth looks wrong besides.
+    this.yaw = Math.atan2(-(victim.pos.x - this.pos.x), -(victim.pos.z - this.pos.z));
+    Audio.tongueFire(this.pos);
+    this._abilEvent('tonguetrap', { tid: victim.id });
+    return true;
+  }
+
+  _updateTrap(dt, cam) {
+    for (const [id, t] of this.trapImmune) {
+      const left = t - dt;
+      if (left <= 0) this.trapImmune.delete(id); else this.trapImmune.set(id, left);
+    }
+    if (!this.trap) return;
+    const A = CFG.abilities.tonguetrap;
+    const tr = this.trap;
+    const victim = tr.target;
+
+    // The catch is void if they died, left, or got out of reach while the
+    // tongue was travelling. A tongue stuck to a corpse is not a mechanic.
+    if (!victim || victim.dead) { this._endTrap(); return; }
+
+    tr.t += dt;
+    if (tr.phase === 'out') {
+      if (tr.t >= A.travel) {
+        tr.phase = 'hold';
+        tr.t = 0;
+        tr.to = tonguePullPoint(this.pos, victim, A);
+        this.trapImmune.set(victim.id, A.immunity);
+        _tmp.set(victim.pos.x, victim.pos.y + 1.0, victim.pos.z);
+        this.effects.tongueImpact(_tmp);
+        Audio.tongueHit(this.pos);
+        this._pullVictim(victim, A);
+      }
+      return;
+    }
+    if (tr.phase === 'hold' && tr.t >= A.hold) {
+      // The automatic strike. Routed through the ordinary swing so it
+      // shares the katana's damage numbers, hit sparks and networking —
+      // there is no second way to hit somebody in this game.
+      this._trapStrike(victim, A, cam);
+      this._endTrap();
+    }
+  }
+
+  /**
+   * ═══ DRAG THEM TO THE END OF THE BLADE ═════════════════════════════════
+   *
+   * A remote player cannot be moved from here — every client owns its own
+   * body — so they are sent the pull as knockback aimed at the point they
+   * should end up on, and their own `receiveHit` applies it. That is the
+   * same attacker-detects / victim-confirms path damage already takes, so
+   * the pull cannot land without the victim agreeing to it.
+   *
+   * ── and some things simply cannot be dragged ──────────────────────────
+   * A camp mob has no velocity at all; it is walked around by a state
+   * machine that writes its position directly. A guardian and a boss are
+   * not going to be yanked off their feet either. There is no honest way to
+   * pull those, so the tongue does not pretend to: `_trapStrike` closes
+   * whatever gap is left by moving YOU instead, which keeps the promise the
+   * ability actually makes — that the strike at the end of it lands.
+   */
+  _pullVictim(victim, A) {
+    const dx = this.trap.to.x - victim.pos.x;
+    const dz = this.trap.to.z - victim.pos.z;
+    const len = Math.hypot(dx, dz) || 1;
+    // Strong enough to cover the gap inside the hold beat, and no stronger.
+    const speed = Math.min(len / Math.max(A.hold, 0.05), 46);
+    if (!victim.isDummy) {
+      this.events.push({
+        t: 'hit', id: victim.id, dmg: 0,
+        kx: r2((dx / len) * speed), ky: r2(3.0), kz: r2((dz / len) * speed), c: 0,
+      });
+    }
+    _tmp.set(victim.pos.x, victim.pos.y + 1.0, victim.pos.z);
+    this.effects.ring(_tmp, 0.3, 2.2, 0.28, 0xef7d9d, true);
+  }
+
+  _trapStrike(victim, A, cam) {
+    /**
+     * Close whatever the drag did not — see `_pullVictim`. Without this the
+     * "close-range strike" plays its animation at the far end of a tongue
+     * and connects with a mob twenty units away, which looks exactly like
+     * the bug it would be.
+     */
+    const gap = Math.hypot(victim.pos.x - this.pos.x, victim.pos.z - this.pos.z);
+    if (gap > A.pullTo + 0.6) {
+      const at = stepStandPoint(this.pos, victim, 1.2);
+      this.pos.x = at.x;
+      this.pos.z = at.z;
+      // Their feet, not yours: dragged across a step you would otherwise
+      // finish the swing hanging in the air above them.
+      this.pos.y = Math.max(this.pos.y, at.y);
+      this.vel.x = 0;
+      this.vel.z = 0;
+      this.effects.dashTrail(this.pos, { x: 0, y: 1, z: 0 }, 0xef7d9d);
+    }
+
+    const dmg = Math.round(A.damage * this.damageMultiplier);
+    const dx = victim.pos.x - this.pos.x, dz = victim.pos.z - this.pos.z;
+    const len = Math.hypot(dx, dz) || 1;
+    this.yaw = Math.atan2(-dx, -dz);
+
+    _tmp.set(this.pos.x - Math.sin(this.yaw) * 1.5, this.pos.y + 1.1,
+      this.pos.z - Math.cos(this.yaw) * 1.5);
+    this.effects.slashArc(_tmp, this.yaw, 2, 0xfff0b0, 3.6);
+    Audio.slash(this.pos, 2);
+    if (cam) cam.shake(0.22);
+
+    this._dealAbilityHit(victim, dmg,
+      (dx / len) * 9, 4.0, (dz / len) * 9, 2);
+    _tmp.set(victim.pos.x, victim.pos.y + 1.2, victim.pos.z);
+    this.effects.damageNumber(_tmp, dmg, true);
+    this.effects.hitBurst(_tmp, { x: -dx / len, y: 0, z: -dz / len }, true);
+  }
+
+  _endTrap() {
+    if (!this.trap) return;
+    this.trap = null;
+    Audio.tongueRelease(this.pos);
+  }
+
+  // -------------------------------------------------------- lightning step
+
+  /**
+   * ═══ LIGHTNING STEP ════════════════════════════════════════════════════
+   *
+   * The cast takes the first step for free; every step after it has to be
+   * asked for inside a window. See `CFG.abilities.lightningstep`.
+   */
+  _castLightningStep(A) {
+    const opts = this._abilityOpts();
+    const plan = planLightningStep(this.pos, this.yaw, this._targets, A, opts);
+    if (!plan) return this._abilityRefused();
+
+    this.step = {
+      plan,
+      used: new Set(),
+      struck: 0,               // how many blows the chain has landed
+      phase: 'travel',
+      t: 0,
+      from: { x: this.pos.x, y: this.pos.y, z: this.pos.z },
+      to: null,
+      target: null,
+      /**
+       * A boss ring is rotated per cast so it is not the same four spots
+       * every time — see `bossAnchors`.
+       */
+      anchorPhase: Math.random() * Math.PI * 2,
+    };
+    if (plan.boss) plan.pool = bossAnchors(plan.boss, A, this.step.anchorPhase);
+
+    this.grapple.cancel();
+    this.combat.reset();
+    this.dashTimer = 0;
+    if (this.parrying) this._dropParry();
+
+    _tmp.set(this.pos.x, this.pos.y + 1.0, this.pos.z);
+    this.effects.ring(_tmp, 0.3, 3.0, 0.3, 0xfff27a, true);
+    this.effects.puff(_tmp, 0xfff27a, 22, 9);
+    Audio.tone({ freq: 1400, to: 300, dur: 0.16, type: 'sawtooth', volume: 0.22, pos: this.pos });
+
+    if (!this._beginStep(A)) {
+      // planLightningStep said there was something, so this should not
+      // happen — but refusing cleanly beats a chain that starts nowhere.
+      this.step = null;
+      return this._abilityRefused();
+    }
+    this._abilEvent('lightningstep', { s: 1 });
+    return true;
+  }
+
+  /** Pick the next link and launch at it. False when the chain is out. */
+  _beginStep(A, aimYaw) {
+    const st = this.step;
+    if (!st || st.used.size >= A.maxTargets) return false;
+    /**
+     * A boss's standing points are rebuilt from where it is NOW, not from
+     * where it was when the chain started. Bosses move — several of them
+     * charge — and stepping to a point the boss has already walked away
+     * from would put you in an empty corner of the room with the strike
+     * landing on nothing.
+     *
+     * The ids are stable across rebuilds (`<boss>#0`..`#3`), which is what
+     * lets `used` keep working: you still cannot take the same point twice.
+     */
+    if (st.plan.boss) {
+      st.plan.pool = bossAnchors(st.plan.boss, A, st.anchorPhase);
+    }
+    const pool = st.plan.pool || this._targets;
+    const range = st.used.size === 0 ? A.range : A.linkRange;
+    const next = nextStepTarget(
+      this.pos, aimYaw === undefined ? this.yaw : aimYaw,
+      pool, range, st.used, this._abilityOpts());
+    if (!next) return false;
+
+    st.used.add(next.id);
+    st.target = next;
+    st.from = { x: this.pos.x, y: this.pos.y, z: this.pos.z };
+    st.to = stepStandPoint(this.pos, next, 1.4);
+    st.phase = 'travel';
+    st.t = 0;
+    this.yaw = Math.atan2(-(next.pos.x - this.pos.x), -(next.pos.z - this.pos.z));
+    Audio.tone({ freq: 1800, to: 600, dur: 0.1, type: 'sawtooth', volume: 0.18, pos: this.pos });
+    return true;
+  }
+
+  /**
+   * The player asked for another link.
+   *
+   * Only legal inside the window. Pressing early does nothing at all rather
+   * than buffering — a buffered press would mean mashing the key beat a
+   * timed one, and the timing is the ability.
+   */
+  _stepOnward() {
+    const st = this.step;
+    if (!st || st.phase !== 'window') return;
+    const A = CFG.abilities.lightningstep;
+    if (!this._beginStep(A)) {
+      // Asked for more and there is none left: end on the finisher rather
+      // than punishing a correct press with a fizzle.
+      this._endStep(A, true);
+    }
+  }
+
+  _updateStep(dt, cam) {
+    const st = this.step;
+    if (!st) return;
+    const A = CFG.abilities.lightningstep;
+
+    // Whatever we were flying at may have died on the way to it — from our
+    // own last strike, or from somebody else entirely.
+    if (st.target && st.target.dead && st.phase === 'travel') {
+      // Finish the movement anyway. Stopping dead in mid-air because the
+      // target expired mid-flight drops the player out of the sky.
+      st.target = null;
+    }
+
+    st.t += dt;
+    if (st.phase === 'travel') {
+      const k = Math.min(1, st.t / Math.max(A.travel, 0.01));
+      this.pos.x = st.from.x + (st.to.x - st.from.x) * k;
+      this.pos.y = st.from.y + (st.to.y - st.from.y) * k;
+      this.pos.z = st.from.z + (st.to.z - st.from.z) * k;
+      this.vel.set(0, 0, 0);
+      this.effects.dashTrail(this.pos, { x: 0, y: 1, z: 0 }, 0xfff27a);
+      if (k >= 1) {
+        this._strikeStep(A, cam);
+        st.phase = 'hang';
+        st.t = 0;
+      }
+      return;
+    }
+    if (st.phase === 'hang') {
+      this.vel.set(0, 0, 0);
+      if (st.t >= A.hang) {
+        if (st.used.size >= A.maxTargets) { this._endStep(A, true); return; }
+        st.phase = 'window';
+        st.t = 0;
+        // The cue that the window is open. Without it the timing is
+        // guesswork and "miss it and the chain ends" is just unfair.
+        Audio.tone({ freq: 1000, to: 1300, dur: 0.09, type: 'square', volume: 0.16, pos: this.pos });
+        this._markStepTargets(A);
+      }
+      return;
+    }
+    // window
+    this.vel.set(0, 0, 0);
+    if (st.t >= A.window) this._endStep(A, true);
+  }
+
+  /**
+   * ═══ THE TARGETING MARKERS ═════════════════════════════════════════════
+   *
+   * Put a mark over everything the next press could take you to, at the
+   * moment the window opens — which is the moment the choice is actually
+   * yours.
+   *
+   * Drawn from the very list `_beginStep` will pick out of, so a mark can
+   * never appear over somebody the ability would then refuse to go to. The
+   * one you are looking at is brighter, because that is the one you will
+   * get if you press now: showing the options without showing which is
+   * selected would make the aim rule invisible.
+   */
+  _markStepTargets(A) {
+    const st = this.step;
+    if (!st) return;
+    const pool = st.plan.boss
+      ? bossAnchors(st.plan.boss, A, st.anchorPhase)
+      : (st.plan.pool || this._targets);
+    const range = A.linkRange;
+    const options = stepCandidates(
+      this.pos, pool, range, st.used, this._abilityOpts());
+    if (!options.length) return;
+
+    const picked = nextStepTarget(
+      this.pos, this.yaw, pool, range, st.used, this._abilityOpts());
+    for (const c of options) {
+      const on = picked && c.t.id === picked.id;
+      const off = (c.t.hitbox && c.t.hitbox.bodyOffset) || 1.0;
+      _tmp.set(c.t.pos.x, c.t.pos.y + off + 0.9, c.t.pos.z);
+      this.effects.ring(_tmp, on ? 0.2 : 0.5, on ? 1.9 : 1.1,
+        A.window, on ? 0xfff27a : 0x7a8ea0, true);
+      if (on) this.effects.puff(_tmp, 0xfff27a, 6, 2);
+    }
+  }
+
+  /** The hit at the end of a link. */
+  _strikeStep(A, cam) {
+    const st = this.step;
+    // A boss chain strikes the boss from the point it arrived at; an
+    // ordinary chain strikes whatever it stepped to.
+    const victim = st.plan.boss || (st.target && st.target.anchorOf) || st.target;
+    if (!victim || victim.dead) return;
+
+    st.struck++;
+    const last = st.used.size >= A.maxTargets;
+    const mult = last ? A.finisher : 1;
+    const dmg = Math.round(A.damage * mult * this.damageMultiplier);
+    const dx = victim.pos.x - this.pos.x, dz = victim.pos.z - this.pos.z;
+    const len = Math.hypot(dx, dz) || 1;
+    this.yaw = Math.atan2(-dx, -dz);
+
+    _tmp.set(this.pos.x - Math.sin(this.yaw) * 1.4, this.pos.y + 1.1,
+      this.pos.z - Math.cos(this.yaw) * 1.4);
+    this.effects.slashArc(_tmp, this.yaw, last ? 2 : 1, 0xfff27a, last ? 4.0 : 3.0);
+    this.effects.ring(_tmp, 0.2, 2.4, 0.24, 0xfff27a, true);
+    Audio.slash(this.pos, last ? 2 : 0);
+    if (cam) cam.shake(last ? 0.3 : 0.14);
+
+    this._dealAbilityHit(victim, dmg,
+      (dx / len) * 6, 3.5, (dz / len) * 6, last ? 2 : 1);
+    _tmp.set(victim.pos.x, victim.pos.y + 1.2, victim.pos.z);
+    this.effects.damageNumber(_tmp, dmg, last);
+    this.effects.hitBurst(_tmp, { x: -dx / len, y: 0, z: -dz / len }, last);
+  }
+
+  _endStep(A, landed) {
+    if (!this.step) return;
+    this.step = null;
+    this.health.invulnerable = Math.max(this.health.invulnerable, A.invulnerable);
+    // Dropped back into ordinary physics facing where you finished, with a
+    // little forward carry so the landing is not a dead stop.
+    this.vel.x = -Math.sin(this.yaw) * 4;
+    this.vel.z = -Math.cos(this.yaw) * 4;
+    this.vel.y = 0;
+    if (landed) {
+      _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
+      this.effects.puff(_tmp, 0xfff27a, 16, 6);
+    }
+    this._abilEvent('lightningstep', { s: 0 });
   }
 
   /**
@@ -1381,6 +2136,18 @@ export class Player {
     if (this.spectating) return false;
     if (this.health.dead || this.health.protected) return false;
 
+    /**
+     * Stone first. The shell stops everything — no chip, no stagger, and
+     * unlike a parry it is NOT spent by blocking: it keeps standing and
+     * opens the counter window instead. That is the whole shape of the
+     * ability, so it has to be checked before the guard.
+     */
+    if (this.shell) {
+      this.shellAbsorb(kx, kz);
+      if (cam) cam.shake(0.12);
+      return false;
+    }
+
     // A raised guard turns the blow aside — same rule everywhere, including
     // the arena. Turning one aside is what ends the guard: see `_parryTook`.
     if (this.parrying) {
@@ -1456,6 +2223,13 @@ export class Player {
     const dirZ = this.pos.z - from.z;
     const len = Math.hypot(dirX, dirZ) || 1;
     const nx = dirX / len, nz = dirZ / len;
+
+    // Stone turns a boss blow aside exactly as it turns a player's, and for
+    // the same reason it is checked before the guard in `receiveHit`.
+    if (this.shell) {
+      this.shellAbsorb(-nx, -nz);
+      return;
+    }
 
     if (this.parrying) {
       this.justParried = 0.2;
@@ -1826,8 +2600,23 @@ export class Player {
       attackT: this.combat.attackT,
       attackIndex: this.combat.comboIndex,
       throwT: this.throwT > 0 ? this.throwT / 0.26 : 0,
-      grappling: this.grapple.visible,
-      tongueTo: this.grapple.visible ? this.grapple.tip : null,
+      /**
+       * The tongue is shared between the grapple and Tongue Trap — it is
+       * the same tongue, and the rig only has one. The trap wins when both
+       * somehow want it, because the trap cancels the grapple on cast and
+       * so the grapple should not be out at all.
+       */
+      grappling: !!this.trap || this.grapple.visible,
+      tongueTo: this.trap && this.trap.target
+        ? {
+          x: this.trap.target.pos.x,
+          y: this.trap.target.pos.y + 1.0,
+          z: this.trap.target.pos.z,
+        }
+        : (this.grapple.visible ? this.grapple.tip : null),
+      // The stone, and whether the counter window is open — see `_buildShell`.
+      shell: !!this.shell,
+      shellHot: !!(this.shell && shellPerfect(this.shell, CFG.abilities.earthshell)),
       /**
        * A frog holding on to a lip is drawn with the wall-hug pose and the
        * climb reach on top of it, which between them is exactly what

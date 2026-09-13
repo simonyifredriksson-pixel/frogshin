@@ -6,25 +6,35 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v133';
-import { CFG } from './config.js?v=v133';
-import { staminaBand } from './stamina.js?v=v133';
-import { modeAvailable } from './rounds.js?v=v133';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v133';
-import { Audio } from './audio.js?v=v133';
-import { PX, setIcon } from './icons.js?v=v133';
+import { clamp } from './util.js?v=v134';
+import { CFG } from './config.js?v=v134';
+import { staminaBand } from './stamina.js?v=v134';
+import { modeAvailable } from './rounds.js?v=v134';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v134';
+import { Audio } from './audio.js?v=v134';
+import { PX, setIcon } from './icons.js?v=v134';
 
 const $ = (id) => document.getElementById(id);
 
-// Full cooldown per ability, so the shade can be drawn as a fraction.
-const ABILITY_CD = {
-  invisibility: CFG.abilities.invisibility.cooldown,
-  shadowclone: CFG.abilities.shadowclone.cooldown,
-};
-const ABILITY_MAX = {
-  invisibility: CFG.abilities.invisibility.duration,
-  shadowclone: CFG.abilities.shadowclone.duration,
-};
+/**
+ * Full cooldown per ability, so the shade can be drawn as a fraction.
+ *
+ * Built from CFG rather than written out, so an ability whose cooldown is
+ * retuned cannot end up with a hotbar shade that empties at a different rate
+ * than the ability actually recharges.
+ */
+const ABILITY_CD = {};
+const ABILITY_MAX = {};
+for (const id in CFG.abilities) {
+  const a = CFG.abilities[id];
+  // `maxEquipped` is a number sitting in the same object, not an ability.
+  if (!a || typeof a !== 'object') continue;
+  if (a.cooldown) ABILITY_CD[id] = a.cooldown;
+  // Only the ones that RUN for a while have a duration to show. Tongue Trap
+  // and Lightning Step resolve in well under a second, so an "active" bar
+  // for them would be a flicker.
+  if (a.duration) ABILITY_MAX[id] = a.duration;
+}
 
 export class HUD {
   constructor() {

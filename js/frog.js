@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v133';
-import { CFG } from './config.js?v=v133';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v133';
+import * as THREE from '../lib/three.module.js?v=v134';
+import { CFG } from './config.js?v=v134';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v134';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -1828,6 +1828,137 @@ export class FrogModel {
     this.root.add(this.tongue);
   }
 
+  /**
+   * ═══ THE EARTH SHELL ═══════════════════════════════════════════════════
+   *
+   * A boulder that closes over the frog.
+   *
+   * ── built on first use, then kept ─────────────────────────────────────
+   * Not in the constructor. Only one ability in four is Earth Shell and
+   * only two may be carried at once, so most frogs in most matches never
+   * raise one — and a dozen meshes that never render still cost every frog
+   * in the room memory, a place in `setGhost`'s traversal, and a say in the
+   * rig's bounding box. That last one is not hypothetical: an invisible
+   * boulder is TALLER than a frog, so every measurement of the model
+   * silently became a measurement of the shell.
+   *
+   * It is kept once built, because it is raised and dropped several times a
+   * match and rebuilding it each time would hitch on exactly the frame the
+   * player most needs it not to.
+   *
+   * It is a low-poly sphere with plates stuck to it rather than a smooth
+   * dome: at this art scale a clean sphere reads as a bubble — a force
+   * field — and the whole point of this ability rather than a parry is that
+   * it is made of rock.
+   *
+   * Lives on the ROOT, not the body, so it does not bob, lean or swing with
+   * whatever pose the frog was in when it went up. Stone does not bob.
+   */
+  _buildShell() {
+    this.shell = new THREE.Group();
+    this.shell.visible = false;
+
+    const rock = new THREE.MeshLambertMaterial({ color: 0x6f5637, flatShading: true });
+    const rockLight = new THREE.MeshLambertMaterial({ color: 0x8a6a44, flatShading: true });
+    const rockDark = new THREE.MeshLambertMaterial({ color: 0x4a3925, flatShading: true });
+    this._shellMats = [rock, rockLight, rockDark];
+
+    this.shellCore = mesh(G.lowSphere, rock, 1.12, 1.18, 1.12, 0, 1.05, 0);
+    this.shell.add(this.shellCore);
+
+    /**
+     * Plates, placed on a fixed spiral rather than at random.
+     *
+     * Random placement is rebuilt differently for every frog in the match,
+     * so two players using the same ability would be wearing visibly
+     * different rocks — which reads as two abilities, not one.
+     */
+    const PLATES = 11;
+    for (let i = 0; i < PLATES; i++) {
+      const a = i * 2.399;                       // golden angle
+      const y = 1 - (i + 0.5) * (1.7 / PLATES);  // -0.7 .. 1
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const m = mesh(
+        G.box, i % 3 === 0 ? rockLight : (i % 3 === 1 ? rock : rockDark),
+        0.42 + (i % 4) * 0.08, 0.3 + (i % 3) * 0.07, 0.42 + (i % 5) * 0.05,
+        Math.cos(a) * r * 1.05,
+        1.05 + y * 1.06,
+        Math.sin(a) * r * 1.05);
+      m.rotation.set(a * 0.7, a, y * 1.4);
+      this.shell.add(m);
+    }
+
+    /**
+     * The counter window, as a seam of light through the cracks.
+     *
+     * This is the tell the ability is balanced around — an opponent is
+     * meant to be able to see that a release is coming and back off — so it
+     * has to be visible from outside, not just on the owner's HUD.
+     */
+    this.shellGlow = mesh(G.lowSphere,
+      new THREE.MeshBasicMaterial({
+        color: 0xffc66b, transparent: true, opacity: 0, depthWrite: false,
+      }), 1.22, 1.28, 1.22, 0, 1.05, 0);
+    this.shellGlow.castShadow = false;
+    this.shell.add(this.shellGlow);
+
+    this.root.add(this.shell);
+    this._shellScale = 0;
+  }
+
+  /**
+   * Raise, hold or drop the stone.
+   *
+   * The frog inside is hidden outright rather than left to clip through —
+   * `setGhost(0)` is already the one path that fades the whole rig, so the
+   * shell borrows it instead of introducing a second way to hide a frog.
+   *
+   * @param s { shell, shellHot }  up, and inside the counter window
+   */
+  _updateShell(dt, s) {
+    // Nothing to build and nothing built: the overwhelmingly common case,
+    // and it costs one comparison. See `_buildShell` for why it is lazy.
+    if (!this.shell && !s.shell) return;
+    if (!this.shell) this._buildShell();
+    const want = s.shell ? 1 : 0;
+    // Springs up fast, crumbles away faster — a shell that eased out slowly
+    // would still be standing well after it stopped blocking anything.
+    this._shellScale = damp(this._shellScale, want, want ? 14 : 22, dt);
+    const up = this._shellScale > 0.02;
+    this.shell.visible = up;
+    if (!up) {
+      // Whatever happened to the shell — crumbled, released, or the frog
+      // died and it was dropped outright — the frog comes back.
+      if (this.lift) this.lift.visible = true;
+      return;
+    }
+
+    const k = this._shellScale;
+    // A touch of overshoot on the way up so it lands like a rock rather
+    // than inflating like a balloon.
+    const pop = 1 + Math.sin(Math.min(1, k) * Math.PI) * 0.09 * want;
+    this.shell.scale.set(k * pop, k * pop, k * pop);
+    this.shell.rotation.y += dt * 0.35;
+
+    /**
+     * Hide the frog once the stone has actually closed, not before.
+     *
+     * `lift` is the whole rig — torso, head, limbs, gear — and leaves the
+     * nameplate (which hangs off the root) alone, so a sealed opponent can
+     * still be identified. The 0.8 threshold is what keeps the frog visible
+     * through the raise and the crumble; popping it out at the first frame
+     * would make the shell look like it spawned instead of closing.
+     */
+    if (this.lift) this.lift.visible = k < 0.8;
+
+    if (this.shellGlow) {
+      const hot = s.shellHot ? 1 : 0;
+      const pulse = 0.35 + Math.abs(Math.sin(this.t * 9)) * 0.4;
+      this.shellGlow.material.opacity = damp(
+        this.shellGlow.material.opacity, hot * pulse, 16, dt);
+    }
+  }
+
   _buildNameplate() {
     this.plateCanvas = document.createElement('canvas');
     this.plateCanvas.width = 256;
@@ -1917,6 +2048,9 @@ export class FrogModel {
       // four-times-oversized ellipsoid before that.
       for (const e of this.eyes) e.lid.scale.setScalar(damp(e.lid.scale.x, LID_SHUT, 12, dt));
       this.tongue.visible = false;
+      // Dying drops the stone. It is not a coffin, and a boulder standing
+      // over a corpse would keep blocking shots that should now go through.
+      this._updateShell(dt, { shell: false, shellHot: false });
       return;
     }
     this.root.rotation.z = damp(this.root.rotation.z, 0, 10, dt);
@@ -2437,6 +2571,9 @@ export class FrogModel {
 
     // ---- tongue ----------------------------------------------------------
     this._updateTongue(dt, s);
+
+    // ---- earth shell -----------------------------------------------------
+    this._updateShell(dt, s);
   }
 
   /**
