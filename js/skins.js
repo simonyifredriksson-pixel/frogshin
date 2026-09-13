@@ -37,43 +37,43 @@
  * than an Epic. Raising the top of a ladder means re-spacing the rungs
  * under it, or it stops being a ladder.
  */
+/**
+ * ═══ ONE ODDS TABLE, FOR EVERY CASE IN THE GAME ══════════════════════════
+ *
+ * `odds` is the chance of the TIER, as a percentage. Every crate uses the
+ * same ladder, and the items inside a tier share it equally.
+ *
+ * ── what this replaced, twice ─────────────────────────────────────────
+ * First a pure weight system, where a tier's probability depended on which
+ * OTHER tiers happened to be in the same crate — so Mythic came out five
+ * times rarer in the Celestial cases than the Eclipse ones purely because
+ * Celestial has no Common tier to dilute it.
+ *
+ * Then a hybrid: weights below, flat per-ITEM anchors on the top three. That
+ * fixed the drift but made the top of the ladder very steep — a Legendary
+ * was 0.80% and a crate holding one paid one out about once in a hundred
+ * and twenty-five opens.
+ *
+ * A per-TIER table is the version a player can actually hold in their head:
+ * a third of opens are Common, one in twenty is Legendary, one in a thousand
+ * is ???. It reads the same on every case because it IS the same on every
+ * case, and a crate that is missing a tier simply shares that tier's slice
+ * out among the ones it has — see `tierChances`.
+ */
 export const RARITY = {
-  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', weight: 7750 },
-  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', weight: 3000 },
-  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', weight: 1250 },
-  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', weight: 400 },
-  /**
-   * ── THE TOP THREE ARE ANCHORED, NOT WEIGHTED ────────────────────────
-   *
-   * `odds` is a flat PER-ITEM percentage: any one Legendary is 0.80% to
-   * pull, any one Mythic 0.20%, any one Secret 0.03%, out of any crate in
-   * the game, whatever else that crate happens to contain.
-   *
-   * ── why this had to stop being a weight ─────────────────────────────
-   * A weight is only a probability once you know what it is competing
-   * against, and `rollCrate` totals only the tiers a crate actually holds.
-   * Mythic sat at weight 4 in every crate and came out at 0.1988% in the
-   * Celestial cases and 0.0400% in the Eclipse ones — five times rarer for
-   * no reason anybody chose, purely because the Celestial set has no
-   * Common tier to dilute it. It also left Mythic (0.04%) barely rarer
-   * than Secret (0.03%), collapsing two tiers that are meant to be an
-   * order of magnitude apart.
-   *
-   * A headline number is a promise to the player. It cannot be an emergent
-   * property of which other tiers happen to be in the pool, so these three
-   * are now stated directly and the tiers below them share what is left.
-   */
-  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: 0.80 },
-  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 0.20 },
+  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', odds: 35 },
+  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', odds: 27 },
+  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', odds: 20 },
+  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', odds: 10 },
+  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: 5 },
+  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 2.9 },
   /**
    * ??? — and it stays ??? until somebody pulls one.
    *
-   * One in 3,333, which is the figure these were specified at. It is not a
-   * tier anything else uses, and the three items in it are the only things
-   * in the game whose NAME is hidden until it is yours — see `secret` on a
-   * skin and `Shop.hidden`.
+   * One in a thousand. It is the only tier whose items hide their own NAME
+   * until they are yours — see `secret` on a skin and `Shop.hidden`.
    */
-  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.03 },
+  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.1 },
 };
 
 export const RARITY_ORDER = [
@@ -929,19 +929,19 @@ export function findSkin(kind, id) {
 export const CRATES = [
   // ── the standard cases ──────────────────────────────────────────────
   {
-    id: 'crate_kunai', kind: 'kunai', set: 'base', price: 1000,
+    id: 'crate_kunai', kind: 'kunai', set: 'base', price: 1800,
     name: 'Common Kunai Case',
     blurb: 'Nine blades. Nine ways to miss.',
     color: '#c0392b',
   },
   {
-    id: 'crate_sword', kind: 'swords', set: 'base', price: 1500,
+    id: 'crate_sword', kind: 'swords', set: 'base', price: 2800,
     name: 'Common Sword Case',
     blurb: 'Steel for the frog who takes their duels seriously.',
     color: '#5f9ec4',
   },
   {
-    id: 'crate_frog', kind: 'frogs', set: 'base', price: 2500,
+    id: 'crate_frog', kind: 'frogs', set: 'base', price: 3600,
     name: 'Common Frog Case',
     blurb: 'A whole new you. Same terrible habits.',
     color: '#4e9a3c',
@@ -975,19 +975,19 @@ export const CRATES = [
    * Mythic — the only Mythic in the game.
    */
   {
-    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 2500,
+    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 4200,
     name: 'Celestial Kunai Case',
     blurb: 'Dark metal and starlight. Nothing common has ever been in one.',
     color: '#7fbcff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 3500,
+    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 5600,
     name: 'Celestial Sword Case',
     blurb: 'Nine blades of heavenly metal — and one that is not quite a blade.',
     color: '#8fd8ff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 5000,
+    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 6600,
     name: 'Celestial Forge Crate',
     blurb: 'Ancient gold, blue fire, and the rarest frog anybody owns.',
     color: '#ffd24a', anim: 'celestial',
@@ -1000,13 +1000,13 @@ export const CRATES = [
    * all three is the only way to the title — see `eclipseFound`.
    */
   {
-    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 2500,
+    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 3100,
     name: 'Eclipse Kunai Crate',
     blurb: 'Nine blades cut from the dark. One of them is not a blade.',
     color: '#a87aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 3500,
+    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 4100,
     name: 'Eclipse Sword Crate',
     blurb: 'Nightsteel, void and corona — and something with no name yet.',
     color: '#8f6aff', anim: 'eclipse',
@@ -1028,6 +1028,247 @@ export const CRATES = [
  * step with the collection it describes — the honest answer to "have they
  * found the Eclipse" is "do they own these three", asked fresh every time.
  */
+/**
+ * ═══ THE FIVE COLLECTIONS ════════════════════════════════════════════════
+ *
+ * Verdant Samurai, Frostveil, Emberborn, Dragon Ascension and Divine Sun —
+ * fifteen cases, a hundred and fifty skins, and one shape between them:
+ *
+ *   2 Common · 2 Uncommon · 2 Rare · 1 Epic · 1 Legendary · 1 Mythic · 1 ???
+ *
+ * ── why these are built rather than written out ───────────────────────
+ * The sets above this line are hand-written because each one is a handful
+ * of items with their own ideas. A hundred and fifty literals is a
+ * different problem: the thing that matters about them is the LADDER — that
+ * a Rare visibly out-dresses an Uncommon, and does so the same way in every
+ * collection — and a ladder is exactly what you cannot see in a wall of
+ * hex. Written as a table, the progression is the code.
+ *
+ * A collection supplies five colours and thirty names. The tier decides
+ * everything else, identically across all five, so a Frostveil Epic and an
+ * Emberborn Epic wear the same amount of armour in different weather.
+ */
+const COLLECTIONS = [
+  {
+    id: 'verdant', name: 'Verdant Samurai', color: '#6aa832',
+    price: { frogs: 6000, swords: 4500, kunai: 3000 },
+    // dark, mid, light, accent, glow
+    pal: [0x1f3a1a, 0x4e7a34, 0x8fc44a, 0xc9d98f, 0x9cff6b],
+    blurb: 'Bamboo, moss and old jade. Everything in here grew before it '
+      + 'was forged.',
+    frogs: ['Bamboo Frog', 'Moss Ronin', 'Jade Scout', 'Forest Shinobi',
+      'Mossblade Warrior', 'Jade Samurai', 'Ancient Warden', 'Verdant Ronin',
+      'Forest Shogun', 'The Bamboo Sage'],
+    swords: ['Bamboo Blade', 'Moss Katana', 'Jade Edge', 'Forest Fang',
+      'Ronin Blade', 'Verdant Katana', 'Warden Blade', 'Jade Reaver',
+      "Shogun's Blade", 'Whisperleaf'],
+    kunai: ['Bamboo Kunai', 'Moss Kunai', 'Jade Kunai', 'Forest Kunai',
+      'Ronin Kunai', 'Verdant Fang', 'Warden Kunai', 'Jade Shard',
+      'Shogun Kunai', "The Sage's Needle"],
+  },
+  {
+    id: 'frost', name: 'Frostveil', color: '#8fd8ff',
+    price: { frogs: 7500, swords: 5500, kunai: 4000 },
+    pal: [0x2a4a66, 0x6a9ec4, 0xbfe4ff, 0xe8f6ff, 0x8ff0ff],
+    blurb: 'Nine things out of the deep winter, and one that was already '
+      + 'there when it arrived.',
+    frogs: ['Snow Frog', 'Frost Scout', 'Ice Ronin', 'Frozen Shinobi',
+      'Glacier Warrior', 'Frost Warden', 'Crystal Samurai', 'Winter Phantom',
+      'Frost Emperor', 'The Still Winter'],
+    swords: ['Frost Blade', 'Ice Katana', 'Snowfang', 'Frozen Edge',
+      'Glacier Fang', 'Crystal Blade', 'Frost Reaper', "Winter's Edge",
+      "Emperor's Frost", 'Heartfrost'],
+    kunai: ['Snow Kunai', 'Frost Kunai', 'Ice Fang', 'Frozen Kunai',
+      'Glacier Kunai', 'Crystal Shard', 'Winter Fang', 'Frost Reaper',
+      "Emperor's Kunai", 'Stillfrost'],
+  },
+  {
+    id: 'ember', name: 'Emberborn', color: '#ff8a3c',
+    price: { frogs: 9000, swords: 7000, kunai: 5000 },
+    pal: [0x3a1a10, 0x8a3a1e, 0xff8a3c, 0xffca4a, 0xff6a2a],
+    blurb: 'Ash, cinder and the things that walk out of a fire still '
+      + 'burning.',
+    frogs: ['Ash Frog', 'Ember Scout', 'Cinder Ninja', 'Flame Ronin',
+      'Magma Warrior', 'Inferno Shinobi', 'Ember Warden', 'Cinder Lord',
+      'Inferno Shogun', 'The First Ash'],
+    swords: ['Ash Blade', 'Ember Katana', 'Cinder Edge', 'Flamefang',
+      'Magma Blade', 'Inferno Katana', 'Ember Reaper', 'Volcanic Fang',
+      'Inferno Shogun Blade', 'Cinderheart'],
+    kunai: ['Ash Kunai', 'Ember Kunai', 'Cinder Kunai', 'Flame Fang',
+      'Magma Kunai', 'Inferno Kunai', 'Ember Shard', 'Volcanic Fang',
+      'Inferno Kunai', 'Ashfall'],
+  },
+  {
+    id: 'dragon', name: 'Dragon Ascension', color: '#d94a4a',
+    price: { frogs: 10500, swords: 8500, kunai: 6500 },
+    pal: [0x3a0f14, 0x9c2430, 0xd94a4a, 0xd8ad2e, 0xffb03c],
+    blurb: 'Scale, bone and gold. The ladder here ends somewhere that was '
+      + 'never a frog.',
+    frogs: ['Dragon Initiate', 'Scale Runner', 'Crimson Shinobi', 'Dragon Ronin',
+      'Golden Scale', 'Dragon Warden', 'Elder Dragon', 'Dragon Samurai',
+      'Dragon Emperor', 'The Sleeping Wyrm'],
+    swords: ['Scale Blade', 'Dragon Fang', 'Crimson Edge', 'Wyrm Katana',
+      'Dragonbone Blade', 'Elder Fang', 'Dragon Reaver', 'Imperial Dragon',
+      "Dragon Emperor's Fang", 'Wyrmheart'],
+    kunai: ['Scale Kunai', 'Dragon Kunai', 'Crimson Fang', 'Wyrm Kunai',
+      'Dragonbone Kunai', 'Elder Kunai', 'Dragon Shard', 'Imperial Fang',
+      'Dragon Emperor Kunai', 'Wyrmscale'],
+  },
+  {
+    id: 'sun', name: 'Divine Sun', color: '#ffd76b',
+    price: { frogs: 12000, swords: 10000, kunai: 8000 },
+    pal: [0x5a4408, 0xb89a4a, 0xffd76b, 0xfff3c4, 0xffe08a],
+    blurb: 'The most expensive case in the shop, and the brightest thing '
+      + 'in it does not set.',
+    frogs: ['Sunlit Frog', 'Dawn Shinobi', 'Solar Scout', 'Golden Ronin',
+      'Sun Guardian', 'Celestial Warrior', 'Solar Warden', "Heaven's Champion",
+      'Divine Emperor', 'The Unsetting'],
+    swords: ['Sunsteel Blade', 'Dawn Katana', 'Solar Edge', 'Golden Fang',
+      'Sun Guardian', 'Celestial Blade', "Heaven's Reaver", 'Divine Edge',
+      'Sword of the Sun', 'Daybreaker'],
+    kunai: ['Sunlit Kunai', 'Dawn Kunai', 'Solar Kunai', 'Golden Fang',
+      'Sun Shard', 'Celestial Kunai', "Heaven's Kunai", 'Divine Shard',
+      'Kunai of the Sun', 'Sunfall'],
+  },
+];
+
+/**
+ * The ladder every collection climbs. Ten rungs, and the tier is the rung.
+ *
+ * `pal` is the collection's five colours — dark, mid, light, accent, glow —
+ * and each rung says which of them to use and what the frog is WEARING. The
+ * escalation is deliberately the same in all five so a player who has
+ * learned to read one case can read the other fourteen.
+ */
+const TIER_LADDER = [
+  'common', 'common', 'uncommon', 'uncommon', 'rare', 'rare',
+  'epic', 'legendary', 'mythic', 'secret',
+];
+
+/** Darken or lighten a hex by a factor, staying inside 0..255 per channel. */
+function shade(hex, k) {
+  const r = Math.min(255, Math.round(((hex >> 16) & 255) * k));
+  const g = Math.min(255, Math.round(((hex >> 8) & 255) * k));
+  const b = Math.min(255, Math.round((hex & 255) * k));
+  return (r << 16) | (g << 8) | b;
+}
+
+/**
+ * The frog at rung `i` of a collection.
+ *
+ * Nothing below Uncommon gets geometry — a Common has to be the plain shape
+ * so everything above it has something to be more than. From there it is
+ * spines, then armour and glowing inlay, then a crown and a halo, and the
+ * Mythic gets the whole lot with its own light around it.
+ */
+function collectionFrog(c, i) {
+  const [dark, mid, light, accent, glow] = c.pal;
+  const rarity = TIER_LADDER[i];
+  const fx = {};
+  if (i >= 2) fx.spikes = 3;
+  if (i >= 3) fx.fins = true;
+  if (i >= 4) { fx.plates = shade(mid, 0.8); fx.pattern = accent; }
+  if (i >= 5) { fx.eyeGlow = glow; fx.emissive = shade(dark, 0.9); }
+  if (i >= 6) { fx.spikes = 5; fx.aura = glow; fx.horns = 2; }
+  if (i >= 7) { fx.crown = 1.5; fx.halo = accent; fx.stars = accent; }
+  if (i >= 8) { fx.halo2 = true; fx.spikes = 6; fx.horns = 4; fx.crown = 1.8; }
+  if (i === 9) { fx.orbit = glow; fx.orbitN = 9; fx.embers = glow; }
+  const s = {
+    id: `frog_${c.id}_${i}`, name: c.frogs[i], rarity, set: c.id,
+    skin: i >= 7 ? shade(dark, 1.1) : shade(mid, 0.7 + i * 0.07),
+    belly: shade(light, 0.9 + i * 0.02),
+    cloth: shade(dark, 0.85),
+    scarf: i >= 6 ? accent : shade(light, 1.0),
+    fx,
+  };
+  if (rarity === 'secret') s.secret = true;
+  return s;
+}
+
+/** The sword at rung `i`. Shape climbs, then the blade starts to glow. */
+function collectionSword(c, i) {
+  const [dark, mid, light, accent, glow] = c.pal;
+  const rarity = TIER_LADDER[i];
+  const SHAPE = ['katana', 'katana', 'curved', 'curved', 'serrated',
+    'serrated', 'broad', 'broad', 'light', 'light'];
+  const TSUBA = ['disc', 'square', 'disc', 'cross', 'square',
+    'cross', 'ring', 'ring', 'ring', 'ring'];
+  const fx = { shape: SHAPE[i], tsuba: TSUBA[i] };
+  if (i >= 3) fx.tassel = accent;
+  if (i >= 4) fx.runes = glow;
+  if (i >= 6) fx.aura = glow;
+  if (i >= 7) { fx.glow = true; fx.long = 1.15; }
+  if (i >= 8) fx.long = 1.3;
+  if (i === 9) { fx.orbit = glow; fx.orbitN = 3; }
+  const s = {
+    id: `sword_${c.id}_${i}`, name: c.swords[i], rarity, set: c.id,
+    blade: shade(light, 0.8 + i * 0.03),
+    edge: i >= 7 ? accent : shade(light, 1.1),
+    guard: i >= 6 ? accent : shade(mid, 0.9),
+    grip: shade(dark, 0.8),
+    glow: shade(glow, 0.5 + i * 0.06),
+    fx,
+  };
+  if (rarity === 'secret') s.secret = true;
+  return s;
+}
+
+/** The kunai at rung `i`. The cheapest of the three, and the plainest. */
+function collectionKunai(c, i) {
+  const [dark, mid, light, accent, glow] = c.pal;
+  const rarity = TIER_LADDER[i];
+  const SHAPE = ['classic', 'classic', 'needle', 'needle', 'broad',
+    'broad', 'crystal', 'crystal', 'star', 'star'];
+  const fx = { shape: SHAPE[i] };
+  if (i >= 4) fx.ribbon = accent;
+  if (i >= 6) fx.glow = true;
+  if (i >= 8) fx.big = 1.2;
+  const s = {
+    id: `kunai_${c.id}_${i}`, name: c.kunai[i], rarity, set: c.id,
+    blade: shade(mid, 0.7 + i * 0.05),
+    facet: shade(light, 0.85 + i * 0.02),
+    wrap: i >= 6 ? accent : shade(dark, 1.3),
+    ring: shade(dark, 0.8),
+    fx,
+  };
+  if (rarity === 'secret') s.secret = true;
+  return s;
+}
+
+/**
+ * Expand the table into the three catalogues and fifteen cases.
+ *
+ * Pushed onto the arrays above rather than kept apart, so everything that
+ * already reads `FROG_SKINS` — the avatar screen, the reel, `findSkin`,
+ * the dupe values, the odds display — picks these up with no idea they were
+ * generated.
+ */
+for (const c of COLLECTIONS) {
+  for (let i = 0; i < TIER_LADDER.length; i++) {
+    FROG_SKINS.push(collectionFrog(c, i));
+    SWORD_SKINS.push(collectionSword(c, i));
+    KUNAI_SKINS.push(collectionKunai(c, i));
+  }
+  CRATES.push(
+    {
+      id: `crate_${c.id}_kunai`, kind: 'kunai', set: c.id,
+      price: c.price.kunai, name: `${c.name} Kunai Case`,
+      blurb: c.blurb, color: c.color,
+    },
+    {
+      id: `crate_${c.id}_sword`, kind: 'swords', set: c.id,
+      price: c.price.swords, name: `${c.name} Sword Case`,
+      blurb: c.blurb, color: c.color,
+    },
+    {
+      id: `crate_${c.id}_frog`, kind: 'frogs', set: c.id,
+      price: c.price.frogs, name: `${c.name} Crate`,
+      blurb: c.blurb, color: c.color,
+    },
+  );
+}
+
+
 export const ECLIPSE_SET = {
   frogs: 'frog_ecl_secret',
   swords: 'sword_ecl_secret',
@@ -1100,47 +1341,29 @@ function tiersOf(pool) {
  * cannot drift apart — they are not two implementations of the same rule,
  * they are one.
  *
- * Two kinds of tier:
+ * Every tier's share comes straight off `RARITY` and does not depend on how
+ * many ITEMS are in it: a tier with two Legendaries in it still pays out a
+ * Legendary 5% of the time, and each of the two is 2.5%. That is the
+ * difference between this and the per-item anchors it replaced, and it is
+ * what lets a case advertise one ladder however many skins it holds.
  *
- *   ANCHORED (`odds`)  Legendary, Mythic, Secret. A flat per-item
- *                      percentage, identical in every crate. A tier with
- *                      two Legendaries in it is therefore twice as likely
- *                      to pay out a Legendary — which is the point: the
- *                      promise is about the ITEM you are chasing, and a
- *                      set with two of them gives you two shots at 0.80%.
- *
- *   WEIGHTED (`weight`) Common through Epic. These share whatever the
- *                      anchored tiers leave, in proportion — so a crate
- *                      whose floor is Uncommon genuinely upgrades its
- *                      commons rather than deleting them.
+ * ── a crate that is missing a tier ────────────────────────────────────
+ * Renormalised, not deleted. The Celestial cases have no Common tier, so
+ * their remaining tiers share Common's 35% in proportion — a case whose
+ * floor is Uncommon genuinely UPGRADES its commons rather than quietly
+ * giving that third of its probability to nothing.
  *
  * @returns `{ tier: probability }` as fractions of 1, summing to 1.
  */
 function tierChances(tiers) {
-  let anchored = 0;
-  let floatWeight = 0;
-  for (const r of RARITY_ORDER) {
-    if (!tiers[r]) continue;
-    if (RARITY[r].odds !== undefined) anchored += (RARITY[r].odds / 100) * tiers[r].length;
-    else floatWeight += RARITY[r].weight;
-  }
-  /**
-   * A pool could in principle carry so many anchored items that they claim
-   * more than the whole probability space — thirty Mythics would be 6%
-   * each of nothing left over. Nothing in the game is close to that, but
-   * the alternative to scaling here is a negative remainder and a roller
-   * that silently stops returning commons.
-   */
-  const scale = anchored > 1 ? 1 / anchored : 1;
-  const used = anchored * scale;
-  const spare = Math.max(0, 1 - used);
+  let total = 0;
+  for (const r of RARITY_ORDER) if (tiers[r]) total += RARITY[r].odds;
 
   const out = {};
+  if (total <= 0) return out;
   for (const r of RARITY_ORDER) {
     if (!tiers[r]) continue;
-    out[r] = RARITY[r].odds !== undefined
-      ? (RARITY[r].odds / 100) * tiers[r].length * scale
-      : (floatWeight > 0 ? (RARITY[r].weight / floatWeight) * spare : 0);
+    out[r] = RARITY[r].odds / total;
   }
   return out;
 }
@@ -1149,9 +1372,8 @@ function tierChances(tiers) {
  * Roll one item from a crate.
  *
  * Picks a RARITY first, then an item uniformly within it. Doing it that way
- * is what makes a per-item anchor exact: one of two Legendaries is
- * `tier / 2`, and the tier is `0.80% x 2`, so each lands on 0.80% whatever
- * else changes around it.
+ * is what makes the advertised ladder exact: the tier's slice is fixed, and
+ * whatever is in it splits that slice evenly.
  */
 export function rollCrate(crate, rnd = Math.random) {
   const tiers = tiersOf(cratePool(crate));

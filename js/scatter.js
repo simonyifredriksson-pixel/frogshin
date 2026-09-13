@@ -24,10 +24,10 @@
  * Bramblewood's canopy.
  */
 
-import * as THREE from '../lib/three.module.js?v=v140';
-import { mulberry32 } from './util.js?v=v140';
-import { SEA } from './regions.js?v=v140';
-import { CHUNK } from './realm.js?v=v140';
+import * as THREE from '../lib/three.module.js?v=v141';
+import { mulberry32 } from './util.js?v=v141';
+import { SEA } from './regions.js?v=v141';
+import { CHUNK } from './realm.js?v=v141';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -433,9 +433,24 @@ export class Scatter {
         r() < 0.5 ? 0x6a6b45 : 0x565c3c);
     });
 
-    // ---- bones, standing out of the ground ----
+    /**
+     * ---- bones, standing out of the ground ----
+     *
+     * DRY GROUND ONLY, and well clear of the waterline.
+     *
+     * The floor used to be SEA + 0.5, which put bones squarely inside the
+     * band reeds grow in (SEA - 3.0 to SEA + 1.6). Half the regions grow
+     * both — Whispermire has thirty-two reeds to two bones, Gravewater
+     * sixteen to nine — so pale grey posts stood among the green stalks at
+     * a slight tilt and read as the reeds having something wrong with them
+     * rather than as bones.
+     *
+     * Three units up is above the reeds entirely. It costs the dead regions
+     * nothing: Boneflats, the Spine and the Ashen Throne are dry and high,
+     * which is why they have bones in the first place.
+     */
     scatter(mix.bone, (x, y, z, r) => {
-      if (y < SEA + 0.5) return;
+      if (y < SEA + 3.0) return;
       const h = 1.4 + r() * 4.4;
       this._emit('post', x, y + h * 0.45, z, 0.22 + r() * 0.2, h, 0.22 + r() * 0.2,
         0xcfc7b4, r() * 3, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5);

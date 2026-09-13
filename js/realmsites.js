@@ -31,11 +31,11 @@
  * extra steps.
  */
 
-import * as THREE from '../lib/three.module.js?v=v140';
-import { mulberry32, clamp } from './util.js?v=v140';
-import { SEA } from './regions.js?v=v140';
-import { buildLandmark } from './landmarks.js?v=v140';
-import { ROADS } from './roads.js?v=v140';
+import * as THREE from '../lib/three.module.js?v=v141';
+import { mulberry32, clamp } from './util.js?v=v141';
+import { SEA } from './regions.js?v=v141';
+import { buildLandmark } from './landmarks.js?v=v141';
+import { ROADS } from './roads.js?v=v141';
 
 /** Shared geometry. Every site draws from these and none of them own any. */
 const G = {
@@ -2159,7 +2159,21 @@ export class Sites {
 
   /** A farm: a barn, fences, and a field of something in rows. */
   _farm(g, spec, rnd, style) {
-    this._house(g, 0, 0, 8, 6, 5.5, 0.2, style, 0.3);
+    /**
+     * ── AND IT STANDS CLEAR OF THE WATER ──────────────────────────────
+     *
+     * This lifted the farmhouse a flat 0.3 off the ground and nothing
+     * else, so a farm that landed on a shore or a fen put its floor half a
+     * unit under the sea: a house standing in open water with its walls
+     * cut by the surface, which is what it looked like.
+     *
+     * `_settlement` and `_hut` have always worked this out; the farm and
+     * the stilt village below did not. Same sum as theirs — the floor ends
+     * up at least SEA + 1.8, which is the line the whole realm's buildings
+     * sit above.
+     */
+    const lift = Math.max(0.3, SEA + 1.8 - g.position.y);
+    this._house(g, 0, 0, 8, 6, 5.5, 0.2, style, lift);
     this._put(g, G.box, style.wall, 5, 3.2, 4, -10, 1.6, 4, 0.3);
     this._put(g, G.cone, style.roofMat, 4.4, 3, 3.6, -10, 4.4, 4, 0.3);
     this._solid(g, 2.5, 1.6, 2.0, -10, 1.6, 4, 'house');
