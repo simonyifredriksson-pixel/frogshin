@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v135';
+import * as THREE from '../lib/three.module.js?v=v136';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v135';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v135';
-import { Input } from './input.js?v=v135';
-import { Audio } from './audio.js?v=v135';
-import { World } from './world.js?v=v135';
-import { Effects } from './effects.js?v=v135';
-import { Atmosphere } from './atmosphere.js?v=v135';
-import { FollowCamera } from './camera.js?v=v135';
-import { Player } from './player.js?v=v135';
+} from './config.js?v=v136';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v136';
+import { Input } from './input.js?v=v136';
+import { Audio } from './audio.js?v=v136';
+import { World } from './world.js?v=v136';
+import { Effects } from './effects.js?v=v136';
+import { Atmosphere } from './atmosphere.js?v=v136';
+import { FollowCamera } from './camera.js?v=v136';
+import { Player } from './player.js?v=v136';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v135';
+} from './tournament.js?v=v136';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v135';
-import { RemotePlayer } from './remote.js?v=v135';
-import { HUD } from './hud.js?v=v135';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v135';
-import { FrogModel } from './frog.js?v=v135';
-import { DummyField } from './dummy.js?v=v135';
+import { coneHit } from './combat.js?v=v136';
+import { RemotePlayer } from './remote.js?v=v136';
+import { HUD } from './hud.js?v=v136';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v136';
+import { FrogModel } from './frog.js?v=v136';
+import { DummyField } from './dummy.js?v=v136';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v135';
-import { ToadModel } from './npc.js?v=v135';
+} from './rounds.js?v=v136';
+import { ToadModel } from './npc.js?v=v136';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v135';
-import { DungeonRun } from './dungeon.js?v=v135';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v135';
-import { JudgmentRun } from './judgment.js?v=v135';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v135';
-import { COMBO_NAMES } from './ascended.js?v=v135';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v135';
-import { MenuScene } from './menu.js?v=v135';
-import { Economy } from './economy.js?v=v135';
-import { Shop } from './shop.js?v=v135';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v135';
-import { Overworld } from './overworld.js?v=v135';
-import { InventoryScreen } from './inventoryui.js?v=v135';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v135';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v135';
-import { Cine } from './cinema.js?v=v135';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v135';
-import { MEMORIES } from './flashbacks.js?v=v135';
-import { GUARDIANS } from './guardians.js?v=v135';
-import { gearOfTier } from './gear.js?v=v135';
-import { Chat } from './chat.js?v=v135';
+} from './skins.js?v=v136';
+import { DungeonRun } from './dungeon.js?v=v136';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v136';
+import { JudgmentRun } from './judgment.js?v=v136';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v136';
+import { COMBO_NAMES } from './ascended.js?v=v136';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v136';
+import { MenuScene } from './menu.js?v=v136';
+import { Economy } from './economy.js?v=v136';
+import { Shop } from './shop.js?v=v136';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v136';
+import { Overworld } from './overworld.js?v=v136';
+import { InventoryScreen } from './inventoryui.js?v=v136';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v136';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v136';
+import { Cine } from './cinema.js?v=v136';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v136';
+import { MEMORIES } from './flashbacks.js?v=v136';
+import { GUARDIANS } from './guardians.js?v=v136';
+import { gearOfTier } from './gear.js?v=v136';
+import { Chat } from './chat.js?v=v136';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -274,7 +274,20 @@ class Game {
   loadSettings() {
     const defaults = {
       name: pick(NINJA_NAMES),
-      colorIndex: Math.floor(Math.random() * FROG_COLORS.length),
+      /**
+       * EVERYONE STARTS GREEN.
+       *
+       * Index 0 is the frog green the whole game is drawn around — the
+       * menu frog, the icons, the default skin's own body. A random colour
+       * meant a new player's first sight of themselves was a violet or
+       * orange frog that matched nothing else on screen, and that reads as
+       * a mistake rather than as a choice they made.
+       *
+       * It is still only a DEFAULT: the swatches on the home screen change
+       * it, and the choice is saved. Starting somewhere deliberate and
+       * letting people move is better than starting them at random.
+       */
+      colorIndex: 0,
       sensitivity: 1.0,
       invertY: false,
       master: 0.85,
@@ -1885,11 +1898,26 @@ class Game {
     this.pendingMode = null;
     this.sessionMode = 'arena';
 
-    // The arena world is kept between matches so a rematch loads instantly.
-    // That cache was never keyed on the MAP, so picking a different one in
-    // the lobby left the old world standing and the game reopened the map you
-    // had just switched away from — with only a page refresh to clear it.
-    if (this.world && this.world.map && this.world.map.id !== this.mapId) {
+    /**
+     * ═══ THE ARENA WORLD CACHE, KEYED POSITIVELY ═══════════════════════
+     *
+     * The arena world is kept between matches so a rematch loads instantly.
+     * The question this has to answer is "is the thing standing there an
+     * arena World for THIS map", and it used to ask the opposite — it only
+     * dropped a world that had a `map` with the wrong id.
+     *
+     * Every other mode leaves something else in `this.world`: the tutorial,
+     * the realm, heaven and the judgment all park a plain
+     * `{ collision, update }` stub there. A stub has no `map`, so the old
+     * test said "not a different map, keep it" — and the arena then built
+     * itself around the tutorial's collision and handed that stub to
+     * `PickupSystem`, which called `randomGroundPoint` on it and threw.
+     *
+     * That is the crash on entering a match after the tutorial. Asking the
+     * positive question means anything that is not an arena World for this
+     * map is dropped, whatever it is and however it got there.
+     */
+    if (this.world && !(this.world.map && this.world.map.id === this.mapId)) {
       this._dropArenaWorld();
     }
 
@@ -4139,10 +4167,27 @@ class Game {
     // open world commits whatever it is holding before the world stops.
     if (this.overworld) this.overworld.save();
     $('pause').classList.add('show');
+    /**
+     * ═══ YOU DO NOT WALK OUT OF THE FIRST ISLAND ═══════════════════════
+     *
+     * The island is the game's first impression and it is fifteen minutes
+     * long. A LEAVE MATCH button sitting next to RESUME invites a player
+     * who is two stations in to tap out of the one part of the game that
+     * was built to teach them how to play it.
+     *
+     * There is still a way out, and it is the island's own: hold Backspace
+     * to step past a station you are stuck on, or to leave altogether. That
+     * one runs the proper teardown. The pause button never did — see the
+     * `isTutorial` branch in `_quitToMenu` — which is why leaving this way
+     * used to break the next match you joined.
+     */
+    $('btn-quit').classList.toggle('hidden', !!this.isTutorial);
     $('pause-room').textContent = this.isRealm
       ? (this.overworld && this.overworld.region
         ? `The Realm — ${this.overworld.region.name}`
         : 'The Realm')
+      : this.isTutorial
+      ? 'The First Island — hold BACKSPACE to step past or leave'
       : this.isDungeon
       ? (this.dungeon && this.dungeon.checkpoints
         ? 'The Dungeon — checkpoints on'
@@ -4178,6 +4223,22 @@ class Game {
     if (this.isPrologue) {
       this._dropPrologue();
       this.saves.deselect();
+    }
+    /**
+     * ═══ THE ISLAND OWNS ITS OWN SCENE TOO ═════════════════════════════
+     *
+     * This branch did not exist, and its absence is where the game broke.
+     * Quitting the tutorial from the pause menu tore down nothing: the
+     * island stayed built, and `this.world` was left holding the tutorial's
+     * `{ collision, update }` stub. The next arena match then adopted that
+     * stub as its world and threw on the first crate spawn.
+     *
+     * `_leaveTutorial` is the same teardown the island runs when it is
+     * finished or skipped, so there is exactly one way out of here and it
+     * is the one that has always worked.
+     */
+    if (this.isTutorial) {
+      this._leaveTutorial();
     }
     // The judgment arena owns its own scene as well.
     if (this.isJudgment) {
@@ -4591,16 +4652,24 @@ class Game {
     if (this.shop.clearTrial()) this._applySkins();
   }
 
-  /** Free the mouse and show the shop as a lend-everything panel. */
+  /**
+   * Free the mouse and open CUSTOMISE AVATAR as a lend-everything panel.
+   *
+   * It used to open the SHOP, which since the case rework sells cases and
+   * nothing else — so the ring's whole promise, "try every skin", landed on
+   * a storefront with no skins on it. The equip screen is where skins live
+   * now, and abilities have a tab there too, so one screen covers
+   * everything the ring lends.
+   */
   _openTryPanel() {
     this._tryPanelOpen = true;
     this._settingsFromPause = false;
     this.shop.onTrialEquip = () => this._applySkins();
     this.shop.setTryMode(true);
-    this.shop.render();
+    this.shop.openAvatar('frogs');
     this.input.releaseLock();
     $('menu').classList.add('show');
-    this.showPanel('shop');
+    this.showPanel('avatar');
     this.hud.setRingPrompt(false);
   }
 

@@ -51,14 +51,14 @@
  * a gap and the positions are worked out from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v135';
-import { CFG } from './config.js?v=v135';
-import { clamp, mulberry32 } from './util.js?v=v135';
-import { Terrain, CollisionWorld } from './collision.js?v=v135';
-import { Mob } from './mobs.js?v=v135';
-import { addFrog } from './frogbuild.js?v=v135';
-import { Cine } from './cinema.js?v=v135';
-import { Audio } from './audio.js?v=v135';
+import * as THREE from '../lib/three.module.js?v=v136';
+import { CFG } from './config.js?v=v136';
+import { clamp, mulberry32 } from './util.js?v=v136';
+import { Terrain, CollisionWorld } from './collision.js?v=v136';
+import { Mob } from './mobs.js?v=v136';
+import { addFrog } from './frogbuild.js?v=v136';
+import { Cine } from './cinema.js?v=v136';
+import { Audio } from './audio.js?v=v136';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -667,19 +667,48 @@ export class TutorialIsland {
       x += 3.0;
     }
     /**
-     * The wall, HIGHER than the last post you swung off.
+     * ═══ THE CLEFT ═══════════════════════════════════════════════════════
      *
-     * That is what makes it a wall-jump rather than a step: coming off the
-     * last anchor you arrive below its top, so there is nothing to do but
-     * hold into it and press SPACE. Its ledge is four below the top, which
-     * one kick clears.
+     * A slot through a sea stack, and the last thing the island asks for.
+     *
+     * ── what it replaced, and why that did not work ──────────────────────
+     * A single slab of stone standing in open water sixteen units past the
+     * last grapple post, with a ledge on the far side of it. The idea was
+     * sound — arrive below the top, hold into it, press SPACE — but there
+     * was nothing to arrive ON. You came off a swing at speed, crossed
+     * sixteen units of air, and had to strike a two-unit-thick face at the
+     * right height on the way past. Miss and you were in the sea. In
+     * practice the only reliable way over it was to abuse the geometry,
+     * which is exactly what a tutorial must never teach.
+     *
+     * ── what makes this one fair ─────────────────────────────────────────
+     * THREE things, and each is doing a job:
+     *
+     *   · You LAND in it. The cleft has a floor, three units below the post
+     *     you left, so arriving is a drop rather than a target.
+     *   · There are TWO faces, not one. A slot kicks you into the opposite
+     *     wall whichever way you face, so the verb is discoverable by
+     *     flailing — which is how people find wall-jumps.
+     *   · Failing costs NOTHING. A missed kick drops you back on the same
+     *     floor to try again, instead of into the water and back to a
+     *     checkpoint. The lesson can be repeated in two seconds.
+     *
+     * And it is a rock the width of the island, so there is no going round.
      */
-    x += 16;
+    x += GAP.tongue - 4;
     const lastPost = P.runPosts[P.runPosts.length - 1];
-    P.wall = { x: x + 2, y: lastPost.y + 6, hw: 2, ledge: x + 9 };
-    x = P.wall.ledge + 5;
-    P.runRamp = { from: x, y: P.wall.y - 4 };
-    x += 20;
+    const cleftBase = lastPost.y - 3;
+    P.cleft = {
+      x: x + 9,
+      hw: 9,                      // half the stack's thickness along x
+      base: cleftBase,            // the floor you land on
+      top: cleftBase + 7.5,       // the lip you climb out to
+      gap: 3.6,                   // half the slot's width across z
+      rise: 20,                   // how far the stack stands above the floor
+    };
+    x = P.cleft.x + P.cleft.hw;
+    P.runRamp = { from: x + 5, y: P.cleft.top - 3 };
+    x += 26;
     P.holes.push([runFrom - 2, x - 2]);
     run.to = x - 6;
 
@@ -799,8 +828,26 @@ export class TutorialIsland {
         else if (edge < 0.19) col = 0xb7a377;
         else col = [0x4f8f38, 0x5c9c3f, 0x468030, 0x639f45][
           Math.floor(R() * 4)];
-        // A cell's top is y = 0 exactly. Nothing on this island slopes.
-        this.b.box.add(x, -1.4 - R() * 0.3, z, C + 0.4, 2.8, C + 0.4, col);
+        /**
+         * ═══ A CELL'S TOP IS y = 0. EXACTLY. ══════════════════════════
+         *
+         * The comment here always said that; the code did not do it. The
+         * visual box carried `- R() * 0.3` of random sink, so every
+         * twelve-unit cell settled somewhere between 0 and -0.3 while its
+         * COLLIDER stayed at 0 — and that one term is both of the island's
+         * worst bugs at once:
+         *
+         *   · adjacent cells ended at different heights, so the ground
+         *     rendered as a field of ragged plates with their side faces
+         *     showing, which is the "glitching ground" in the screenshots;
+         *   · and you stood on the collider at 0 while the ground you
+         *     could SEE was up to a third of a unit below your feet, which
+         *     is the "noclip" — the frog hovering over its own floor.
+         *
+         * Colour still varies per cell, which is where the texture was
+         * meant to come from. Height does not vary at all.
+         */
+        this.b.box.add(x, -1.4, z, C + 0.4, 2.8, C + 0.4, col);
         this._solid(x, -1.4, z, C * 0.5 + 0.2, 1.4, C * 0.5 + 0.2, 'deck');
         cells++;
       }
@@ -985,12 +1032,7 @@ export class TutorialIsland {
    */
   _posts() {
     for (const p of this.plan.posts) {
-      this.b.rod.add(p.x, p.y * 0.5 - 6, 0, p.hw * 0.5, p.y + 12,
-        p.hw * 0.5, 0x7a6a58);
-      this._solid(p.x, p.y * 0.5 - 6, 0, p.hw * 0.55, (p.y + 12) * 0.5,
-        p.hw * 0.55, 'stone');
-      this.b.box.add(p.x, p.y, 0, p.hw * 2, 1.4, p.hw * 2, 0x8a8172);
-      this._solid(p.x, p.y, 0, p.hw, 0.7, p.hw, 'deck');
+      this._spire(p.x, p.y, p.hw, true);
       /**
        * The anchor, and it is FOUR AND A HALF units of radius.
        *
@@ -1001,8 +1043,6 @@ export class TutorialIsland {
        * makes looking roughly at the light enough.
        */
       this._anchor(p.x, p.y + 3.4, 0, 4.5);
-      this.b.lamp.add(p.x, p.y + 3.4, 0, 1.3, 1.4, 1.3, 0xffd76b);
-      this.b.glow.add(p.x, p.y + 3.4, 0, 2.4, 2.5, 2.4, 0x8fe8ff);
     }
     const L = this.plan.landing;
     this._plat(L.x, L.y, L.hw, 13);
@@ -1121,27 +1161,10 @@ export class TutorialIsland {
     for (const p of P.runPlats) this._plat(p.x, p.y, p.hw, 6);
     this._plat(P.runDash.x, P.runDash.y, P.runDash.hw, 8);
     for (const p of P.runPosts) {
-      this.b.rod.add(p.x, p.y * 0.5 - 4, 0, p.hw * 0.6, p.y + 8, p.hw * 0.6,
-        0x7a6a58);
-      this._solid(p.x, p.y * 0.5 - 4, 0, p.hw * 0.65, (p.y + 8) * 0.5,
-        p.hw * 0.65, 'stone');
+      this._spire(p.x, p.y, p.hw, false);
       this._anchor(p.x, p.y + 2.6, 0, 3.0);
-      this.b.lamp.add(p.x, p.y + 2.6, 0, 1.0, 1.1, 1.0, 0xffd76b);
-      this.b.glow.add(p.x, p.y + 2.6, 0, 1.8, 1.9, 1.8, 0x8fe8ff);
     }
-    /**
-     * The wall, and a ledge on the far side of it.
-     *
-     * The one thing on the island only crossable by kicking off a wall,
-     * which is the last movement verb the game has and the one players most
-     * often never find. Its top is a metre above the ledge, so a straight
-     * jump cannot clear it and a wall-jump can.
-     */
-    const W = this.plan.wall;
-    this.b.box.add(W.x, W.y * 0.5, 0, W.hw * 2, W.y, 26, 0x8a8172);
-    this._solid(W.x, W.y * 0.5, 0, W.hw, W.y * 0.5, 13, 'wall');
-    this.b.box.add(W.x, W.y + 0.5, 0, W.hw * 2 + 1.2, 1.0, 27, 0xc4bfae);
-    this._plat(W.ledge, W.y - 4, 5, 10);
+    this._cleft();
     const R = this.plan.runRamp;
     for (let i = 0; i < 9; i++) {
       const h = R.y * (1 - i / 9);
@@ -1149,6 +1172,202 @@ export class TutorialIsland {
       this._solid(R.from + i * 2.1, h * 0.5, 0, 1.2, (h + 0.6) * 0.5, 9,
         'deck');
     }
+  }
+
+  /**
+   * ═══ A GRAPPLE SPIRE ═══════════════════════════════════════════════════
+   *
+   * The thing you fire your tongue at, and it used to be a brown cylinder
+   * with a pale blue ball floating over it. Two primitives, no context —
+   * so the lagoon read as a physics test with programmer art in it rather
+   * than as somewhere, which is a poor first impression for the station
+   * that teaches the best verb in the game.
+   *
+   * It is now a rock spire standing out of the lagoon: a tapered stack
+   * widening as it goes down into the water, boulders breaking the surface
+   * around its foot, a sea-worn cap, and the anchor light sitting in a
+   * small cairn somebody clearly built up there. The grotto at the base is
+   * the piece that sells it — an arch of rock with water running through
+   * it, so the spire has a shape the sea could plausibly have cut.
+   *
+   * ── the gameplay is UNTOUCHED ────────────────────────────────────────
+   * Same x, same top height, same platform, and the anchor is placed by
+   * the caller at exactly the height it always was. Every number that
+   * decides whether a swing works is where it was; only the rock around
+   * them is new.
+   *
+   * @param big  the lagoon's spires, which are climbed on. The run's are
+   *             swung past and get a slimmer, unlanded version.
+   */
+  _spire(x, y, hw, big) {
+    const base = ISLE.water - 8;
+    const TIERS = big ? 7 : 5;
+
+    /**
+     * A tapered stack rather than one column. Each tier is a little wider
+     * than the one above and offset a little off-axis, on a FIXED walk so
+     * every spire in the lagoon is carved the same way — random offsets
+     * would make two posts teaching the same swing look like two different
+     * pieces of scenery.
+     */
+    for (let i = 0; i < TIERS; i++) {
+      const t = i / (TIERS - 1);            // 0 at the top, 1 at the water
+      const ty = y - 1.2 - t * (y - base - 1);
+      const th = (y - base) / TIERS + 2.2;
+      const w = hw * (0.72 + t * 0.95);
+      const off = Math.sin(i * 2.1) * hw * 0.18;
+      this.b.blob.add(x + off, ty, off * 0.6, w, th, w,
+        i % 2 ? 0x8a8172 : 0x7a7264, i * 0.7);
+    }
+    // One stone collider for the whole spire: the rock is decoration, and
+    // a column of blob colliders would snag a swing on nothing you could
+    // see.
+    this._solid(x, (y + base) * 0.5, 0, hw * 0.8, (y - base) * 0.5, hw * 0.8,
+      'stone');
+
+    /**
+     * THE GROTTO. An arch cut through the foot of the spire at the
+     * waterline, with the sea visible through it.
+     *
+     * Built as two legs and a lintel rather than as a hole, because there
+     * is no hole primitive here — and at this size the difference is not
+     * something you can see from the platform above.
+     */
+    if (big) {
+      const gy = ISLE.water;
+      for (const sd of [-1, 1]) {
+        this.b.blob.add(x, gy + 1.4, sd * (hw * 0.95), hw * 1.15, 5.0,
+          hw * 0.5, 0x6f6a5c, sd * 0.4);
+      }
+      this.b.blob.add(x, gy + 4.4, 0, hw * 1.25, 2.2, hw * 1.9, 0x7a7264, 0.3);
+      // Wet, dark stone inside the arch.
+      this.b.box.add(x, gy + 0.6, 0, hw * 1.6, 1.2, hw * 1.5, 0x4a4740);
+    }
+
+    // Boulders breaking the surface around its foot.
+    for (let i = 0; i < (big ? 9 : 5); i++) {
+      const a = i * 2.399;
+      const r = hw * (1.5 + (i % 3) * 0.55);
+      this.b.blob.add(x + Math.cos(a) * r, ISLE.water - 0.6 + (i % 3) * 0.5,
+        Math.sin(a) * r,
+        2.2 + (i % 4) * 1.3, 2.0 + (i % 3) * 1.1, 2.2 + (i % 5) * 0.9,
+        i % 2 ? 0x8a8172 : 0x6f6a5c, a);
+    }
+
+    /**
+     * The cap, and the cairn the anchor light sits in. A landable stone on
+     * the lagoon spires; on the run's posts it is a perch nobody stands
+     * on, so it is smaller and has no collider at all.
+     */
+    if (big) {
+      this.b.box.add(x, y, 0, hw * 2, 1.4, hw * 2, 0x8a8172);
+      this._solid(x, y, 0, hw, 0.7, hw, 'deck');
+      this.b.box.add(x, y + 0.85, 0, hw * 2.3, 0.4, hw * 2.3, 0xc4bfae);
+      // Three stacked stones under the light.
+      this.b.blob.add(x, y + 1.5, 0, 1.5, 0.9, 1.5, 0x7a7264, 0.4);
+      this.b.blob.add(x, y + 2.3, 0, 1.1, 0.8, 1.1, 0x8a8172, 1.1);
+    } else {
+      this.b.blob.add(x, y + 0.4, 0, hw * 1.1, 1.1, hw * 1.1, 0x8a8172, 0.6);
+    }
+
+    const ly = y + (big ? 3.4 : 2.6);
+    const ls = big ? 1.3 : 1.0;
+    this.b.lamp.add(x, ly, 0, ls, ls + 0.1, ls, 0xffd76b);
+    this.b.glow.add(x, ly, 0, ls * 1.85, ls * 1.9, ls * 1.85, 0x8fe8ff);
+  }
+
+  /**
+   * ═══ THE SEA STACK, AND THE SLOT THROUGH IT ════════════════════════════
+   *
+   * See the note in `_layout` for why this is a cleft and not a wall.
+   *
+   * Built as a rock the width of the island with a gap left down the
+   * middle, rather than as two walls that happen to face each other — so
+   * there is nothing to walk round, nothing to see past, and the slot reads
+   * as the only way through because it is.
+   */
+  _cleft() {
+    const C = this.plan.cleft;
+    const R = this.rnd;
+    const halfW = this._halfAt(C.x) + 10;
+    const floorY = C.base;
+    const topY = floorY + C.rise;
+
+    // ── the two shoulders of rock, out to the shore on each side ──
+    for (const sd of [-1, 1]) {
+      const from = C.gap;
+      const len = halfW - from;
+      const cz = sd * (from + len * 0.5);
+      // Down into the water, so it stands out of the sea rather than
+      // hovering over it.
+      const bottom = ISLE.water - 6;
+      const h = topY - bottom;
+      this.b.box.add(C.x, bottom + h * 0.5, cz, C.hw * 2, h, len, 0x8a8172);
+      this._solid(C.x, bottom + h * 0.5, cz, C.hw, h * 0.5, len * 0.5, 'wall');
+      /**
+       * A weathered cap, and boulders piled along the flanks so the stack
+       * reads as rock rather than as a extruded box. Placed on a fixed
+       * walk rather than at random so both shoulders match.
+       */
+      this.b.box.add(C.x, topY + 0.7, cz, C.hw * 2 + 1.4, 1.4, len, 0xc4bfae);
+      /**
+       * Boulders along the flanks — and WELL clear of the slot.
+       *
+       * A boulder is placed by its centre, so one sitting on the slot's lip
+       * at |z| = 3.6 with a half-width of nine reaches five units PAST the
+       * centre line and fills the channel you are meant to kick up. The
+       * first render of this cleft had exactly that: a rock the size of the
+       * frog standing in the middle of the climb.
+       *
+       * They start twelve units out and are capped at four across, so the
+       * widest one still stops short of the lip.
+       */
+      const bFrom = from + 12;
+      const bLen = Math.max(6, len - 14);
+      for (let i = 0; i < 7; i++) {
+        const t = (i + 0.5) / 7;
+        this.b.blob.add(
+          C.x + (t - 0.5) * C.hw * 2.2,
+          topY - 2 - (i % 3) * 3.5,
+          sd * (bFrom + t * bLen),
+          3.0 + (i % 4) * 1.0, 3.5 + (i % 3) * 1.8, 3.0 + (i % 5) * 0.9,
+          i % 2 ? 0x8a8172 : 0x6f6a5c, t * 3);
+      }
+    }
+
+    /**
+     * ── the floor of the slot ──
+     *
+     * This is the whole fix. You drop onto it from the last swing, and a
+     * missed kick drops you back onto it — so the wall-jump can be tried
+     * over and over at no cost, which is the only way anybody learns one.
+     */
+    this.b.box.add(C.x, floorY - 1.0, 0, C.hw * 2, 2.0, C.gap * 2, 0x9a9182);
+    this._solid(C.x, floorY - 1.0, 0, C.hw, 1.0, C.gap, 'deck');
+
+    /**
+     * The two kick faces, tagged 'wall'.
+     *
+     * Seven and a bit units apart: close enough that `wallJumpOut` (13)
+     * carries you into the opposite face well before the apex, so the
+     * second kick is there waiting whether or not you were aiming for it.
+     */
+    for (const sd of [-1, 1]) {
+      // A band of lighter stone up each face, so the climb has rungs the
+      // eye can count and the slot does not read as a smooth chute.
+      for (let i = 0; i < 4; i++) {
+        this.b.box.add(C.x + (i % 2 ? 2.5 : -2.5), floorY + 1.6 + i * 2.2,
+          sd * (C.gap - 0.25), 5.0, 0.5, 0.4, 0xc4bfae);
+      }
+    }
+
+    // ── the lip you climb out onto, on the far side of the slot ──
+    this._plat(C.x + C.hw - 3, C.top, 4.5, C.gap + 1.5);
+    // And a marker on it, because a ledge inside a dark slot is easy to
+    // miss when you are busy kicking.
+    this.b.lamp.add(C.x + C.hw - 3, C.top + 2.6, 0, 0.9, 1.0, 0.9, 0xffd76b);
+    this.b.glow.add(C.x + C.hw - 3, C.top + 2.6, 0, 1.9, 2.0, 1.9, 0xffd76b);
+    void R;
   }
 
   /**
@@ -1160,25 +1379,67 @@ export class TutorialIsland {
    */
   _plaza() {
     const A = this.plan.plazaAt;
-    for (let i = 0; i < 180; i++) {
-      const a = this.rnd() * Math.PI * 2;
-      const r = Math.sqrt(this.rnd()) * A.r;
-      this.b.box.add(A.x + Math.cos(a) * r, 0.16, Math.sin(a) * r,
-        6, 0.35, 6, this.rnd() < 0.5 ? 0xc4bfae : 0xb4ae9c, this.rnd() * 3);
+    /**
+     * ═══ LAID, NOT SCATTERED ═══════════════════════════════════════════
+     *
+     * A hundred and eighty six-unit slabs were dropped at random angles on
+     * random points of the disc, all of them 0.335 ABOVE the ground and
+     * none of them with a collider. Three things went wrong at once: it
+     * read as rubble rather than as a floor, the slabs z-fought each other
+     * where they overlapped, and the player walked at y = 0 while the
+     * paving they could see was a third of a unit up — the same "noclip"
+     * the island's own floor had.
+     *
+     * Now it is masonry: concentric rings of slabs laid radially, each ring
+     * sized so its stones meet end to end, and the whole floor sitting
+     * three centimetres proud of the ground. Three centimetres is enough to
+     * stop it z-fighting with the cells underneath and far too little to
+     * stand on.
+     */
+    /**
+     * The rings have to OVERLAP, or the plaza is a few stone hoops lying on
+     * grass. Five units apart with slabs six deep leaves a unit of overlap
+     * on every joint, which is what makes it read as one floor.
+     */
+    const RING_STEP = 5.0;
+    for (let ri = 0; ; ri++) {
+      const rad = 4.5 + ri * RING_STEP;
+      if (rad > A.r + 1) break;
+      // Enough stones to close the ring at roughly this width, and an odd
+      // offset per ring so the joints do not line up into spokes.
+      const n = Math.max(8, Math.round((Math.PI * 2 * rad) / 5.2));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + ri * 0.37;
+        const x = A.x + Math.cos(a) * rad, z = Math.sin(a) * rad;
+        // Laid radially: long edge follows the ring.
+        this.b.box.add(x, -0.145, z, 6.0, 0.35, 5.8,
+          (i + ri) % 2 ? 0xc4bfae : 0xb4ae9c, -a);
+      }
     }
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      this.b.box.add(A.x + Math.cos(a) * 15, 0.32, Math.sin(a) * 15,
-        2.4, 0.3, 1.0, 0xd8ad2e, -a);
+    // The centre stone, so the rings have something to start from.
+    this.b.box.add(A.x, -0.145, 0, 9.0, 0.35, 9.0, 0xcfcaba);
+    // Gold inlay, one ring of it, sitting just proud of the paving.
+    for (let i = 0; i < 40; i++) {
+      const a = (i / 40) * Math.PI * 2;
+      this.b.box.add(A.x + Math.cos(a) * 16, -0.09, Math.sin(a) * 16,
+        2.6, 0.3, 1.0, 0xd8ad2e, -a);
     }
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + 0.5;
-      const x = A.x + Math.cos(a) * (A.r - 2), z = Math.sin(a) * (A.r - 2);
-      this.b.rod.add(x, 6, z, 1.4, 12, 1.4, 0xd8cfae);
-      this.b.box.add(x, 12.4, z, 3.4, 1.0, 3.4, 0xe8e2c8);
-      this._solid(x, 6, z, 1.7, 6, 1.7, 'stone');
-      this._anchor(x, 12.6, z, 2.4);
-      this.b.lamp.add(x, 13.4, z, 0.7, 0.8, 0.7, 0xffd76b);
+    /**
+     * Eight columns, and TALL ones — eighteen units rather than twelve,
+     * on a base and under a capital. The plaza is the last room in the
+     * island and it holds a boss twice the height of anything before him;
+     * a ring of waist-high posts around that reads as a picnic.
+     */
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.4;
+      const x = A.x + Math.cos(a) * (A.r - 3), z = Math.sin(a) * (A.r - 3);
+      this.b.box.add(x, 0.7, z, 5.0, 1.4, 5.0, 0xd0c8ab);      // base
+      this.b.rod.add(x, 9.6, z, 1.9, 18, 1.9, 0xd8cfae);       // shaft
+      this.b.box.add(x, 18.9, z, 4.6, 1.4, 4.6, 0xe8e2c8);     // capital
+      this._solid(x, 9.6, z, 2.3, 9.6, 2.3, 'stone');
+      this._anchor(x, 19.6, z, 2.4);
+      this.b.lamp.add(x, 20.1, z, 0.8, 0.9, 0.8, 0xffd76b);
+      this.b.glow.add(x, 20.1, z, 1.7, 1.8, 1.7, 0xffd76b);
     }
     /**
      * THE GATE — deliberately the same shape as the arch on the beach. You
@@ -1231,12 +1492,32 @@ export class TutorialIsland {
     }
   }
 
+  /** Half the island's width at this x, on the stadium outline. */
+  _halfAt(x) {
+    const dx = Math.max(0, Math.abs(x) - ISLE.spine);
+    return Math.sqrt(Math.max(0, ISLE.half * ISLE.half - dx * dx));
+  }
+
   /**
-   * ONE DOOR.
+   * ═══ ONE GATE, AND THE WALL IT SITS IN ═════════════════════════════════
    *
-   * Its own group so it can be moved, and its own collider so the collider
-   * goes off in the same breath. Eleven units of stone across the path with
-   * a gold band on it; it sinks into the ground when its station is cleared.
+   * A door is only a door if there is a wall either side of it.
+   *
+   * This used to be a single slab twenty-six units across, standing alone
+   * in the middle of an island TWO HUNDRED units wide. So every station on
+   * the island could be skipped by strolling round the end of its door —
+   * not by exploiting anything, just by walking. The course taught nothing
+   * to anyone who wandered.
+   *
+   * Now the gate is a rampart from one shore to the other with a gap in the
+   * middle, and the leaf fills the gap. Sixteen units tall, which is above
+   * a frog flip off the ground and has nothing on it to grapple to: the
+   * lamps sit on the JAMBS, inside the doorway, so a tongue fired at the
+   * light lands you in front of the gate rather than on top of it.
+   *
+   * Only the leaf sinks when the station is cleared. The rampart stays,
+   * which is also what stops a cleared station being re-entered backwards
+   * from the far side and re-arming itself.
    */
   _buildDoor(id, x) {
     const g = new THREE.Group();
@@ -1253,16 +1534,38 @@ export class TutorialIsland {
       m.receiveShadow = true;
       g.add(m);
     };
-    put(3.0, 11, 26, 5.5, 0x9a9182);
-    put(3.4, 1.2, 26, 10.6, 0xd8ad2e);
+    // The leaf, as tall as the wall it fills — a short leaf leaves a slot
+    // over the door that a frog flip goes straight through.
+    put(3.0, 16, 26, 8.0, 0x9a9182);
+    put(3.4, 1.2, 26, 15.2, 0xd8ad2e);
     put(3.4, 1.2, 26, 1.6, 0xa89a80);
-    // The jambs stay up. Only the leaf sinks.
+
+    // The jambs. They stay up; only the leaf sinks.
     for (const sd of [-1, 1]) {
-      this.b.box.add(x, 7, sd * 14.5, 4.0, 14, 4.0, 0xd8cfae);
-      this._solid(x, 7, sd * 14.5, 2.2, 7, 2.2, 'stone');
-      this.b.lamp.add(x, 14.6, sd * 14.5, 0.8, 0.9, 0.8, 0xffd76b);
+      this.b.box.add(x, 8.5, sd * 14.5, 4.0, 17, 4.0, 0xd8cfae);
+      this._solid(x, 8.5, sd * 14.5, 2.2, 8.5, 2.2, 'stone');
+      this.b.lamp.add(x, 17.6, sd * 14.5, 0.8, 0.9, 0.8, 0xffd76b);
     }
-    const box = this._solid(x, 5.5, 0, 1.6, 5.5, 13, 'wall');
+
+    /**
+     * The rampart, shore to shore. `+8` overshoots the rim so the wall
+     * meets the water rather than stopping a few units short of it and
+     * leaving a gap at each end — which is the same skip in miniature.
+     */
+    const halfW = this._halfAt(x) + 8;
+    const from = 16.5;                       // clear of the jambs
+    if (halfW > from + 2) {
+      const len = halfW - from;
+      for (const sd of [-1, 1]) {
+        const cz = sd * (from + len * 0.5);
+        this.b.box.add(x, 8, cz, 3.4, 16, len, 0x9a9182);
+        // A capping course, so it reads as built rather than extruded.
+        this.b.box.add(x, 16.4, cz, 4.2, 1.3, len, 0xd0c8ab);
+        this._solid(x, 8, cz, 1.7, 8, len * 0.5, 'wall');
+      }
+    }
+
+    const box = this._solid(x, 8.0, 0, 1.6, 8.0, 13, 'wall');
     return { id, x, group: g, box, y: 0, open: false };
   }
 
@@ -1584,7 +1887,14 @@ export class TutorialIsland {
    */
   _spawnRing() {
     const A = this.plan.ringAt;
-    const m = this._mob('stonewarden', 0, A.x, A.z);
+    /**
+     * Half again the size of anything the island has shown you so far.
+     * This is the first thing that ever swings at you, and a training
+     * partner you have to look UP at is a great deal more memorable than
+     * one you look down on. It cannot hurt you past its three scripted
+     * blows and it cannot be killed, so size costs nothing here.
+     */
+    const m = this._mob('stonewarden', 0, A.x, A.z, 1.5);
     m.maxHealth = 1e9;
     m.health = 1e9;
     m.unkillable = true;
@@ -1626,7 +1936,7 @@ export class TutorialIsland {
   }
 
   /**
-   * THE WARDEN.
+   * ═══ THE WARDEN ════════════════════════════════════════════════════════
    *
    * A City Husk at TIER ONE — three times the health of anything else on
    * the island and eleven damage a blow, which is nine blows from a full
@@ -1636,13 +1946,38 @@ export class TutorialIsland {
    * Still telegraphed, still leashed to the plaza, still impossible to lose
    * to: going down puts you back on the plaza with a full bar and him back
    * at full health.
+   *
+   *
+   * THREE TIMES THE SIZE, AND NOT ONE POINT HARDER.
+   *
+   * He was built as an ordinary City Husk — the same 0.74-scale creature
+   * the island had already thrown at you twice — standing in the middle of
+   * a plaza the size of a village green. The game called him a boss and put
+   * his name on a bar across the top of the screen, and what walked out was
+   * the thing you had just killed two of.
+   *
+   * So he is 2.2 instead of 0.74. Everything that decides how hard he is to
+   * FIGHT is untouched: the same 180 health, the same tier-1 damage, the
+   * same 1.6x stretched wind-up that gives a first-timer long enough to see
+   * the red ring and put a guard up. His reach scales with him because a
+   * blade that passes through you without landing is a bug, not a
+   * difficulty setting — see `Mob.reach`.
+   *
+   * A first boss has to LOOK like the end of something. That is a
+   * silhouette problem, and silhouette is free.
    */
   _spawnWarden() {
     const A = this.plan.plazaAt;
-    const m = this._mob('cityhusk', 1, A.x + 12, 0);
+    const m = this._mob('cityhusk', 1, A.x + 16, 0, 2.2);
     m.maxHealth = 180;
     m.health = 180;
     m.windScale = 1.6;
+    /**
+     * And he does not run you down. At 2.2 scale his stride covers ground
+     * far faster than the model suggests, and a first boss that outruns a
+     * sprinting player teaches nothing except that you cannot get away.
+     */
+    m.speed *= 0.72;
     if (this.hud) {
       this.hud.showBossBar('THE WARDEN OF THE FIRST ISLAND', 1,
         'He was here before the island had a name.');
@@ -1658,10 +1993,10 @@ export class TutorialIsland {
    * so `applyHit` can never find its target. That was half of the reason
    * everything on this island was immune to the sword.
    */
-  _mob(kind, tier, lx, lz) {
+  _mob(kind, tier, lx, lz, scale) {
     const m = new Mob(kind, tier,
       { x: this.at.x + lx, y: this.at.y, z: this.at.z + lz },
-      this.scene, this.effects, () => this.groundAt());
+      this.scene, this.effects, () => this.groundAt(), scale);
     m.id = `isle-mob-${this.mobs.length}`;
     this.mobs.push(m);
     return m;
@@ -1834,8 +2169,16 @@ export class TutorialIsland {
     }
     // The doors sink, and stay down.
     for (const d of this.doors) {
-      if (!d.open || d.y <= -11.4) continue;
-      d.y = Math.max(-11.6, d.y - dt * 7);
+      /**
+       * Far enough down to actually clear the doorway.
+       *
+       * The leaf is sixteen units tall now rather than eleven, and the old
+       * stop at -11.6 would have left four units of stone standing across
+       * the gap — a door that opened into a hurdle. It sinks a shade past
+       * its own height so no gold band peeps out of the floor.
+       */
+      if (!d.open || d.y <= -16.6) continue;
+      d.y = Math.max(-16.8, d.y - dt * 9);
       d.group.position.y = d.y;
     }
     for (const t of this.straw) {

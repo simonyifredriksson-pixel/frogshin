@@ -19,10 +19,10 @@
  * holds it for the wind-up, and only then swings. They are quick, not unfair.
  */
 
-import * as THREE from '../lib/three.module.js?v=v135';
-import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v135';
-import { buildGuardian } from './guardians.js?v=v135';
-import { rollLoot } from './gear.js?v=v135';
+import * as THREE from '../lib/three.module.js?v=v136';
+import { damp, dampAngle, clamp, mulberry32 } from './util.js?v=v136';
+import { buildGuardian } from './guardians.js?v=v136';
+import { rollLoot } from './gear.js?v=v136';
 
 const _to = new THREE.Vector3();
 const _at = new THREE.Vector3();
@@ -156,8 +156,9 @@ export class Mob {
    * @param tier    0-5, from the camp; scales health, damage and reward
    * @param home    {x, y, z} it wanders around and returns to
    * @param groundAt (x, z) => y, so it walks the terrain instead of a plane
+   * @param scale    optional size override, for a mob standing in as a boss
    */
-  constructor(kind, tier, home, scene, effects, groundAt) {
+  constructor(kind, tier, home, scene, effects, groundAt, scale) {
     const K = MOB_KINDS[kind] || MOB_KINDS.lurker;
     this.kind = kind;
     this.K = K;
@@ -166,14 +167,32 @@ export class Mob {
     this.effects = effects;
     this.groundAt = groundAt;
 
+    /**
+     * ═══ SIZE IS PER MOB, NOT PER KIND ═════════════════════════════════
+     *
+     * `this.K` is a REFERENCE into the shared `MOB_KINDS` table, so writing
+     * `m.K.scale` to make one creature big would resize every City Husk in
+     * the game, in every region, for the rest of the session.
+     *
+     * This is the field everything reads instead — the rig, the hitbox and
+     * the hit sparks — so a caller can hand one mob a different size and
+     * nothing else in the world notices. The first island's Warden uses it
+     * to stand three times the height of the things it taught you on.
+     */
+    this.scale = scale || K.scale;
     this.maxHealth = Math.round(34 + tier * 26);
     this.health = this.maxHealth;
     this.damage = Math.round(7 + tier * 4.5);
     this.speed = K.speed;
-    this.reach = K.reach;
+    /**
+     * Reach grows with the body. A mob scaled up without this swings a
+     * blade that visibly passes a foot through you and does nothing, which
+     * is the same bug the juggernaut's `CFG.juggernaut.reach` exists for.
+     */
+    this.reach = K.reach * (this.scale / K.scale);
 
     this.rig = buildGuardian(K.rig);
-    this.rig.root.scale.setScalar(K.scale);
+    this.rig.root.scale.setScalar(this.scale);
     this.hovers = this.rig.hover;
 
     this.home = new THREE.Vector3(home.x, home.y, home.z);
@@ -201,7 +220,7 @@ export class Mob {
 
   /** The shape the player's katana and kunai test against. */
   target(onDead) {
-    const s = this.K.scale;
+    const s = this.scale;
     return {
       id: this.id, pos: this.pos, dead: !this.alive, isDummy: false,
       hitbox: {
@@ -223,7 +242,7 @@ export class Mob {
       this.state = STATE.CHASE;
       this.timer = 0;
     }
-    _at.set(this.pos.x, this.pos.y + 1.6 * this.K.scale, this.pos.z);
+    _at.set(this.pos.x, this.pos.y + 1.6 * this.scale, this.pos.z);
     this.effects.hitBurst(_at, { x: 0, y: 0, z: 1 }, amount > 30);
     if (this.health <= 0) {
       this.state = STATE.DEAD;

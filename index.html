@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v135" />
+<link rel="stylesheet" href="css/style.css?v=v136" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -271,6 +271,10 @@
           <button class="av-tab active" data-kind="frogs">PLAYER SKINS</button>
           <button class="av-tab" data-kind="swords">SWORD SKINS</button>
           <button class="av-tab" data-kind="kunai">KUNAI SKINS</button>
+          <!-- Abilities are worn, not bought, so they belong on this screen
+               with everything else you carry. The shop still SELLS them; it
+               is the same split the note above describes. -->
+          <button class="av-tab" data-kind="abilities">ABILITIES</button>
         </div>
 
         <div id="avatar-status" class="status"></div>
@@ -1431,6 +1435,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v135"></script>
+<script type="module" src="js/main.js?v=v136"></script>
 </body>
 </html>

@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v135';
-import { Audio } from './audio.js?v=v135';
-import { PX } from './icons.js?v=v135';
-import { CFG } from './config.js?v=v135';
+} from './skins.js?v=v136';
+import { Audio } from './audio.js?v=v136';
+import { PX } from './icons.js?v=v136';
+import { CFG } from './config.js?v=v136';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -722,6 +722,15 @@ export class Shop {
     if (!body) return;
     body.textContent = '';
 
+    /**
+     * Abilities are part of the loadout, so they are worn here.
+     *
+     * The very same cards the shop uses: one renderer means the equip
+     * button, the two-slot cap and the practice ring's lend-everything mode
+     * cannot behave differently depending on which screen you opened.
+     */
+    if (kind === 'abilities') { this._renderAbilities(body); return; }
+
     const items = CATALOG[kind] || [];
     const groupOf = (s) => (s.reward ? 'awards' : setOf(s));
     const order = [];
@@ -1083,10 +1092,16 @@ export class Shop {
       const on = this._abilityOn(a.id);
       const card = document.createElement('div');
       card.className = 'ability-card' + (on ? ' equipped' : '');
+      /**
+       * LASTS only when it does. Tongue Trap and Lightning Step resolve in
+       * well under a second, so they have no `duration` at all — and the
+       * card printed "LASTS undefineds" for both of them.
+       */
+      const lasts = a.duration ? `<span>LASTS ${a.duration}s</span>` : '';
       card.innerHTML =
         `<div class="ability-art">${a.art}</div>`
         + `<div class="ability-info"><h3>${a.name}</h3><p>${a.blurb}</p>`
-        + `<div class="ability-stats"><span>LASTS ${a.duration}s</span>`
+        + `<div class="ability-stats">${lasts}`
         + `<span>COOLDOWN ${a.cooldown}s</span></div></div>`;
       const btn = document.createElement('button');
       if (owned) {
@@ -1107,7 +1122,7 @@ export class Shop {
           Audio.respawn({ x: 0, y: 0, z: 0 });
           this.status(`${a.name} unlocked and equipped to your hotbar.`);
           this.onChange();
-          this.render();
+          this.refresh();
         };
       }
       card.appendChild(btn);
@@ -1149,7 +1164,10 @@ export class Shop {
       : `${a.name} unequipped.`);
     if (this.tryMode && this.onTrialEquip) this.onTrialEquip();
     else this.onChange();
-    this.render();
+    // `refresh`, not `render`: these cards are on the equip screen too now,
+    // and `render` would redraw the shop behind whichever one you are
+    // actually looking at, leaving the button you just clicked unchanged.
+    this.refresh();
   }
 
   // ---------------------------------------------------------- crate opening
