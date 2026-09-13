@@ -40,8 +40,8 @@
  * costs the player nothing to find out.
  */
 
-import { gearOfTier, GEAR_BY_ID } from './gear.js?v=v136';
-import { mulberry32 } from './util.js?v=v136';
+import { gearOfTier, GEAR_BY_ID } from './gear.js?v=v137';
+import { mulberry32 } from './util.js?v=v137';
 
 /** How many blades a blade-seller sells at once. */
 export const KUNAI_LOT = 5;

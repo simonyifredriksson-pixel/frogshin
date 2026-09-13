@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v136';
+import * as THREE from '../lib/three.module.js?v=v137';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v136';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v136';
-import { Input } from './input.js?v=v136';
-import { Audio } from './audio.js?v=v136';
-import { World } from './world.js?v=v136';
-import { Effects } from './effects.js?v=v136';
-import { Atmosphere } from './atmosphere.js?v=v136';
-import { FollowCamera } from './camera.js?v=v136';
-import { Player } from './player.js?v=v136';
+} from './config.js?v=v137';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v137';
+import { Input } from './input.js?v=v137';
+import { Audio } from './audio.js?v=v137';
+import { World } from './world.js?v=v137';
+import { Effects } from './effects.js?v=v137';
+import { Atmosphere } from './atmosphere.js?v=v137';
+import { FollowCamera } from './camera.js?v=v137';
+import { Player } from './player.js?v=v137';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v136';
+} from './tournament.js?v=v137';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v136';
-import { RemotePlayer } from './remote.js?v=v136';
-import { HUD } from './hud.js?v=v136';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v136';
-import { FrogModel } from './frog.js?v=v136';
-import { DummyField } from './dummy.js?v=v136';
+import { coneHit } from './combat.js?v=v137';
+import { RemotePlayer } from './remote.js?v=v137';
+import { HUD } from './hud.js?v=v137';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v137';
+import { FrogModel } from './frog.js?v=v137';
+import { DummyField } from './dummy.js?v=v137';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v136';
-import { ToadModel } from './npc.js?v=v136';
+} from './rounds.js?v=v137';
+import { ToadModel } from './npc.js?v=v137';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v136';
-import { DungeonRun } from './dungeon.js?v=v136';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v136';
-import { JudgmentRun } from './judgment.js?v=v136';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v136';
-import { COMBO_NAMES } from './ascended.js?v=v136';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v136';
-import { MenuScene } from './menu.js?v=v136';
-import { Economy } from './economy.js?v=v136';
-import { Shop } from './shop.js?v=v136';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v136';
-import { Overworld } from './overworld.js?v=v136';
-import { InventoryScreen } from './inventoryui.js?v=v136';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v136';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v136';
-import { Cine } from './cinema.js?v=v136';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v136';
-import { MEMORIES } from './flashbacks.js?v=v136';
-import { GUARDIANS } from './guardians.js?v=v136';
-import { gearOfTier } from './gear.js?v=v136';
-import { Chat } from './chat.js?v=v136';
+} from './skins.js?v=v137';
+import { DungeonRun } from './dungeon.js?v=v137';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v137';
+import { JudgmentRun } from './judgment.js?v=v137';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v137';
+import { COMBO_NAMES } from './ascended.js?v=v137';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v137';
+import { MenuScene } from './menu.js?v=v137';
+import { Economy } from './economy.js?v=v137';
+import { Shop } from './shop.js?v=v137';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v137';
+import { Overworld } from './overworld.js?v=v137';
+import { InventoryScreen } from './inventoryui.js?v=v137';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v137';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v137';
+import { Cine } from './cinema.js?v=v137';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v137';
+import { MEMORIES } from './flashbacks.js?v=v137';
+import { GUARDIANS } from './guardians.js?v=v137';
+import { gearOfTier } from './gear.js?v=v137';
+import { Chat } from './chat.js?v=v137';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -3201,8 +3201,17 @@ class Game {
    * decided they do not need it, and asking them again next time they open
    * the game would be the game arguing with them.
    *
-   * Then straight to the save files, because that is what the player came
-   * for and the island was the thing in the way.
+   * ── AND IT ENDS ON THE MAIN MENU ──────────────────────────────────────
+   *
+   * It used to drop straight onto the save-file picker, which is the door
+   * to the Croaklands — so finishing the island handed you a decision you
+   * had not asked to make, about a mode you had not chosen, seconds after
+   * a boss fight.
+   *
+   * The island teaches you to play. What it has earned you is the whole
+   * game, not one corner of it, and the menu is where all of it is: the
+   * arena, the dungeon, the Croaklands, the shop you just earned seven
+   * hundred and fifty froglets for. Landing there lets the player pick.
    */
   _tutorialDone(why) {
     if (this._tutorialEnding) return;
@@ -3218,10 +3227,12 @@ class Game {
       this._tutorialEnding = false;
       this._leaveTutorial();
       this.hud.setFade(0, 0.6);
-      this._showSaves();
+      // `_leaveTutorial` already shows the menu; this puts it on the front
+      // page rather than wherever it happened to be left.
+      this.showPanel('home');
       this.hud.toast(why === 'skipped'
         ? 'The island is on the main menu whenever you want it.'
-        : 'Pick a file. The Croaklands are waiting.', 8);
+        : 'That is the island done. Everything is open — take your pick.', 8);
     }, 1100);
   }
 

@@ -1,16 +1,16 @@
 /**
  * The ninja frog character.
  *
- * Everything is built procedurally out of primitives — no external model
- * files — and animated by a small hand-written procedural rig. The rig is
+ * Everything is built procedurally out of primitives â€” no external model
+ * files â€” and animated by a small hand-written procedural rig. The rig is
  * driven purely from gameplay state (speed, grounded, dash timer, attack
  * timer, ...) which means the exact same code animates the local player and
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v136';
-import { CFG } from './config.js?v=v136';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v136';
+import * as THREE from '../lib/three.module.js?v=v137';
+import { CFG } from './config.js?v=v137';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v137';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -23,7 +23,7 @@ const EYE_WHITE = 0xfefbe8;
  *
  * A cylinder is a prism: its flat faces lie at cos(PI/sides) of its nominal
  * radius, so a coarse one is much narrower between its corners than it looks.
- * The gi was an 8-sided cylinder — faces at 0.92 of its radius — and that is
+ * The gi was an 8-sided cylinder â€” faces at 0.92 of its radius â€” and that is
  * what let the body push out through the shirt. Rounder means the cloth only
  * has to be a little bigger than the frog rather than a lot.
  */
@@ -33,7 +33,7 @@ const WRAP_SIDES = 24;
  * Radius of a shut eyelid.
  *
  * The lid sits in the middle of the eyeball and swells to cover it, so this
- * is the radius that just swallows the white, the pupil and the highlight —
+ * is the radius that just swallows the white, the pupil and the highlight â€”
  * the highlight's far edge is the furthest, at 0.209.
  */
 const LID_SHUT = 0.216;
@@ -65,7 +65,7 @@ const STANCE = {
    *
    * MEASURED off the rig, not derived. Bending the knees shortens a leg's
    * reach to the ground and the body has to come down by exactly that much or
-   * the frog floats — but the reach depends on the ankle angle and the LENGTH
+   * the frog floats â€” but the reach depends on the ankle angle and the LENGTH
    * OF THE FOOT as much as on the knee, and a hip-and-knee formula gets it
    * wrong by more than the whole crouch. Retune the angles above and this has
    * to be re-measured with them; the test asserts the soles land where the
@@ -85,12 +85,12 @@ const TOR = [0.52, 0.46, 0.46];
 const TOR_Y = 0.62;
 
 /**
- * The gi band — how tall it is at rest, and where it is centred.
+ * The gi band â€” how tall it is at rest, and where it is centred.
  *
  * The two move together so the TOP stays exactly where it was, at 0.77: the
  * shirt was only ever short at the BOTTOM, where it stopped a hair under the
  * obi and left the whole lower back bare. Raising the height and dropping the
- * centre by half of it lengthens the hem and touches nothing else — the croak
+ * centre by half of it lengthens the hem and touches nothing else â€” the croak
  * that swells the gi still tops out at the same 0.8975 it always did.
  */
 const GI_H = 0.40, GI_Y = 0.57;
@@ -99,7 +99,7 @@ const GI_H = 0.40, GI_Y = 0.57;
  * The gi's lower panel: the shirt carried on down the flanks and the back.
  *
  * The gi proper is a cylinder, so it can only end in a flat rim, and simply
- * lengthening it further would barrel the frog out at the hips — the torso
+ * lengthening it further would barrel the frog out at the hips â€” the torso
  * has drawn in from 0.52 to 0.34 by the time it reaches the legs, while a
  * cylinder stays 0.53 the whole way down. This panel is instead a band of the
  * torso's OWN ellipsoid, a fiftieth proud of it, so it adds cloth without
@@ -108,7 +108,7 @@ const GI_H = 0.40, GI_Y = 0.57;
  * It ends at 0.27 because that is where the haunches take over and there is
  * nothing left to cover but leg. At the FRONT the belly stands further out
  * than the torso at every height in the band, so the panel is hidden there
- * and the pale belly still reads — the cloth appears at the flanks and runs
+ * and the pale belly still reads â€” the cloth appears at the flanks and runs
  * unbroken around the back, which is the line it ends on.
  *
  * It hangs off the body rather than the girth group: it wraps the hips, which
@@ -120,7 +120,7 @@ const SKIRT_TOP = 0.42, SKIRT_BOT = 0.27;
 const skirtTheta = (y) =>
   Math.acos(clamp((y - TOR_Y) / (TOR[1] * SKIRT_FIT), -1, 1));
 
-/** Shared geometries — every frog reuses these, so memory stays flat. */
+/** Shared geometries â€” every frog reuses these, so memory stays flat. */
 const G = {
   /** Cylinder for clothing that has to enclose a limb or the torso. */
   wrap: new THREE.CylinderGeometry(1, 1, 1, WRAP_SIDES),
@@ -129,7 +129,7 @@ const G = {
    *
    * A flat box cannot do this job. The mask is a curved dome, so a bar wide
    * enough to be a frog's mouth is 0.08 further forward at its centre than at
-   * its ends — push it out until the middle shows and the corners hang off
+   * its ends â€” push it out until the middle shows and the corners hang off
    * the face; leave it flush and the whole thing is swallowed, which is what
    * had happened. A band of the mask's own sphere follows the curve exactly.
    */
@@ -141,11 +141,31 @@ const G = {
   lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
   capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
+  /**
+   * â•â•â• CARVED, NOT BLOCKED OUT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   *
+   * The smooth pair, and they exist for the Earth Shell statue.
+   *
+   * The frog rig is deliberately chunky: `lowSphere` is eight segments by
+   * six, which is the right look for a pixel-art ninja frog and cheap
+   * enough to draw one per player per frame. A STONE CARVING is the
+   * opposite brief â€” it should look worked and worn, and at eight segments
+   * its head was visibly a die.
+   *
+   * They are separate rather than an upgrade to `lowSphere` because that
+   * one is used about forty times per frog, by every frog on the map, and
+   * quadrupling its triangle count to improve an effect that appears for
+   * four seconds at a time would be a poor trade. The statue is built once
+   * per frog that ever raises it â€” see `_buildShell` â€” so it can afford
+   * this.
+   */
+  smoothSphere: new THREE.SphereGeometry(1, 22, 16),
+  smoothCapsule: new THREE.CapsuleGeometry(1, 1, 8, 18),
   cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
   cone: new THREE.ConeGeometry(1, 1, 7),
   torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
   /**
-   * A PARTIAL ring — a crescent, not a circle.
+   * A PARTIAL ring â€” a crescent, not a circle.
    *
    * The eclipse emblem is a dark disc with a thin arc of light around most
    * of it, and the gap is the whole read: a complete ring is a badge, an
@@ -154,7 +174,7 @@ const G = {
    * tube is a doughnut.
    *
    * Lies in the XY plane like every TorusGeometry, so it faces +Z with no
-   * rotation — which is exactly where the chest is.
+   * rotation â€” which is exactly where the chest is.
    */
   arc: new THREE.TorusGeometry(1, 0.075, 5, 22, Math.PI * 1.42),
 };
@@ -176,7 +196,7 @@ function mesh(geo, mat, sx, sy, sz, px, py, pz, rx, ry, rz) {
  * Build a katana.
  *
  * Shared by the player frogs and the juggernaut toad so there is exactly one
- * katana in the game — the juggernaut's is the same weapon scaled up, which
+ * katana in the game â€” the juggernaut's is the same weapon scaled up, which
  * is the point: it should read as the familiar blade, only enormous.
  *
  * Modelled along +Y with the grip below the origin: a round tsuba, a habaki
@@ -243,16 +263,16 @@ export function buildKatana(m, fx) {
       k.add(mesh(G.cone, m.edge, 0.05, 0.14, 0.06, 0, tipY - 0.04, 0));
       break;
     case 'light':
-      // Not steel at all — a bar of light, like the god's.
+      // Not steel at all â€” a bar of light, like the god's.
       blade.scale.set(0.10, 1.42 * L, 0.30);
       k.add(mesh(G.box, m.edge, 0.14, 1.36 * L, 0.16, 0, 0.80 * L, 0));
       k.add(mesh(G.cone, m.edge, 0.12, 0.34, 0.30, 0, tipY + 0.06, 0));
       break;
     /**
-     * ═══ THE THREE THAT ARE NOT SWORDS ══════════════════════════════════
+     * â•â•â• THE THREE THAT ARE NOT SWORDS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      *
      * A spear, an axe and a maul, added for the WEAPONS table in
-     * js/weapons.js — the gear list has four polearms, two mauls and two
+     * js/weapons.js â€” the gear list has four polearms, two mauls and two
      * axes in it and every one of them was being drawn as a katana.
      *
      * All three are built the same way and it is the one thing that makes
@@ -286,8 +306,8 @@ export function buildKatana(m, fx) {
        * The bit: thick and narrow where it is socketed onto the haft, thinning
        * and FLARING out to a tall edge.
        *
-       * It must flare the whole way. It used to be waisted — a 0.52 shoulder,
-       * a 0.30 middle and a 0.58 edge — and a cutting edge standing that far
+       * It must flare the whole way. It used to be waisted â€” a 0.52 shoulder,
+       * a 0.30 middle and a 0.58 edge â€” and a cutting edge standing that far
        * proud of the piece behind it reads as a tab with a notch bitten out
        * behind it, which is a hatchet that has hit something it should not
        * have. Each step is thinner in x, deeper in z and taller in y than the
@@ -304,7 +324,7 @@ export function buildKatana(m, fx) {
     }
     case 'hammer': {
       /**
-       * A haft and a block, with no edge anywhere on it — and the block is
+       * A haft and a block, with no edge anywhere on it â€” and the block is
        * deliberately enormous. See the note on the axe: the whole reading of
        * a maul is that the far end of it is much heavier than the near end.
        */
@@ -330,7 +350,7 @@ export function buildKatana(m, fx) {
   }
   k.add(blade);
 
-  // A second blade out of the pommel — the Ascended's double-ended weapon.
+  // A second blade out of the pommel â€” the Ascended's double-ended weapon.
   // Mirrored below the grip so the whole thing reads as one bar of light
   // through his fist rather than two swords.
   if (F.doubled) {
@@ -357,8 +377,8 @@ export function buildKatana(m, fx) {
   /**
    * FRAGMENTS ORBITING THE BLADE.
    *
-   * On exactly one sword in the game — the Astral Sovereign, the only Mythic
-   * — so that seeing it means something. Handed out on the group as
+   * On exactly one sword in the game â€” the Astral Sovereign, the only Mythic
+   * â€” so that seeing it means something. Handed out on the group as
    * `userData.shards` and driven by `FrogModel.update`, because the pivot is
    * re-posed every frame by the swing code and anything animating itself
    * inside it would fight that.
@@ -448,7 +468,7 @@ export class FrogModel {
     const skin = new THREE.Color(useCustomFrog ? fs.skin : color);
     const skinDark = skin.clone().multiplyScalar(0.72);
 
-    // `fx` is what makes a skin more than a recolour — glowing hide, inlay,
+    // `fx` is what makes a skin more than a recolour â€” glowing hide, inlay,
     // horns, a halo. Read once here and used by the builders below.
     const ffx = (useCustomFrog && fs.fx) || {};
     const sfx = (ss && ss.fx) || {};
@@ -473,7 +493,7 @@ export class FrogModel {
       eye: new THREE.MeshBasicMaterial({ color: EYE_WHITE }),
       pupil: new THREE.MeshBasicMaterial({ color: 0x101014 }),
       shine: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      // A glowing blade is emissive-lit rather than shaded — it is the light
+      // A glowing blade is emissive-lit rather than shaded â€” it is the light
       // source, not a thing the world lights.
       steel: sfx.glow
         ? new THREE.MeshBasicMaterial({ color: ss.blade })
@@ -522,11 +542,11 @@ export class FrogModel {
       });
     }
     /**
-     * ── the Swampforged and Celestial sets ────────────────────────────
+     * â”€â”€ the Swampforged and Celestial sets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Armour, moss, a hood, a shield, specks and orbiting fragments. The two
      * new crate sets describe almost every skin in them as wearing ARMOUR,
-     * and there was no way to say that — a crate that sells you "heavy
+     * and there was no way to say that â€” a crate that sells you "heavy
      * ancient armour covered in moss" and hands you a differently tinted
      * naked frog is the exact failure the `fx` system exists to prevent.
      *
@@ -557,7 +577,7 @@ export class FrogModel {
      * `embers` was DEAD. Frogath's hide and the Ascended's have declared it
      * since they were written and no builder has ever read it, so two of the
      * three rarest skins in the game were quietly missing an effect their
-     * own data asks for. Sparks, rising and fading out — implemented here
+     * own data asks for. Sparks, rising and fading out â€” implemented here
      * because the orbit machinery below is most of what it needed.
      */
     if (ffx.embers) {
@@ -572,7 +592,7 @@ export class FrogModel {
       });
     }
     /**
-     * ── WINGS ─────────────────────────────────────────────────────────
+     * â”€â”€ WINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Nothing else on this rig comes off the BACK, which is the whole
      * reason they exist: the fx vocabulary had grown able to say
@@ -596,18 +616,18 @@ export class FrogModel {
       });
     }
     /**
-     * ══ THE ECLIPSE SET'S MATERIALS ═══════════════════════════════════
+     * â•â• THE ECLIPSE SET'S MATERIALS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      *
-     * One skin uses these — see `frog_ecl_secret` in js/skins.js — and it
+     * One skin uses these â€” see `frog_ecl_secret` in js/skins.js â€” and it
      * is the only one in the game with a builder to itself.
      *
-     * ── every animated value here is a COLOUR, never an opacity ────────
+     * â”€â”€ every animated value here is a COLOUR, never an opacity â”€â”€â”€â”€â”€â”€â”€â”€
      * `setGhost` walks the whole graph stashing each material's opacity so
      * it can restore it afterwards, so anything that writes `opacity` every
      * frame fights the invisibility ability and loses in both directions:
      * the stash captures a mid-fade value, and the restore is overwritten a
      * frame later. Colour is untouched by ghosting, and the two effects
-     * that genuinely need to fade — the fragments and the motes — do it by
+     * that genuinely need to fade â€” the fragments and the motes â€” do it by
      * SCALE, the same way the embers above do and for the same reason.
      */
     if (ffx.eclipse) {
@@ -638,7 +658,7 @@ export class FrogModel {
       this.mats.eclVoid = new THREE.MeshBasicMaterial({ color: 0x07060c });
       /**
        * Sclera and iris. Basic, so the eyes stay the brightest thing on the
-       * frog whatever the light is doing — they are the focal point.
+       * frog whatever the light is doing â€” they are the focal point.
        *
        * SILVER, not white. At 0xe8e6ff over this much of the head they read
        * as two cartoon eyes; pulled back to a moonlit silver they read as
@@ -649,7 +669,7 @@ export class FrogModel {
       this.mats.eclEye = new THREE.MeshBasicMaterial({ color: 0xd2d4e8 });
       this.mats.eclIris = new THREE.MeshBasicMaterial({ color: energy.clone() });
       // The emblem's crescent and the hairline cracks. Three materials, not
-      // one, so they can pulse out of phase — a single material makes every
+      // one, so they can pulse out of phase â€” a single material makes every
       // crack on the model flash in unison, which reads as a light switch.
       this.mats.eclEmblem = new THREE.MeshBasicMaterial({ color: energy.clone() });
       this.mats.eclCrackA = new THREE.MeshBasicMaterial({ color: energy.clone() });
@@ -663,7 +683,7 @@ export class FrogModel {
         color: energy.clone().multiplyScalar(0.85),
         transparent: true, opacity: 0.5, depthWrite: false,
       });
-      // The distortion at the feet. Dark, not smoky — it reads as the
+      // The distortion at the feet. Dark, not smoky â€” it reads as the
       // ground being wrong rather than as something burning.
       this.mats.eclShade = new THREE.MeshBasicMaterial({
         color: 0x120c22, transparent: true, opacity: 0.42, depthWrite: false,
@@ -677,8 +697,8 @@ export class FrogModel {
     /**
      * Raises the whole animated rig so the SOLES rest on the ground.
      *
-     * The rig is modelled with its feet hanging below its own origin — hip
-     * +0.36, shin -0.30, foot -0.29, sole -0.08 — which puts the bottom of
+     * The rig is modelled with its feet hanging below its own origin â€” hip
+     * +0.36, shin -0.30, foot -0.29, sole -0.08 â€” which puts the bottom of
      * the foot about a third of a unit under y=0. Since the root is placed
      * exactly at the ground point, that difference was the frog standing
      * buried to the ankles.
@@ -705,7 +725,7 @@ export class FrogModel {
      * The rig is BUILT straight because _groundRig has to measure it that way,
      * but a frog that appears is already on its feet. Left at zero the legs
      * spent their first frames folding from straight into whatever pose was
-     * asked for, and the soles swung below the floor on the way — which is
+     * asked for, and the soles swung below the floor on the way â€” which is
      * worse the deeper the pose, and the ninja stance is deep.
      */
     for (const leg of this.legs) {
@@ -748,8 +768,8 @@ export class FrogModel {
      * The midsection: the belly and everything worn OVER it, in one group.
      *
      * The throat pulse in update() breathes this whole group rather than the
-     * belly alone. Clothes on a body that inflates have to inflate with it —
-     * a shirt over a balloon stretches when the balloon does — and scaling
+     * belly alone. Clothes on a body that inflates have to inflate with it â€”
+     * a shirt over a balloon stretches when the balloon does â€” and scaling
      * only the belly drove it in and out through a gi and a sash that never
      * moved, so the pale area grew and shrank against a fixed dark rim.
      *
@@ -771,7 +791,7 @@ export class FrogModel {
      * Each is sized off what it has to COVER rather than by eye. The gi was a
      * 0.50-wide 8-sided cylinder around a 0.52-wide torso: its flat faces sat
      * at 0.46, inside the body, so the green frog pushed out through the
-     * shirt everywhere except the eight corners — over half of every
+     * shirt everywhere except the eight corners â€” over half of every
      * horizontal slice was flesh showing through cloth. The obi then has to
      * clear the gi for the same reason.
      */
@@ -785,7 +805,7 @@ export class FrogModel {
      * The frog is not round front-to-back: the belly bulges forward to 0.53
      * while the gi's back sits at 0.47. A sash centred on the body therefore
      * cannot reach the belly's nose without ballooning off the spine by the
-     * same amount — and centred, it simply sank behind the belly, leaving the
+     * same amount â€” and centred, it simply sank behind the belly, leaving the
      * red showing only as two slivers at the far edges where the belly ran
      * out.
      *
@@ -814,12 +834,12 @@ export class FrogModel {
 
     // Wide frog mouth line, drawn on the mask a hair proud of it. It used to
     // be a flat bar at z 0.34, which sat inside the mask's 0.43 and was never
-    // visible at all — the jaw hanging out in front was doing the whole job
+    // visible at all â€” the jaw hanging out in front was doing the whole job
     // of looking like a mouth, and once that was tucked away the face had
     // nothing on it.
     this.head.add(mesh(G.mouth, this.mats.skinDark,
       0.435 * 1.02, 0.20 * 1.02, 0.415 * 1.02, 0, -0.14, 0.02));
-    // Jaw — opens when the tongue fires.
+    // Jaw â€” opens when the tongue fires.
     //
     // Tucked inside the face mask. It used to reach z 0.52 while the mask's
     // front is 0.43, so a dark green chin hung out in front of the black
@@ -852,7 +872,7 @@ export class FrogModel {
        * rather than being a flat plate that drops down the front.
        *
        * As a plate it was a disc of radius 0.24 lying at eye height with its
-       * thickness scaled to nothing — and the eyeball spans that height, so
+       * thickness scaled to nothing â€” and the eyeball spans that height, so
        * the disc cut a green line straight across the white. Not during a
        * blink: while the eye was OPEN, which is nearly all the time.
        *
@@ -870,7 +890,7 @@ export class FrogModel {
     // The back reached z -0.67 against a skull that stops at -0.42: a quarter
     // of a unit of cloth hanging off the back of the head, 60% of the head's
     // own depth again, which read as a huge black lump from behind. It is now
-    // pulled in so the head reaches back 1.25x less far — 0.33 took it 1.5x
+    // pulled in so the head reaches back 1.25x less far â€” 0.33 took it 1.5x
     // and that was too far the other way, leaving the hood looking shrunken.
     //
     // Radius and offset move together so the hood's FRONT edge stays put over
@@ -889,7 +909,7 @@ export class FrogModel {
     this.head.add(mesh(G.cyl, this.mats.scarf, 0.455, 0.075, 0.44, 0, 0.10, 0));
     /**
      * The brow plate, and the sheath fittings in _buildGear, are the frog's
-     * OWN gear drawn in the sword's guard colour — which is fine for every
+     * OWN gear drawn in the sword's guard colour â€” which is fine for every
      * skin in the game except one. Collected so `_buildEclipse` can restate
      * them in silver: the Forgotten One has no gold anywhere on it, and a
      * gold buckle in the middle of its face was the single loudest wrong
@@ -955,7 +975,7 @@ export class FrogModel {
        * next to the frog rather than growing out of it.
        *
        * It rides in the hip group, close to the pivot, so it follows the leg
-       * a little as it swings — like a haunch — instead of either staying
+       * a little as it swings â€” like a haunch â€” instead of either staying
        * welded to the body or swinging the whole way with the thigh.
        */
       hip.add(mesh(G.sphere, this.mats.skin, 0.20, 0.155, 0.185,
@@ -968,13 +988,13 @@ export class FrogModel {
       shin.add(mesh(G.capsule, this.mats.skin, 0.10, 0.14, 0.10, 0, -0.13, 0.02));
       // Leg wrap. Two things were wrong with it: an 8-sided cylinder's flat
       // faces sit at 0.92 of its radius, and it was centred on z 0 while the
-      // shin it wraps sits at z +0.02 — so the green leg came out through the
+      // shin it wraps sits at z +0.02 â€” so the green leg came out through the
       // front of the black binding. Rounder, and lined up with the limb.
       shin.add(mesh(G.wrap, this.mats.clothDark, 0.115, 0.07, 0.115, 0, -0.02, 0.02));
       const foot = new THREE.Group();
       foot.position.set(0, -0.29, 0);
       shin.add(foot);
-      // Big webbed foot — reads instantly as "frog".
+      // Big webbed foot â€” reads instantly as "frog".
       foot.add(mesh(G.lowSphere, this.mats.skin, 0.15, 0.06, 0.26, 0, -0.02, 0.11));
       for (let t = 0; t < 3; t++) {
         foot.add(mesh(G.lowSphere, this.mats.skin, 0.055, 0.045, 0.10,
@@ -988,7 +1008,7 @@ export class FrogModel {
    * Measure how far the feet hang below the origin, and lift by exactly that.
    *
    * Run once, right after the legs are built and while everything is still in
-   * its rest pose at the world origin — so a local-space box is a world-space
+   * its rest pose at the world origin â€” so a local-space box is a world-space
    * box, and the number needs no correction.
    */
   _groundRig() {
@@ -1003,7 +1023,7 @@ export class FrogModel {
     if (!Number.isFinite(lowest)) return;
     // Lift the measured drop, then give a little of it back so the soles
     // settle INTO the ground rather than balancing exactly on it. Landing
-    // the feet at precisely zero is geometrically right and looks wrong —
+    // the feet at precisely zero is geometrically right and looks wrong â€”
     // the frog reads as hovering, because a shadow under a foot that only
     // ever grazes the floor is what floating looks like.
     this._lift = Math.max(0, -lowest - CFG.move.footSink);
@@ -1023,7 +1043,7 @@ export class FrogModel {
     this.sheath.rotation.set(0.25, 0, -0.62);
     this.body.add(this.sheath);
     this.sheath.add(mesh(G.box, this.mats.saya, 0.085, 0.80, 0.15, 0, 0.30, 0));
-    // Koiguchi and kojiri — see the note on `_goldTrim` in _buildHead.
+    // Koiguchi and kojiri â€” see the note on `_goldTrim` in _buildHead.
     this._goldTrim = this._goldTrim || [];
     for (const [sy, sz, py] of [[0.05, 0.16, 0.68], [0.045, 0.158, -0.08]]) {
       const fit = mesh(G.box, this.mats.gold, 0.095, sy, sz, 0, py, 0);
@@ -1057,7 +1077,7 @@ export class FrogModel {
   /**
    * Everything a skin adds beyond colour.
    *
-   * This is the whole answer to "why buy a crate" — a recolour costs nothing
+   * This is the whole answer to "why buy a crate" â€” a recolour costs nothing
    * and is worth nothing, so a skin above common physically changes the frog:
    * spines, fins, horns, a crown, glowing inlay, a halo, a shell of light.
    * Built last so it sits on top of the finished rig.
@@ -1090,22 +1110,22 @@ export class FrogModel {
     /**
      * A ring of points around the skull.
      *
-     * `crown` may be a NUMBER, which scales it — the Swamp King's is meant
+     * `crown` may be a NUMBER, which scales it â€” the Swamp King's is meant
      * to be huge and the Star Emperor's larger again, and a crown that is
      * the same size on a common and on a legendary is not a crown, it is a
      * hat everybody owns. `true` still means 1.
      *
-     * ── IT HAS TO CLEAR THE EYES ──────────────────────────────────────
-     * This frog's eyes are mounds of radius 0.23 centred at (±0.28, 0.26,
-     * 0.10) — they bulge to y 0.49, well above the 0.36 skull. The crown was
+     * â”€â”€ IT HAS TO CLEAR THE EYES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     * This frog's eyes are mounds of radius 0.23 centred at (Â±0.28, 0.26,
+     * 0.10) â€” they bulge to y 0.49, well above the 0.36 skull. The crown was
      * a ring of 0.14-tall cones based at y 0.26, on a ring of radius 0.36:
      * the same height and almost the same place as the eyes, so five of its
      * seven points were INSIDE an eyeball and the other two inside the
      * skull. No skin has ever actually shown its crown, this one or the
      * three that had it before.
      *
-     * The band may still be hidden behind the brow — that is what a crown
-     * does — but the POINTS now start above the eyes and rise from there.
+     * The band may still be hidden behind the brow â€” that is what a crown
+     * does â€” but the POINTS now start above the eyes and rise from there.
      */
     if (F.crown && M.inlay) {
       const cs = typeof F.crown === 'number' ? F.crown : 1;
@@ -1121,11 +1141,11 @@ export class FrogModel {
         0.34 * rr, 0.34 * rr, 0.33 * rr, 0, y - 0.13 * cs, 0, Math.PI / 2));
     }
     /**
-     * ── ARMOUR ────────────────────────────────────────────────────────
+     * â”€â”€ ARMOUR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * A breastplate, a pair of pauldrons and a collar. Parented to the BODY
      * and the SHOULDERS respectively, so the plate leans and squashes with
-     * the frog and the pauldrons swing with the arms — armour bolted to the
+     * the frog and the pauldrons swing with the arms â€” armour bolted to the
      * root would slide about over the animation and read as a decal.
      *
      * The pauldrons go on `shoulder`, not `fore`: a pauldron covers the
@@ -1135,10 +1155,10 @@ export class FrogModel {
       /**
        * SIZED OFF THE TORSO, the way every other garment on this rig is.
        *
-       * The torso is an ellipsoid 0.52 × 0.46 × 0.46 centred at y 0.62 (see
+       * The torso is an ellipsoid 0.52 Ã— 0.46 Ã— 0.46 centred at y 0.62 (see
        * TOR), which puts its front face at z 0.45 across the chest. The
        * first version of this armour was 0.35 deep and sat entirely INSIDE
-       * the frog — exactly the mistake the note on the gi warns about, and
+       * the frog â€” exactly the mistake the note on the gi warns about, and
        * it renders as a differently-coloured naked frog. Every figure below
        * is checked against that ellipsoid at the height it sits at.
        */
@@ -1147,7 +1167,7 @@ export class FrogModel {
        *
        * That group is what the croak inflates, and it holds the belly with
        * the gi and the obi over it precisely so clothing stretches with the
-       * body underneath — see _buildTorso. Armour bolted to the body would
+       * body underneath â€” see _buildTorso. Armour bolted to the body would
        * have the belly swell straight through it on every croak.
        */
       const g = this.girth;
@@ -1180,14 +1200,14 @@ export class FrogModel {
     /**
      * A HOOD, pulled up over the cowl the rig already has.
      *
-     * Every frog wears a dark cowl over the back and top of its skull — see
-     * _buildHead — so a hood skin cannot just add cloth in the same place;
+     * Every frog wears a dark cowl over the back and top of its skull â€” see
+     * _buildHead â€” so a hood skin cannot just add cloth in the same place;
      * that is what the first attempt did, and it was invisible. This one is
      * bigger than the cowl in all three axes and arches over the top of the
      * eyes, which the cowl does not reach.
      *
      * It stops short of the FACE on purpose. The eyes are mounds at
-     * (±0.28, 0.26, 0.10) with a radius of 0.23; a shell whose front edge
+     * (Â±0.28, 0.26, 0.10) with a radius of 0.23; a shell whose front edge
      * lands at z 0.16 presses in behind them and leaves the whites, the
      * pupils and the mask clear, which is how a hood actually sits.
      */
@@ -1215,7 +1235,7 @@ export class FrogModel {
       }
     }
     /**
-     * Glowing specks over the hide — stars, or a comet's trail.
+     * Glowing specks over the hide â€” stars, or a comet's trail.
      *
      * Pushed out onto the torso's own surface at each height for the same
      * reason the moss is: a speck one hundredth inside an opaque frog is not
@@ -1233,11 +1253,11 @@ export class FrogModel {
       this.head.add(mesh(G.box, M.star, 0.045, 0.045, 0.045, -0.34, -0.02, 0.22));
     }
     /**
-     * ── ORBITING FRAGMENTS ────────────────────────────────────────────
+     * â”€â”€ ORBITING FRAGMENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Chips of gold going round the frog, animated in `update`. This is the
-     * signature of the Mythic — see the note on `frog_sovereign` in
-     * js/skins.js — so it is deliberately the only fx here that MOVES
+     * signature of the Mythic â€” see the note on `frog_sovereign` in
+     * js/skins.js â€” so it is deliberately the only fx here that MOVES
      * independently of the rig, which is what makes it catch the eye.
      *
      * Parented to the body but positioned in body space each frame, and
@@ -1294,10 +1314,10 @@ export class FrogModel {
     // Haloes.
     if (M.halo) {
       /**
-       * ── A BROKEN ONE HANGS, IT DOES NOT FLOAT ─────────────────────────
+       * â”€â”€ A BROKEN ONE HANGS, IT DOES NOT FLOAT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
        *
        * `haloBroken` swaps the pristine ring for the crescent geometry the
-       * eclipse emblem already uses — a circle with a piece missing — and
+       * eclipse emblem already uses â€” a circle with a piece missing â€” and
        * hangs it BEHIND the head at a tilt rather than level overhead.
        *
        * The tilt is the read. A ring sitting flat above the skull is the
@@ -1348,12 +1368,12 @@ export class FrogModel {
   }
 
   /**
-   * ═══ WINGS ═════════════════════════════════════════════════════════════
+   * â•â•â• WINGS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    *
    * A fan of feathers off each shoulder blade, hinged at a group so the
-   * whole thing can flex — see `_updateWings`.
+   * whole thing can flex â€” see `_updateWings`.
    *
-   * ── ragged on purpose ─────────────────────────────────────────────────
+   * â”€â”€ ragged on purpose â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    * `wingsTorn` shortens alternate feathers and drops one outright. A
    * clean, even fan reads as an angel; the same fan with holes in it reads
    * as one that has been through something, which is the entire brief for
@@ -1387,7 +1407,7 @@ export class FrogModel {
         // A tear takes one feather out of the fan entirely.
         if (torn && i === 3) continue;
         const t = i / (FEATHERS - 1);
-        // Longest at the top of the fan, tapering down — a wing, not a rake.
+        // Longest at the top of the fan, tapering down â€” a wing, not a rake.
         let len = (0.78 - t * 0.34) * span;
         if (torn && i % 2 === 1) len *= 0.62;     // snapped short
         const thick = 0.05 - t * 0.010;
@@ -1405,7 +1425,7 @@ export class FrogModel {
          * WIDE ENOUGH TO OVERLAP ITS NEIGHBOUR.
          *
          * At 0.13 across, with the fan spread over 1.5 radians, adjacent
-         * feathers left a gap wider than the feather itself — so the
+         * feathers left a gap wider than the feather itself â€” so the
          * membrane never joined up and the whole wing rendered as a
          * handful of loose sticks poking out of the frog's back. The
          * width here is set so the fan closes into a surface, and the
@@ -1453,20 +1473,20 @@ export class FrogModel {
   }
 
   /**
-   * ═══ THE FORGOTTEN ONE ═════════════════════════════════════════════════
+   * â•â•â• THE FORGOTTEN ONE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    *
    * The one skin with a builder of its own. Everything else in the game is
-   * assembled out of the shared fx vocabulary above — horns, a crown, a
-   * halo, spines, orbiting chips — and that vocabulary can only produce
+   * assembled out of the shared fx vocabulary above â€” horns, a crown, a
+   * halo, spines, orbiting chips â€” and that vocabulary can only produce
    * more entries in the same list. This is meant to read as a different
    * TIER of cosmetic, so it is a different object.
    *
-   * ── the rules it is built to ──────────────────────────────────────────
+   * â”€â”€ the rules it is built to â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    *  1. It is a FROG. Same proportions, same rig, same hitbox. Nothing here
    *     touches a collider or a stat, and nothing changes the silhouette by
    *     more than the thickness of a piece of armour.
    *  2. The body takes light. See the note on the skin in js/skins.js.
-   *  3. Rarity comes from the armour, the emblem and the eyes — not from
+   *  3. Rarity comes from the armour, the emblem and the eyes â€” not from
    *     covering the frog in glow. There are exactly four lit colours on
    *     the whole model and three of them are hairlines.
    *  4. Everything is parented to the part it belongs to: the cuirass to
@@ -1476,7 +1496,7 @@ export class FrogModel {
    *
    * Every offset below is checked against the shape it sits on. The torso
    * is an ellipsoid 0.52 x 0.46 x 0.46 at y 0.62; the head is 0.44 x 0.36 x
-   * 0.42; the eyes are mounds of radius 0.23 at (±0.28, 0.26, 0.10) that
+   * 0.42; the eyes are mounds of radius 0.23 at (Â±0.28, 0.26, 0.10) that
    * bulge to y 0.49. A plate that ignores those is a plate inside the frog.
    */
   _buildEclipse() {
@@ -1493,11 +1513,11 @@ export class FrogModel {
     };
 
     /**
-     * ── the headpiece ─────────────────────────────────────────────────
+     * â”€â”€ the headpiece â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Every gold fitting on the frog's own gear becomes silver. There is no
      * gold anywhere on this skin, and the brow plate sits dead centre of
-     * the face — see `_goldTrim`.
+     * the face â€” see `_goldTrim`.
      */
     for (const m of this._goldTrim || []) m.material = M.eclSilver;
 
@@ -1505,8 +1525,8 @@ export class FrogModel {
      * A sleek fitted skullcap, not a hood.
      *
      * Low and tight: at x 0 it caps the skull to y 0.43, and by the time it
-     * reaches the eyes at x 0.28 it has drawn down to 0.38 — under their
-     * crown at 0.49 — so it hugs the head and leaves the face open, which
+     * reaches the eyes at x 0.28 it has drawn down to 0.38 â€” under their
+     * crown at 0.49 â€” so it hugs the head and leaves the face open, which
      * is what a fitted mask does and what a hood cannot.
      *
      * The RIM is what makes it read as a separate piece. Without it the cap
@@ -1530,7 +1550,7 @@ export class FrogModel {
      *
      * There are no temple studs any more. Two silver chips floating beside
      * the eyes read as debris stuck to the face, and the brief asked for a
-     * simple silhouette — the cap, the guards and one brow plate is the
+     * simple silhouette â€” the cap, the guards and one brow plate is the
      * whole headpiece.
      */
     for (const sx of [-1, 1]) {
@@ -1538,13 +1558,13 @@ export class FrogModel {
         sx * 0.368, -0.070, 0.045, 0, 0, sx * -0.13));
       // A hairline along the guard's top edge, in the LIP colour rather
       // than in silver: silver here reads as a chip stuck to the jaw, and
-      // the face is allowed exactly one bright line — the brow plate.
+      // the face is allowed exactly one bright line â€” the brow plate.
       h.add(mesh(G.box, M.eclLip, 0.052, 0.016, 0.218,
         sx * 0.368, 0.014, 0.045, 0, 0, sx * -0.13));
     }
 
     /**
-     * ── the eyes ──────────────────────────────────────────────────────
+     * â”€â”€ the eyes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Silver-white, with a small violet centre. The default pupil is 0.105
      * x 0.135 and nearly fills the white; shrunk to 0.072 it becomes an
@@ -1561,10 +1581,10 @@ export class FrogModel {
       e.pupil.position.z = 0.215;
     }
 
-    // ── chest: a fitted cuirass, standing a tenth proud of the torso ────
+    // â”€â”€ chest: a fitted cuirass, standing a tenth proud of the torso â”€â”€â”€â”€
     //
     // In `girth`, with the belly and the gi, so a croak swells all three
-    // together — see _buildTorso. Its nose lands at z 0.560 against the
+    // together â€” see _buildTorso. Its nose lands at z 0.560 against the
     // belly's 0.530, so the pale belly stays behind it at every point.
     g.add(mesh(G.lowSphere, M.eclPlate, CU.x, CU.y, CU.z, 0, CU.cy, CU.cz));
     // The bevel along its top edge, and a gorget filling the neck gap
@@ -1574,11 +1594,11 @@ export class FrogModel {
     b.add(mesh(G.wrap, M.eclSilver, 0.452, 0.020, 0.426, 0, 0.922, 0));
 
     /**
-     * ── THE ECLIPSE EMBLEM ────────────────────────────────────────────
+     * â”€â”€ THE ECLIPSE EMBLEM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * A dark disc with a thin crescent of light around most of it. Three
      * parts and about 0.3 units across: it is a maker's mark on a
-     * breastplate, not a logo — the brief was explicit that it must not be
+     * breastplate, not a logo â€” the brief was explicit that it must not be
      * a giant glowing badge, and the crescent is the only part of it that
      * is lit at all.
      *
@@ -1587,7 +1607,7 @@ export class FrogModel {
      * than as a broken ring.
      *
      * `eclEmblem` is its own material because the emblem brightens when
-     * the player moves or attacks and the cracks do not — see `update`.
+     * the player moves or attacks and the cracks do not â€” see `update`.
      */
     const emY = 0.665;
     const emZ = cuirassZ(0, emY);
@@ -1596,10 +1616,10 @@ export class FrogModel {
     g.add(mesh(G.arc, M.eclEmblem, 0.150, 0.150, 0.150, 0, emY, emZ + 0.002, 0, 0, 2.55));
 
     /**
-     * ── hairline cracks ───────────────────────────────────────────────
+     * â”€â”€ hairline cracks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Ancient energy leaking through the armour. Three on the chest, one
-     * along each pauldron, one down each shin guard — seven lines, none
+     * along each pauldron, one down each shin guard â€” seven lines, none
      * longer than a seventh of a unit, each sixty-thousandths thick.
      *
      * Every one sits on the surface of the plate it is on, computed rather
@@ -1614,7 +1634,7 @@ export class FrogModel {
       g.add(mesh(G.box, mat, 0.016, len, 0.016, x, y, cuirassZ(x, y) + 0.008, 0, 0, tilt));
     }
 
-    // ── shoulders: small, angular, canted outward ───────────────────────
+    // â”€â”€ shoulders: small, angular, canted outward â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     //
     // Flatter than the generic pauldron on purpose (0.095 tall against
     // 0.18). The brief asked for small angular pieces, and a dome twice
@@ -1634,7 +1654,7 @@ export class FrogModel {
       arm.fore.add(mesh(G.wrap, M.eclSilver, 0.113, 0.017, 0.113, 0, -0.205, 0));
     }
 
-    // ── legs: a plate on the outer thigh, a guard down the shin ─────────
+    // â”€â”€ legs: a plate on the outer thigh, a guard down the shin â”€â”€â”€â”€â”€â”€â”€â”€â”€
     for (const leg of this.legs) {
       const sx = leg.side;
       leg.hip.add(mesh(G.box, M.eclPlate, 0.070, 0.150, 0.165,
@@ -1645,9 +1665,9 @@ export class FrogModel {
     }
 
     /**
-     * ── the charm on the belt ─────────────────────────────────────────
+     * â”€â”€ the charm on the belt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
-     * Two silver links and a tiny eclipse — the emblem again, a fifth of
+     * Two silver links and a tiny eclipse â€” the emblem again, a fifth of
      * the size. Its own group so it can swing a little in the idle, which
      * is most of what sells a hanging object as hanging.
      *
@@ -1664,10 +1684,10 @@ export class FrogModel {
     this.eclCharm.add(mesh(G.cyl, M.eclVoid, 0.046, 0.016, 0.046, 0, -0.135, 0.008, Math.PI / 2));
 
     /**
-     * ── three fragments ───────────────────────────────────────────────
+     * â”€â”€ three fragments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Slow, and not always there. Each turns at about a fifth of a radian
-     * a second — a lap takes half a minute — and runs a fade cycle of its
+     * a second â€” a lap takes half a minute â€” and runs a fade cycle of its
      * own, so at any moment one or two of the three are visible and
      * occasionally none are. That is the difference between a character
      * with fragments around it and a character inside a particle system.
@@ -1702,10 +1722,10 @@ export class FrogModel {
     }
 
     /**
-     * ── five motes ────────────────────────────────────────────────────
+     * â”€â”€ five motes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
-     * Very tiny, drifting up and out. Three hundredths of a unit — at
-     * arm's length they are a pixel — and a full rise takes four seconds,
+     * Very tiny, drifting up and out. Three hundredths of a unit â€” at
+     * arm's length they are a pixel â€” and a full rise takes four seconds,
      * so what you see is the occasional speck leaving the frog rather than
      * a column of smoke.
      */
@@ -1724,7 +1744,7 @@ export class FrogModel {
     }
 
     /**
-     * ── the distortion at the feet ────────────────────────────────────
+     * â”€â”€ the distortion at the feet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Two flat discs, the outer one nearly invisible. Parented to `lift`
      * rather than to `body`: `body` carries the breath and the hop, and a
@@ -1737,14 +1757,14 @@ export class FrogModel {
     this.eclShadeOut.castShadow = false;
     this.lift.add(this.eclShadeOut);
 
-    // Idle gesture clock — see the note in `update`.
+    // Idle gesture clock â€” see the note in `update`.
     this.eclipse = true;
     this.eclGestureIn = 7 + Math.random() * 7;
     this.eclGesture = 0;
   }
 
   /**
-   * FROGATH THE DIVINE — the god's rig, at frog scale.
+   * FROGATH THE DIVINE â€” the god's rig, at frog scale.
    *
    * Both forms are built here and phase 2 starts hidden, because the
    * transformation has to land on one frame in the middle of a firefight; it
@@ -1965,7 +1985,7 @@ export class FrogModel {
       : 0.09 + pulse * 0.04;
     D.corona.scale.setScalar((two ? 1.35 + 0.5 * m : 1.35)
       * (1 + pulse * 0.03));
-    // Phase 2 burns hotter — the wing membrane goes from gold to white.
+    // Phase 2 burns hotter â€” the wing membrane goes from gold to white.
     this.mats.dvWing.color.copy(
       _dvA.setHex(0xfff3c4).lerp(_dvB.setHex(0xffffff), two ? m : 0));
     this.mats.dvWing.opacity = two ? 0.55 + m * 0.28 : 0.62;
@@ -1986,14 +2006,14 @@ export class FrogModel {
   }
 
   /**
-   * ═══ THE EARTH SHELL ═══════════════════════════════════════════════════
+   * â•â•â• THE EARTH SHELL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    *
    * A boulder that closes over the frog.
    *
-   * ── built on first use, then kept ─────────────────────────────────────
+   * â”€â”€ built on first use, then kept â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    * Not in the constructor. Only one ability in four is Earth Shell and
    * only two may be carried at once, so most frogs in most matches never
-   * raise one — and a dozen meshes that never render still cost every frog
+   * raise one â€” and a dozen meshes that never render still cost every frog
    * in the room memory, a place in `setGhost`'s traversal, and a say in the
    * rig's bounding box. That last one is not hypothetical: an invisible
    * boulder is TALLER than a frog, so every measurement of the model
@@ -2004,8 +2024,8 @@ export class FrogModel {
    * player most needs it not to.
    *
    * It is a low-poly sphere with plates stuck to it rather than a smooth
-   * dome: at this art scale a clean sphere reads as a bubble — a force
-   * field — and the whole point of this ability rather than a parry is that
+   * dome: at this art scale a clean sphere reads as a bubble â€” a force
+   * field â€” and the whole point of this ability rather than a parry is that
    * it is made of rock.
    *
    * Lives on the ROOT, not the body, so it does not bob, lean or swing with
@@ -2016,18 +2036,25 @@ export class FrogModel {
     this.shell.visible = false;
 
     /**
-     * ── the stone ─────────────────────────────────────────────────────
+     * â”€â”€ the stone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * Weathered garden-ornament granite: a sage grey-green, not the brown
-     * of a boulder. Three tones do the whole statue — the mid for the mass,
+     * of a boulder. Three tones do the whole statue â€” the mid for the mass,
      * the pale for lichen and for the surfaces the sun would have bleached,
      * the dark for every recess. Flat shading throughout, so each facet
      * catches the light separately and the thing reads as carved rather
      * than inflated.
      */
-    const stone = new THREE.MeshLambertMaterial({ color: 0x8b8f6f, flatShading: true });
-    const pale = new THREE.MeshLambertMaterial({ color: 0xa9ad8c, flatShading: true });
-    const dark = new THREE.MeshLambertMaterial({ color: 0x5d6149, flatShading: true });
+    /**
+     * SMOOTH-SHADED. `flatShading` was on for all three, which shades every
+     * facet as its own plane â€” so on top of a low-poly sphere the statue
+     * got the faceting twice over and read as a rock someone had chipped
+     * into a frog shape rather than as a carving worn round by weather.
+     * Vertex normals across a 22-segment sphere is what makes it stone.
+     */
+    const stone = new THREE.MeshLambertMaterial({ color: 0x8b8f6f });
+    const pale = new THREE.MeshLambertMaterial({ color: 0xa9ad8c });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x5d6149 });
 
     const S = this.shell;
     const add = (geo, mat, sx, sy, sz, x, y, z, rx, ry, rz) => {
@@ -2037,12 +2064,12 @@ export class FrogModel {
     };
 
     /**
-     * ── the sitting frog ──────────────────────────────────────────────
+     * â”€â”€ the sitting frog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * WIDER THAN IT IS TALL. That is the single most important number
      * here: a garden frog is a squat thing that has settled, and the first
      * version of this was 1.87 tall against 1.70 wide, which read as a
-     * cairn — a stack of stones — rather than as a carving. It now comes
+     * cairn â€” a stack of stones â€” rather than as a carving. It now comes
      * out about 1.56 across and 1.43 high.
      *
      * The masses overlap HEAVILY and step in only a little at a time, so
@@ -2051,34 +2078,49 @@ export class FrogModel {
      * as a second mouth in the first attempt.
      *
      * LOCAL +Z IS THE FRONT. `setFacing` puts the root at `yaw + Math.PI`,
-     * so a point at +Z maps to the direction the frog is facing — which is
+     * so a point at +Z maps to the direction the frog is facing â€” which is
      * why the face, the hands and the feet are all at positive z.
+     *
+     * ── TWO MASSES, NOT FOUR ─────────────────────────────────────────
+     *
+     * Haunches, belly, chest and head used to be four stacked ellipsoids
+     * of similar width. Faceted, that read as one lumpy rock; smooth-
+     * shaded it read as a stack of pillows, because every place two
+     * surfaces cross leaves a crease and there were three of them down the
+     * front.
+     *
+     * One body and one head is the whole figure. They still cross — that
+     * is the fold under the chin, which a sitting frog has — but it is ONE
+     * fold in a deliberate place instead of three by accident.
      */
-    add(G.lowSphere, stone, 0.78, 0.42, 0.66, 0, 0.36, -0.02);   // haunches
-    add(G.lowSphere, stone, 0.70, 0.40, 0.60, 0, 0.60, 0.04);    // belly
-    add(G.lowSphere, stone, 0.66, 0.36, 0.56, 0, 0.80, 0.04);    // chest
-    add(G.lowSphere, stone, 0.64, 0.34, 0.55, 0, 0.98, 0.02);    // head
-    // The top has weathered paler than the rest, which is what happens to
-    // a stone ornament left outside and is most of the tonal variation
-    // this thing has. Kept tucked INSIDE the skull's own profile, so it is
-    // a change of colour rather than another bump on the skyline.
-    add(G.lowSphere, pale, 0.56, 0.22, 0.48, 0, 1.04, 0.00);
+    add(G.smoothSphere, stone, 0.78, 0.60, 0.67, 0, 0.55, 0.00);    // body
+    add(G.smoothSphere, stone, 0.64, 0.38, 0.56, 0, 1.02, 0.02);    // head
+    /**
+     * The top has weathered paler, which is what happens to a stone
+     * ornament left outside and is most of the tonal variation this thing
+     * has.
+     *
+     * Narrow and high, so it is a PATCH on the crown. Wider, its edge came
+     * round the sides of the skull as a horizontal band and read as the
+     * brim of a hat rather than as weathering.
+     */
+    add(G.smoothSphere, pale, 0.52, 0.22, 0.45, 0, 1.14, 0.00);
 
     // Feet: big splayed pads at the very front, with toes.
     for (const sx of [-1, 1]) {
-      add(G.lowSphere, stone, 0.28, 0.12, 0.34, sx * 0.36, 0.10, 0.42, 0, sx * -0.35, 0);
+      add(G.smoothSphere, stone, 0.28, 0.12, 0.34, sx * 0.36, 0.10, 0.42, 0, sx * -0.35, 0);
       for (let i = 0; i < 3; i++) {
-        add(G.lowSphere, pale, 0.09, 0.075, 0.12,
+        add(G.smoothSphere, pale, 0.09, 0.075, 0.12,
           sx * (0.20 + i * 0.13), 0.11, 0.68 - i * 0.07, 0, sx * -0.35, 0);
       }
     }
 
     /**
-     * ── the arms, and the hands folded in its lap ─────────────────────
+     * â”€â”€ the arms, and the hands folded in its lap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * The folded hands ARE the statue. Everything above is a frog shape;
-     * this is what makes it an ornament — something carved deliberately,
-     * sitting patiently — and it is what the eye goes to.
+     * this is what makes it an ornament â€” something carved deliberately,
+     * sitting patiently â€” and it is what the eye goes to.
      *
      * They have to stand PROUD of the belly. In the first attempt they sat
      * at z 0.46 against a belly whose front face is at 0.62 at that height,
@@ -2088,23 +2130,30 @@ export class FrogModel {
     for (const sx of [-1, 1]) {
       /**
        * The arms HUG the body. In the reference they are barely separate
-       * from it — only the hands are prominent — and an earlier pass with
+       * from it â€” only the hands are prominent â€” and an earlier pass with
        * a shoulder ball and a thicker limb put two lumps on the skyline
        * that read as growths in profile. They are thin, tucked, and mostly
        * buried; it is the hands that do the work.
        */
-      add(G.capsule, stone, 0.105, 0.15, 0.105, sx * 0.58, 0.66, 0.16, 0.22, 0, sx * 0.30);
-      // Sunk well into the belly: only the top of the curve shows, which is
-      // all the reference shows either. Left proud it crossed the body as a
-      // diagonal sausage in three-quarter view.
-      add(G.capsule, stone, 0.105, 0.16, 0.105,
-        sx * 0.40, 0.505, 0.36, 1.12, sx * 0.48, sx * 1.08);
+      /**
+       * Brought back OUT after the body became one mass.
+       *
+       * The merged body is fatter than the belly it replaced — 0.67 deep
+       * against 0.60 — and at the old positions both arms ended up
+       * entirely inside it, which is a limb that costs triangles and shows
+       * nothing. These sit just proud of the surface: a bulge down the
+       * side and the top of the forearm's curve, which is all the
+       * reference shows either.
+       */
+      add(G.smoothCapsule, stone, 0.095, 0.14, 0.095, sx * 0.66, 0.66, 0.20, 0.22, 0, sx * 0.34);
+      add(G.smoothCapsule, stone, 0.105, 0.16, 0.105,
+        sx * 0.46, 0.50, 0.58, 1.12, sx * 0.48, sx * 1.08);
       // The palm: a broad paddle laid over the lap, clear of the belly.
-      add(G.lowSphere, stone, 0.24, 0.105, 0.20, sx * 0.16, 0.49, 0.66, -0.22, 0, 0);
+      add(G.smoothSphere, stone, 0.24, 0.105, 0.20, sx * 0.16, 0.49, 0.66, -0.22, 0, 0);
     }
     /**
      * Interlaced fingers: four bars laid across the join, alternating which
-     * hand is on top. Bars rather than modelled digits — at the size this
+     * hand is on top. Bars rather than modelled digits â€” at the size this
      * appears on screen what has to read is the WEAVE, and four clean
      * grooves say "fingers laced" where eight little sausages say "mess".
      */
@@ -2112,18 +2161,18 @@ export class FrogModel {
       const sx = i % 2 === 0 ? -1 : 1;
       const row = i >> 1;
       /**
-       * Nearly flat (1.46 rad is 84° off the capsule's own Y axis), and
-       * only slightly opposed. At ±1.30 they splayed far enough to read as
+       * Nearly flat (1.46 rad is 84Â° off the capsule's own Y axis), and
+       * only slightly opposed. At Â±1.30 they splayed far enough to read as
        * a painted V across the belly rather than as fingers lying over one
        * another.
        */
-      add(G.capsule, pale, 0.040, 0.125, 0.040,
+      add(G.smoothCapsule, pale, 0.040, 0.125, 0.040,
         sx * (0.05 + row * 0.075), 0.520 - row * 0.030, 0.70 - row * 0.05,
         -0.20, 0, sx * 1.46);
     }
     // Thumbs crossed on top of the pile.
     for (const sx of [-1, 1]) {
-      add(G.capsule, stone, 0.045, 0.095, 0.045,
+      add(G.smoothCapsule, stone, 0.045, 0.095, 0.045,
         sx * 0.11, 0.565, 0.61, -0.42, 0, sx * 0.80);
     }
     // The shadow line under the hands, which is what lifts them off the
@@ -2133,7 +2182,7 @@ export class FrogModel {
     /**
      * The mouth: one wide recessed groove running nearly ear to ear, with
      * a heavy lip under it and the corners turned down a touch. That slight
-     * downturn is the whole expression — patient and a little resigned,
+     * downturn is the whole expression â€” patient and a little resigned,
      * which is what the reference has and what makes it read as a face
      * rather than as a slot.
      *
@@ -2141,13 +2190,13 @@ export class FrogModel {
      * the pair of them read as stripes painted on a rock.
      */
     add(G.box, dark, 1.00, 0.085, 0.26, 0, 0.90, 0.40, -0.10, 0, 0);
-    add(G.lowSphere, stone, 0.52, 0.115, 0.20, 0, 0.825, 0.44, 0.14, 0, 0);
+    add(G.smoothSphere, stone, 0.52, 0.115, 0.20, 0, 0.825, 0.44, 0.14, 0, 0);
     for (const sx of [-1, 1]) {
       add(G.box, dark, 0.17, 0.07, 0.17, sx * 0.45, 0.875, 0.31, 0, sx * 0.55, sx * 0.20);
     }
     // Nostrils: two dots that cost nothing and stop the face being blank.
     for (const sx of [-1, 1]) {
-      add(G.lowSphere, dark, 0.035, 0.03, 0.035, sx * 0.13, 1.03, 0.50);
+      add(G.smoothSphere, dark, 0.035, 0.03, 0.035, sx * 0.13, 1.03, 0.50);
     }
 
     /**
@@ -2156,7 +2205,7 @@ export class FrogModel {
      * these are domes with a single crease rather than anything with a
      * pupil in it.
      *
-     * They are deliberately LARGE — nearly half the head's height again —
+     * They are deliberately LARGE â€” nearly half the head's height again â€”
      * and set far enough apart to leave a saddle between them. In the
      * first attempt they were small and flush and vanished entirely; the
      * eyes and the mouth are the two things that have to survive being
@@ -2166,20 +2215,20 @@ export class FrogModel {
       // Set FORWARD, over the face rather than over the crown. Centred on
       // the skull they bulged past the back of the head in profile and the
       // frog read as having a lumpy skull rather than eyes.
-      add(G.lowSphere, stone, 0.29, 0.25, 0.29, sx * 0.33, 1.17, 0.09);
-      add(G.lowSphere, pale, 0.24, 0.18, 0.24, sx * 0.33, 1.23, 0.10);
+      add(G.smoothSphere, stone, 0.29, 0.25, 0.29, sx * 0.33, 1.17, 0.09);
+      add(G.smoothSphere, pale, 0.24, 0.18, 0.24, sx * 0.33, 1.23, 0.10);
       // The lid crease, across the front of the mound.
       add(G.box, dark, 0.36, 0.045, 0.22, sx * 0.33, 1.135, 0.26, -0.32, 0, sx * 0.12);
     }
 
     /**
-     * ── weathering ────────────────────────────────────────────────────
+     * â”€â”€ weathering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * There are no lichen SPOTS, and there is no longer a shadow under the
      * chin or in the armpits.
      *
      * The spots came first: flattened spheres scattered over the surface on
-     * a golden-angle spiral, which rendered as lozenges glued on — pills,
+     * a golden-angle spiral, which rendered as lozenges glued on â€” pills,
      * not staining. The extra recesses came next, and stacked up into four
      * horizontal dark bars down the front of the face and chest, which read
      * as a painted rock.
@@ -2187,11 +2236,11 @@ export class FrogModel {
      * What is left is tone from whole PARTS: the crown, the eyelids and the
      * toes are the pale stone, the mouth and the lid creases are the dark,
      * and the single line under the hands lifts them off the belly. That is
-     * how a real carving reads — by its own shape, not by decoration.
+     * how a real carving reads â€” by its own shape, not by decoration.
      */
 
     /**
-     * ── the counter window, as cracks lighting up ─────────────────────
+     * â”€â”€ the counter window, as cracks lighting up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
      *
      * The tell the ability is balanced around: an opponent is meant to be
      * able to see that a release is coming and step back, so it has to be
@@ -2205,7 +2254,7 @@ export class FrogModel {
       color: 0xffc66b, transparent: true, opacity: 0, depthWrite: false,
     });
     this.shellCracks = [];
-    // x, y, z, length, yaw, roll — laid along the body's own fault lines.
+    // x, y, z, length, yaw, roll â€” laid along the body's own fault lines.
     const CRACKS = [
       [0.00, 0.60, 0.62, 0.85, 0.0, 0.26],
       [-0.50, 0.78, 0.34, 0.62, -0.6, -0.85],
@@ -2230,7 +2279,7 @@ export class FrogModel {
   /**
    * Raise, hold or drop the stone.
    *
-   * The frog inside is hidden outright rather than left to clip through —
+   * The frog inside is hidden outright rather than left to clip through â€”
    * `setGhost(0)` is already the one path that fades the whole rig, so the
    * shell borrows it instead of introducing a second way to hide a frog.
    *
@@ -2242,14 +2291,14 @@ export class FrogModel {
     if (!this.shell && !s.shell) return;
     if (!this.shell) this._buildShell();
     const want = s.shell ? 1 : 0;
-    // Springs up fast, crumbles away faster — a shell that eased out slowly
+    // Springs up fast, crumbles away faster â€” a shell that eased out slowly
     // would still be standing well after it stopped blocking anything.
     this._shellScale = damp(this._shellScale, want, want ? 14 : 22, dt);
     const up = this._shellScale > 0.02;
     this.shell.visible = up;
     if (!up) {
-      // Whatever happened to the shell — crumbled, released, or the frog
-      // died and it was dropped outright — the frog comes back.
+      // Whatever happened to the shell â€” crumbled, released, or the frog
+      // died and it was dropped outright â€” the frog comes back.
       if (this.lift) this.lift.visible = true;
       return;
     }
@@ -2262,13 +2311,13 @@ export class FrogModel {
      *
      * And it does not turn. The boulder this replaced span slowly, which
      * was fine for a rock and is wrong for a carving: a statue that rotates
-     * is a prop on a turntable. It holds the frog's own facing — the face,
+     * is a prop on a turntable. It holds the frog's own facing â€” the face,
      * the folded hands and the feet are all built toward local +Z, which
      * `setFacing` has already pointed the way the player was looking.
      */
     /**
      * A shade bigger than the frog it swallowed. The carving is built at
-     * roughly 1.5 units across, against a frog about 1.0 wide — this takes
+     * roughly 1.5 units across, against a frog about 1.0 wide â€” this takes
      * it to 1.7, which is enough for the statue to read as something the
      * frog is INSIDE rather than as a frog wearing a costume, without
      * making it big enough to clip through the scenery it sits in.
@@ -2281,7 +2330,7 @@ export class FrogModel {
     /**
      * Hide the frog once the stone has actually closed, not before.
      *
-     * `lift` is the whole rig — torso, head, limbs, gear — and leaves the
+     * `lift` is the whole rig â€” torso, head, limbs, gear â€” and leaves the
      * nameplate (which hangs off the root) alone, so a sealed opponent can
      * still be identified. The 0.8 threshold is what keeps the frog visible
      * through the raise and the crumble; popping it out at the first frame
@@ -2293,7 +2342,7 @@ export class FrogModel {
      * The fault lines light up when the counter window opens.
      *
      * One shared material, so seven cracks cost one opacity write a frame
-     * rather than seven — and so they can never drift out of step with each
+     * rather than seven â€” and so they can never drift out of step with each
      * other, which would read as flickering rather than as pulsing.
      */
     if (this.shellCrackMat) {
@@ -2327,7 +2376,7 @@ export class FrogModel {
    * Draw the nameplate THROUGH whatever is in front of it.
    *
    * Used when a player is hidden by something you are meant to be able to
-   * see past — foliage, water — so a tree is cover, not an invisibility
+   * see past â€” foliage, water â€” so a tree is cover, not an invisibility
    * cloak. Deliberately NOT enabled for solid geometry: seeing names through
    * walls is a different game.
    */
@@ -2387,7 +2436,7 @@ export class FrogModel {
     if (s.dead) {
       this.root.rotation.z = damp(this.root.rotation.z, Math.PI * 0.48, 9, dt);
       this.body.position.y = damp(this.body.position.y, -0.25, 8, dt);
-      // Eyes close the same way a blink closes them — uniformly, to the
+      // Eyes close the same way a blink closes them â€” uniformly, to the
       // radius that just swallows the eyeball. Driving scale.y alone left the
       // lid a needle now that the other two axes are a speck, and it was a
       // four-times-oversized ellipsoid before that.
@@ -2407,7 +2456,7 @@ export class FrogModel {
      * Is the frog standing still with nothing else going on?
      *
      * Every other state is listed here rather than relying on the pose chain
-     * below, because the stance also moves the BODY — and the body is posed
+     * below, because the stance also moves the BODY â€” and the body is posed
      * before any of those branches get a say. Anything that is its own
      * animation wins: attacking, dashing, jumping, falling, grappling,
      * throwing, parrying, swimming, sliding a wall. When one ends this goes
@@ -2434,7 +2483,7 @@ export class FrogModel {
     // The idle breath rides ABOVE the origin rather than swinging either side
     // of it. The origin is the soles of the feet and sits exactly on the
     // ground, so a bob that goes negative buries the feet in the floor for
-    // half of every cycle — which is precisely what it used to do.
+    // half of every cycle â€” which is precisely what it used to do.
     const idleBob = (0.5 + Math.sin(t * 1.9) * 0.5) * 0.05;
     let targetY = (moving ? hop : idleBob);
     let targetSquash = 1;
@@ -2469,7 +2518,7 @@ export class FrogModel {
       targetRoll = 0;
     }
     // Ninja run: torso pitched almost horizontal, chest low, arms trailing.
-    // Only on the ground — mid-air keeps the normal tuck so jumps read clearly.
+    // Only on the ground â€” mid-air keeps the normal tuck so jumps read clearly.
     const ninjaRun = s.sprinting && moving && !s.swimming;
     if (ninjaRun) {
       targetLean = 1.02;
@@ -2491,7 +2540,7 @@ export class FrogModel {
      * The pose is additive on whatever the run cycle is already doing rather
      * than a branch of its own, because you climb WHILE running and the
      * stride has to keep going underneath. The frog leans into the step, the
-     * body rises, and the lead knee comes up further down in the leg pass —
+     * body rises, and the lead knee comes up further down in the leg pass â€”
      * a reach, which is what makes the climb read as effort rather than the
      * frog being teleported upward.
      */
@@ -2509,7 +2558,7 @@ export class FrogModel {
      * The ninja stance. Weight low and forward, and never quite still.
      *
      * The idle motion is several slow sines at frequencies that do not divide
-     * into each other — breath, a weight shift, a settle — so the pose keeps
+     * into each other â€” breath, a weight shift, a settle â€” so the pose keeps
      * drifting instead of ticking round a loop. There are no keyframes to
      * wrap, so there is no seam to hide.
      *
@@ -2528,7 +2577,7 @@ export class FrogModel {
        * pose being aimed at.
        *
        * Bending a knee lifts that foot toward the hip and the body comes down
-       * to meet it — but the body reaches its target sooner than the legs
+       * to meet it â€” but the body reaches its target sooner than the legs
        * reach theirs, so committing to the full drop the moment the frog
        * stops walking pushes the soles through the floor for the length of
        * the transition. That is the feet-in-the-ground bug this rig has had
@@ -2570,7 +2619,7 @@ export class FrogModel {
         hipX = -0.5 + kick * 0.95;
         shinX = 1.0 - kick * 0.9;
       } else if (!s.grounded || s.dashT > 0) {
-        // Tuck the legs up — classic frog leap silhouette.
+        // Tuck the legs up â€” classic frog leap silhouette.
         const tuck = s.dashT > 0 ? 1.5 : clamp(1.0 - s.vy / 26, 0.4, 1.5);
         hipX = -1.15 * tuck;
         shinX = 1.9 * tuck;
@@ -2596,7 +2645,7 @@ export class FrogModel {
       /**
        * The reach for the step. See the `climb` block above.
        *
-       * Only the LEADING leg — whichever is swinging forward this instant —
+       * Only the LEADING leg â€” whichever is swinging forward this instant â€”
        * so it looks like one foot being placed on the tread rather than both
        * knees rising together, which reads as a crouch. Off the same phase
        * the stride uses, so it stays in time with the walk.
@@ -2608,13 +2657,13 @@ export class FrogModel {
       }
       leg.hip.rotation.x = damp(leg.hip.rotation.x, hipX, 20, dt);
       leg.shin.rotation.x = damp(leg.shin.rotation.x, shinX, 20, dt);
-      // Legs splay wide on the power stroke — the classic frog kick shape.
+      // Legs splay wide on the power stroke â€” the classic frog kick shape.
       const splay = s.swimming ? 0.30 + Math.max(0, kick) * 0.62
         : (stance ? 0.30 : 0.22);
       leg.hip.rotation.z = damp(leg.hip.rotation.z, leg.side * splay, 10, dt);
       // Feet flat to the ground in the stance. The default ankle follows the
       // shin at 0.6, which in a deep crouch drives the toe down hard and digs
-      // it into the floor — the toe, not the knee, is what limits how low the
+      // it into the floor â€” the toe, not the knee, is what limits how low the
       // frog can get. Cancelling the whole chain (lean + hip + knee) lands the
       // sole flat instead, and the rear heel is allowed to lift the way a back
       // foot does in a real stance.
@@ -2652,7 +2701,7 @@ export class FrogModel {
           sx = -1.15; sz = arm.side * (arm.side > 0 ? 0.55 : 0.85); fx = -1.25;
         } else if (s.reachT > 0 && arm.side > 0) {
           /**
-           * Reaching out and back — a hand on the lid, the lever, the hilt.
+           * Reaching out and back â€” a hand on the lid, the lever, the hilt.
            *
            * Out and in over the same gesture, so the arm is extended on the
            * beat the thing it is touching starts to move and back by its
@@ -2698,7 +2747,7 @@ export class FrogModel {
           // the larger angle.
           //
           // The sword hand is the right one (see _poseAttack), so that is the
-          // one held back by the hip with the katana on the back behind it —
+          // one held back by the hip with the katana on the back behind it â€”
           // cocked to draw rather than waving about in front.
           const breath = Math.sin(t * 1.9) * 0.025;
           const sway = Math.sin(t * 0.74) * 0.045;
@@ -2727,7 +2776,7 @@ export class FrogModel {
     let headTiltY = 0;
     if (stance) {
       // Cancel most of the stance's forward pitch so the frog is watching
-      // you rather than the floor, and let the head drift a hair — a fighter
+      // you rather than the floor, and let the head drift a hair â€” a fighter
       // reading the room, not scanning it.
       headTiltX = -this.lean * 0.82 + Math.sin(t * 0.80) * 0.022;
       headTiltY = Math.sin(t * 0.43) * 0.065;
@@ -2749,7 +2798,7 @@ export class FrogModel {
      * only while standing, so it reads as a thought rather than a loop. It
      * is ADDED to whatever the head was going to do and then damped like
      * everything else, so there is nothing to cancel when the frog starts
-     * moving mid-gesture — the target simply changes underneath it.
+     * moving mid-gesture â€” the target simply changes underneath it.
      *
      * Small on purpose: 0.26 radians is about fifteen degrees. A calm,
      * extremely powerful character glances at the sky; it does not perform.
@@ -2770,8 +2819,8 @@ export class FrogModel {
      *
      * Half the speed with a wobble on the tilt, so it reads as something
      * that is still trying to work rather than as a ring that happens to
-     * have a gap in it. The spin is on the ring's OWN axis — Three.js
-     * composes Euler XYZ as Rx·Ry·Rz, so the z term is innermost and turns
+     * have a gap in it. The spin is on the ring's OWN axis â€” Three.js
+     * composes Euler XYZ as RxÂ·RyÂ·Rz, so the z term is innermost and turns
      * the torus within its own plane, leaving the tilt intact.
      */
     if (this.halo) this.halo.rotation.z += dt * (this._haloBroken ? 0.42 : 0.9);
@@ -2785,7 +2834,7 @@ export class FrogModel {
     }
     /**
      * Orbiting fragments. Each rides its own ring at its own rate, and bobs
-     * on a phase taken from its starting angle — a single shared rate would
+     * on a phase taken from its starting angle â€” a single shared rate would
      * make them a rigid wheel, and the whole point is that they float.
      */
     if (this.shards) {
@@ -2804,7 +2853,7 @@ export class FrogModel {
      * Embers: each spark rises from the hip to over the head and restarts.
      *
      * Fading is done with SCALE, not opacity, because all nine share one
-     * material — nine materials to fade nine cubes independently would be
+     * material â€” nine materials to fade nine cubes independently would be
      * nine draw calls for something the size of a pixel at arm's length.
      *
      * `size` is the spark's own build scale and the fade MULTIPLIES it.
@@ -2839,7 +2888,7 @@ export class FrogModel {
     if (this.eclipse) this._animateEclipse(dt, t, s, stance, speed);
     if (this.divine) this._animateDivine(dt, t);
 
-    // Throat pulse — a frog is never quite still.
+    // Throat pulse â€” a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);
     const throat = 1 + Math.sin(t * 3.1) * 0.03 + this.croakPulse * 0.25;
     // Breathe the whole midsection, so the gi and the sash swell with the
@@ -2852,7 +2901,7 @@ export class FrogModel {
     // Height on each mesh's OWN scale instead, which grows it about its own
     // centre and moves nothing. The gi has to grow with the belly here too:
     // breathing the belly upward against a shirt of fixed height pushed it
-    // out through the top of the gi — 0.04 proud at rest, 0.18 at full croak,
+    // out through the top of the gi â€” 0.04 proud at rest, 0.18 at full croak,
     // a pale bubble surfacing at the chest for the few frames of the pulse.
     // The gi's centre sits above the belly's, so growing both by the same
     // factor keeps its top edge permanently clear of the belly's.
@@ -2882,7 +2931,7 @@ export class FrogModel {
     if (this.blinkTimer <= 0) { this.blink = 1; this.blinkTimer = 2.2 + Math.random() * 3.5; }
     if (this.blink > 0) this.blink = Math.max(0, this.blink - dt * 7);
     // The lid grows over the eyeball and shrinks back inside it. Uniform, so
-    // there is never a flat disc lying across the white — see _buildHead.
+    // there is never a flat disc lying across the white â€” see _buildHead.
     const lidR = 0.002 + Math.sin(this.blink * Math.PI) * (LID_SHUT - 0.002);
     for (const e of this.eyes) e.lid.scale.setScalar(lidR);
 
@@ -2935,7 +2984,7 @@ export class FrogModel {
   }
 
   /**
-   * ═══ THE FORGOTTEN ONE, MOVING ═════════════════════════════════════════
+   * â•â•â• THE FORGOTTEN ONE, MOVING â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    *
    * Six small things, none of which is a particle system:
    *
@@ -2949,7 +2998,7 @@ export class FrogModel {
    * Plus the gesture clock, read by the head block in `update`.
    *
    * Everything animated here is a COLOUR or a SCALE. Nothing writes
-   * `opacity`, because `setGhost` owns that — see the note on the materials
+   * `opacity`, because `setGhost` owns that â€” see the note on the materials
    * in the constructor.
    */
   _animateEclipse(dt, t, s, stance, speed) {
@@ -2957,7 +3006,7 @@ export class FrogModel {
 
     /**
      * The iris. A slow breath between two-thirds and full, which at this
-     * size is a shimmer rather than a blink — the eye stays lit the whole
+     * size is a shimmer rather than a blink â€” the eye stays lit the whole
      * time and only its intensity moves.
      *
      * Both eyes share the material and therefore shimmer together, which is
@@ -2973,7 +3022,7 @@ export class FrogModel {
      * `attackT` counts down through the swing, so it is at its strongest on
      * the frame the blade starts moving and has faded by the recovery.
      *
-     * The range is deliberately narrow — 0.55 to 1.25 of the base colour.
+     * The range is deliberately narrow â€” 0.55 to 1.25 of the base colour.
      * The brief was that the emblem should become SLIGHTLY brighter, and an
      * emblem that switches from dark to blazing is a light, not a mark.
      */
@@ -2985,7 +3034,7 @@ export class FrogModel {
 
     /**
      * The cracks. Two sets on long, unequal periods, so what you see is one
-     * line somewhere on the armour coming up as another goes down — energy
+     * line somewhere on the armour coming up as another goes down â€” energy
      * moving through it rather than a row of lamps on a timer.
      *
      * They bottom out at a quarter rather than at zero: a crack that goes
@@ -3000,7 +3049,7 @@ export class FrogModel {
      * Fragments. Each runs its own cycle: a long hidden stretch, then a
      * fade up, a while orbiting, and a fade down. `k` is the visible
      * fraction, and it multiplies the build scale rather than replacing it
-     * — the same mistake the embers made once, which turned nine specks
+     * â€” the same mistake the embers made once, which turned nine specks
      * into nine unit cubes.
      */
     for (const f of this.eclFrags) {
@@ -3013,7 +3062,7 @@ export class FrogModel {
        * Measured, not guessed: at 56% all three were up together 36% of
        * the time, which is a permanent ring by another name. At 44% that
        * falls to 22%, the average drops from 1.64 fragments to 1.27, and
-       * for better than a third of the time there are none at all — so
+       * for better than a third of the time there are none at all â€” so
        * the usual sight is one fragment, occasionally two.
        */
       const p = f.t / f.period;
@@ -3075,7 +3124,7 @@ export class FrogModel {
      *
      * The countdown runs ONLY in stance, so a player who is moving is not
      * quietly accruing gestures that all fire the moment they stop. The
-     * gesture itself is allowed to finish whatever happens — it is a
+     * gesture itself is allowed to finish whatever happens â€” it is a
      * quarter-radian offset that damps out on its own if the frog starts
      * running mid-glance.
      */
@@ -3127,7 +3176,7 @@ export class FrogModel {
       // The finisher's weight comes from COMPRESSING the body, not from
       // translating it down. The origin is the soles of the feet, so scaling
       // Y drops the shoulders by the same amount while the feet stay planted
-      // — translating instead drove the whole frog 0.12 into the floor.
+      // â€” translating instead drove the whole frog 0.12 into the floor.
       this.body.scale.y *= 1 - sw * 0.13;
       this.katana.rotation.set(lerp(-2.6, 1.3, smooth(k)), 0, 0);
     }
@@ -3153,7 +3202,7 @@ export class FrogModel {
     }
 
     // Mouth, root-local. `_lift` is added because the rig it belongs to was
-    // raised to put the soles on the ground — without it the tongue would
+    // raised to put the soles on the ground â€” without it the tongue would
     // still fire from where the mouth used to be.
     const from = new THREE.Vector3(0, 1.42 + this._lift, 0.30);
     this.root.localToWorld(from);
@@ -3214,7 +3263,7 @@ export class FrogModel {
       this.tagMarker = g;
       this.root.add(g);
       // Built after the fact, so any fade already in effect has not been
-      // applied to it — force setGhost to run over the rig again.
+      // applied to it â€” force setGhost to run over the rig again.
       this._ghost = undefined;
     }
     if (this.tagMarker) this.tagMarker.visible = v;
@@ -3225,7 +3274,7 @@ export class FrogModel {
    *
    * The rig is modelled facing +Z (eyes, mouth and toes are all at positive
    * Z, scarf and sheath trail at negative Z), while gameplay yaw points along
-   * -Z — so the half-turn here is what stops the frog from running backwards
+   * -Z â€” so the half-turn here is what stops the frog from running backwards
    * and staring into the camera. Always set facing through this method.
    */
   setFacing(yaw) {
@@ -3234,17 +3283,17 @@ export class FrogModel {
 
   /** Called by the player controller the moment a double jump starts. */
   triggerFlip() { this.flip = 1; }
-  /** Little throat puff — used on jumps and croaks. */
+  /** Little throat puff â€” used on jumps and croaks. */
   croak() { this.croakPulse = 1; }
 
   /**
-   * Fade the ENTIRE frog — used while invisibility is up, and by the shadow
+   * Fade the ENTIRE frog â€” used while invisibility is up, and by the shadow
    * clone when its owner is invisible.
    *
    * Walks the whole rig rather than just `this.mats`, because parts of the
    * model carry their own materials: the nameplate sprite and the "it"
    * marker. Fading only the body left those floating at full strength, which
-   * defeats the point — a name tag hanging over thin air is worse than no
+   * defeats the point â€” a name tag hanging over thin air is worse than no
    * invisibility at all.
    *
    * Each material's original look is stashed the first time it is touched,
@@ -3285,31 +3334,31 @@ export class FrogModel {
   }
 
   /**
-   * ═══ PUT A DIFFERENT WEAPON IN THE FROG'S HAND ═════════════════════════
+   * â•â•â• PUT A DIFFERENT WEAPON IN THE FROG'S HAND â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    *
-   * Called when the equipped weapon changes — see `applyStats` in
+   * Called when the equipped weapon changes â€” see `applyStats` in
    * js/overworld.js. Twenty weapons in the gear table were all being drawn
    * as the same katana, so buying the Quarry Maul changed a number in the
    * bag and nothing else in the world.
    *
    * It REBUILDS the group rather than swapping meshes inside it, because
-   * the nine shapes `buildKatana` makes have different part counts — a maul
-   * has a haft and a block where a sabre has seven stacked segments — and
+   * the nine shapes `buildKatana` makes have different part counts â€” a maul
+   * has a haft and a block where a sabre has seven stacked segments â€” and
    * there is no sensible correspondence to morph between. Rebuilding costs
    * about twenty meshes and happens when a player equips something, which
    * is a menu action and not a frame.
    *
-   * ── what it keeps ─────────────────────────────────────────────────────
+   * â”€â”€ what it keeps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    * The pivot's transform. `this.katana` is animated every frame by the
    * swing code and parked in the sheath pose between swings, so a fresh
    * group at the origin would put the weapon through the frog's chest until
    * the next animation frame wrote over it. Copied across explicitly.
    *
-   * ── the materials ─────────────────────────────────────────────────────
+   * â”€â”€ the materials â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    * The four the weapon colours live in are REPLACED, not edited, and the
    * old ones are disposed. They cannot simply be recoloured: a glowing
    * blade is a `MeshBasicMaterial` and a steel one is a `MeshLambertMaterial`
-   * — a bar of light is a light source, not a thing the world lights — so
+   * â€” a bar of light is a light source, not a thing the world lights â€” so
    * FROGSHIN and the Reed Knife need different material classes, not
    * different values in the same one.
    *
@@ -3360,7 +3409,7 @@ export class FrogModel {
       M.bladeShard = new THREE.MeshBasicMaterial({ color: look.orbit });
     }
 
-    // The sheath is made of the same materials, so it re-tints for free —
+    // The sheath is made of the same materials, so it re-tints for free â€”
     // but its meshes hold references to the OLD ones, so it is rebuilt too.
     for (const child of this.sheath.children.slice()) {
       if (child.geometry && !Object.values(G).includes(child.geometry)) {
@@ -3400,7 +3449,7 @@ export class FrogModel {
     const seen = new Set();
     this.root.traverse((o) => {
       if (o.geometry && !shared.includes(o.geometry)) o.geometry.dispose();
-      // Sweep every material, not just this.mats — the nameplate sprite and
+      // Sweep every material, not just this.mats â€” the nameplate sprite and
       // the tagger marker own theirs, and shadow clones are built and torn
       // down often enough that leaking them would add up.
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : null);
