@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v134';
-import { Audio } from './audio.js?v=v134';
-import { PX } from './icons.js?v=v134';
-import { CFG } from './config.js?v=v134';
+} from './skins.js?v=v135';
+import { Audio } from './audio.js?v=v135';
+import { PX } from './icons.js?v=v135';
+import { CFG } from './config.js?v=v135';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -448,24 +448,29 @@ export const ABILITIES = [
     price: 8000,
     duration: CFG.abilities.earthshell.duration,
     cooldown: CFG.abilities.earthshell.cooldown,
-    blurb: 'Stone closes over you and nothing gets through — but you cannot '
-      + 'move, swing or throw while it is up. Let it go at the right moment '
-      + 'and it bursts: you launch forward and everything near you is thrown '
-      + 'off. Let it lapse and you have wasted twelve seconds.',
+    blurb: 'Turn to stone — a weathered garden statue of a frog, sitting with '
+      + 'its hands folded, and nothing gets through it. You cannot move, swing '
+      + 'or throw while it is up. Let it go at the right moment and it shatters: '
+      + 'you launch forward and everything near you is thrown off. Let it lapse '
+      + 'and you have wasted twelve seconds.',
     art: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges">
-      <g fill="#6f5637">
-        <rect x="9" y="4" width="14" height="3"/><rect x="6" y="7" width="20" height="4"/>
-        <rect x="4" y="11" width="24" height="12"/><rect x="6" y="23" width="20" height="5"/>
+      <g fill="#8b8f6f">
+        <rect x="5" y="3" width="8" height="6"/><rect x="19" y="3" width="8" height="6"/>
+        <rect x="4" y="8" width="24" height="7"/>
+        <rect x="3" y="15" width="26" height="10"/><rect x="2" y="18" width="28" height="7"/>
+        <rect x="3" y="25" width="9" height="4"/><rect x="20" y="25" width="9" height="4"/>
       </g>
-      <g fill="#8a6a44">
-        <rect x="9" y="7" width="8" height="4"/><rect x="7" y="11" width="6" height="5"/>
-        <rect x="18" y="19" width="7" height="4"/>
+      <g fill="#a9ad8c">
+        <rect x="6" y="2" width="6" height="3"/><rect x="20" y="2" width="6" height="3"/>
+        <rect x="7" y="7" width="18" height="2"/>
+        <rect x="10" y="18" width="12" height="3"/>
+        <rect x="4" y="26" width="7" height="2"/><rect x="21" y="26" width="7" height="2"/>
       </g>
-      <g fill="#4a3925">
-        <rect x="4" y="19" width="5" height="4"/><rect x="21" y="11" width="5" height="4"/>
-        <rect x="13" y="23" width="6" height="5"/>
+      <g fill="#5d6149">
+        <rect x="6" y="9" width="7" height="1"/><rect x="19" y="9" width="7" height="1"/>
+        <rect x="5" y="12" width="22" height="2"/>
+        <rect x="10" y="21" width="12" height="1"/>
       </g>
-      <g fill="#c6f06a"><rect x="11" y="14" width="3" height="4"/><rect x="18" y="14" width="3" height="4"/></g>
     </svg>`,
   },
   {

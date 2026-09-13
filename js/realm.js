@@ -29,13 +29,13 @@
  * thing that must never stream is the thing the simulation depends on.
  */
 
-import * as THREE from '../lib/three.module.js?v=v134';
-import { CFG } from './config.js?v=v134';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v134';
-import { Terrain, CollisionWorld } from './collision.js?v=v134';
+import * as THREE from '../lib/three.module.js?v=v135';
+import { CFG } from './config.js?v=v135';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v135';
+import { Terrain, CollisionWorld } from './collision.js?v=v135';
 import { REGIONS, REGION_BY_ID, REALM_SIZE, REALM_HALF, SEA,
-  regionWeights, regionAt } from './regions.js?v=v134';
-import { Network } from './roads.js?v=v134';
+  regionWeights, regionAt } from './regions.js?v=v135';
+import { Network } from './roads.js?v=v135';
 
 const _scratch = [];
 const _col = new THREE.Color();

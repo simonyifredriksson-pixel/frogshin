@@ -10,9 +10,9 @@
  *     the set periodically so late joiners converge without special-casing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v134';
-import { CFG } from './config.js?v=v134';
-import { clamp } from './util.js?v=v134';
+import * as THREE from '../lib/three.module.js?v=v135';
+import { CFG } from './config.js?v=v135';
+import { clamp } from './util.js?v=v135';
 
 const _v = new THREE.Vector3();
 const _prev = new THREE.Vector3();
@@ -89,22 +89,33 @@ export const ITEM_ICONS = {
     </g>
     <g fill="#12121a"><rect x="20" y="14" width="3" height="3"/><rect x="26" y="14" width="3" height="3"/></g>
   </svg>`,
-  // A boulder with a frog sealed in it — the eyes are the only tell that
-  // there is anybody in there, which is exactly the read the ability wants.
+  /**
+   * The garden statue you become — see `_buildShell` in js/frog.js.
+   *
+   * Same three stones as the model and the same four features in the same
+   * order: eye mounds on top, a wide mouth, the hands folded in its lap,
+   * two splayed feet. An icon that showed a boulder while the ability made
+   * a frog would be the one place a player looks before they know what the
+   * ability does.
+   */
   earthshell: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">
-    <g fill="#6f5637">
-      <rect x="9" y="5" width="14" height="3"/><rect x="6" y="8" width="20" height="4"/>
-      <rect x="4" y="12" width="24" height="11"/><rect x="6" y="23" width="20" height="4"/>
+    <g fill="#8b8f6f">
+      <rect x="5" y="4" width="8" height="5"/><rect x="19" y="4" width="8" height="5"/>
+      <rect x="4" y="8" width="24" height="7"/>
+      <rect x="3" y="15" width="26" height="10"/><rect x="2" y="18" width="28" height="6"/>
+      <rect x="3" y="25" width="9" height="4"/><rect x="20" y="25" width="9" height="4"/>
     </g>
-    <g fill="#8a6a44">
-      <rect x="9" y="8" width="8" height="3"/><rect x="7" y="12" width="6" height="5"/>
-      <rect x="18" y="19" width="7" height="4"/>
+    <g fill="#a9ad8c">
+      <rect x="6" y="3" width="6" height="3"/><rect x="20" y="3" width="6" height="3"/>
+      <rect x="7" y="7" width="18" height="2"/>
+      <rect x="10" y="18" width="12" height="3"/>
+      <rect x="4" y="26" width="7" height="2"/><rect x="21" y="26" width="7" height="2"/>
     </g>
-    <g fill="#4a3925">
-      <rect x="4" y="19" width="5" height="4"/><rect x="21" y="12" width="5" height="4"/>
-      <rect x="13" y="23" width="6" height="4"/>
+    <g fill="#5d6149">
+      <rect x="6" y="9" width="7" height="1"/><rect x="19" y="9" width="7" height="1"/>
+      <rect x="5" y="12" width="22" height="2"/>
+      <rect x="10" y="21" width="12" height="1"/>
     </g>
-    <g fill="#c6f06a"><rect x="11" y="15" width="3" height="3"/><rect x="18" y="15" width="3" height="3"/></g>
   </svg>`,
   // The tongue, out and hooked.
   tonguetrap: `<svg viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true">

@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v134';
-import { CFG } from './config.js?v=v134';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v134';
-import { FrogModel } from './frog.js?v=v134';
-import { Grapple, GrappleState } from './grapple.js?v=v134';
-import { Combat, Health } from './combat.js?v=v134';
-import { Stamina } from './stamina.js?v=v134';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v134';
-import { Audio } from './audio.js?v=v134';
+import * as THREE from '../lib/three.module.js?v=v135';
+import { CFG } from './config.js?v=v135';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v135';
+import { FrogModel } from './frog.js?v=v135';
+import { Grapple, GrappleState } from './grapple.js?v=v135';
+import { Combat, Health } from './combat.js?v=v135';
+import { Stamina } from './stamina.js?v=v135';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v135';
+import { Audio } from './audio.js?v=v135';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v134';
+} from './abilities.js?v=v135';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1290,9 +1290,16 @@ export class Player {
     this.grapple.cancel();
     this.dashTimer = 0;
     this.combat.reset();
-    _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
-    this.effects.ring(_tmp, 0.6, 3.2, 0.42, 0xb98a52, true);
-    this.effects.puff(_tmp, 0x8a6a44, 26, 7);
+    /**
+     * The stone comes UP, so the dust does too — a ring at the feet and a
+     * low puff, rather than a cloud around the chest. See `_buildShell` in
+     * js/frog.js: what closes over you is a sitting garden statue, and it
+     * wants to look like it rose out of the ground.
+     */
+    _tmp.set(this.pos.x, this.pos.y + 0.25, this.pos.z);
+    this.effects.ring(_tmp, 0.6, 3.4, 0.45, 0x9aa07e, true);
+    this.effects.puff(_tmp, 0x8b8f6f, 26, 6);
+    this.effects.dustPuff(_tmp, 12, 3.2, 0xa9ad8c);
     Audio.tone({ freq: 150, to: 60, dur: 0.42, type: 'square', volume: 0.2, pos: this.pos });
     this._abilEvent('earthshell', { s: 1 });
   }
@@ -1313,7 +1320,8 @@ export class Player {
     const len = Math.hypot(kx, kz) || 1;
     _tmp.set(this.pos.x + (kx / len) * 0.9, this.pos.y + 1.0, this.pos.z + (kz / len) * 0.9);
     this.effects.hitBurst(_tmp, { x: -kx / len, y: 0, z: -kz / len }, true);
-    this.effects.puff(_tmp, 0xb98a52, 10, 5);
+    // Chips off the carving where the blow landed.
+    this.effects.puff(_tmp, 0xa9ad8c, 10, 5);
     Audio.parry(this.pos);
     return true;
   }
@@ -1332,8 +1340,12 @@ export class Player {
     const shell = this.shell;
     this.shell = null;
     if (kind !== SHELL.PERFECT) {
-      _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
-      this.effects.puff(_tmp, 0x7a5f3e, 16, 4);
+      // It just sags apart. Low, slow and grey — nothing about a wasted
+      // shell should look like the burst, or the player cannot tell from
+      // the screen which one they got.
+      _tmp.set(this.pos.x, this.pos.y + 0.4, this.pos.z);
+      this.effects.puff(_tmp, 0x6f7358, 18, 4);
+      this.effects.dustPuff(_tmp, 10, 2.4, 0x8b8f6f);
       Audio.tone({ freq: 90, to: 40, dur: 0.3, type: 'square', volume: 0.12, pos: this.pos });
       this._abilEvent('earthshell', { s: 0 });
       return;
@@ -1348,10 +1360,23 @@ export class Player {
     this.shellBurst = 0.35;
     this.dashCharges = CFG.dash.airCharges;
 
-    _tmp.set(this.pos.x, this.pos.y + 0.8, this.pos.z);
-    this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xd8a760, true);
-    this.effects.puff(_tmp, 0xb98a52, 34, 13);
-    this.effects.dashBurst(this.pos, { x: fx, y: 0, z: fz }, 0xd8a760);
+    /**
+     * ── THE STATUE SHATTERS ───────────────────────────────────────────
+     *
+     * Three layers, because one puff reads as smoke and this is supposed to
+     * read as carved stone coming apart:
+     *   1. the light that was in the cracks, let go as a ring
+     *   2. fast pale chips, thrown hard and far
+     *   3. slower dark rubble, which is what sells the WEIGHT — debris that
+     *      all moves at one speed looks like confetti
+     */
+    _tmp.set(this.pos.x, this.pos.y + 0.7, this.pos.z);
+    this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xffc66b, true);
+    this.effects.ring(_tmp, 0.3, A.radius * 0.8, 0.3, 0xa9ad8c, true);
+    this.effects.puff(_tmp, 0xa9ad8c, 30, 15);
+    this.effects.puff(_tmp, 0x5d6149, 22, 7);
+    this.effects.dustPuff(_tmp, 16, 5, 0x8b8f6f);
+    this.effects.dashBurst(this.pos, { x: fx, y: 0, z: fz }, 0xffc66b);
     Audio.tone({ freq: 220, to: 70, dur: 0.5, type: 'square', volume: 0.28, pos: this.pos });
     Audio.dash(this.pos);
 
@@ -1409,13 +1434,19 @@ export class Player {
     this.shell.left -= dt;
     if (this.shell.struck > 0) this.shell.struck -= dt;
 
-    // Dust while the stone sits, so it reads as a solid object and not a tint.
+    /**
+     * Grit trickling off it while it sits, so it reads as a solid object
+     * weathering rather than as a tint over the frog.
+     *
+     * Around the base and low down, not in a sphere around the middle —
+     * dust falls. The statue is about 1.5 wide at the haunches.
+     */
     if (Math.random() < dt * 8) {
       _tmp.set(
-        this.pos.x + (Math.random() - 0.5) * 2.2,
-        this.pos.y + Math.random() * 1.6,
-        this.pos.z + (Math.random() - 0.5) * 2.2);
-      this.effects.puff(_tmp, 0x8a6a44, 2, 1.2);
+        this.pos.x + (Math.random() - 0.5) * 1.7,
+        this.pos.y + Math.random() * 0.9,
+        this.pos.z + (Math.random() - 0.5) * 1.7);
+      this.effects.puff(_tmp, 0x8b8f6f, 2, 1.0);
     }
 
     // The moment the window opens, say so — the player cannot see a timer.
@@ -1431,8 +1462,9 @@ export class Player {
     if (this.shell.left <= 0) {
       // Lapsed. Same crumble as a mistimed release — see `_releaseShell`.
       this.shell = null;
-      _tmp.set(this.pos.x, this.pos.y + 0.6, this.pos.z);
-      this.effects.puff(_tmp, 0x7a5f3e, 18, 4);
+      _tmp.set(this.pos.x, this.pos.y + 0.4, this.pos.z);
+      this.effects.puff(_tmp, 0x6f7358, 18, 4);
+      this.effects.dustPuff(_tmp, 10, 2.4, 0x8b8f6f);
       Audio.tone({ freq: 90, to: 40, dur: 0.3, type: 'square', volume: 0.12, pos: this.pos });
       this._abilEvent('earthshell', { s: 0 });
     }

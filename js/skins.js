@@ -741,19 +741,32 @@ export const FROG_SKINS = [
       emissive: 0x5a4408,
     } },
   /**
-   * THE RAREST THING THE SHOP CAN PRODUCE. About one open in five hundred.
+   * ═══ THE RAREST THING THE SHOP CAN PRODUCE ═══════════════════════════
+   * About one open in five hundred.
    *
-   * It gets everything: armour, a crown, a double halo, glowing hide, and
-   * twelve golden fragments orbiting the frog. That last one is the tell —
-   * `orbit` is on this and on one sword, and nothing else, so a frog with
-   * fragments going round it is unmistakable from across the arena.
+   * ENTHRONED. Armour, a crown, a double halo, glowing hide, and twelve
+   * golden fragments orbiting it — `orbit` is on this and on one sword and
+   * nothing else in the game, so a frog with fragments going round it is
+   * unmistakable from across the arena.
+   *
+   * ── it has no horns and no spines ─────────────────────────────────────
+   * It used to have four horns and six spikes, and so does Fallen
+   * Celestial. Between that, the crown, the double halo, the stars, the
+   * glowing eyes and the armour, the two Mythics in this game were the same
+   * frog in two tints — which is the one thing two items out of two
+   * different five-thousand-froglet cases must not be.
+   *
+   * Horns are not regal. They went to the one that FELL, and this kept the
+   * crown, so the two now differ in outline rather than in palette: this is
+   * a crowned, haloed, orbited thing, and that is a horned, winged, broken
+   * one. See `frog_ecl_fallen`.
    */
   { id: 'frog_sovereign', name: 'Astral Sovereign', rarity: 'mythic', set: 'celestial',
     skin: 0x1a1e38, belly: 0xd8e0ff, cloth: 0x0d1024, scarf: 0xffd76b,
     fx: {
       plates: 0x2a3060, orbit: 0xffd76b, orbitN: 12, stars: 0xffffff,
-      crown: 1.8, pattern: 0xffe98a, eyeGlow: 0xffffff, aura: 0xffd76b,
-      halo: 0xfff3c4, halo2: true, horns: 4, spikes: 6, emissive: 0x2a2060,
+      crown: 1.9, pattern: 0xffe98a, eyeGlow: 0xffffff, aura: 0xffd76b,
+      halo: 0xfff3c4, halo2: true, emissive: 0x2a2060,
     } },
 
   /**
@@ -793,12 +806,36 @@ export const FROG_SKINS = [
       plates: 0x2a2a34, crown: 1.5, pattern: 0xffb43a, eyeGlow: 0xffd76b,
       aura: 0xff9a2a, halo: 0xffb43a, horns: 2, spikes: 5, emissive: 0x241806,
     } },
+  /**
+   * ═══ THE ONE THAT FELL ═══════════════════════════════════════════════
+   *
+   * The name is the whole brief, and it is the opposite of the Mythic it
+   * used to be a recolour of. Where the Astral Sovereign is crowned,
+   * double-haloed and orbited by its own gold, this is HORNED, WINGED and
+   * carrying one halo with a piece missing, hanging behind its head at a
+   * tilt instead of sitting level over it.
+   *
+   * `wingsTorn` shortens alternate feathers and drops one outright, so the
+   * fan has holes in it. A clean, even fan reads as an angel; this one has
+   * been through something.
+   *
+   * ── why it lost the crown ─────────────────────────────────────────────
+   * Two five-thousand-froglet cases must not pay out the same silhouette,
+   * and they did: both Mythics had a crown, a double halo, four horns, six
+   * spikes, stars, glowing eyes and armour, and differed only in being gold
+   * or violet. Everything a fallen thing would have lost went to the
+   * Sovereign, and everything it would have gained came here.
+   */
   { id: 'frog_ecl_fallen', name: 'Fallen Celestial', rarity: 'mythic', set: 'eclipse',
     skin: 0x0f0d18, belly: 0xd8d0f0, cloth: 0x070610, scarf: 0xffffff,
     fx: {
-      plates: 0x1a1830, embers: 0xbfa8ff, stars: 0xffffff, crown: 1.7,
+      plates: 0x1a1830, embers: 0xbfa8ff, stars: 0xffffff,
+      // Ashen, not black. A dark membrane on a near-black frog left only
+      // the lit edge visible and the wings read as sticks; they have to
+      // carry their own mass against the body they grow out of.
+      wings: 0x9a90c4, wingGlow: 0xe8dcff, wingsTorn: true, wingSpan: 1.2,
       pattern: 0xffffff, eyeGlow: 0xffffff, aura: 0x7a5ad0,
-      halo: 0xd8d0ff, halo2: true, horns: 4, spikes: 6, emissive: 0x1a1040,
+      halo: 0xd8d0ff, haloBroken: true, horns: 4, spikes: 6, emissive: 0x1a1040,
     } },
   /**
    * ══ ??? — THE FORGOTTEN ONE ═══════════════════════════════════════════

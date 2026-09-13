@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v134';
-import { CFG } from './config.js?v=v134';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v134';
+import * as THREE from '../lib/three.module.js?v=v135';
+import { CFG } from './config.js?v=v135';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v135';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -569,6 +569,30 @@ export class FrogModel {
       this.mats.shard = new THREE.MeshBasicMaterial({ color: ffx.orbit });
       this.mats.shardFaint = new THREE.MeshBasicMaterial({
         color: ffx.orbit, transparent: true, opacity: 0.35, depthWrite: false,
+      });
+    }
+    /**
+     * ── WINGS ─────────────────────────────────────────────────────────
+     *
+     * Nothing else on this rig comes off the BACK, which is the whole
+     * reason they exist: the fx vocabulary had grown able to say
+     * "crowned, haloed, horned, spiked, glowing" in a dozen combinations,
+     * and every one of them still reads as the same frog with different
+     * jewellery from across the arena. A wing changes the outline.
+     *
+     * Two materials: a shaded membrane so the feathers catch the light
+     * and read as solid, and an unlit edge so they still register against
+     * a dark sky. `wingGlow` defaults to the membrane colour, so a skin
+     * that only wants plain wings says one thing rather than two.
+     */
+    if (ffx.wings) {
+      this.mats.wing = new THREE.MeshLambertMaterial({
+        color: ffx.wings,
+        emissive: new THREE.Color(ffx.wings).multiplyScalar(0.22),
+      });
+      this.mats.wingEdge = new THREE.MeshBasicMaterial({
+        color: ffx.wingGlow || ffx.wings,
+        transparent: true, opacity: 0.75, depthWrite: false,
       });
     }
     /**
@@ -1269,15 +1293,43 @@ export class FrogModel {
     }
     // Haloes.
     if (M.halo) {
-      this.halo = mesh(G.torus, M.halo, 0.30, 0.30, 0.30, 0, 1.92, 0, Math.PI / 2);
-      this.halo.castShadow = false;
-      b.add(this.halo);
-      if (F.halo2) {
-        this.halo2 = mesh(G.torus, M.halo, 0.42, 0.42, 0.42, 0, 2.02, 0, Math.PI / 2);
-        this.halo2.castShadow = false;
-        b.add(this.halo2);
+      /**
+       * ── A BROKEN ONE HANGS, IT DOES NOT FLOAT ─────────────────────────
+       *
+       * `haloBroken` swaps the pristine ring for the crescent geometry the
+       * eclipse emblem already uses — a circle with a piece missing — and
+       * hangs it BEHIND the head at a tilt rather than level overhead.
+       *
+       * The tilt is the read. A ring sitting flat above the skull is the
+       * universal shorthand for sanctity, and it keeps meaning that however
+       * you recolour it; the same ring knocked off its axis with a bite out
+       * of it means the opposite, and means it instantly. That is the whole
+       * difference between Astral Sovereign and Fallen Celestial, which
+       * until now were the same crowned, double-haloed frog in two tints.
+       */
+      if (F.haloBroken) {
+        this._haloBroken = true;
+        this._haloTilt = Math.PI / 2 - 0.42;
+        this.halo = mesh(G.arc, M.halo, 0.34, 0.34, 0.34,
+          0, 1.80, -0.16, this._haloTilt, 0, 0.55);
+        this.halo.castShadow = false;
+        b.add(this.halo);
+        // A shard of it, drifting loose where the gap is.
+        const chip = mesh(G.box, M.halo, 0.07, 0.05, 0.05, 0.30, 1.62, -0.05, 0, 0, 0.6);
+        chip.castShadow = false;
+        b.add(chip);
+      } else {
+        this.halo = mesh(G.torus, M.halo, 0.30, 0.30, 0.30, 0, 1.92, 0, Math.PI / 2);
+        this.halo.castShadow = false;
+        b.add(this.halo);
+        if (F.halo2) {
+          this.halo2 = mesh(G.torus, M.halo, 0.42, 0.42, 0.42, 0, 2.02, 0, Math.PI / 2);
+          this.halo2.castShadow = false;
+          b.add(this.halo2);
+        }
       }
     }
+    if (M.wing) this._buildWings(F, M, b);
     // A shell of light around the whole frog.
     if (M.bodyAura) {
       this.bodyAura = mesh(G.sphere, M.bodyAura, 1.05, 1.25, 1.05, 0, 0.85, 0);
@@ -1293,6 +1345,111 @@ export class FrogModel {
     }
     if (F.eclipse) this._buildEclipse();
     if (F.divine) this._buildDivine();
+  }
+
+  /**
+   * ═══ WINGS ═════════════════════════════════════════════════════════════
+   *
+   * A fan of feathers off each shoulder blade, hinged at a group so the
+   * whole thing can flex — see `_updateWings`.
+   *
+   * ── ragged on purpose ─────────────────────────────────────────────────
+   * `wingsTorn` shortens alternate feathers and drops one outright. A
+   * clean, even fan reads as an angel; the same fan with holes in it reads
+   * as one that has been through something, which is the entire brief for
+   * the skin this was written for. It is a flag rather than a separate
+   * builder because the two are the same object at different ages.
+   *
+   * The geometry is boxes, not planes: this rig is lit from one side and a
+   * zero-thickness feather disappears entirely at the wrong angle.
+   *
+   * Mounted on the BODY so they squash and lean with it. On the root they
+   * would slide around over the animation and read as a sticker.
+   */
+  _buildWings(F, M, b) {
+    const torn = !!F.wingsTorn;
+    const span = F.wingSpan || 1;
+    this.wings = [];
+
+    for (const sx of [-1, 1]) {
+      const wing = new THREE.Group();
+      // Off the shoulder blade: clear of the torso's back face (z -0.45 at
+      // this height) so the root is not buried inside the frog.
+      wing.position.set(sx * 0.26, 0.84, -0.30);
+      // Swept up and out. Only slightly back: swept hard behind the frog
+      // they were invisible from the front, which is the angle a player
+      // spends the whole match looking at another player from.
+      wing.rotation.set(0.26, sx * -0.32, sx * 0.20);
+      b.add(wing);
+
+      const FEATHERS = 6;
+      for (let i = 0; i < FEATHERS; i++) {
+        // A tear takes one feather out of the fan entirely.
+        if (torn && i === 3) continue;
+        const t = i / (FEATHERS - 1);
+        // Longest at the top of the fan, tapering down — a wing, not a rake.
+        let len = (0.78 - t * 0.34) * span;
+        if (torn && i % 2 === 1) len *= 0.62;     // snapped short
+        const thick = 0.05 - t * 0.010;
+
+        const f = new THREE.Group();
+        f.position.set(0, 0.02 - t * 0.05, 0);
+        // Fanned: the top feather points up and back, the bottom one out.
+        // Starts just above horizontal rather than near-vertical: fanned
+        // steeper, the top feathers rose past the head and crowded the
+        // face from the front, which is where the skin is mostly seen.
+        f.rotation.set(0, 0, sx * (0.86 - t * 1.46));
+        wing.add(f);
+
+        /**
+         * WIDE ENOUGH TO OVERLAP ITS NEIGHBOUR.
+         *
+         * At 0.13 across, with the fan spread over 1.5 radians, adjacent
+         * feathers left a gap wider than the feather itself — so the
+         * membrane never joined up and the whole wing rendered as a
+         * handful of loose sticks poking out of the frog's back. The
+         * width here is set so the fan closes into a surface, and the
+         * TEARS are then what put holes back into it deliberately.
+         */
+        const q = mesh(G.box, M.wing, len, 0.26 - t * 0.06, thick, sx * len * 0.5, 0, 0);
+        q.castShadow = false;
+        f.add(q);
+        // A lit edge along the leading side, so the wing still registers
+        // against a night sky. Thin: when this was the only part with any
+        // contrast, the edge WAS the wing.
+        const e = mesh(G.box, M.wingEdge, len * 0.9, 0.03, thick * 0.8,
+          sx * len * 0.5, 0.115 - t * 0.028, 0);
+        e.castShadow = false;
+        f.add(e);
+
+        this.wings.push({
+          group: f,
+          side: sx,
+          rest: f.rotation.z,
+          // Staggered so the fan ripples rather than flapping as one plank.
+          phase: t * 1.6 + (sx > 0 ? 0.4 : 0),
+        });
+      }
+    }
+  }
+
+  /**
+   * Flex the wings.
+   *
+   * Deliberately a slow drift rather than a flap: this frog walks and jumps
+   * like every other frog, and wings that beat would promise a flight the
+   * movement code does not deliver. They open a little in the air, which is
+   * the one moment the promise is true enough.
+   */
+  _updateWings(dt, s) {
+    if (!this.wings) return;
+    const airborne = !s.grounded && !s.dead ? 1 : 0;
+    for (const w of this.wings) {
+      const drift = Math.sin(this.t * 1.5 + w.phase) * 0.09;
+      // Opening is away from the spine, which is the sign of `rest`.
+      const open = airborne * 0.30 * Math.sign(w.rest || w.side);
+      w.group.rotation.z = damp(w.group.rotation.z, w.rest + drift + open, 6, dt);
+    }
   }
 
   /**
@@ -1858,49 +2015,213 @@ export class FrogModel {
     this.shell = new THREE.Group();
     this.shell.visible = false;
 
-    const rock = new THREE.MeshLambertMaterial({ color: 0x6f5637, flatShading: true });
-    const rockLight = new THREE.MeshLambertMaterial({ color: 0x8a6a44, flatShading: true });
-    const rockDark = new THREE.MeshLambertMaterial({ color: 0x4a3925, flatShading: true });
-    this._shellMats = [rock, rockLight, rockDark];
+    /**
+     * ── the stone ─────────────────────────────────────────────────────
+     *
+     * Weathered garden-ornament granite: a sage grey-green, not the brown
+     * of a boulder. Three tones do the whole statue — the mid for the mass,
+     * the pale for lichen and for the surfaces the sun would have bleached,
+     * the dark for every recess. Flat shading throughout, so each facet
+     * catches the light separately and the thing reads as carved rather
+     * than inflated.
+     */
+    const stone = new THREE.MeshLambertMaterial({ color: 0x8b8f6f, flatShading: true });
+    const pale = new THREE.MeshLambertMaterial({ color: 0xa9ad8c, flatShading: true });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x5d6149, flatShading: true });
 
-    this.shellCore = mesh(G.lowSphere, rock, 1.12, 1.18, 1.12, 0, 1.05, 0);
-    this.shell.add(this.shellCore);
+    const S = this.shell;
+    const add = (geo, mat, sx, sy, sz, x, y, z, rx, ry, rz) => {
+      const m = mesh(geo, mat, sx, sy, sz, x, y, z, rx, ry, rz);
+      S.add(m);
+      return m;
+    };
 
     /**
-     * Plates, placed on a fixed spiral rather than at random.
+     * ── the sitting frog ──────────────────────────────────────────────
      *
-     * Random placement is rebuilt differently for every frog in the match,
-     * so two players using the same ability would be wearing visibly
-     * different rocks — which reads as two abilities, not one.
+     * WIDER THAN IT IS TALL. That is the single most important number
+     * here: a garden frog is a squat thing that has settled, and the first
+     * version of this was 1.87 tall against 1.70 wide, which read as a
+     * cairn — a stack of stones — rather than as a carving. It now comes
+     * out about 1.56 across and 1.43 high.
+     *
+     * The masses overlap HEAVILY and step in only a little at a time, so
+     * the whole thing is one body rather than a column of separate balls.
+     * There is no neck and no seam at the waist; a visible ring there read
+     * as a second mouth in the first attempt.
+     *
+     * LOCAL +Z IS THE FRONT. `setFacing` puts the root at `yaw + Math.PI`,
+     * so a point at +Z maps to the direction the frog is facing — which is
+     * why the face, the hands and the feet are all at positive z.
      */
-    const PLATES = 11;
-    for (let i = 0; i < PLATES; i++) {
-      const a = i * 2.399;                       // golden angle
-      const y = 1 - (i + 0.5) * (1.7 / PLATES);  // -0.7 .. 1
-      const r = Math.sqrt(Math.max(0, 1 - y * y));
-      const m = mesh(
-        G.box, i % 3 === 0 ? rockLight : (i % 3 === 1 ? rock : rockDark),
-        0.42 + (i % 4) * 0.08, 0.3 + (i % 3) * 0.07, 0.42 + (i % 5) * 0.05,
-        Math.cos(a) * r * 1.05,
-        1.05 + y * 1.06,
-        Math.sin(a) * r * 1.05);
-      m.rotation.set(a * 0.7, a, y * 1.4);
-      this.shell.add(m);
+    add(G.lowSphere, stone, 0.78, 0.42, 0.66, 0, 0.36, -0.02);   // haunches
+    add(G.lowSphere, stone, 0.70, 0.40, 0.60, 0, 0.60, 0.04);    // belly
+    add(G.lowSphere, stone, 0.66, 0.36, 0.56, 0, 0.80, 0.04);    // chest
+    add(G.lowSphere, stone, 0.64, 0.34, 0.55, 0, 0.98, 0.02);    // head
+    // The top has weathered paler than the rest, which is what happens to
+    // a stone ornament left outside and is most of the tonal variation
+    // this thing has. Kept tucked INSIDE the skull's own profile, so it is
+    // a change of colour rather than another bump on the skyline.
+    add(G.lowSphere, pale, 0.56, 0.22, 0.48, 0, 1.04, 0.00);
+
+    // Feet: big splayed pads at the very front, with toes.
+    for (const sx of [-1, 1]) {
+      add(G.lowSphere, stone, 0.28, 0.12, 0.34, sx * 0.36, 0.10, 0.42, 0, sx * -0.35, 0);
+      for (let i = 0; i < 3; i++) {
+        add(G.lowSphere, pale, 0.09, 0.075, 0.12,
+          sx * (0.20 + i * 0.13), 0.11, 0.68 - i * 0.07, 0, sx * -0.35, 0);
+      }
     }
 
     /**
-     * The counter window, as a seam of light through the cracks.
+     * ── the arms, and the hands folded in its lap ─────────────────────
      *
-     * This is the tell the ability is balanced around — an opponent is
-     * meant to be able to see that a release is coming and back off — so it
-     * has to be visible from outside, not just on the owner's HUD.
+     * The folded hands ARE the statue. Everything above is a frog shape;
+     * this is what makes it an ornament — something carved deliberately,
+     * sitting patiently — and it is what the eye goes to.
+     *
+     * They have to stand PROUD of the belly. In the first attempt they sat
+     * at z 0.46 against a belly whose front face is at 0.62 at that height,
+     * so the entire feature was inside the body and invisible. Every z
+     * below is checked against the belly ellipsoid at its own height.
      */
-    this.shellGlow = mesh(G.lowSphere,
-      new THREE.MeshBasicMaterial({
-        color: 0xffc66b, transparent: true, opacity: 0, depthWrite: false,
-      }), 1.22, 1.28, 1.22, 0, 1.05, 0);
-    this.shellGlow.castShadow = false;
-    this.shell.add(this.shellGlow);
+    for (const sx of [-1, 1]) {
+      /**
+       * The arms HUG the body. In the reference they are barely separate
+       * from it — only the hands are prominent — and an earlier pass with
+       * a shoulder ball and a thicker limb put two lumps on the skyline
+       * that read as growths in profile. They are thin, tucked, and mostly
+       * buried; it is the hands that do the work.
+       */
+      add(G.capsule, stone, 0.105, 0.15, 0.105, sx * 0.58, 0.66, 0.16, 0.22, 0, sx * 0.30);
+      // Sunk well into the belly: only the top of the curve shows, which is
+      // all the reference shows either. Left proud it crossed the body as a
+      // diagonal sausage in three-quarter view.
+      add(G.capsule, stone, 0.105, 0.16, 0.105,
+        sx * 0.40, 0.505, 0.36, 1.12, sx * 0.48, sx * 1.08);
+      // The palm: a broad paddle laid over the lap, clear of the belly.
+      add(G.lowSphere, stone, 0.24, 0.105, 0.20, sx * 0.16, 0.49, 0.66, -0.22, 0, 0);
+    }
+    /**
+     * Interlaced fingers: four bars laid across the join, alternating which
+     * hand is on top. Bars rather than modelled digits — at the size this
+     * appears on screen what has to read is the WEAVE, and four clean
+     * grooves say "fingers laced" where eight little sausages say "mess".
+     */
+    for (let i = 0; i < 4; i++) {
+      const sx = i % 2 === 0 ? -1 : 1;
+      const row = i >> 1;
+      /**
+       * Nearly flat (1.46 rad is 84° off the capsule's own Y axis), and
+       * only slightly opposed. At ±1.30 they splayed far enough to read as
+       * a painted V across the belly rather than as fingers lying over one
+       * another.
+       */
+      add(G.capsule, pale, 0.040, 0.125, 0.040,
+        sx * (0.05 + row * 0.075), 0.520 - row * 0.030, 0.70 - row * 0.05,
+        -0.20, 0, sx * 1.46);
+    }
+    // Thumbs crossed on top of the pile.
+    for (const sx of [-1, 1]) {
+      add(G.capsule, stone, 0.045, 0.095, 0.045,
+        sx * 0.11, 0.565, 0.61, -0.42, 0, sx * 0.80);
+    }
+    // The shadow line under the hands, which is what lifts them off the
+    // belly at a glance rather than on inspection.
+    add(G.box, dark, 0.62, 0.05, 0.10, 0, 0.425, 0.64, -0.25, 0, 0);
+
+    /**
+     * The mouth: one wide recessed groove running nearly ear to ear, with
+     * a heavy lip under it and the corners turned down a touch. That slight
+     * downturn is the whole expression — patient and a little resigned,
+     * which is what the reference has and what makes it read as a face
+     * rather than as a slot.
+     *
+     * ONE dark bar, not two. The first attempt had a brow ridge as well and
+     * the pair of them read as stripes painted on a rock.
+     */
+    add(G.box, dark, 1.00, 0.085, 0.26, 0, 0.90, 0.40, -0.10, 0, 0);
+    add(G.lowSphere, stone, 0.52, 0.115, 0.20, 0, 0.825, 0.44, 0.14, 0, 0);
+    for (const sx of [-1, 1]) {
+      add(G.box, dark, 0.17, 0.07, 0.17, sx * 0.45, 0.875, 0.31, 0, sx * 0.55, sx * 0.20);
+    }
+    // Nostrils: two dots that cost nothing and stop the face being blank.
+    for (const sx of [-1, 1]) {
+      add(G.lowSphere, dark, 0.035, 0.03, 0.035, sx * 0.13, 1.03, 0.50);
+    }
+
+    /**
+     * Eyes: big closed mounds ON TOP of the skull, not on the front of it.
+     * A frog's eyes sit above the waterline, and a statue's are shut, so
+     * these are domes with a single crease rather than anything with a
+     * pupil in it.
+     *
+     * They are deliberately LARGE — nearly half the head's height again —
+     * and set far enough apart to leave a saddle between them. In the
+     * first attempt they were small and flush and vanished entirely; the
+     * eyes and the mouth are the two things that have to survive being
+     * seen from across an arena.
+     */
+    for (const sx of [-1, 1]) {
+      // Set FORWARD, over the face rather than over the crown. Centred on
+      // the skull they bulged past the back of the head in profile and the
+      // frog read as having a lumpy skull rather than eyes.
+      add(G.lowSphere, stone, 0.29, 0.25, 0.29, sx * 0.33, 1.17, 0.09);
+      add(G.lowSphere, pale, 0.24, 0.18, 0.24, sx * 0.33, 1.23, 0.10);
+      // The lid crease, across the front of the mound.
+      add(G.box, dark, 0.36, 0.045, 0.22, sx * 0.33, 1.135, 0.26, -0.32, 0, sx * 0.12);
+    }
+
+    /**
+     * ── weathering ────────────────────────────────────────────────────
+     *
+     * There are no lichen SPOTS, and there is no longer a shadow under the
+     * chin or in the armpits.
+     *
+     * The spots came first: flattened spheres scattered over the surface on
+     * a golden-angle spiral, which rendered as lozenges glued on — pills,
+     * not staining. The extra recesses came next, and stacked up into four
+     * horizontal dark bars down the front of the face and chest, which read
+     * as a painted rock.
+     *
+     * What is left is tone from whole PARTS: the crown, the eyelids and the
+     * toes are the pale stone, the mouth and the lid creases are the dark,
+     * and the single line under the hands lifts them off the belly. That is
+     * how a real carving reads — by its own shape, not by decoration.
+     */
+
+    /**
+     * ── the counter window, as cracks lighting up ─────────────────────
+     *
+     * The tell the ability is balanced around: an opponent is meant to be
+     * able to see that a release is coming and step back, so it has to be
+     * visible from outside and not only on the owner's HUD.
+     *
+     * Cracks rather than the glow shell this used to have. A statue that
+     * lights up along its fault lines is about to come apart; a statue
+     * inside a bubble of light is wearing a bubble of light.
+     */
+    const crackMat = new THREE.MeshBasicMaterial({
+      color: 0xffc66b, transparent: true, opacity: 0, depthWrite: false,
+    });
+    this.shellCracks = [];
+    // x, y, z, length, yaw, roll — laid along the body's own fault lines.
+    const CRACKS = [
+      [0.00, 0.60, 0.62, 0.85, 0.0, 0.26],
+      [-0.50, 0.78, 0.34, 0.62, -0.6, -0.85],
+      [0.48, 0.74, 0.36, 0.62, 0.6, 0.95],
+      [0.00, 0.80, -0.58, 0.80, 3.1, 0.20],
+      [-0.66, 0.38, -0.18, 0.55, -1.3, -0.50],
+      [0.64, 0.42, -0.20, 0.55, 1.3, 0.55],
+      [0.00, 1.12, 0.34, 0.42, 0.0, 1.45],
+    ];
+    for (const c of CRACKS) {
+      const m = mesh(G.box, crackMat, c[3], 0.035, 0.035, c[0], c[1], c[2], 0, c[4], c[5]);
+      m.castShadow = false;
+      S.add(m);
+      this.shellCracks.push(m);
+    }
+    this.shellCrackMat = crackMat;
 
     this.root.add(this.shell);
     this._shellScale = 0;
@@ -1934,11 +2255,28 @@ export class FrogModel {
     }
 
     const k = this._shellScale;
-    // A touch of overshoot on the way up so it lands like a rock rather
-    // than inflating like a balloon.
-    const pop = 1 + Math.sin(Math.min(1, k) * Math.PI) * 0.09 * want;
-    this.shell.scale.set(k * pop, k * pop, k * pop);
-    this.shell.rotation.y += dt * 0.35;
+    /**
+     * It SETTLES. A touch of overshoot on the way up, taken out of the
+     * height rather than the width, so the statue drops the last inch and
+     * squats rather than inflating like a balloon.
+     *
+     * And it does not turn. The boulder this replaced span slowly, which
+     * was fine for a rock and is wrong for a carving: a statue that rotates
+     * is a prop on a turntable. It holds the frog's own facing — the face,
+     * the folded hands and the feet are all built toward local +Z, which
+     * `setFacing` has already pointed the way the player was looking.
+     */
+    /**
+     * A shade bigger than the frog it swallowed. The carving is built at
+     * roughly 1.5 units across, against a frog about 1.0 wide — this takes
+     * it to 1.7, which is enough for the statue to read as something the
+     * frog is INSIDE rather than as a frog wearing a costume, without
+     * making it big enough to clip through the scenery it sits in.
+     */
+    const SIZE = 1.15;
+    const drop = Math.sin(Math.min(1, k) * Math.PI) * 0.10 * want;
+    const w = k * SIZE * (1 + drop * 0.35);
+    this.shell.scale.set(w, k * SIZE * (1 - drop), w);
 
     /**
      * Hide the frog once the stone has actually closed, not before.
@@ -1951,11 +2289,18 @@ export class FrogModel {
      */
     if (this.lift) this.lift.visible = k < 0.8;
 
-    if (this.shellGlow) {
+    /**
+     * The fault lines light up when the counter window opens.
+     *
+     * One shared material, so seven cracks cost one opacity write a frame
+     * rather than seven — and so they can never drift out of step with each
+     * other, which would read as flickering rather than as pulsing.
+     */
+    if (this.shellCrackMat) {
       const hot = s.shellHot ? 1 : 0;
-      const pulse = 0.35 + Math.abs(Math.sin(this.t * 9)) * 0.4;
-      this.shellGlow.material.opacity = damp(
-        this.shellGlow.material.opacity, hot * pulse, 16, dt);
+      const pulse = 0.55 + Math.abs(Math.sin(this.t * 9)) * 0.45;
+      this.shellCrackMat.opacity = damp(
+        this.shellCrackMat.opacity, hot * pulse, 16, dt);
     }
   }
 
@@ -2420,8 +2765,21 @@ export class FrogModel {
     // Skin extras that live rather than sit there: haloes turn, the aura
     // breathes. Cheap, and it is what makes a legendary read as special
     // rather than as a differently-coloured frog.
-    if (this.halo) this.halo.rotation.z += dt * 0.9;
+    /**
+     * A whole halo turns steadily. A broken one labours.
+     *
+     * Half the speed with a wobble on the tilt, so it reads as something
+     * that is still trying to work rather than as a ring that happens to
+     * have a gap in it. The spin is on the ring's OWN axis — Three.js
+     * composes Euler XYZ as Rx·Ry·Rz, so the z term is innermost and turns
+     * the torus within its own plane, leaving the tilt intact.
+     */
+    if (this.halo) this.halo.rotation.z += dt * (this._haloBroken ? 0.42 : 0.9);
+    if (this._haloBroken && this.halo) {
+      this.halo.rotation.x = this._haloTilt + Math.sin(t * 1.1) * 0.07;
+    }
     if (this.halo2) this.halo2.rotation.z -= dt * 0.6;
+    this._updateWings(dt, s);
     if (this.bodyAura) {
       this.bodyAura.material.opacity = 0.11 + Math.sin(t * 2.4) * 0.04;
     }

@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v134';
-import { CFG } from './config.js?v=v134';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v134';
-import { FrogModel } from './frog.js?v=v134';
-import { ToadModel } from './npc.js?v=v134';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v134';
-import { Audio } from './audio.js?v=v134';
+import * as THREE from '../lib/three.module.js?v=v135';
+import { CFG } from './config.js?v=v135';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v135';
+import { FrogModel } from './frog.js?v=v135';
+import { ToadModel } from './npc.js?v=v135';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v135';
+import { Audio } from './audio.js?v=v135';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -202,21 +202,35 @@ export class RemotePlayer {
          * be somewhere else. `ev.s` says which: 1 up, 0 down, 2 burst.
          */
         if (ev.a === 'earthshell') {
+          /**
+           * The same three layers the owner sees — see `_releaseShell` in
+           * js/player.js. A watcher who saw a smaller or plainer version of
+           * the burst would misjudge how far to stand back from it, and the
+           * burst having a readable radius is what makes it fair.
+           */
           if (ev.s === 2) {
             const A = CFG.abilities.earthshell;
-            this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xd8a760, true);
-            this.effects.puff(_tmp, 0xb98a52, 34, 13);
+            _tmp.y = ev.y + 0.7;
+            this.effects.ring(_tmp, 0.5, A.radius * 1.3, 0.42, 0xffc66b, true);
+            this.effects.ring(_tmp, 0.3, A.radius * 0.8, 0.3, 0xa9ad8c, true);
+            this.effects.puff(_tmp, 0xa9ad8c, 30, 15);
+            this.effects.puff(_tmp, 0x5d6149, 22, 7);
+            this.effects.dustPuff(_tmp, 16, 5, 0x8b8f6f);
             Audio.tone({
               freq: 220, to: 70, dur: 0.5, type: 'square', volume: 0.24, pos: _tmp,
             });
           } else if (ev.s === 1) {
-            this.effects.ring(_tmp, 0.6, 3.2, 0.42, 0xb98a52, true);
-            this.effects.puff(_tmp, 0x8a6a44, 24, 7);
+            _tmp.y = ev.y + 0.25;
+            this.effects.ring(_tmp, 0.6, 3.4, 0.45, 0x9aa07e, true);
+            this.effects.puff(_tmp, 0x8b8f6f, 24, 6);
+            this.effects.dustPuff(_tmp, 12, 3.2, 0xa9ad8c);
             Audio.tone({
               freq: 150, to: 60, dur: 0.42, type: 'square', volume: 0.16, pos: _tmp,
             });
           } else {
-            this.effects.puff(_tmp, 0x7a5f3e, 16, 4);
+            _tmp.y = ev.y + 0.4;
+            this.effects.puff(_tmp, 0x6f7358, 18, 4);
+            this.effects.dustPuff(_tmp, 10, 2.4, 0x8b8f6f);
           }
           break;
         }
