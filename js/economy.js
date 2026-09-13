@@ -11,10 +11,10 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v137';
+import { CFG } from './config.js?v=v138';
 // Only for `revoke`: a staked skin that was being worn falls back to the
 // default rather than leaving the player in something they no longer own.
-import { DEFAULT_SKIN } from './skins.js?v=v137';
+import { DEFAULT_SKIN } from './skins.js?v=v138';
 
 export class Economy {
   constructor() {

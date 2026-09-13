@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v137';
-import { CFG } from './config.js?v=v137';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v137';
+import * as THREE from '../lib/three.module.js?v=v138';
+import { CFG } from './config.js?v=v138';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v138';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -141,26 +141,6 @@ const G = {
   lowSphere: new THREE.SphereGeometry(1, 8, 6),
   box: new THREE.BoxGeometry(1, 1, 1),
   capsule: new THREE.CapsuleGeometry(1, 1, 3, 8),
-  /**
-   * â•â•â• CARVED, NOT BLOCKED OUT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   *
-   * The smooth pair, and they exist for the Earth Shell statue.
-   *
-   * The frog rig is deliberately chunky: `lowSphere` is eight segments by
-   * six, which is the right look for a pixel-art ninja frog and cheap
-   * enough to draw one per player per frame. A STONE CARVING is the
-   * opposite brief â€” it should look worked and worn, and at eight segments
-   * its head was visibly a die.
-   *
-   * They are separate rather than an upgrade to `lowSphere` because that
-   * one is used about forty times per frog, by every frog on the map, and
-   * quadrupling its triangle count to improve an effect that appears for
-   * four seconds at a time would be a poor trade. The statue is built once
-   * per frog that ever raises it â€” see `_buildShell` â€” so it can afford
-   * this.
-   */
-  smoothSphere: new THREE.SphereGeometry(1, 22, 16),
-  smoothCapsule: new THREE.CapsuleGeometry(1, 1, 8, 18),
   cyl: new THREE.CylinderGeometry(1, 1, 1, 8),
   cone: new THREE.ConeGeometry(1, 1, 7),
   torus: new THREE.TorusGeometry(1, 0.12, 6, 18),
@@ -2036,233 +2016,181 @@ export class FrogModel {
     this.shell.visible = false;
 
     /**
-     * â”€â”€ the stone â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     * ── the stone ─────────────────────────────────────────────────────
      *
      * Weathered garden-ornament granite: a sage grey-green, not the brown
-     * of a boulder. Three tones do the whole statue â€” the mid for the mass,
-     * the pale for lichen and for the surfaces the sun would have bleached,
-     * the dark for every recess. Flat shading throughout, so each facet
-     * catches the light separately and the thing reads as carved rather
-     * than inflated.
-     */
-    /**
-     * SMOOTH-SHADED. `flatShading` was on for all three, which shades every
-     * facet as its own plane â€” so on top of a low-poly sphere the statue
-     * got the faceting twice over and read as a rock someone had chipped
-     * into a frog shape rather than as a carving worn round by weather.
-     * Vertex normals across a 22-segment sphere is what makes it stone.
+     * of a boulder. Three tones do the whole statue and the podium under
+     * it — the mid for the mass, the pale for the surfaces the weather has
+     * bleached, the dark for every recess.
+     *
+     * These are the exact three colours the hotbar icon is drawn in. That
+     * is the point: see the note on the build below.
      */
     const stone = new THREE.MeshLambertMaterial({ color: 0x8b8f6f });
     const pale = new THREE.MeshLambertMaterial({ color: 0xa9ad8c });
     const dark = new THREE.MeshLambertMaterial({ color: 0x5d6149 });
 
     const S = this.shell;
-    const add = (geo, mat, sx, sy, sz, x, y, z, rx, ry, rz) => {
-      const m = mesh(geo, mat, sx, sy, sz, x, y, z, rx, ry, rz);
+    const add = (mat, sx, sy, sz, x, y, z) => {
+      const m = mesh(G.box, mat, sx, sy, sz, x, y, z);
       S.add(m);
       return m;
     };
 
     /**
-     * â”€â”€ the sitting frog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     * ═══ BUILT FROM THE ICON, RECTANGLE FOR RECTANGLE ══════════════════
      *
-     * WIDER THAN IT IS TALL. That is the single most important number
-     * here: a garden frog is a squat thing that has settled, and the first
-     * version of this was 1.87 tall against 1.70 wide, which read as a
-     * cairn â€” a stack of stones â€” rather than as a carving. It now comes
-     * out about 1.56 across and 1.43 high.
+     * The statue is the hotbar icon in three dimensions, and it is laid
+     * out in the icon's own coordinates so the two cannot drift apart.
      *
-     * The masses overlap HEAVILY and step in only a little at a time, so
-     * the whole thing is one body rather than a column of separate balls.
-     * There is no neck and no seam at the waist; a visible ring there read
-     * as a second mouth in the first attempt.
+     * ── why it went back to slabs ─────────────────────────────────────
+     * It was ellipsoids, and then smooth-shaded ellipsoids, and the
+     * smoother it got the less it looked like stone: a rounded sage-green
+     * mass reads as clay or putty, because nothing quarried is that soft.
+     * Cut stone has FLAT FACES and hard edges that catch the light one at
+     * a time — which is exactly what the icon draws, and exactly what the
+     * rest of this game's art is made of.
+     *
+     * So every piece below is one rectangle of the 32×32 icon extruded to
+     * a depth. `px`/`py` map icon pixels to world units and `slab` places
+     * one; the numbers in each call are the `x y w h` of the matching
+     * `<rect>` in `ITEM_ICONS.earthshell`, in the same order. Change the
+     * icon and you can see at a glance what the model owes it.
      *
      * LOCAL +Z IS THE FRONT. `setFacing` puts the root at `yaw + Math.PI`,
-     * so a point at +Z maps to the direction the frog is facing â€” which is
+     * so a point at +Z maps to the direction the frog is facing — which is
      * why the face, the hands and the feet are all at positive z.
-     *
-     * ── TWO MASSES, NOT FOUR ─────────────────────────────────────────
-     *
-     * Haunches, belly, chest and head used to be four stacked ellipsoids
-     * of similar width. Faceted, that read as one lumpy rock; smooth-
-     * shaded it read as a stack of pillows, because every place two
-     * surfaces cross leaves a crease and there were three of them down the
-     * front.
-     *
-     * One body and one head is the whole figure. They still cross — that
-     * is the fold under the chin, which a sitting frog has — but it is ONE
-     * fold in a deliberate place instead of three by accident.
      */
-    add(G.smoothSphere, stone, 0.78, 0.60, 0.67, 0, 0.55, 0.00);    // body
-    add(G.smoothSphere, stone, 0.64, 0.38, 0.56, 0, 1.02, 0.02);    // head
-    /**
-     * The top has weathered paler, which is what happens to a stone
-     * ornament left outside and is most of the tonal variation this thing
-     * has.
-     *
-     * Narrow and high, so it is a PATCH on the crown. Wider, its edge came
-     * round the sides of the skull as a horizontal band and read as the
-     * brim of a hat rather than as weathering.
-     */
-    add(G.smoothSphere, pale, 0.52, 0.22, 0.45, 0, 1.14, 0.00);
-
-    // Feet: big splayed pads at the very front, with toes.
-    for (const sx of [-1, 1]) {
-      add(G.smoothSphere, stone, 0.28, 0.12, 0.34, sx * 0.36, 0.10, 0.42, 0, sx * -0.35, 0);
-      for (let i = 0; i < 3; i++) {
-        add(G.smoothSphere, pale, 0.09, 0.075, 0.12,
-          sx * (0.20 + i * 0.13), 0.11, 0.68 - i * 0.07, 0, sx * -0.35, 0);
-      }
-    }
+    const U = 0.052;                 // one icon pixel, in world units
+    const POD = 0.32;                // the statue stands this high on its rock
+    const px = (x, w) => (x + w / 2 - 16) * U;
+    const py = (y, h) => (29 - (y + h / 2)) * U + POD;
+    const slab = (mat, x, y, w, h, z, d) =>
+      add(mat, w * U, h * U, d, px(x, w), py(y, h), z);
 
     /**
-     * â”€â”€ the arms, and the hands folded in its lap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     * ── the mass, bottom to top ──
      *
-     * The folded hands ARE the statue. Everything above is a frog shape;
-     * this is what makes it an ornament â€” something carved deliberately,
-     * sitting patiently â€” and it is what the eye goes to.
+     * THE FRONT FACES ARE FLUSH. All three courses have their front at
+     * z = FACE, and the depth tapering happens entirely at the BACK.
      *
-     * They have to stand PROUD of the belly. In the first attempt they sat
-     * at z 0.46 against a belly whose front face is at 0.62 at that height,
-     * so the entire feature was inside the body and invisible. Every z
-     * below is checked against the belly ellipsoid at its own height.
+     * That is the whole trick to this build. The icon's courses are 28, 26
+     * and 24 pixels wide — a seven per cent step each — and the first
+     * attempt tapered the depth as well and set each course further back,
+     * so from the front it stepped in and from three-quarters it stepped
+     * back: a ziggurat, terrace by terrace, which is a temple and not a
+     * frog. Flush at the front, it is the icon head-on, with the body
+     * falling away behind the head the way a sitting frog's does.
      */
-    for (const sx of [-1, 1]) {
-      /**
-       * The arms HUG the body. In the reference they are barely separate
-       * from it â€” only the hands are prominent â€” and an earlier pass with
-       * a shoulder ball and a thicker limb put two lumps on the skyline
-       * that read as growths in profile. They are thin, tucked, and mostly
-       * buried; it is the hands that do the work.
-       */
-      /**
-       * Brought back OUT after the body became one mass.
-       *
-       * The merged body is fatter than the belly it replaced — 0.67 deep
-       * against 0.60 — and at the old positions both arms ended up
-       * entirely inside it, which is a limb that costs triangles and shows
-       * nothing. These sit just proud of the surface: a bulge down the
-       * side and the top of the forearm's curve, which is all the
-       * reference shows either.
-       */
-      add(G.smoothCapsule, stone, 0.095, 0.14, 0.095, sx * 0.66, 0.66, 0.20, 0.22, 0, sx * 0.34);
-      add(G.smoothCapsule, stone, 0.105, 0.16, 0.105,
-        sx * 0.46, 0.50, 0.58, 1.12, sx * 0.48, sx * 1.08);
-      // The palm: a broad paddle laid over the lap, clear of the belly.
-      add(G.smoothSphere, stone, 0.24, 0.105, 0.20, sx * 0.16, 0.49, 0.66, -0.22, 0, 0);
-    }
+    const FACE = 0.55;
+    const back = (d) => FACE - d / 2;
+    slab(stone, 2, 18, 28, 6, back(1.34), 1.34);   // haunches, the widest
+    slab(stone, 3, 15, 26, 10, back(1.14), 1.14);  // body
+    slab(stone, 4, 8, 24, 7, back(0.94), 0.94);    // head
     /**
-     * Interlaced fingers: four bars laid across the join, alternating which
-     * hand is on top. Bars rather than modelled digits â€” at the size this
-     * appears on screen what has to read is the WEAVE, and four clean
-     * grooves say "fingers laced" where eight little sausages say "mess".
+     * The eye mounds sit a little BEHIND the face, because a frog's eyes
+     * are on top of its skull rather than on the front of it — and the
+     * feet stand well in front of everything, which is what stops the
+     * whole thing reading as one slab from the side.
      */
-    for (let i = 0; i < 4; i++) {
-      const sx = i % 2 === 0 ? -1 : 1;
-      const row = i >> 1;
-      /**
-       * Nearly flat (1.46 rad is 84Â° off the capsule's own Y axis), and
-       * only slightly opposed. At Â±1.30 they splayed far enough to read as
-       * a painted V across the belly rather than as fingers lying over one
-       * another.
-       */
-      add(G.smoothCapsule, pale, 0.040, 0.125, 0.040,
-        sx * (0.05 + row * 0.075), 0.520 - row * 0.030, 0.70 - row * 0.05,
-        -0.20, 0, sx * 1.46);
-    }
-    // Thumbs crossed on top of the pile.
-    for (const sx of [-1, 1]) {
-      add(G.smoothCapsule, stone, 0.045, 0.095, 0.045,
-        sx * 0.11, 0.565, 0.61, -0.42, 0, sx * 0.80);
-    }
-    // The shadow line under the hands, which is what lifts them off the
-    // belly at a glance rather than on inspection.
-    add(G.box, dark, 0.62, 0.05, 0.10, 0, 0.425, 0.64, -0.25, 0, 0);
+    const EYE = 0.42;
+    slab(stone, 5, 4, 8, 5, EYE - 0.23, 0.46);     // eye mound, left
+    slab(stone, 19, 4, 8, 5, EYE - 0.23, 0.46);    // eye mound, right
+    slab(stone, 3, 25, 9, 4, 0.50, 0.62);          // foot, left
+    slab(stone, 20, 25, 9, 4, 0.50, 0.62);         // foot, right
+
+    // ── the bleached surfaces ──
+    slab(pale, 6, 3, 6, 3, EYE - 0.17, 0.34);      // crown of the left eye
+    slab(pale, 20, 3, 6, 3, EYE - 0.17, 0.34);     // and the right
+    slab(pale, 7, 7, 18, 2, FACE + 0.03, 0.30);    // the brow course
+    slab(pale, 4, 26, 7, 2, 0.78, 0.14);           // toes, left
+    slab(pale, 21, 26, 7, 2, 0.78, 0.14);          // toes, right
 
     /**
-     * The mouth: one wide recessed groove running nearly ear to ear, with
-     * a heavy lip under it and the corners turned down a touch. That slight
-     * downturn is the whole expression â€” patient and a little resigned,
-     * which is what the reference has and what makes it read as a face
-     * rather than as a slot.
+     * ── the folded hands ──
      *
-     * ONE dark bar, not two. The first attempt had a brow ridge as well and
-     * the pair of them read as stripes painted on a rock.
+     * The one piece the icon can only hint at. On a 32-pixel sprite it is
+     * a pale band across the belly; here it is a real block standing proud
+     * of the body with a shadow line under it, because the folded hands
+     * are what make this an ORNAMENT — a thing carved deliberately, sitting
+     * patiently — rather than a frog-shaped rock.
      */
-    add(G.box, dark, 1.00, 0.085, 0.26, 0, 0.90, 0.40, -0.10, 0, 0);
-    add(G.smoothSphere, stone, 0.52, 0.115, 0.20, 0, 0.825, 0.44, 0.14, 0, 0);
-    for (const sx of [-1, 1]) {
-      add(G.box, dark, 0.17, 0.07, 0.17, sx * 0.45, 0.875, 0.31, 0, sx * 0.55, sx * 0.20);
-    }
-    // Nostrils: two dots that cost nothing and stop the face being blank.
-    for (const sx of [-1, 1]) {
-      add(G.smoothSphere, dark, 0.035, 0.03, 0.035, sx * 0.13, 1.03, 0.50);
+    slab(pale, 10, 18, 12, 3, FACE + 0.09, 0.28);
+    slab(dark, 10, 21, 12, 1, FACE + 0.11, 0.24);
+    // A thumb laid over each end of the pile, to break the straight edge.
+    slab(stone, 10, 17, 3, 2, FACE + 0.09, 0.24);
+    slab(stone, 19, 17, 3, 2, FACE + 0.09, 0.24);
+
+    /**
+     * ── the recesses ──
+     *
+     * Each one sits a few centimetres proud of the course it belongs to,
+     * so it catches its own edge of light — written as an offset from that
+     * course's front rather than as a number, because the first build of
+     * this hard-coded the offsets and then moved the courses, which left
+     * the mouth floating in front of the face and the brow buried inside
+     * it.
+     *
+     * The mouth is DEEP. It is the single strongest line on the icon and
+     * the thing that makes the face a face; at the depth of the other
+     * details it washed out into the shadow under the brow.
+     */
+    slab(dark, 6, 9, 7, 1, EYE + 0.02, 0.16);      // lid crease, left
+    slab(dark, 19, 9, 7, 1, EYE + 0.02, 0.16);     // and right
+    slab(dark, 5, 12, 22, 2, FACE + 0.05, 0.26);   // the mouth
+
+    /**
+     * ═══ THE PODIUM ════════════════════════════════════════════════════
+     *
+     * Three courses of rough rock, each a little narrower than the one
+     * below, with chips knocked off the corners.
+     *
+     * A garden ornament stands on something. Without it the statue's feet
+     * met the grass at a hard line and it read as having been dropped
+     * there; on a plinth it reads as having been PUT there, which is the
+     * difference between a rock and a carving. It also gives the burst
+     * something to come apart from.
+     */
+    add(stone, 1.78, 0.13, 1.54, 0, 0.065, 0.02);
+    add(dark, 1.62, 0.09, 1.40, 0, 0.175, 0.02);
+    add(pale, 1.46, 0.14, 1.26, 0, 0.28, 0.02);
+    /**
+     * Chips, on a fixed spiral rather than at random — two players using
+     * the same ability must be standing on the same rock, or it reads as
+     * two abilities. Same reasoning as the lichen that used to be here.
+     */
+    for (let i = 0; i < 10; i++) {
+      const a = i * 2.399;                      // golden angle
+      const t = i / 10;
+      add(i % 3 === 0 ? dark : stone,
+        0.16 + (i % 4) * 0.06, 0.09 + (i % 3) * 0.04, 0.16 + (i % 5) * 0.05,
+        Math.cos(a) * 0.86, 0.05 + t * 0.22, Math.sin(a) * 0.74);
     }
 
     /**
-     * Eyes: big closed mounds ON TOP of the skull, not on the front of it.
-     * A frog's eyes sit above the waterline, and a statue's are shut, so
-     * these are domes with a single crease rather than anything with a
-     * pupil in it.
-     *
-     * They are deliberately LARGE â€” nearly half the head's height again â€”
-     * and set far enough apart to leave a saddle between them. In the
-     * first attempt they were small and flush and vanished entirely; the
-     * eyes and the mouth are the two things that have to survive being
-     * seen from across an arena.
-     */
-    for (const sx of [-1, 1]) {
-      // Set FORWARD, over the face rather than over the crown. Centred on
-      // the skull they bulged past the back of the head in profile and the
-      // frog read as having a lumpy skull rather than eyes.
-      add(G.smoothSphere, stone, 0.29, 0.25, 0.29, sx * 0.33, 1.17, 0.09);
-      add(G.smoothSphere, pale, 0.24, 0.18, 0.24, sx * 0.33, 1.23, 0.10);
-      // The lid crease, across the front of the mound.
-      add(G.box, dark, 0.36, 0.045, 0.22, sx * 0.33, 1.135, 0.26, -0.32, 0, sx * 0.12);
-    }
-
-    /**
-     * â”€â”€ weathering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-     *
-     * There are no lichen SPOTS, and there is no longer a shadow under the
-     * chin or in the armpits.
-     *
-     * The spots came first: flattened spheres scattered over the surface on
-     * a golden-angle spiral, which rendered as lozenges glued on â€” pills,
-     * not staining. The extra recesses came next, and stacked up into four
-     * horizontal dark bars down the front of the face and chest, which read
-     * as a painted rock.
-     *
-     * What is left is tone from whole PARTS: the crown, the eyelids and the
-     * toes are the pale stone, the mouth and the lid creases are the dark,
-     * and the single line under the hands lifts them off the belly. That is
-     * how a real carving reads â€” by its own shape, not by decoration.
-     */
-
-    /**
-     * â”€â”€ the counter window, as cracks lighting up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     * ── the counter window, as cracks lighting up ─────────────────────
      *
      * The tell the ability is balanced around: an opponent is meant to be
      * able to see that a release is coming and step back, so it has to be
      * visible from outside and not only on the owner's HUD.
      *
-     * Cracks rather than the glow shell this used to have. A statue that
-     * lights up along its fault lines is about to come apart; a statue
-     * inside a bubble of light is wearing a bubble of light.
+     * Cracks rather than a glow shell. A statue lighting up along its
+     * fault lines is about to come apart; a statue inside a bubble of
+     * light is wearing a bubble of light.
      */
     const crackMat = new THREE.MeshBasicMaterial({
       color: 0xffc66b, transparent: true, opacity: 0, depthWrite: false,
     });
     this.shellCracks = [];
-    // x, y, z, length, yaw, roll â€” laid along the body's own fault lines.
+    // x, y, z, length, yaw, roll — laid along the statue's own courses.
     const CRACKS = [
-      [0.00, 0.60, 0.62, 0.85, 0.0, 0.26],
-      [-0.50, 0.78, 0.34, 0.62, -0.6, -0.85],
-      [0.48, 0.74, 0.36, 0.62, 0.6, 0.95],
-      [0.00, 0.80, -0.58, 0.80, 3.1, 0.20],
-      [-0.66, 0.38, -0.18, 0.55, -1.3, -0.50],
-      [0.64, 0.42, -0.20, 0.55, 1.3, 0.55],
-      [0.00, 1.12, 0.34, 0.42, 0.0, 1.45],
+      [0.00, 0.62, 0.68, 0.80, 0.0, 0.22],
+      [-0.52, 0.80, 0.40, 0.58, -0.6, -0.80],
+      [0.50, 0.76, 0.42, 0.58, 0.6, 0.90],
+      [0.00, 0.80, -0.66, 0.76, 3.1, 0.18],
+      [-0.70, 0.44, -0.20, 0.52, -1.3, -0.45],
+      [0.68, 0.48, -0.22, 0.52, 1.3, 0.50],
+      [0.00, 1.18, 0.56, 0.40, 0.0, 1.45],
     ];
     for (const c of CRACKS) {
       const m = mesh(G.box, crackMat, c[3], 0.035, 0.035, c[0], c[1], c[2], 0, c[4], c[5]);

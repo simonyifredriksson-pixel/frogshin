@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v137';
-import { CFG } from './config.js?v=v137';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v137';
-import { FrogModel } from './frog.js?v=v137';
-import { Grapple, GrappleState } from './grapple.js?v=v137';
-import { Combat, Health } from './combat.js?v=v137';
-import { Stamina } from './stamina.js?v=v137';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v137';
-import { Audio } from './audio.js?v=v137';
+import * as THREE from '../lib/three.module.js?v=v138';
+import { CFG } from './config.js?v=v138';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v138';
+import { FrogModel } from './frog.js?v=v138';
+import { Grapple, GrappleState } from './grapple.js?v=v138';
+import { Combat, Health } from './combat.js?v=v138';
+import { Stamina } from './stamina.js?v=v138';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v138';
+import { Audio } from './audio.js?v=v138';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v137';
+} from './abilities.js?v=v138';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1303,6 +1303,25 @@ export class Player {
     Audio.tone({ freq: 150, to: 60, dur: 0.42, type: 'square', volume: 0.2, pos: this.pos });
     this._abilEvent('earthshell', { s: 1 });
   }
+
+  /**
+   * ═══ SEALED IN STONE ═══════════════════════════════════════════════════
+   *
+   * You are a statue. You do not move and you do not LOOK.
+   *
+   * The controls were already sealed — see the `sealed` branch in `update`,
+   * which eats every press — but the mouse was not, because mouse look does
+   * not go through the player at all: each mode's frame loop calls
+   * `followCam.look` directly. So a player encased in a solid block of rock
+   * could still swivel the camera round on the spot, and the stone read as
+   * a costume rather than as being stuck inside something.
+   *
+   * ── the lightning chain is NOT covered by this ────────────────────────
+   * Deliberately. `_beginStep` aims the next link off `this.yaw`, so the
+   * camera is the one control that has to stay live during a chain — it is
+   * how you choose where to go next.
+   */
+  get sealedInStone() { return !!this.shell; }
 
   /**
    * A blow the stone turned aside.
