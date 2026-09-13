@@ -5,49 +5,52 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v129';
+import * as THREE from '../lib/three.module.js?v=v130';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v129';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v129';
-import { Input } from './input.js?v=v129';
-import { Audio } from './audio.js?v=v129';
-import { World } from './world.js?v=v129';
-import { Effects } from './effects.js?v=v129';
-import { Atmosphere } from './atmosphere.js?v=v129';
-import { FollowCamera } from './camera.js?v=v129';
-import { Player } from './player.js?v=v129';
-import { RemotePlayer } from './remote.js?v=v129';
-import { HUD } from './hud.js?v=v129';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v129';
-import { FrogModel } from './frog.js?v=v129';
-import { DummyField } from './dummy.js?v=v129';
-import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v129';
-import { ToadModel } from './npc.js?v=v129';
+} from './config.js?v=v130';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v130';
+import { Input } from './input.js?v=v130';
+import { Audio } from './audio.js?v=v130';
+import { World } from './world.js?v=v130';
+import { Effects } from './effects.js?v=v130';
+import { Atmosphere } from './atmosphere.js?v=v130';
+import { FollowCamera } from './camera.js?v=v130';
+import { Player } from './player.js?v=v130';
+// The shadow clone swings with the same geometry a player does — see
+// `_cloneSwing`. It has no swing state, so it uses the bare cone test.
+import { coneHit } from './combat.js?v=v130';
+import { RemotePlayer } from './remote.js?v=v130';
+import { HUD } from './hud.js?v=v130';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v130';
+import { FrogModel } from './frog.js?v=v130';
+import { DummyField } from './dummy.js?v=v130';
+import { RoundManager, PHASE, MODES, maxTaggers } from './rounds.js?v=v130';
+import { ToadModel } from './npc.js?v=v130';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v129';
-import { DungeonRun } from './dungeon.js?v=v129';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v129';
-import { JudgmentRun } from './judgment.js?v=v129';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v129';
-import { COMBO_NAMES } from './ascended.js?v=v129';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v129';
-import { MenuScene } from './menu.js?v=v129';
-import { Economy } from './economy.js?v=v129';
-import { Shop } from './shop.js?v=v129';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v129';
-import { Overworld } from './overworld.js?v=v129';
-import { InventoryScreen } from './inventoryui.js?v=v129';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v129';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v129';
-import { Cine } from './cinema.js?v=v129';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v129';
-import { MEMORIES } from './flashbacks.js?v=v129';
-import { GUARDIANS } from './guardians.js?v=v129';
-import { gearOfTier } from './gear.js?v=v129';
-import { Chat } from './chat.js?v=v129';
+} from './skins.js?v=v130';
+import { DungeonRun } from './dungeon.js?v=v130';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v130';
+import { JudgmentRun } from './judgment.js?v=v130';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v130';
+import { COMBO_NAMES } from './ascended.js?v=v130';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v130';
+import { MenuScene } from './menu.js?v=v130';
+import { Economy } from './economy.js?v=v130';
+import { Shop } from './shop.js?v=v130';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v130';
+import { Overworld } from './overworld.js?v=v130';
+import { InventoryScreen } from './inventoryui.js?v=v130';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v130';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v130';
+import { Cine } from './cinema.js?v=v130';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v130';
+import { MEMORIES } from './flashbacks.js?v=v130';
+import { GUARDIANS } from './guardians.js?v=v130';
+import { gearOfTier } from './gear.js?v=v130';
+import { Chat } from './chat.js?v=v130';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -1130,6 +1133,24 @@ class Game {
        * refreshed because that is the screen it is drawn on, and a player
        * can be sitting in it while someone else opens cases.
        */
+      /**
+       * SOMEBODY STRUCK OUR CLONE.
+       *
+       * They cannot remove it themselves — like damage, a hit on a clone is
+       * a REQUEST, and the machine that owns the body is the one that acts
+       * on it. So the clone can only ever be killed once, by its owner, and
+       * a peer cannot cancel an ability it does not own beyond having
+       * actually hit the thing.
+       */
+      if (ev.t === 'clonehit') {
+        if (ev.to === this.player.id && this.player.killClone()) {
+          const c = this.player.pos;
+          this.hud.toast('Your shadow clone was struck down', 2);
+          _v3.set(c.x, c.y + 1.0, c.z);
+          Audio.tongueRelease(this.player.pos);
+        }
+        return;
+      }
       if (ev.t === 'title') {
         const prof = this.net.profiles.get(id);
         if (prof) prof.title = cleanTitle(ev.s);
@@ -4513,11 +4534,49 @@ class Game {
         pos.x - Math.sin(c.yaw) * 1.5, pos.y + 1.1, pos.z - Math.cos(c.yaw) * 1.5);
       this.effects.slashArc(_v3, c.yaw, i, i === 2 ? 0xfff0b0 : 0xdff3ff, i === 2 ? 3.8 : 3.0);
       Audio.slash(pos, i);
+      this._cloneSwing(pos, c.yaw, i);
     }
     if (c.thr !== this._cloneThr) {
       this._cloneThr = c.thr;
       this._cloneThrow(pos, c);
     }
+  }
+
+  /**
+   * ═══ THE CLONE'S SWING ACTUALLY LANDS ══════════════════════════════════
+   *
+   * It replays a cut you made half a second ago, and that cut connects with
+   * whatever is standing in front of the CLONE — not in front of you. A
+   * second body swinging a sword through people and doing nothing was the
+   * thing that made the ability read as a decoy.
+   *
+   * ── who swings it ─────────────────────────────────────────────────────
+   * Your machine, because the clone is yours. That is the same rule the
+   * whole combat model runs on: the attacker detects the hit locally and
+   * sends a request, and the victim applies it to their own health. So the
+   * clone's hits go out as ordinary `sendHit`s with you as the attacker,
+   * which also means every rule already written — allies, spectators,
+   * spawn protection, parries — applies to them for free.
+   *
+   * ── it cannot hit your own clone ──────────────────────────────────────
+   * `_buildTargets` lists other players' clones, never yours, so there is
+   * nothing here to exclude.
+   */
+  _cloneSwing(pos, yaw, index) {
+    // Nothing to swing at, and nothing to swing in — the practice ring has
+    // dummies but a clone hitting them would double every damage number.
+    if (!this.round || !this.round.combatEnabled) return;
+    if (this.round.isTagMode) return;      // a tag is a person's to make
+
+    const targets = this._buildTargets().filter((t) => !t.isDummy);
+    if (!targets.length) return;
+
+    const A = CFG.abilities.shadowclone;
+    const dmg = Math.round(CFG.combat.comboDamage[index] * (A.damage || 0.6));
+    const hits = coneHit(pos, yaw, targets, CFG.combat.reach, CFG.combat.arc);
+    // A clone striking another clone removes it, exactly as you would — the
+    // target's own `onHit` decides what being hit means.
+    for (const h of hits) h.target.onHit(dmg, h.dirX, h.dirZ, false, h.target.pos);
   }
 
   /**
@@ -4938,6 +4997,40 @@ class Game {
           if (head) this._headshotFeedback(_hitPos);
         },
       });
+
+      /**
+       * ── AND THEIR SHADOW CLONE, which is a real body ──────────────────
+       *
+       * In the list beside its owner, with the same hitbox, so a kunai's
+       * aim assist curves to it exactly as it would to a player and a
+       * katana can cut it down. That is the whole point of the ability: it
+       * is a second target, and the kunai that goes into it is one that was
+       * coming for you.
+       *
+       * ONE HIT AND IT IS GONE. Nothing is dealt to the owner — a clone is
+       * not a health pool, it is a body that absorbs one attack and
+       * vanishes. The owner is told and does the removing, the same way
+       * damage works everywhere else here: we request, they apply.
+       */
+      if (r.cloneState) {
+        list.push({
+          id: 'clone:' + r.id,
+          pos: r.clonePos,
+          dead: false,
+          isDummy: false,
+          hitbox: CFG.hitbox.player,
+          onHit: (dmg, dx, dz, head, at) => {
+            _hitPos.copy(at || r.clonePos);
+            // Tagging a clone would be tagging nobody, so in Tag it is
+            // purely a thing that eats your throw.
+            this.net.sendEvent({ t: 'clonehit', to: r.id });
+            this.hud.hitmarker(false);
+            this.effects.puff(_hitPos, 0x9a7aff, 20, 5);
+            this.effects.ring(_hitPos, 0.3, 3.0, 0.35, 0x9a7aff, true);
+            Audio.tongueRelease(_hitPos);
+          },
+        });
+      }
     }
 
     for (const d of this.dummies.dummies) {

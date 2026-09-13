@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v129';
+export const BUILD = 'v130';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -315,12 +315,39 @@ export const CFG = {
       // 70% transparent to you and your own side; fully gone to the enemy.
       friendlyOpacity: 0.30,
     },
+    /**
+     * ═══ THE SHADOW CLONE ════════════════════════════════════════════════
+     *
+     * It replays what you did half a second ago, and it is a SECOND BODY on
+     * the field — not a decoy. It swings when you swung and those swings
+     * land; it can be hit, and kunai aim-assist locks onto it exactly as it
+     * does onto a player. Distraction is a thing you can use it for, not the
+     * thing it is for.
+     *
+     * ── it dies to one hit ────────────────────────────────────────────────
+     * That is the whole balance of it. A body that fights for you, soaks the
+     * kunai meant for you, and cannot be removed would simply be a second
+     * player; one that pops the moment anybody connects is a trade. Killing
+     * it early refunds NOTHING — the cooldown runs from the moment you cast,
+     * so a clone swatted in its first second costs the same sixty as one that
+     * lived its full ten.
+     */
     shadowclone: {
       duration: 10,
       cooldown: 60,
       delay: 0.45,           // how far behind you the clone copies your moves
       buffer: 4.0,           // seconds of movement history kept
       minGap: 1.7,           // it never stands on top of you, even at a halt
+      /**
+       * What its swings hit for, as a fraction of your own.
+       *
+       * Not 1. The clone repeats every cut you make, so at full damage the
+       * ability is a flat doubling of your output for ten seconds and there
+       * is no decision in it. At 0.6 a swing you land yourself is still
+       * worth more than one it copies, and the clone is worth casting for
+       * the body as much as for the damage.
+       */
+      damage: 0.6,
     },
   },
 

@@ -7,15 +7,15 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v129';
-import { CFG } from './config.js?v=v129';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v129';
-import { FrogModel } from './frog.js?v=v129';
-import { Grapple, GrappleState } from './grapple.js?v=v129';
-import { Combat, Health } from './combat.js?v=v129';
-import { Stamina } from './stamina.js?v=v129';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v129';
-import { Audio } from './audio.js?v=v129';
+import * as THREE from '../lib/three.module.js?v=v130';
+import { CFG } from './config.js?v=v130';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v130';
+import { FrogModel } from './frog.js?v=v130';
+import { Grapple, GrappleState } from './grapple.js?v=v130';
+import { Combat, Health } from './combat.js?v=v130';
+import { Stamina } from './stamina.js?v=v130';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v130';
+import { Audio } from './audio.js?v=v130';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -1124,6 +1124,33 @@ export class Player {
    * Position and facing are interpolated; discrete state is taken from the
    * nearer sample, because a half-drawn sword is not a pose.
    */
+  /**
+   * ═══ THE CLONE TAKES A HIT AND IS GONE ═════════════════════════════════
+   *
+   * One hit, whoever landed it and with whatever. That is what makes the
+   * clone a trade rather than a free second body: it fights for you and it
+   * soaks the kunai that was meant for you, and the price is that anybody
+   * who connects with it removes it.
+   *
+   * The COOLDOWN IS NOT TOUCHED. It started when you cast and it keeps
+   * running, so a clone swatted in its first second still costs the full
+   * sixty seconds — the ability is the cast, not the uptime. Refunding here
+   * would make throwing a clone into a crowd strictly free.
+   *
+   * Clearing the trail matters as much as the timer: `cloneTransform`
+   * returns null without two samples, so this is what actually takes it off
+   * everyone's screen — `netState` stops packing `cl` on the next tick.
+   *
+   * @returns true if there was a clone to kill, so the caller can decide
+   *          whether anything is worth showing.
+   */
+  killClone() {
+    if (this.cloneT <= 0) return false;
+    this.cloneT = 0;
+    this.cloneTrail.length = 0;
+    return true;
+  }
+
   cloneTransform() {
     if (this.cloneT <= 0 || this.cloneTrail.length < 2) return null;
     const A = CFG.abilities.shadowclone;

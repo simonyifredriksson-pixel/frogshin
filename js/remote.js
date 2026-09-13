@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v129';
-import { CFG } from './config.js?v=v129';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v129';
-import { FrogModel } from './frog.js?v=v129';
-import { ToadModel } from './npc.js?v=v129';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v129';
-import { Audio } from './audio.js?v=v129';
+import * as THREE from '../lib/three.module.js?v=v130';
+import { CFG } from './config.js?v=v130';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v130';
+import { FrogModel } from './frog.js?v=v130';
+import { ToadModel } from './npc.js?v=v130';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v130';
+import { Audio } from './audio.js?v=v130';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -79,6 +79,8 @@ export class RemotePlayer {
     this.cloneInvisible = false;
     this.cloneState = null;
     this.cloneModel = null;
+    /** Live world position of this player's clone. See `_updateClone`. */
+    this.clonePos = new THREE.Vector3();
     this._hunting = false;
     this._forced = false;
     this.spectating = false;
@@ -429,6 +431,15 @@ export class RemotePlayer {
     // the same delay it does everything else on.
     this.cloneInvisible = !!(bits & 64);
     this._applyVisibility();
+    /**
+     * WHERE THE CLONE IS, as a vector anything can aim at.
+     *
+     * The clone is a real target — kunai aim-assist locks onto it and a
+     * katana can cut it down — and `_buildTargets` in main.js needs a
+     * position object it can hold on to rather than three numbers unpacked
+     * out of a packet each frame.
+     */
+    this.clonePos.set(x, y, z);
     this.cloneModel.root.position.set(x, y, z);
     this.cloneModel.setFacing(yaw);
     this.cloneModel.update(dt, {

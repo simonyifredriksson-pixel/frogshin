@@ -8,12 +8,62 @@
  * another player's health — only request damage on them.
  */
 
-import * as THREE from '../lib/three.module.js?v=v129';
-import { CFG } from './config.js?v=v129';
-import { clamp } from './util.js?v=v129';
+import * as THREE from '../lib/three.module.js?v=v130';
+import { CFG } from './config.js?v=v130';
+import { clamp } from './util.js?v=v130';
 
 const _to = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const _ct = new THREE.Vector3();
+
+/**
+ * ═══ A ONE-SHOT CONE TEST, with no swing behind it ═══════════════════════
+ *
+ * `Combat.resolve` below is the same geometry wrapped in a state machine: it
+ * only fires while `active` is true, it remembers who it has already hit
+ * this swing, and it reads the combo index for the damage. That is exactly
+ * right for a player holding a katana and exactly wrong for the SHADOW
+ * CLONE, which has no swing state at all — it replays a recorded `atk`
+ * counter, and one tick of that counter is one arc that either connects or
+ * does not.
+ *
+ * Sharing the geometry rather than the class is what keeps the clone's reach
+ * and arc honest: it hits what you would have hit standing where it stands.
+ *
+ * @param targets same shape `resolve` takes — { id, pos, dead, hitbox }
+ * @returns array of { target, dirX, dirZ }, empty if nothing is in the cone
+ */
+export function coneHit(origin, yaw, targets, reach, arc) {
+  const out = [];
+  if (!targets || !targets.length) return out;
+  _fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+
+  for (let k = 0; k < targets.length; k++) {
+    const t = targets[k];
+    if (!t || t.dead) continue;
+
+    _ct.set(t.pos.x - origin.x, 0, t.pos.z - origin.z);
+    const dist = _ct.length();
+    // The target's own girth, so hits land on its body and not its origin.
+    const girth = (t.hitbox && t.hitbox.bodyRadius) || CFG.move.radius;
+    if (dist > reach + girth) continue;
+
+    const vert = (t.hitbox && t.hitbox.vertical) || 2.6;
+    const dy = t.pos.y - origin.y;
+    if (dy > vert || dy < -vert) continue;
+
+    if (dist > 0.001) {
+      _ct.multiplyScalar(1 / dist);
+      // Point blank always connects, as it does for a player — a swing that
+      // whiffs on something you are standing inside reads as a bug.
+      if (dist > 1.2 && Math.acos(clamp(_ct.dot(_fwd), -1, 1)) > arc) continue;
+    } else {
+      _ct.copy(_fwd);
+    }
+    out.push({ target: t, dirX: _ct.x, dirZ: _ct.z });
+  }
+  return out;
+}
 
 export class Combat {
   constructor() {
