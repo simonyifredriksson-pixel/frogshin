@@ -912,12 +912,21 @@ kbd {
    odds moved into the drawer where somebody who is actually deciding will
    open them anyway.
 
-   `auto-fill` rather than a fixed four: the card is 176px at its narrowest
-   and the grid simply carries fewer per row as the card narrows, so this
-   works down to a phone without a breakpoint. */
+   ── auto-FIT, not auto-FILL ──────────────────────────────────────────
+   The difference is the whole layout. `auto-fill` lays down as many tracks
+   as the width allows and keeps the empty ones, at full size. Every set
+   holds exactly three cases — one kunai, one sword, one frog — and the card
+   is wide enough for four, so each row reserved a fourth track for nothing
+   and left a column of dead space down the right of the entire shop.
+   `auto-fit` collapses the empty track and the three real ones share the
+   width between them.
+
+   A track floor with `1fr` on top rather than a fixed four across, so the
+   grid drops to two and then one as the window narrows without needing a
+   breakpoint. */
 .crate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
   gap: 14px;
   margin-bottom: 26px;
 }
@@ -946,8 +955,12 @@ kbd {
 }
 .crate-card .cc-open { width: 100%; margin: 0; }
 .crate-card .crate-bulk { width: 100%; margin: 0; }
+/* Grown with the tile. At 108px in a 264px tile the case sat in the middle
+   of a lot of nothing; the whole point of the wider tile is that the thing
+   you are buying is the thing you see. The latch, the colour flash and the
+   lock below are all scaled with it. */
 .crate-box {
-  width: 108px; height: 82px;
+  width: 136px; height: 102px;
   position: relative;
   flex: 0 0 auto;
   cursor: pointer;
@@ -964,28 +977,28 @@ kbd {
 /* Latch and colour flash, so each case reads differently at a glance. */
 .crate-box::before {
   content: '';
-  position: absolute; left: 0; right: 0; top: 22px; height: 11px;
+  position: absolute; left: 0; right: 0; top: 28px; height: 14px;
   background: rgba(0,0,0,0.45);
 }
 .crate-box::after {
   content: '';
-  position: absolute; right: -4px; top: -4px; bottom: -4px; width: 26px;
+  position: absolute; right: -4px; top: -4px; bottom: -4px; width: 33px;
   background: var(--crate-color, #c0392b);
   clip-path: polygon(38% 0, 100% 0, 100% 100%, 0 100%);
   opacity: 0.9;
 }
 .crate-lock {
   position: absolute;
-  left: 50%; top: 14px;
+  left: 50%; top: 18px;
   transform: translateX(-50%);
-  width: 18px; height: 15px;
+  width: 23px; height: 19px;
   background: #cfd6de;
-  box-shadow: inset 0 -4px 0 rgba(0,0,0,0.25);
+  box-shadow: inset 0 -5px 0 rgba(0,0,0,0.25);
 }
 .crate-lock::before {
   content: '';
-  position: absolute; left: 4px; top: -7px;
-  width: 10px; height: 9px;
+  position: absolute; left: 5px; top: -9px;
+  width: 13px; height: 11px;
   border: 3px solid #cfd6de;
   border-bottom: 0;
 }
