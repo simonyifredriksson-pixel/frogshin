@@ -1683,6 +1683,21 @@ kbd {
 }
 .cr-title.show { display: block; }
 
+/* What the room is playing for, in the lobby. Hidden until something is
+   actually staked — an empty prize line is furniture. */
+#lobby-prize { display: none; }
+#lobby-prize.show {
+  display: block;
+  margin: 10px 0 4px;
+  padding: 9px 10px;
+  font-family: var(--font-px); font-size: 8px;
+  letter-spacing: 1px; line-height: 1.8;
+  color: #7ee07e;
+  background: rgba(0,0,0,0.3);
+  border-left: 4px solid var(--gold);
+}
+#btn-tournament.hidden { display: none; }
+
 /* ═══════════════════════════════════════════════════ HOST A TOURNAMENT ══
    Built from the menu's own vocabulary — labelled dividers, a label and a
    control per row — rather than a second visual language for one screen.

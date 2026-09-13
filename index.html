@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=v131" />
+<link rel="stylesheet" href="css/style.css?v=v132" />
 <script>
 // Registered BEFORE the module graph loads. main.js installs its own handler,
 // but if a module fails to parse then main.js never runs at all — which used
@@ -168,21 +168,19 @@
              them. They are the same kind of decision made two ways, and
              stacking them with a sentence each cost a hundred pixels of
              height to say twice what one line says once. -->
-        <!-- Three ways to start a multiplayer match, ON ONE ROW.
-             TOURNAMENT went here rather than on a line of its own with a
-             caption under it: the play screen was measured at 967px and a
-             1080p window has about 1,080 to give, so a fourth row and a
-             second note put it over and made the whole screen scroll. The
-             row was already two buttons of the same kind of decision; it is
-             three now and costs nothing in height. -->
         <div class="btn-row">
           <button class="btn btn-go" id="btn-quickplay"><span>QUICK PLAY</span></button>
           <button class="btn" id="btn-host"><span>CREATE ROOM</span></button>
-          <button class="btn" id="btn-tournament"><span>TOURNAMENT</span></button>
         </div>
         <!-- One line, deliberately. Two costs 23px of height to say the
-             same thing with more words in it. -->
-        <p class="note">A public match, a private code, or a staked room.</p>
+             same thing with more words in it.
+
+             HOSTING A TOURNAMENT IS NOT HERE. It lives in the room you have
+             already made — see #panel-lobby. A tournament needs a code to
+             hand out before anybody can join it, and staking a prize from
+             this screen meant paying for one before you knew whether
+             anybody was coming. -->
+        <p class="note">A public match, or a private code for your friends.</p>
 
         <!-- THE MAP PICKER LIVES HERE, with Create Room — it is the host's
              choice, so it sits under the host's button rather than being
@@ -490,7 +488,17 @@
 
         <div id="lobby-host-controls">
           <button class="btn btn-go" id="lobby-arena"><span>PLAY ARENA</span></button>
+          <!-- HOSTING A TOURNAMENT HAPPENS FROM INSIDE THE ROOM.
+               The code above already exists, so people can be joining while
+               you decide what is at stake — and you are not asked to pay for
+               a prize before you know whether anybody turned up. Host only:
+               it is the host's froglets. -->
+          <button class="btn" id="btn-tournament"><span>HOST TOURNAMENT</span></button>
         </div>
+        <!-- What is being played for, once something is. Shown to EVERYONE
+             in the room, not just the host — a prize nobody can see is not a
+             reason to stay. -->
+        <div id="lobby-prize"></div>
         <div id="lobby-waiting">WAITING FOR THE HOST TO CHOOSE…</div>
         <button class="btn btn-quiet" id="lobby-leave"><span>LEAVE ROOM</span></button>
 
@@ -1413,6 +1421,6 @@
 <pre id="boot-error"></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
-<script type="module" src="js/main.js?v=v131"></script>
+<script type="module" src="js/main.js?v=v132"></script>
 </body>
 </html>

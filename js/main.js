@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v131';
+import * as THREE from '../lib/three.module.js?v=v132';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v131';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v131';
-import { Input } from './input.js?v=v131';
-import { Audio } from './audio.js?v=v131';
-import { World } from './world.js?v=v131';
-import { Effects } from './effects.js?v=v131';
-import { Atmosphere } from './atmosphere.js?v=v131';
-import { FollowCamera } from './camera.js?v=v131';
-import { Player } from './player.js?v=v131';
+} from './config.js?v=v132';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v132';
+import { Input } from './input.js?v=v132';
+import { Audio } from './audio.js?v=v132';
+import { World } from './world.js?v=v132';
+import { Effects } from './effects.js?v=v132';
+import { Atmosphere } from './atmosphere.js?v=v132';
+import { FollowCamera } from './camera.js?v=v132';
+import { Player } from './player.js?v=v132';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize,
-} from './tournament.js?v=v131';
+} from './tournament.js?v=v132';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v131';
-import { RemotePlayer } from './remote.js?v=v131';
-import { HUD } from './hud.js?v=v131';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v131';
-import { FrogModel } from './frog.js?v=v131';
-import { DummyField } from './dummy.js?v=v131';
+import { coneHit } from './combat.js?v=v132';
+import { RemotePlayer } from './remote.js?v=v132';
+import { HUD } from './hud.js?v=v132';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v132';
+import { FrogModel } from './frog.js?v=v132';
+import { DummyField } from './dummy.js?v=v132';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v131';
-import { ToadModel } from './npc.js?v=v131';
+} from './rounds.js?v=v132';
+import { ToadModel } from './npc.js?v=v132';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v131';
-import { DungeonRun } from './dungeon.js?v=v131';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v131';
-import { JudgmentRun } from './judgment.js?v=v131';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v131';
-import { COMBO_NAMES } from './ascended.js?v=v131';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v131';
-import { MenuScene } from './menu.js?v=v131';
-import { Economy } from './economy.js?v=v131';
-import { Shop } from './shop.js?v=v131';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v131';
-import { Overworld } from './overworld.js?v=v131';
-import { InventoryScreen } from './inventoryui.js?v=v131';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v131';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v131';
-import { Cine } from './cinema.js?v=v131';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v131';
-import { MEMORIES } from './flashbacks.js?v=v131';
-import { GUARDIANS } from './guardians.js?v=v131';
-import { gearOfTier } from './gear.js?v=v131';
-import { Chat } from './chat.js?v=v131';
+} from './skins.js?v=v132';
+import { DungeonRun } from './dungeon.js?v=v132';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v132';
+import { JudgmentRun } from './judgment.js?v=v132';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v132';
+import { COMBO_NAMES } from './ascended.js?v=v132';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v132';
+import { MenuScene } from './menu.js?v=v132';
+import { Economy } from './economy.js?v=v132';
+import { Shop } from './shop.js?v=v132';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v132';
+import { Overworld } from './overworld.js?v=v132';
+import { InventoryScreen } from './inventoryui.js?v=v132';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v132';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v132';
+import { Cine } from './cinema.js?v=v132';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v132';
+import { MEMORIES } from './flashbacks.js?v=v132';
+import { GUARDIANS } from './guardians.js?v=v132';
+import { gearOfTier } from './gear.js?v=v132';
+import { Chat } from './chat.js?v=v132';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -517,7 +517,9 @@ class Game {
     const backTo = {
       croaklands: 'play', dungeon: 'play', practice: 'play',
       customize: 'play', saves: 'croaklands', avatar: 'customize',
-      tournament: 'play',
+      // Back from the tournament setup goes to the ROOM you opened it from,
+      // not to PLAY — the room already exists and you have not left it.
+      tournament: 'lobby',
     };
     for (const [from, to] of Object.entries(backTo)) {
       const b = $('panel-' + from).querySelector('.btn-back');
@@ -543,6 +545,10 @@ class Game {
     $('lobby-arena').onclick = () => this._hostStart('arena');
     $('lobby-leave').onclick = () => {
       Audio.uiBack();
+      // Closing the room before it was played gives the stake back. The
+      // host paid when they staked it, and nobody won anything.
+      this._abandonTournament();
+      this._prizeLabel = '';
       this.net.disconnect();
       this.pendingMode = null;
       this._playStatus('', false);
@@ -908,8 +914,31 @@ class Game {
      */
     this._running = JSON.parse(JSON.stringify(t));
     this._running.paid = true;
-    this.pendingMode = 'arena';
-    this._connect('host', null);
+
+    /**
+     * Back to the room, which was already open. Nothing is connected here:
+     * the host came from the lobby with a code people may already be
+     * joining, and the tournament is a thing that happens TO that room.
+     */
+    const named = t.prize.id ? findSkin(t.prize.slot, t.prize.id) : null;
+    this._running.label = describePrize(t, named && named.name);
+    this._announcePrize();
+    this.showPanel('lobby');
+    this._refreshLobby();
+    this.hud.toast('Tournament open — the prize is staked', 4);
+  }
+
+  /**
+   * Tell the room what is being played for.
+   *
+   * Sent as an event rather than carried in the state packet: it changes
+   * once, when the host stakes it, and twenty times a second is not the
+   * rate at which a prize changes. Re-sent whenever somebody joins, because
+   * an event fired before they arrived is one they never saw.
+   */
+  _announcePrize() {
+    if (!this._running || !this._running.label) return;
+    this.net.sendEvent({ t: 'tourney', s: this._running.label });
   }
 
   /**
@@ -1030,6 +1059,26 @@ class Game {
         ? 'Waiting for friends — they join with the code above'
         : 'Ready when you are');
     this._renderRoster();
+
+    /**
+     * THE PRIZE, if this room has one.
+     *
+     * The host reads it off the tournament they paid for; everybody else
+     * reads the sentence the host sent. Both end up in the same line, so
+     * the room agrees about what it is playing for.
+     */
+    const prize = $('lobby-prize');
+    if (prize) {
+      const label = (this._running && this._running.label) || this._prizeLabel || '';
+      prize.textContent = label ? `PLAYING FOR — ${label}` : '';
+      prize.classList.toggle('show', !!label);
+    }
+    // Only the host stakes anything, and only before one is staked.
+    const tb = $('btn-tournament');
+    if (tb) {
+      tb.classList.toggle('hidden', !isHost || !!(this._running && this._running.paid));
+    }
+
     this._renderMapPicker('lobby-maps', true);
   }
 
@@ -1374,6 +1423,9 @@ class Game {
       // the chat is where you look to find out who is actually in the room.
       if (this.chat) this.chat.system(`${prof.name} joined`);
       this._addRemote(id, prof);
+      // Somebody who arrives after the prize was staked never saw the event
+      // that announced it, so it goes out again for them.
+      this._announcePrize();
     };
 
     net.onLeave = (id) => {
@@ -1450,6 +1502,18 @@ class Game {
        */
       if (ev.t === 'prize') {
         if (ev.to === this.player.id) this._takePrize(ev.p);
+        return;
+      }
+      /**
+       * WHAT THIS ROOM IS PLAYING FOR.
+       *
+       * Display only — it is a sentence the host wrote about froglets they
+       * have already paid. Capped and set as text, because it arrives from
+       * a peer and ends up on everybody's screen.
+       */
+      if (ev.t === 'tourney') {
+        this._prizeLabel = typeof ev.s === 'string' ? ev.s.slice(0, 120) : '';
+        this._refreshLobby();
         return;
       }
       if (ev.t === 'clonehit') {
