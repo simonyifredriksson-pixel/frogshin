@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v142';
-import { Audio } from './audio.js?v=v142';
-import { PX } from './icons.js?v=v142';
-import { CFG } from './config.js?v=v142';
+} from './skins.js?v=v143';
+import { Audio } from './audio.js?v=v143';
+import { PX } from './icons.js?v=v143';
+import { CFG } from './config.js?v=v143';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;

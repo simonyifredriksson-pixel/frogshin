@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v142';
-import { CFG } from './config.js?v=v142';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v142';
-import { findMap } from './maps.js?v=v142';
-import { Terrain, CollisionWorld } from './collision.js?v=v142';
+import * as THREE from '../lib/three.module.js?v=v143';
+import { CFG } from './config.js?v=v143';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v143';
+import { findMap } from './maps.js?v=v143';
+import { Terrain, CollisionWorld } from './collision.js?v=v143';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -49,21 +49,26 @@ const CITY = {
    * of an apartment building. Anything placed on a street derives from the
    * half-pitch; anything placed on a block derives from the whole one.
    */
-  pitch: 48,
+  pitch: 44,
   /** Asphalt between two blocks, kerb to kerb. */
   road: 16,
   /** How many blocks across, counting both ways from the middle. */
-  span: 9,
+  span: 11,
   /**
    * No block is built past this from the centre — the ward's edge.
    *
-   * It has to clear the boundary hill with room to spare: a block reaches
-   * `pitch/2 - road/2` past its own centre, and the map's rim starts to
-   * climb at 0.90 of the half-world. 168 + 16 = 184 against a rim at 189,
-   * which is the difference between a ward with outskirts and a ward whose
-   * outer ring is buried in a mountain.
+   * MEASURED AS A SQUARE, `max(|x|, |z|)`, the same ruler the map's rim is
+   * raised with. A circular reach cut the grid to a disc: five and a bit
+   * rings, 41 blocks, and four corners of the world left empty. Nine by
+   * nine is 81, and it is also simply what a ward looks like.
+   *
+   * It has to clear the boundary hill: a block reaches `pitch/2 - road/2`
+   * past its own centre, so 176 + 14 = 190 against a rim that starts at
+   * 198. Those eight units are the outskirts. An earlier draft had the
+   * blocks reaching past where the rim began and buried its whole outer
+   * ring in a hillside, which is the failure this margin exists for.
    */
-  reach: 168,
+  reach: 180,
   /** The flat the whole city sits on. Well above the waterline: no sea. */
   ground: 6,
   /** How high the pedestrian bridges run over the avenues. */
@@ -201,6 +206,17 @@ export class World {
         this.collision.climbLimitY = this.map.climbLimitY;
         if (this.map.climbLimitRadius !== undefined) {
           this.collision.climbLimitRadius = this.map.climbLimitRadius;
+        }
+        /**
+         * And WHICH SHAPE that radius means — see `climbLimitShape` in
+         * js/collision.js for why this matters. A map whose rim is raised
+         * from `max(|x|, |z|)` fills the square world out to its corners,
+         * and measuring its climb limit with a circle would put an
+         * invisible wall a quarter of the way in along both diagonals.
+         * The rim and the limit must be cut with the same ruler.
+         */
+        if (this.map.climbLimitShape) {
+          this.collision.climbLimitShape = this.map.climbLimitShape;
         }
         this.batches = {
           box:   new Batch(new THREE.BoxGeometry(1, 1, 1), this._mat()),
@@ -1135,8 +1151,11 @@ export class World {
       for (let bz = -half; bz <= half; bz++) {
         const cx = bx * C.pitch;
         const cz = bz * C.pitch;
+        // SQUARE reach — see CITY.reach. `d` stays radial below, because
+        // what it is used for there is "how near the middle am I", which is
+        // a distance and not an edge.
+        if (Math.max(Math.abs(cx), Math.abs(cz)) > C.reach) continue;
         const d = Math.hypot(cx, cz);
-        if (d > C.reach) continue;                    // past the ward's edge
 
         const inner = C.pitch * 0.5 - C.road * 0.5;   // half the buildable pad
         this._cityPavement(cx, cz, inner);
@@ -1491,7 +1510,19 @@ export class World {
     const R = this.rnd;
     const g = this.groundY;
     const half = Math.floor(C.span / 2);
-    const lim = C.reach + C.pitch * 0.5;
+    /**
+     * Three numbers, all derived, all SQUARE — because the ward is.
+     *
+     *   far()  the ward's own ruler, `max(|x|, |z|)`
+     *   road   the outermost street centreline. One half-pitch inside the
+     *          last block centre, so the ring past the final blocks — which
+     *          would be painted onto the rim — never gets built.
+     *   paint  how far a lane marking may run along a street: out to the
+     *          block edge plus the outskirts, and short of the rim.
+     */
+    const far = (a, b) => Math.max(Math.abs(a), Math.abs(b));
+    const road = C.reach - C.pitch * 0.5;
+    const paint = C.reach + C.pitch * 0.5 - 8;
 
     /**
      * EVERY line here is a HALF-pitch. `k * pitch` is where a block stands;
@@ -1501,21 +1532,21 @@ export class World {
      */
     for (let k = -half - 1; k <= half; k++) {
       const line = (k + 0.5) * C.pitch;
-      if (Math.abs(line) > lim) continue;
+      if (Math.abs(line) > road) continue;
 
       /**
        * Lane markings, and the long yellow pair the reference has. Dashes
        * rather than a solid strip: a solid one reads as a painted floor,
-       * dashes read as a road. Each dash is culled against the ward's radius
+       * dashes read as a road. Each dash is culled against the ward's edge
        * so the paint stops where the asphalt does.
        */
-      for (let m = -lim; m < lim; m += 9) {
-        if (Math.hypot(line, m) > lim) continue;
+      for (let m = -paint; m < paint; m += 9) {
+        if (far(line, m) > paint) continue;
         this.deco(line, g + 0.03, m + 2.2, 0.16, 0.02, 2.2, 0xd8d6cc);
         this.deco(m + 2.2, g + 0.03, line, 2.2, 0.02, 0.16, 0xd8d6cc);
       }
-      for (let m = -lim; m < lim; m += 12) {
-        if (Math.hypot(line, m) > lim) continue;
+      for (let m = -paint; m < paint; m += 12) {
+        if (far(line, m) > paint) continue;
         this.deco(line - 1.6, g + 0.03, m + 6, 0.13, 0.02, 6, 0xc8a634);
         this.deco(m + 6, g + 0.03, line - 1.6, 6, 0.02, 0.13, 0xc8a634);
       }
@@ -1525,10 +1556,13 @@ export class World {
       const kerb = C.road * 0.5 - 1.1;
       for (let m = -half; m <= half; m++) {
         const at = m * C.pitch;
-        if (Math.hypot(line, at) > C.reach + C.pitch * 0.4) continue;
+        if (far(line, at) > C.reach) continue;
+        // Checkerboarded off (k, m) so the lit ones alternate ALONG a street
+        // rather than lighting one whole side and leaving the other dark.
+        const lit = ((k + m) & 1) === 0;
         for (const s of [-1, 1]) {
-          this._cityLamp(line + s * kerb, at);
-          this._cityLamp(at, line + s * kerb);
+          this._cityLamp(line + s * kerb, at, lit);
+          this._cityLamp(at, line + s * kerb, lit);
         }
 
         /**
@@ -1545,7 +1579,7 @@ export class World {
          * straight box over forty-eight units reads as a scaffolding pole.
          */
         const next = (m + 1) * C.pitch;
-        if (Math.hypot(line, next) <= C.reach + C.pitch * 0.4) {
+        if (far(line, next) <= C.reach) {
           /**
            * Thin, and ABOVE the eye-line. The first pass hung them at five
            * units and a tenth of a unit thick, which from the pavement was
@@ -1582,7 +1616,9 @@ export class World {
        */
       for (let m = -half - 1; m <= half; m++) {
         const at = (m + 0.5) * C.pitch;
-        if (Math.hypot(line, at) > C.reach) continue;
+        // A junction needs a street on BOTH axes, so it is culled against
+        // the outermost centreline, not against the ward's edge.
+        if (far(line, at) > road) continue;
         for (const s of [-1, 1]) {
           for (let i = 0; i < 6; i++) {
             const t = (i + 0.5) / 6;
@@ -1593,32 +1629,57 @@ export class World {
               1.15, 0.02, 0.45, 0xd8d6cc);
           }
           /**
-           * A traffic light on each approach, still cycling. Together with
-           * the vending machines and the handful of lit windows this is the
-           * whole of "alive" — the power is on and nobody is under it.
+           * A traffic light on each CORNER of the junction, still cycling.
+           * With the vending machines and the handful of lit windows this is
+           * the whole of "alive" — the power is on and nobody is under it.
+           *
+           * Both coordinates have to come off their own centreline. These
+           * used to be offset on one axis and left on the other, which stood
+           * a post squarely in the middle of the crossing road — visible the
+           * moment the ward was rendered down an avenue, and in the source
+           * just two lines that each looked right on their own.
+           *
+           * 9.2 out is 1.2 inside the kerb, so they stand on the pavement.
            */
-          const tx = line + s * (C.road * 0.5 + 1.2);
-          const tz = at + s * (C.road * 0.5 + 1.2);
-          this.batches.post.add(tx, g + 2.6, at, 0.13, 5.2, 0.13, 0x2f3238);
-          this.deco(tx, g + 5.0, at, 0.22, 0.6, 0.18,
-            R() < 0.5 ? 0x3f8f4a : 0xd8483c);
-          this.batches.post.add(line, g + 2.6, tz, 0.13, 5.2, 0.13, 0x2f3238);
-          this.deco(line, g + 5.0, tz, 0.18, 0.6, 0.22,
-            R() < 0.5 ? 0x3f8f4a : 0xd8483c);
+          for (const t of [-1, 1]) {
+            const tx = line + s * (C.road * 0.5 + 1.2);
+            const tz = at + t * (C.road * 0.5 + 1.2);
+            this.batches.post.add(tx, g + 2.6, tz, 0.13, 5.2, 0.13, 0x2f3238);
+            this.collision.addBox(tx, g + 2.6, tz, 0.2, 2.6, 0.2, 'stone');
+            this.deco(tx, g + 5.0, tz, 0.2, 0.6, 0.2,
+              R() < 0.5 ? 0x3f8f4a : 0xd8483c);
+          }
         }
       }
     }
     void g;
   }
 
-  /** One street lamp: a dark post, a yellow head, and a grapple anchor. */
-  _cityLamp(x, z) {
+  /**
+   * One street lamp: a dark post, a yellow head, and — on half of them — a
+   * lit globe that is also a grapple anchor.
+   *
+   * `lit` is a COST control, and it is the one number in the ward that is
+   * about frame rate rather than about looks. `World.lantern` is not
+   * batched: each one adds a sphere mesh, an additive sprite and an entry
+   * in the per-frame bob list, so at the ward's new size lighting every
+   * lamp came to roughly eight hundred draw calls against the valley's
+   * hundred and fifty. Post and head are instanced and stay on all of
+   * them, so the street looks identical; only every other globe glows.
+   *
+   * Safe for the grapple highway with room to spare: lamps are a half
+   * pitch apart, so lighting every other one leaves anchors 44 units
+   * apart against a tongue that reaches 62 — and every lamp post, kerb
+   * and wall in the ward is grappleable anyway.
+   */
+  _cityLamp(x, z, lit = true) {
     const g = this.groundY + 0.5;
     this.batches.post.add(x, g + 2.8, z, 0.17, 5.6, 0.17, 0x2f3238);
     this.collision.addBox(x, g + 2.8, z, 0.24, 2.8, 0.24, 'stone');
     // The head is the yellow slab the reference hangs off every pole.
     this.deco(x, g + 5.7, z, 0.75, 0.22, 0.34, 0xe8c23a);
-    this.lantern(x, g + 5.5, z, 0xffca6b);
+    if (lit) this.lantern(x, g + 5.5, z, 0xffca6b);
+    else this.deco(x, g + 5.5, z, 0.3, 0.2, 0.3, 0xffca6b);
   }
 
   /** A vending machine. The hum is the point; the light is how you see it. */
@@ -1646,13 +1707,17 @@ export class World {
     const C = CITY;
     const R = this.rnd;
     const half = Math.floor(C.span / 2);
-    const lim = C.reach + C.pitch * 0.4;
+    // The same square rulers the streets use: cars park on a street, so
+    // they have to stop exactly where the street does.
+    const far = (a, b) => Math.max(Math.abs(a), Math.abs(b));
+    const road = C.reach - C.pitch * 0.5;
+    const lim = C.reach + C.pitch * 0.5 - 8;
 
     for (let k = -half - 1; k <= half; k++) {
       const line = (k + 0.5) * C.pitch;          // the asphalt, not the block
-      if (Math.abs(line) > lim) continue;
+      if (Math.abs(line) > road) continue;
       for (let m = -lim + 8; m < lim - 8; m += 9 + R() * 8) {
-        if (Math.hypot(line, m) > lim) continue;
+        if (far(line, m) > lim) continue;
         /**
          * Tucked against the kerb, nose-to-tail, on alternating sides.
          *
@@ -1746,16 +1811,29 @@ export class World {
     const half = Math.floor(C.span / 2);
 
     // Again: the half-pitch is the street. A bridge OVER an avenue has to be
-    // over the avenue.
+    // over the avenue, and it has to land on a building at BOTH ends — so
+    // it is culled a whole block inside the ward's edge, not at it.
+    const far = (a, b) => Math.max(Math.abs(a), Math.abs(b));
+    const road = C.reach - C.pitch * 0.5;
     for (let k = -half - 1; k <= half; k++) {
       const line = (k + 0.5) * C.pitch;
-      if (Math.abs(line) > C.reach) continue;
+      if (Math.abs(line) > road) continue;
       // Only over every other avenue, or the sky fills up with walkways.
       if (((k % 2) + 2) % 2 !== 0) continue;
 
       for (let m = -half; m <= half; m++) {
         const at = m * C.pitch;               // mid-block, clear of junctions
-        if (Math.hypot(line, at) > C.reach - C.pitch * 0.3) continue;
+        if (far(line, at) > C.reach) continue;
+        /**
+         * Every other block ALONG the avenue as well as every other avenue.
+         *
+         * One per block was fine on a ward five blocks wide; at nine it put
+         * nine bridges down a single street, which from the pavement is a
+         * covered arcade rather than the occasional crossing overhead. The
+         * high route stays continuous either way — the gap is one block, and
+         * every tower on it has its own stair.
+         */
+        if (((m % 2) + 2) % 2 !== 0) continue;
         for (const [px, pz, sx, sz] of [
           [line, at, C.road * 0.68, 1.8],
           [at, line, 1.8, C.road * 0.68],
@@ -2097,11 +2175,18 @@ export class World {
     const S = CFG.world.size * 0.5;
     const W = CFG.world.waterLevel;
 
-    // Half-sunk logs and stumps in the shallows — cover, and something to
-    // break the water up so it does not read as a flat sheet.
-    for (let i = 0; i < 90; i++) {
-      const x = (rnd() * 2 - 1) * (S - 50);
-      const z = (rnd() * 2 - 1) * (S - 50);
+    /**
+     * Half-sunk logs and stumps in the shallows — cover, and something to
+     * break the water up so it does not read as a flat sheet.
+     *
+     * The count and the band both grew with the map. A square rim opened up
+     * the four corners, and scattering the same ninety logs over half again
+     * as much water would have made the Mire read as EMPTIER rather than
+     * bigger — which is the trap in every "make it larger" change.
+     */
+    for (let i = 0; i < 210; i++) {
+      const x = (rnd() * 2 - 1) * (S - 26);
+      const z = (rnd() * 2 - 1) * (S - 26);
       const g = this.heightAt(x, z);
       if (g > W + 2.2 || g < W - 3.0) continue;
       const len = 3 + rnd() * 7;
@@ -2114,12 +2199,32 @@ export class World {
       }
     }
 
-    // Low boardwalks linking the mud islands, so there is a dry route for
-    // anyone who does not want to swim.
+    /**
+     * Low boardwalks linking the mud islands, so there is a dry route for
+     * anyone who does not want to swim.
+     *
+     * Each island to its NEAREST neighbours, not to the next one in the
+     * list. With four islands the list order happened to be a sensible
+     * loop; with twelve spread over the whole square it laid 340-unit
+     * piers diagonally across open water — eighty planks each, and they
+     * looked exactly as odd as they sound. Nearest-two gives a connected
+     * network out of short spans, and the dedup stops a pair being built
+     * from both ends.
+     */
     const islands = this.flats.filter((f) => f.h > W);
+    const built = new Set();
     for (let i = 0; i < islands.length; i++) {
-      const a = islands[i], b = islands[(i + 1) % islands.length];
-      this._mireBoardwalk(a.x, a.z, b.x, b.z);
+      const near = islands
+        .map((f, j) => [Math.hypot(f.x - islands[i].x, f.z - islands[i].z), j])
+        .filter(([, j]) => j !== i)
+        .sort((p, q) => p[0] - q[0])
+        .slice(0, 2);
+      for (const [, j] of near) {
+        const key = Math.min(i, j) + ':' + Math.max(i, j);
+        if (built.has(key)) continue;
+        built.add(key);
+        this._mireBoardwalk(islands[i].x, islands[i].z, islands[j].x, islands[j].z);
+      }
     }
   }
 
@@ -2166,9 +2271,22 @@ export class World {
     // local maximum over a wide radius finds almost nothing, because the
     // exact top of a noise ridge is a knife edge. A point that beats its
     // near neighbours is a tower for our purposes.
-    for (let i = 0; i < 4000 && this.mireSpires.length < 20; i++) {
-      const x = (rnd() * 2 - 1) * (S - 70);
-      const z = (rnd() * 2 - 1) * (S - 70);
+    /**
+     * Sampled to 34 towers, where it used to take 20 out of a box inset 70
+     * units — a box that stopped 30 units short of even the OLD circular
+     * rim, so the outer third of the map had no spires, therefore no
+     * village, therefore nothing to do in it.
+     *
+     * 58 of inset, though, not 34. A spire is a cone with about 30 units of
+     * flank, and the rim starts climbing at 185: sampling to 176 stood the
+     * outermost towers with their feet inside the boundary wall, where the
+     * flank you are supposed to run up is just more mountain. The corners
+     * are not left empty by this — they get a hamlet hung over the mud
+     * island instead, which is what fills them.
+     */
+    for (let i = 0; i < 11000 && this.mireSpires.length < 34; i++) {
+      const x = (rnd() * 2 - 1) * (S - 58);
+      const z = (rnd() * 2 - 1) * (S - 58);
       const h = this.heightAt(x, z);
       if (h < 16) continue;
       let peak = true;
@@ -2180,7 +2298,7 @@ export class World {
       }
       if (!peak) continue;
       // Keep them apart, or the village clumps into one corner.
-      if (this.mireSpires.some((s) => Math.hypot(s.x - x, s.z - z) < 30)) continue;
+      if (this.mireSpires.some((s) => Math.hypot(s.x - x, s.z - z) < 25)) continue;
       this.mireSpires.push({ x, z, y: h });
     }
 
@@ -2219,7 +2337,11 @@ export class World {
       let made = 0;
       // Try several spots per hut: a spire is a cone, so a good fraction of
       // the ring around it is solid rock at the height we want to hang from.
-      for (let i = 0; i < want * 4 && made < want; i++) {
+      // Nine tries per hut, not four. A spire is a cone, so most of the ring
+      // round it fails the "hangs clear of the ground" rule below — at four
+      // tries a third of the spires delivered no huts at all, and a spire
+      // with nothing hanging from it is scenery rather than a place.
+      for (let i = 0; i < want * 9 && made < want; i++) {
         const a = rnd() * Math.PI * 2;
         const d = 11 + rnd() * 18;
         const x = s.x + Math.cos(a) * d;
@@ -2237,15 +2359,49 @@ export class World {
       }
     }
 
-    // A cluster over the middle of the map, so the centre is contested.
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + 0.3;
-      const d = 14 + (i % 3) * 12;
+    /**
+     * A cluster over the middle of the map, so the centre is contested.
+     *
+     * Two rings now rather than one. The old seven sat between 14 and 38
+     * units out, which is a single knot of houses you can see all of from
+     * any one of them; the outer ring reaches 74 and gives the middle of
+     * the map a size of its own instead of a point.
+     */
+    for (let i = 0; i < 15; i++) {
+      const a = (i / 15) * Math.PI * 2 + 0.3;
+      const d = 16 + (i % 5) * 14.5;
       const x = Math.cos(a) * d, z = Math.sin(a) * d;
       const y = this.heightAt(x, z) + 14 + (i % 4) * 7;
       const hr = 3.4 + (i % 2);
       this._mireHut(x, y, z, hr, rnd);
       this.mireHuts.push({ x, y, z, r: hr });
+    }
+
+    /**
+     * A HAMLET OVER EVERY OUTER ISLAND.
+     *
+     * The square rim opened up the four corners of the world, and a corner
+     * you can walk to with nothing in it is not more map — it is more
+     * walking. The render made that plain: the far corner came back as
+     * flat silt, two sunken logs and a single lantern.
+     *
+     * These hang from nothing in particular, exactly as the central cluster
+     * does, because the spires are FOUND from noise and noise does not
+     * promise a tower in any given place. Waiting for one there is how the
+     * outer third of this map stayed empty in the first place.
+     */
+    const outer = this.flats.filter(
+      (f) => Math.max(Math.abs(f.x), Math.abs(f.z)) > 100);
+    for (const f of outer) {
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + f.x * 0.017;
+        const d = 7 + (i % 2) * 7;
+        const x = f.x + Math.cos(a) * d, z = f.z + Math.sin(a) * d;
+        const y = this.heightAt(x, z) + 13 + (i % 3) * 6;
+        const hr = 3.2 + (i % 2) * 0.8;
+        this._mireHut(x, y, z, hr, rnd);
+        this.mireHuts.push({ x, y, z, r: hr });
+      }
     }
 
     // Training dummies on a few of the decks, facing the middle.
@@ -2390,7 +2546,18 @@ export class World {
       for (const h of huts) {
         if (h === a || h === b) continue;
         const t = clamp(((h.x - s.ax) * sx + (h.z - s.az) * sz) / sl, 0, 1);
-        if (Math.hypot(s.ax + sx * t - h.x, s.az + sz * t - h.z) > h.r * 0.8 + 1.5) continue;
+        /**
+         * Measured as a SQUARE, for the same reason the endpoint trim above
+         * is: a deck is a square of half-extent r, so its corner is r·1.41
+         * out. A radial test of `r · 0.8 + 1.5` waves through any span that
+         * clips a deck across the diagonal — which is planking laid over
+         * somebody's floor, the exact thing this guard exists to stop, and
+         * it only shows up on the handful of huts a walk happens to pass
+         * cornerwise. The endpoints were fixed for this once; the third-hut
+         * check was left measuring a circle.
+         */
+        const px = s.ax + sx * t, pz = s.az + sz * t;
+        if (Math.max(Math.abs(px - h.x), Math.abs(pz - h.z)) > h.r + 1.5) continue;
         // _bridge droops the middle of the span; account for it before
         // deciding the walkway clears the roof or misses the deck.
         const py = lerp(s.ay, s.by, t) - Math.sin(t * Math.PI) * sag;
@@ -2428,9 +2595,11 @@ export class World {
     const rnd = this.rnd;
     const S = CFG.world.size * 0.5;
     const W = CFG.world.waterLevel;
-    for (let i = 0; i < 460; i++) {
-      const x = (rnd() * 2 - 1) * (S - 40);
-      const z = (rnd() * 2 - 1) * (S - 40);
+    // Reeds and fishing poles both grew with the map, for the same reason
+    // the logs did: density is what "big" is actually made of.
+    for (let i = 0; i < 820; i++) {
+      const x = (rnd() * 2 - 1) * (S - 22);
+      const z = (rnd() * 2 - 1) * (S - 22);
       const g = this.heightAt(x, z);
       if (g > W + 1.6 || g < W - 2.6) continue;
       // The mud islands carry the statue and the try-out ring, and they sit
@@ -2442,9 +2611,9 @@ export class World {
     }
     // Fishing poles leaning out of the shallows, like the figures in the
     // reference are working from.
-    for (let i = 0; i < 40; i++) {
-      const x = (rnd() * 2 - 1) * (S - 60);
-      const z = (rnd() * 2 - 1) * (S - 60);
+    for (let i = 0; i < 78; i++) {
+      const x = (rnd() * 2 - 1) * (S - 32);
+      const z = (rnd() * 2 - 1) * (S - 32);
       const g = this.heightAt(x, z);
       if (g > W + 1.0 || g < W - 2.0) continue;
       const h = 5 + rnd() * 4;
@@ -2457,18 +2626,27 @@ export class World {
   _buildMireLights() {
     const rnd = this.rnd;
     const S = CFG.world.size * 0.5;
-    // Lamps strung between the spires, high up — the grapple highway.
+    /**
+     * Lamps strung between the spires, high up — the grapple highway.
+     *
+     * Two per spire, not three. There are 27 spires now where there were
+     * 15, and a lantern is the one thing in this engine that is NOT
+     * instanced — a sphere, an additive sprite and a per-frame bob each —
+     * so three apiece took the Mire past seven hundred draw calls against
+     * the valley's 290. Two still leaves anchors well inside a 62-unit
+     * tongue, and the huts carry their own lights regardless.
+     */
     for (const s of (this.mireSpires || [])) {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 2; i++) {
         const a = rnd() * Math.PI * 2, d = 10 + rnd() * 22;
         this.lantern(s.x + Math.cos(a) * d, s.y - 4 - rnd() * 16,
           s.z + Math.sin(a) * d, 0xffb257);
       }
     }
     // A few floating over open water, so crossing it is not pitch dark.
-    for (let i = 0; i < 22; i++) {
-      const x = (rnd() * 2 - 1) * (S - 60);
-      const z = (rnd() * 2 - 1) * (S - 60);
+    for (let i = 0; i < 30; i++) {
+      const x = (rnd() * 2 - 1) * (S - 32);
+      const z = (rnd() * 2 - 1) * (S - 32);
       const g = this.heightAt(x, z);
       if (g > CFG.world.waterLevel + 3) continue;
       this.lantern(x, g + 9 + rnd() * 12, z, 0xff9a3c);

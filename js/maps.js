@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v142';
-import { clamp, smoothstep } from './util.js?v=v142';
+import { CFG } from './config.js?v=v143';
+import { clamp, smoothstep } from './util.js?v=v143';
 
 export const MAPS = [
   {
@@ -101,12 +101,21 @@ export const MAPS = [
      *
      * No height limit at all: the towers are meant to be scaled, and stopping
      * you partway up one on a map whose whole point is going upward would be
-     * backwards. The rim begins to rise at 0.84 of the half-size, so the
+     * backwards. The rim begins to rise at 0.88 of the half-size, so the
      * radius sits just inside that — the limit engages exactly as the ground
      * turns into the outer mountain and nowhere else.
      */
     climbLimitY: Infinity,
-    climbLimitRadius: CFG.world.size * 0.5 * 0.80,
+    climbLimitRadius: CFG.world.size * 0.5 * 0.86,
+    /**
+     * SQUARE, like the world it sits in.
+     *
+     * The Mire used to be a disc of radius 168 dropped into a 420-unit
+     * square, which threw away the four corners — about a third of the map
+     * — and is most of why it read as smaller than the valley beside it.
+     * The valley's mountains run out to (186, 186); this now does too.
+     */
+    climbLimitShape: 'square',
     palette: {
       sand: 0x6a6a52,          // wet silt at the waterline
       grass: 0x4a6b3a,         // sodden moss
@@ -145,20 +154,51 @@ export const MAPS = [
       ['Planting the reeds', (w) => w._buildMireReeds()],
       ['Lighting the lanterns', (w) => w._buildMireLights()],
     ],
+    /**
+     * The mud islands — and the four corner ones are the point of the
+     * square rim. Land out at (±150, ±150) was previously inside the
+     * heightfield but behind an unclimbable circular edge, so the map had
+     * four quadrants of nothing anybody could reach.
+     */
     flats: [
       { x: 0, z: 0, r: 30, f: 34, h: 1.6 },        // the shallows at the centre
       { x: -104, z: 88, r: 22, f: 26, h: 3.4 },    // a mud island
       { x: 112, z: -74, r: 20, f: 24, h: 3.0 },    // another
       { x: 74, z: 108, r: 16, f: 20, h: 2.8 },
+      { x: -148, z: -142, r: 24, f: 26, h: 3.6 },  // the four corners
+      { x: 152, z: 146, r: 22, f: 24, h: 3.2 },
+      { x: -156, z: 138, r: 18, f: 22, h: 2.9 },
+      { x: 144, z: -152, r: 20, f: 24, h: 3.3 },
+      // And the four edges. Kept inside 160 because a hamlet is hung in a
+      // ring up to 14 units out from its island and the rim starts at 185.
+      { x: -12, z: -156, r: 17, f: 20, h: 2.8 },
+      { x: 158, z: 18, r: 16, f: 20, h: 3.0 },
+      { x: 24, z: 160, r: 15, f: 18, h: 2.7 },
+      { x: -160, z: -6, r: 16, f: 20, h: 3.1 },
     ],
     basins: [
       { x: -58, z: -46, r: 40, f: 30, h: 0.2 },    // open water
       { x: 96, z: 52, r: 34, f: 26, h: 0.4 },
+      { x: -130, z: 4, r: 30, f: 24, h: 0.3 },
+      { x: 40, z: -128, r: 32, f: 26, h: 0.2 },
     ],
 
     height(w, x, z) {
       const S = CFG.world.size;
-      const d = Math.hypot(x, z) / (S * 0.5);
+      /**
+       * CHEBYSHEV, not hypot — the ruler that makes this map square.
+       *
+       * `max(|x|, |z|)` raises the rim as four straight walls rather than
+       * as a circle, which is what lets the Mire use the corners of the
+       * square world the way the valley's mountains already do. It threw
+       * away about a third of its own map by measuring a circle, and that
+       * is most of why it felt smaller than the valley standing next to it.
+       *
+       * `climbLimitShape: 'square'` above MUST match this. A circular climb
+       * limit against a square rim is an invisible wall on both diagonals —
+       * the exact trap written up in js/collision.js.
+       */
+      const d = Math.max(Math.abs(x), Math.abs(z)) / (S * 0.5);
 
       // A drowned flat. Most of the map sits within a stride of the
       // waterline, so wading is the default and dry land is a choice.
@@ -190,8 +230,9 @@ export const MAPS = [
       const tower = Math.max(0, r - 0.40) / 0.60;
       h += tower * 54;
 
-      // The rim, so nobody wanders off the heightfield.
-      const edge = smoothstep(clamp((d - 0.84) / 0.16, 0, 1));
+      // The rim, so nobody wanders off the heightfield. It starts where the
+      // valley's does, so the two maps are the same size to the unit.
+      const edge = smoothstep(clamp((d - 0.88) / 0.12, 0, 1));
       h += edge * 150;
       return h;
     },
@@ -230,7 +271,14 @@ export const MAPS = [
      * only ever engages on the rim.
      */
     climbLimitY: Infinity,
-    climbLimitRadius: CFG.world.size * 0.5 * 0.93,
+    climbLimitRadius: CFG.world.size * 0.5 * 0.94,
+    /**
+     * SQUARE, because a city block grid IS a square and cutting it to a
+     * circle both wasted the corners of the world and left the ward with a
+     * ragged edge no street grid would ever have. Nine blocks by nine now,
+     * against the five-and-a-bit rings a disc of the same reach allowed.
+     */
+    climbLimitShape: 'square',
     /**
      * The ground IS the road. Terrain is asphalt everywhere, and a block is
      * simply a place where a pavement was laid on top of it — so the grid
@@ -279,19 +327,23 @@ export const MAPS = [
 
     height(w, x, z) {
       const S = CFG.world.size;
-      const d = Math.hypot(x, z) / (S * 0.5);
+      // CHEBYSHEV: four straight walls round a square ward. See the note on
+      // the Mire's height function — the rim and `climbLimitShape` have to
+      // be cut with the same ruler or the corners become invisible walls.
+      const d = Math.max(Math.abs(x), Math.abs(z)) / (S * 0.5);
       // Dead flat. See the note above: every kerb and every painted line in
       // the ward is placed against this number.
       let h = 6;
       /**
        * And the rim, which is the rest of the city, too far to reach.
        *
-       * It starts at 0.90 — 189 units — because the outermost block reaches
-       * 184 and the first draft started climbing at 181, which buried the
-       * whole outer ring of the ward in a hillside. The five units between
-       * them are the outskirts: open asphalt with the city behind you.
+       * It starts at 0.945 — 198 units — because the outermost block reaches
+       * 190. An earlier draft started climbing at 181 against blocks that
+       * reached 184 and buried the whole outer ring of the ward in a
+       * hillside, so the eight units between them are deliberate: they are
+       * the outskirts, open asphalt with the city behind you.
        */
-      const edge = smoothstep(clamp((d - 0.90) / 0.10, 0, 1));
+      const edge = smoothstep(clamp((d - 0.945) / 0.055, 0, 1));
       h += edge * 170;
       return h;
     },

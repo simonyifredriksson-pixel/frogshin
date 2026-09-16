@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v142';
-import { CFG } from './config.js?v=v142';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v142';
-import { FrogModel } from './frog.js?v=v142';
-import { Grapple, GrappleState } from './grapple.js?v=v142';
-import { Combat, Health } from './combat.js?v=v142';
-import { Stamina } from './stamina.js?v=v142';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v142';
-import { Audio } from './audio.js?v=v142';
+import * as THREE from '../lib/three.module.js?v=v143';
+import { CFG } from './config.js?v=v143';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v143';
+import { FrogModel } from './frog.js?v=v143';
+import { Grapple, GrappleState } from './grapple.js?v=v143';
+import { Combat, Health } from './combat.js?v=v143';
+import { Stamina } from './stamina.js?v=v143';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v143';
+import { Audio } from './audio.js?v=v143';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v142';
+} from './abilities.js?v=v143';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
