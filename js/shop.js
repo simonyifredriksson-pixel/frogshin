@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v141';
-import { Audio } from './audio.js?v=v141';
-import { PX } from './icons.js?v=v141';
-import { CFG } from './config.js?v=v141';
+} from './skins.js?v=v142';
+import { Audio } from './audio.js?v=v142';
+import { PX } from './icons.js?v=v142';
+import { CFG } from './config.js?v=v142';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -800,14 +800,27 @@ export class Shop {
    * needs no change here.
    */
   _renderCrates(body) {
-    const order = [];
-    for (const c of CRATES) {
-      const s = setOf(c);
-      if (order.indexOf(s) === -1) order.push(s);
-    }
+    /**
+     * ═══ CHEAPEST AT THE TOP, DEAREST AT THE BOTTOM ════════════════════
+     *
+     * Sets used to come out in catalogue order and their three cases in
+     * whatever order they were declared, so scrolling the shop walked past
+     * a 12,000 crate, then a 1,800 one, then a 6,600 one. With nine sets
+     * that is unreadable: the single most useful thing about a shop page is
+     * that going down it means spending more.
+     *
+     * A set is ranked by its CHEAPEST case, and the cases inside it are
+     * ranked the same way — so the kunai case leads every row and the frog
+     * case ends it, which is also the order they cost in.
+     */
+    const cheapest = (set) => Math.min(
+      ...CRATES.filter((c) => setOf(c) === set).map((c) => c.price));
+    const order = [...new Set(CRATES.map((c) => setOf(c)))]
+      .sort((a, b) => cheapest(a) - cheapest(b));
 
     for (const set of order) {
-      const mine = CRATES.filter((c) => setOf(c) === set);
+      const mine = CRATES.filter((c) => setOf(c) === set)
+        .sort((a, b) => a.price - b.price);
       if (!mine.length) continue;
 
       const head = document.createElement('div');

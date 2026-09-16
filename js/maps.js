@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v141';
-import { clamp, smoothstep } from './util.js?v=v141';
+import { CFG } from './config.js?v=v142';
+import { clamp, smoothstep } from './util.js?v=v142';
 
 export const MAPS = [
   {
@@ -193,6 +193,106 @@ export const MAPS = [
       // The rim, so nobody wanders off the heightfield.
       const edge = smoothstep(clamp((d - 0.84) / 0.16, 0, 1));
       h += edge * 150;
+      return h;
+    },
+  },
+  /**
+   * ═══ SHIZUKA WARD ══════════════════════════════════════════════════════
+   *
+   * A city everybody left this morning.
+   *
+   * ── the one rule this map is built on ─────────────────────────────────
+   * Nothing is broken. No rubble, no fire, no weeds through the tarmac. The
+   * lamps are lit, the vending machines are humming, there are cars parked
+   * neatly at the kerb and a lit window nine floors up. An empty city is
+   * only eerie while it still works: add rubble and "where did everybody
+   * go" becomes "something happened here", which is a smaller question.
+   *
+   * ── it is FLAT, and that is the whole terrain ─────────────────────────
+   * The other two maps are landscapes with things on them. This one is a
+   * road grid, and a road grid has to agree with itself to the centimetre —
+   * a kerb that follows a hill is a kerb you trip over, and lane markings
+   * painted on a slope read as a mistake. So `height` returns one number
+   * across the entire ward and every builder measures off `CITY.ground`.
+   *
+   * The only relief is the rim, which is the same wall every map has to
+   * stop you walking off the heightfield. Here it is read as the rest of
+   * the city, too far to reach.
+   */
+  {
+    id: 'city',
+    name: 'SHIZUKA WARD',
+    blurb: 'A Japanese city with the people taken out. Rooftops, skyways '
+      + 'and a lot of parked cars.',
+    seed: 4417,
+    /**
+     * Nothing to climb but the buildings, and those have stairs. The limit
+     * only ever engages on the rim.
+     */
+    climbLimitY: Infinity,
+    climbLimitRadius: CFG.world.size * 0.5 * 0.93,
+    /**
+     * The ground IS the road. Terrain is asphalt everywhere, and a block is
+     * simply a place where a pavement was laid on top of it — so the grid
+     * can never disagree with itself.
+     */
+    palette: {
+      sand: 0x35383d,
+      grass: 0x3a3d42,
+      grass2: 0x34373c,
+      dirt: 0x3d4045,
+      rock: 0x4a4d53,
+      high: 0x5a5e66,
+      highAt: 60,
+      slopeDirt: 0.9,
+      slopeRock: 0.95,
+      rockFromY: 40,
+    },
+    /**
+     * Late afternoon going blue — the light in the reference. A deep sky, a
+     * warm haze at street level, and the fog pulled in so the far end of an
+     * avenue fades instead of showing you the rim.
+     */
+    atmosphere: {
+      fogNear: 40,
+      fogFar: 300,
+      fogColor: 0x6a7a92,
+      skyTop: 0x1f3a63,
+      skyMid: 0x4a6a96,
+      skyBottom: 0x9fb4cc,
+      cloudCount: 22,
+      leaves: false,
+      sunColor: 0xffe2c0,
+      sunIntensity: 1.05,
+      ambient: 0x8fa6c4,
+      ambientIntensity: 0.78,
+    },
+    groundY: 6,
+    features: [
+      ['Pouring the streets', (w) => w._buildCity()],
+      ['Painting the lanes', (w) => w._buildCityStreets()],
+      ['Parking the cars', (w) => w._buildCityCars()],
+      ['Hanging the skyways', (w) => w._buildCitySkyways()],
+    ],
+    flats: [],
+    basins: [],
+
+    height(w, x, z) {
+      const S = CFG.world.size;
+      const d = Math.hypot(x, z) / (S * 0.5);
+      // Dead flat. See the note above: every kerb and every painted line in
+      // the ward is placed against this number.
+      let h = 6;
+      /**
+       * And the rim, which is the rest of the city, too far to reach.
+       *
+       * It starts at 0.90 — 189 units — because the outermost block reaches
+       * 184 and the first draft started climbing at 181, which buried the
+       * whole outer ring of the ward in a hillside. The five units between
+       * them are the outskirts: open asphalt with the city behind you.
+       */
+      const edge = smoothstep(clamp((d - 0.90) / 0.10, 0, 1));
+      h += edge * 170;
       return h;
     },
   },

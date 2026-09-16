@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v141';
-import { CFG } from './config.js?v=v141';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v141';
-import { findMap } from './maps.js?v=v141';
-import { Terrain, CollisionWorld } from './collision.js?v=v141';
+import * as THREE from '../lib/three.module.js?v=v142';
+import { CFG } from './config.js?v=v142';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v142';
+import { findMap } from './maps.js?v=v142';
+import { Terrain, CollisionWorld } from './collision.js?v=v142';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -29,6 +29,50 @@ const _c = new THREE.Color();
  * were placed by eye at 15 against an eave that stops at 13.26, so the outer
  * pair held up nothing at all and the rest poked through the roof.
  */
+/**
+ * ═══ SHIZUKA WARD ════════════════════════════════════════════════════════
+ *
+ * Every number the city is measured in. `pitch` and `road` are the two that
+ * matter — the pavements, the lamp spacing, the parking bays, the skyways
+ * and the crossings are all derived from them, so the ward can be made
+ * denser or wider by editing one line rather than by moving three hundred
+ * objects.
+ */
+const CITY = {
+  /**
+   * Block centre to block centre.
+   *
+   * A block is therefore `pitch - road` across, and the ROADS RUN AT THE
+   * HALF-PITCH — at (k + 0.5) * pitch, never at k * pitch. The first draft
+   * put the lane markings, the lamps and the skyways at k * pitch, which is
+   * where the blocks are, so every white line was painted through the middle
+   * of an apartment building. Anything placed on a street derives from the
+   * half-pitch; anything placed on a block derives from the whole one.
+   */
+  pitch: 48,
+  /** Asphalt between two blocks, kerb to kerb. */
+  road: 16,
+  /** How many blocks across, counting both ways from the middle. */
+  span: 9,
+  /**
+   * No block is built past this from the centre — the ward's edge.
+   *
+   * It has to clear the boundary hill with room to spare: a block reaches
+   * `pitch/2 - road/2` past its own centre, and the map's rim starts to
+   * climb at 0.90 of the half-world. 168 + 16 = 184 against a rim at 189,
+   * which is the difference between a ward with outskirts and a ward whose
+   * outer ring is buried in a mountain.
+   */
+  reach: 168,
+  /** The flat the whole city sits on. Well above the waterline: no sea. */
+  ground: 6,
+  /** How high the pedestrian bridges run over the avenues. */
+  skyway: 13.5,
+  /** Shop banners. The only saturated colour in a grey ward. */
+  signs: [0x2f9fb4, 0xd8483c, 0xe8b93a, 0x8f5ac4, 0x3f8f4a],
+  /** Parked cars: municipal whites and silvers, one taxi yellow. */
+  cars: [0xd8d8d2, 0xb4b8bc, 0x8a9098, 0x3f4a5c, 0xc4483c, 0xe8b93a, 0x4a5a48],
+};
 const ROOF_EAVE = 0.78;
 
 /** Collects transforms + colours, then emits one InstancedMesh. */
@@ -78,6 +122,16 @@ export class World {
     this.noise = new ValueNoise(this.map.seed);
     this.noise2 = new ValueNoise(this.map.seed + 991);
     this.spawnPoints = [];
+    /**
+     * The one flat a built map stands on.
+     *
+     * Shizuka Ward is a road grid, and a road grid has to agree with itself
+     * to the centimetre — a kerb that follows the terrain is a kerb you trip
+     * over. So the city declares its own ground height and every builder in
+     * it measures from this rather than from `heightAt`. Maps that grow out
+     * of their terrain leave it at zero and never read it.
+     */
+    this.groundY = this.map.groundY || 0;
     this.lanterns = [];          // { mesh, baseY, phase } — bob animation
     this.grassPatches = [];
     this.waterMesh = null;
@@ -1039,6 +1093,711 @@ export class World {
     this._buildFrogathStatue(x, gy, z);
   }
 
+  // ═══════════════════════════════════════════════════ SHIZUKA WARD (city)
+
+  /**
+   * ═══ A CITY THAT EVERYBODY LEFT THIS MORNING ═════════════════════════════
+   *
+   * Abandoned, but not ruined. Nothing here is broken, overgrown or on fire:
+   * the lamps are lit, the vending machines hum, a shop sign is still
+   * flickering and there are cars parked neatly at the kerb with one or two
+   * abandoned at an angle in the road. The only thing missing is people.
+   *
+   * That is the whole brief, and it is a discipline rather than a look — the
+   * temptation with an empty city is to add rubble, and rubble turns "where
+   * did they all go" into "something happened here", which is a different and
+   * much less interesting question.
+   *
+   * ── how it is laid out ────────────────────────────────────────────────
+   * A road GRID, not a landscape. `CITY.pitch` sets the block spacing and
+   * `CITY.road` the width of the asphalt between them; everything else —
+   * pavements, crossings, lamp spacing, where a car may park — is measured
+   * off those two numbers, so the ward can be made denser or wider by
+   * changing one of them rather than by moving three hundred objects.
+   *
+   * The ground mesh IS the road: the terrain palette is asphalt, and every
+   * block sits on a raised concrete pavement. So a road is simply where no
+   * block was built, which means the grid can never disagree with itself.
+   */
+  _buildCity() {
+    const C = CITY;
+    const R = this.rnd;
+    const half = Math.floor(C.span / 2);
+
+    /**
+     * Every block, and what stands on it — decided first, built after.
+     *
+     * The centre block is left empty on purpose: it is the arena everybody
+     * lands in, and a map whose middle is a building is a map where the
+     * first thing anybody does is walk round a wall.
+     */
+    for (let bx = -half; bx <= half; bx++) {
+      for (let bz = -half; bz <= half; bz++) {
+        const cx = bx * C.pitch;
+        const cz = bz * C.pitch;
+        const d = Math.hypot(cx, cz);
+        if (d > C.reach) continue;                    // past the ward's edge
+
+        const inner = C.pitch * 0.5 - C.road * 0.5;   // half the buildable pad
+        this._cityPavement(cx, cz, inner);
+        this._clear(cx, cz, inner + 2);
+
+        /**
+         * A spawn beside every other block. The generic fallback puts six
+         * points on a 22-unit ring, which on a ward three hundred across
+         * means every match opens with everybody standing in one plaza.
+         */
+        if (d > C.pitch && ((bx + bz) & 1) === 0) {
+          this.spawnPoints.push([cx + C.pitch * 0.5, this.groundY + 1.2, cz]);
+        }
+
+        // The central plaza, and the four crossings around it.
+        if (bx === 0 && bz === 0) { this._cityPlaza(cx, cz, inner); continue; }
+
+        /**
+         * Towers toward the middle, low shops at the edges. A skyline has
+         * to have a shape or the whole ward reads as one height, and the
+         * cheapest shape that works is "tall in the centre".
+         */
+        /**
+         * Apartments are the RULE and shophouses the exception, which is the
+         * other way round from the first draft. The reference is a street
+         * canyon — grey slabs with window grids on both sides of a wide
+         * avenue — and a ward that was mostly two-storey shops read as a
+         * model village with a couple of towers dropped into it.
+         */
+        const near = 1 - Math.min(1, d / C.reach);
+        if (R() < 0.66 + near * 0.26) {
+          this._cityTower(cx, cz, inner, near, R() < 0.5);
+        } else this._cityShops(cx, cz, inner);
+      }
+    }
+  }
+
+  /**
+   * The raised concrete a block stands on, and the kerb round it.
+   *
+   * Half a unit up, which is a kerb you step over rather than a ledge you
+   * have to jump — `stepHeight` is 0.65, so this is deliberately inside it.
+   * A city you have to jump to cross is a city nobody runs through.
+   */
+  _cityPavement(cx, cz, r) {
+    const g = this.groundY;
+    this.deco(cx, g + 0.24, cz, r, 0.26, r, 0x8e8b82);
+    this.collision.addBox(cx, g + 0.24, cz, r, 0.26, r, 'deck');
+    // A darker kerb band, so the edge of the pavement reads from the road.
+    for (const [ox, oz, hx, hz] of [
+      [0, -r, r, 0.45], [0, r, r, 0.45], [-r, 0, 0.45, r], [r, 0, 0.45, r],
+    ]) {
+      this.deco(cx + ox, g + 0.50, cz + oz, hx, 0.06, hz, 0x6f6c63);
+    }
+    // Paving joints. Cheap, and it stops a forty-unit slab reading as one
+    // flat colour from a rooftop.
+    const R = this.rnd;
+    for (let i = 0; i < 5; i++) {
+      const t = (i + 0.5) / 5;
+      this.deco(cx - r + t * r * 2, g + 0.51, cz, 0.06, 0.02, r, 0x7e7b73);
+      this.deco(cx, g + 0.51, cz - r + t * r * 2, r, 0.02, 0.06, 0x7e7b73);
+    }
+    void R;
+  }
+
+  /**
+   * An apartment block: a slab with a grid of windows on every face.
+   *
+   * The windows are what make it read as Japanese social housing rather than
+   * as a grey box — evenly spaced, small, and the same on all four sides.
+   * A handful are LIT, and that is the single strongest "still alive" cue in
+   * the map: one warm rectangle nine floors up says somebody's timer is
+   * still running.
+   */
+  _cityTower(cx, cz, pad, near, longX) {
+    const R = this.rnd;
+    /**
+     * A SLAB, not a cube. `lon` runs along the building's frontage and `sht`
+     * is its depth, and which of those is x and which is z is the one thing
+     * that stops a grid of blocks reading as a grid of dice. It very nearly
+     * fills its plot, so two facing blocks make a street canyon rather than
+     * two huts on two lawns.
+     */
+    const lon = pad * (0.82 + R() * 0.14);
+    const sht = pad * (0.46 + R() * 0.22);
+    const w = longX ? lon : sht;
+    const d = longX ? sht : lon;
+    const floors = Math.round(7 + near * 11 + R() * 4);
+    const fh = 3.2;                                   // one storey
+    const h = floors * fh;
+    const g = this.groundY + 0.5;
+    const body = [0x9a9a95, 0x8e908c, 0xa4a29a][Math.floor(R() * 3)];
+
+    this.solid(cx, g + h * 0.5, cz, w, h * 0.5, d, body, 'stone');
+    // A darker plinth at street level. Two storeys of shade under twenty of
+    // pale concrete is what stops the slab reading as one flat wall.
+    this.deco(cx, g + 1.8, cz, w + 0.14, 1.8, d + 0.14, 0x6f716f);
+    // The roof slab, walkable, with a parapet you can take cover behind.
+    this.collision.addBox(cx, g + h + 0.2, cz, w, 0.3, d, 'roof');
+    this.deco(cx, g + h + 0.2, cz, w + 0.3, 0.3, d + 0.3, 0x7e807c);
+    for (const [ox, oz, hx, hz] of [
+      [0, -d, w, 0.3], [0, d, w, 0.3], [-w, 0, 0.3, d], [w, 0, 0.3, d],
+    ]) {
+      this.deco(cx + ox, g + h + 0.9, cz + oz, hx, 0.5, hz, 0x9a9c98);
+      this.collision.addBox(cx + ox, g + h + 0.9, cz + oz, hx, 0.5, hz, 'stone');
+    }
+
+    /**
+     * WINDOWS. Four faces, one grid each, pushed 0.06 proud of the wall.
+     *
+     * Drawn as deco rather than as a texture because this whole game is
+     * untextured — and at this scale a grid of small dark quads is exactly
+     * what a texture would have drawn anyway.
+     */
+    const lit = 0xffd9a0;
+    const dark = 0x353a45;
+    for (let f = 0; f < floors; f++) {
+      const y = g + f * fh + fh * 0.55;
+      /**
+       * Each face gets the half-extent it ACTUALLY has. The first draft
+       * spread the ±z windows over `w` and then pushed them out by `w` as
+       * well, so on any slab that was not square the front windows floated
+       * off the wall and the side windows were buried inside it. `spread`
+       * is along the face, `depth` is out to it, and they are never the same
+       * number on a slab.
+       */
+      for (const ax of ['z', 'x']) {
+        for (const s of [1, -1]) {
+          const spread = ax === 'z' ? w : d;
+          const depth = ax === 'z' ? d : w;
+          const long = spread >= depth;
+
+          // The balcony ledge. One thin line per floor, and it is most of
+          // what makes a grey box read as somewhere people lived.
+          if (ax === 'z') {
+            this.deco(cx, y - fh * 0.42, cz + s * (depth + 0.2),
+              spread * 0.96, 0.09, 0.2, 0x7a7c78);
+          } else {
+            this.deco(cx + s * (depth + 0.2), y - fh * 0.42, cz,
+              0.2, 0.09, spread * 0.96, 0x7a7c78);
+          }
+
+          const cols = long ? Math.max(3, Math.round(spread / 2.2)) : 2;
+          for (let i = 0; i < cols; i++) {
+            const t = (i + 0.5) / cols;
+            const off = (t - 0.5) * spread * 1.86;
+            const col = R() < 0.06 ? lit : dark;
+            if (ax === 'z') {
+              this.deco(cx + off, y, cz + s * (depth + 0.07), 0.66, 0.8, 0.06, col);
+            } else {
+              this.deco(cx + s * (depth + 0.07), y, cz + off, 0.06, 0.8, 0.66, col);
+            }
+          }
+        }
+      }
+    }
+
+    /**
+     * The rooftop water tank, on four short legs. Every building of this
+     * kind in Japan has one, it is the only cover in a rooftop fight, and it
+     * gives the skyline something other than flat lids.
+     */
+    const tw = Math.max(1.2, Math.min(w, d) * 0.36);
+    for (const ox of [-tw * 0.78, tw * 0.78]) {
+      for (const oz of [-tw * 0.78, tw * 0.78]) {
+        this.deco(cx + ox, g + h + 1.3, cz + oz, 0.15, 1.1, 0.15, 0x5f6166);
+      }
+    }
+    this.solid(cx, g + h + 3.3, cz, tw, 0.9, tw, 0x8c9096, 'stone');
+
+    // A rooftop billboard on a third of them: the only saturated colour
+    // anything above ten storeys has.
+    if (R() < 0.34) {
+      const bc = CITY.signs[Math.floor(R() * CITY.signs.length)];
+      this.deco(cx, g + h + 3.6, cz + d * 0.76, w * 0.72, 2.3, 0.16, bc);
+    }
+
+    /**
+     * And a banner down the corner of the facade on half of them.
+     *
+     * Structurally this ward is entirely grey, and the reference is not —
+     * the thing that reads as Japanese in it is a cyan or a red sign running
+     * six storeys down the side of an otherwise plain concrete block. The
+     * rooftop billboards only pay off from a roof; this is the one you see
+     * from the pavement, which is where the game is played.
+     */
+    if (R() < 0.5) {
+      const sc = CITY.signs[Math.floor(R() * CITY.signs.length)];
+      const sh = Math.min(h * 0.42, 9 + R() * 7);
+      const top = g + h - 2 - R() * (h * 0.3);
+      const ex = R() < 0.5 ? 1 : -1, ez = R() < 0.5 ? 1 : -1;
+      this.deco(cx + ex * (w * 0.84), top - sh * 0.5, cz + ez * (d + 0.3),
+        0.55, sh * 0.5, 0.14, sc);
+    }
+
+    /**
+     * An external stair up the side, which is how you get to the roof.
+     *
+     * Every tower has one. A city of unclimbable slabs would waste the best
+     * thing about a city map, and a grapple-only route would lock the
+     * rooftops to whoever brought the tongue.
+     */
+    const side = Math.floor(R() * 4);
+    const sx = side === 0 ? 1 : (side === 1 ? -1 : 0);
+    const sz = side === 2 ? 1 : (side === 3 ? -1 : 0);
+    /**
+     * The face it climbs is `w` out on the x sides and `d` out on the z
+     * sides — the same pairing the windows needed, and swapped here in
+     * exactly the same way. On a square tower it made no difference; on a
+     * slab it buried the whole flight inside the wall on two faces and hung
+     * it in mid-air on the other two.
+     */
+    const steps = Math.ceil(h / 1.6);
+    for (let i = 0; i < steps; i++) {
+      const y = g + (i + 1) * (h / steps);
+      const out = 1.4 + (i % 2) * 0.25;
+      const px = cx + sx * (w + out) + (sx ? 0 : (i - steps / 2) * (w * 2 / steps));
+      const pz = cz + sz * (d + out) + (sz ? 0 : (i - steps / 2) * (d * 2 / steps));
+      this.solid(px, y, pz, 1.5, 0.14, 1.5, 0x5f6166, 'deck');
+    }
+    // And an aircraft beacon, above the tank, which doubles as the anchor.
+    this.lantern(cx, g + h + 5.2, cz, 0xff6a5a);
+  }
+
+  /**
+   * A row of shophouses: two or three storeys, awnings, and vertical signs.
+   *
+   * The signs are the colour in this map. Everything structural is grey, so
+   * a cyan or a red banner four storeys tall is the only saturated thing in
+   * a street and does all the work of telling one block from another.
+   */
+  _cityShops(cx, cz, pad) {
+    const R = this.rnd;
+    const g = this.groundY + 0.5;
+    const dep = pad * 0.38;                 // how far back from the kerb
+
+    /**
+     * A TERRACE round all four sides of the plot, not a few detached huts in
+     * the middle of it. A shophouse block that leaves its frontage empty
+     * leaves a forty-unit concrete apron facing the street, which was the
+     * single thing that made the first ward read as a diorama. The corners
+     * are allowed to run into each other — in a city that is a corner shop.
+     */
+    for (const [nx, nz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+      const n = 3 + Math.floor(R() * 2);
+      for (let i = 0; i < n; i++) {
+        const t = (i + 0.5) / n;
+        const off = (t - 0.5) * pad * 1.86;
+        const uw = (pad * 1.86) / n * 0.47;
+        const h = 6.5 + R() * 6.5;
+        const wall = [0xa8a49c, 0x9a9690, 0xb0aaa0, 0x8f8a82][Math.floor(R() * 4)];
+        const px = cx + nx * (pad - dep) + (nx ? 0 : off);
+        const pz = cz + nz * (pad - dep) + (nz ? 0 : off);
+        const hx = nx ? dep : uw;
+        const hz = nz ? dep : uw;
+        this.solid(px, g + h * 0.5, pz, hx, h * 0.5, hz, wall, 'stone');
+        this.collision.addBox(px, g + h + 0.2, pz, hx, 0.3, hz, 'roof');
+        this.deco(px, g + h + 0.2, pz, hx + 0.22, 0.3, hz + 0.22, 0x6f6c64);
+
+        // The shopfront: a dark glazed recess facing the street.
+        this.deco(px + nx * (dep + 0.06), g + 1.5, pz + nz * (dep + 0.06),
+          nx ? 0.06 : uw * 0.78, 1.5, nz ? 0.06 : uw * 0.78, 0x23272e);
+        // And a striped awning over it.
+        this.deco(px + nx * (dep + 0.55), g + 3.2, pz + nz * (dep + 0.55),
+          nx ? 0.6 : uw * 0.88, 0.12, nz ? 0.6 : uw * 0.88,
+          R() < 0.5 ? 0xc4483c : 0x2f7f8a);
+
+        // A vertical sign board, hung off the corner and most of the height
+        // of the building. These are the colour in the whole ward.
+        if (R() < 0.72) {
+          const col = CITY.signs[Math.floor(R() * CITY.signs.length)];
+          const sh = h * (0.4 + R() * 0.34);
+          this.deco(
+            px + nx * (dep + 0.35) + (nx ? 0 : uw * 0.84),
+            g + h - sh * 0.5,
+            pz + nz * (dep + 0.35) + (nz ? 0 : uw * 0.84),
+            nx ? 0.12 : 0.5, sh * 0.5, nz ? 0.5 : 0.12, col);
+        }
+      }
+    }
+  }
+
+  /**
+   * The middle of the ward: an open crossing with a shelter and the ring.
+   *
+   * Left deliberately bare. It is where everybody spawns and where most
+   * fights start, and the one thing a fighting space must not have is
+   * furniture to snag on.
+   */
+  _cityPlaza(cx, cz, pad) {
+    const g = this.groundY;
+    /**
+     * PAVING, not paint. This used to be nine white bars each way, which
+     * from any rooftop read as a chessboard dropped in the middle of a grey
+     * city. Joint lines do the same job of breaking up a forty-unit slab
+     * without announcing themselves; the zebra stripes now live at the
+     * junctions, where a crossing actually goes.
+     */
+    for (let i = 0; i < 7; i++) {
+      const t = (i + 0.5) / 7;
+      const o = (t - 0.5) * pad * 1.86;
+      this.deco(cx + o, g + 0.52, cz, 0.08, 0.02, pad * 0.94, 0x74716a);
+      this.deco(cx, g + 0.52, cz + o, pad * 0.94, 0.02, 0.08, 0x74716a);
+    }
+    // Planters round the edge: clipped, alive, and nobody is watering them.
+    for (const [ox, oz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const bx = cx + ox * pad * 0.84, bz = cz + oz * pad * 0.84;
+      this.solid(bx, g + 0.95, bz, 1.5, 0.45, 1.5, 0x6b6860, 'stone');
+      this.deco(bx, g + 1.9, bz, 1.25, 0.6, 1.25, 0x4c6a44);
+    }
+
+    /**
+     * THE ALTAR, THE RING AND THE DUMMIES.
+     *
+     * Every map owes the game these three, and the ward was built without
+     * them — which nothing about the ward itself would ever have told me:
+     * it renders beautifully and then you cannot hand in a crystal, cannot
+     * try a skin and have nothing to hit. The valley hides them in its arena
+     * and the Mire on its widest island, so the city's plaza is the same
+     * answer to the same question: the one open space on the map.
+     *
+     * The bus shelter that used to stand here is gone. The plinth is better
+     * cover than it was, and the middle of a fighting space does not want
+     * two things to snag on.
+     */
+    const deck = g + 0.5;                    // the plaza pavement, not the road
+    this._buildFrogathStatue(cx, deck, cz);
+    this._buildPracticeRing(cx + 10.5, deck + 0.1, cz, 4.2);
+
+    // Four dummies round the edge, each facing the altar.
+    for (const [dx, dz] of [[0, 10.5], [-10.5, 0], [0, -10.5], [-7.4, 7.4]]) {
+      this.dummySpots.push([cx + dx, deck + 0.18, cz + dz,
+        Math.atan2(-dx, -dz)]);
+    }
+
+    this.spawnPoints.push([cx + 11, g + 1.2, cz + 11]);
+    this.spawnPoints.push([cx - 11, g + 1.2, cz - 11]);
+  }
+
+  /**
+   * ═══ THE STREETS ════════════════════════════════════════════════════════
+   *
+   * Lane markings, lamps, utility poles and the wires between them.
+   *
+   * All of it is placed off the same grid the blocks are, so a lamp is never
+   * inside a building and a wire never crosses one. The lamps are the
+   * grapple highway: one on every corner at five and a half units, which is
+   * a tongue's length apart along any street.
+   */
+  _buildCityStreets() {
+    const C = CITY;
+    const R = this.rnd;
+    const g = this.groundY;
+    const half = Math.floor(C.span / 2);
+    const lim = C.reach + C.pitch * 0.5;
+
+    /**
+     * EVERY line here is a HALF-pitch. `k * pitch` is where a block stands;
+     * the asphalt is the gap between two of them, so a road runs at
+     * `(k + 0.5) * pitch` and the loop has to start one short of the block
+     * range to pick up the outermost street.
+     */
+    for (let k = -half - 1; k <= half; k++) {
+      const line = (k + 0.5) * C.pitch;
+      if (Math.abs(line) > lim) continue;
+
+      /**
+       * Lane markings, and the long yellow pair the reference has. Dashes
+       * rather than a solid strip: a solid one reads as a painted floor,
+       * dashes read as a road. Each dash is culled against the ward's radius
+       * so the paint stops where the asphalt does.
+       */
+      for (let m = -lim; m < lim; m += 9) {
+        if (Math.hypot(line, m) > lim) continue;
+        this.deco(line, g + 0.03, m + 2.2, 0.16, 0.02, 2.2, 0xd8d6cc);
+        this.deco(m + 2.2, g + 0.03, line, 2.2, 0.02, 0.16, 0xd8d6cc);
+      }
+      for (let m = -lim; m < lim; m += 12) {
+        if (Math.hypot(line, m) > lim) continue;
+        this.deco(line - 1.6, g + 0.03, m + 6, 0.13, 0.02, 6, 0xc8a634);
+        this.deco(m + 6, g + 0.03, line - 1.6, 6, 0.02, 0.13, 0xc8a634);
+      }
+
+      // Lamps at the kerb, one pair per block frontage — so they run down
+      // BOTH sides of every street at mid-block, clear of the junctions.
+      const kerb = C.road * 0.5 - 1.1;
+      for (let m = -half; m <= half; m++) {
+        const at = m * C.pitch;
+        if (Math.hypot(line, at) > C.reach + C.pitch * 0.4) continue;
+        for (const s of [-1, 1]) {
+          this._cityLamp(line + s * kerb, at);
+          this._cityLamp(at, line + s * kerb);
+        }
+
+        /**
+         * THE OVERHEAD WIRES.
+         *
+         * The docstring above this function has promised these since the
+         * ward was written and there were none — which is worse than an
+         * omission, because a comment that describes something that is not
+         * there is the thing the next reader trusts. They are also the most
+         * Japanese object on the whole map: nothing else says "a street in
+         * Japan" as quickly as cable strung pole to pole over the road.
+         *
+         * Two segments per span with a metre of sag between them. One
+         * straight box over forty-eight units reads as a scaffolding pole.
+         */
+        const next = (m + 1) * C.pitch;
+        if (Math.hypot(line, next) <= C.reach + C.pitch * 0.4) {
+          /**
+           * Thin, and ABOVE the eye-line. The first pass hung them at five
+           * units and a tenth of a unit thick, which from the pavement was
+           * a black bar straight across the middle of every shot — cable
+           * that reads as scaffolding is worse than no cable. 6.4 puts them
+           * over a frog's head and clear of the shopfronts, and 0.07 is thin
+           * enough to be a line rather than a beam.
+           */
+          const wy = this.groundY + 0.5 + 6.4;
+          const hs = C.pitch * 0.25;             // half of half a span
+          const sag = 0.9;
+          const tilt = Math.atan2(sag, hs * 2);
+          for (const s of [-1, 1]) {
+            for (const e of [-1, 1]) {
+              const mid = at + C.pitch * 0.5 + e * hs;
+              // Down the street that runs in z, then the one that runs in x.
+              this.deco(line + s * kerb, wy - sag * 0.5, mid,
+                0.035, 0.035, hs, 0x24272c, 0, e * tilt, 0);
+              this.deco(mid, wy - sag * 0.5, line + s * kerb,
+                hs, 0.035, 0.035, 0x24272c, 0, 0, -e * tilt);
+            }
+          }
+        }
+        // A vending machine every so often: lit, humming, and the clearest
+        // sign in the map that the power is still on.
+        if (R() < 0.4) this._cityVendor(line + (C.road * 0.5 - 1.5), at + 5);
+        if (R() < 0.4) this._cityVendor(at + 5, line - (C.road * 0.5 - 1.5));
+      }
+
+      /**
+       * Zebra crossings on the approaches to every junction. A junction is
+       * where two half-pitch lines meet, which is why `at` is a half-pitch
+       * here and a whole one in the loop above.
+       */
+      for (let m = -half - 1; m <= half; m++) {
+        const at = (m + 0.5) * C.pitch;
+        if (Math.hypot(line, at) > C.reach) continue;
+        for (const s of [-1, 1]) {
+          for (let i = 0; i < 6; i++) {
+            const t = (i + 0.5) / 6;
+            const o = (t - 0.5) * C.road * 0.82;
+            this.deco(line + o, g + 0.04, at + s * (C.road * 0.5 + 1.8),
+              0.45, 0.02, 1.15, 0xd8d6cc);
+            this.deco(at + s * (C.road * 0.5 + 1.8), g + 0.04, line + o,
+              1.15, 0.02, 0.45, 0xd8d6cc);
+          }
+          /**
+           * A traffic light on each approach, still cycling. Together with
+           * the vending machines and the handful of lit windows this is the
+           * whole of "alive" — the power is on and nobody is under it.
+           */
+          const tx = line + s * (C.road * 0.5 + 1.2);
+          const tz = at + s * (C.road * 0.5 + 1.2);
+          this.batches.post.add(tx, g + 2.6, at, 0.13, 5.2, 0.13, 0x2f3238);
+          this.deco(tx, g + 5.0, at, 0.22, 0.6, 0.18,
+            R() < 0.5 ? 0x3f8f4a : 0xd8483c);
+          this.batches.post.add(line, g + 2.6, tz, 0.13, 5.2, 0.13, 0x2f3238);
+          this.deco(line, g + 5.0, tz, 0.18, 0.6, 0.22,
+            R() < 0.5 ? 0x3f8f4a : 0xd8483c);
+        }
+      }
+    }
+    void g;
+  }
+
+  /** One street lamp: a dark post, a yellow head, and a grapple anchor. */
+  _cityLamp(x, z) {
+    const g = this.groundY + 0.5;
+    this.batches.post.add(x, g + 2.8, z, 0.17, 5.6, 0.17, 0x2f3238);
+    this.collision.addBox(x, g + 2.8, z, 0.24, 2.8, 0.24, 'stone');
+    // The head is the yellow slab the reference hangs off every pole.
+    this.deco(x, g + 5.7, z, 0.75, 0.22, 0.34, 0xe8c23a);
+    this.lantern(x, g + 5.5, z, 0xffca6b);
+  }
+
+  /** A vending machine. The hum is the point; the light is how you see it. */
+  _cityVendor(x, z) {
+    const g = this.groundY + 0.5;
+    const col = this.rnd() < 0.5 ? 0xc4483c : 0x2f7f8a;
+    this.solid(x, g + 0.95, z, 0.7, 0.95, 0.4, col, 'stone');
+    this.deco(x, g + 1.25, z + 0.44, 0.52, 0.55, 0.06, 0xfff0c4);
+    this.deco(x, g + 0.35, z + 0.44, 0.52, 0.12, 0.06, 0x2a2e36);
+  }
+
+  /**
+   * ═══ THE CARS ═══════════════════════════════════════════════════════════
+   *
+   * Parked at the kerb, mostly, and a few left at an angle in the road.
+   *
+   * They are SOLID and about waist high, which makes them the map's cover —
+   * a street with nothing in it is a shooting gallery, and a street with a
+   * line of parked cars down each side is a fight. The ones abandoned at an
+   * angle are the ones that tell the story, so there are only a handful:
+   * a road full of crashed cars is a disaster, and this is a Tuesday where
+   * nobody came back.
+   */
+  _buildCityCars() {
+    const C = CITY;
+    const R = this.rnd;
+    const half = Math.floor(C.span / 2);
+    const lim = C.reach + C.pitch * 0.4;
+
+    for (let k = -half - 1; k <= half; k++) {
+      const line = (k + 0.5) * C.pitch;          // the asphalt, not the block
+      if (Math.abs(line) > lim) continue;
+      for (let m = -lim + 8; m < lim - 8; m += 9 + R() * 8) {
+        if (Math.hypot(line, m) > lim) continue;
+        /**
+         * Tucked against the kerb, nose-to-tail, on alternating sides.
+         *
+         * A car built long in its own +X has to be turned a QUARTER to park
+         * along a road that runs in z. These two were the wrong way round,
+         * which parked every car broadside across the kerb — obvious the
+         * moment it was rendered and invisible in the source.
+         */
+        if (R() < 0.6) {
+          const s = R() < 0.5 ? -1 : 1;
+          this._car(line + s * (C.road * 0.5 - 2.3), m, Math.PI / 2, R);
+        }
+        if (R() < 0.6) {
+          const s = R() < 0.5 ? -1 : 1;
+          this._car(m, line + s * (C.road * 0.5 - 2.3), 0, R);
+        }
+        // And one in twenty stopped dead where it was, turned across a lane.
+        // Offset off the centreline, which is where the skyway stairs land.
+        if (R() < 0.05) {
+          const s = R() < 0.5 ? -1 : 1;
+          this._car(line + s * (3 + R() * 2), m, Math.PI / 2 + (R() - 0.5) * 1.6, R);
+        }
+      }
+    }
+  }
+
+  /**
+   * One car. A body, a cabin, four wheels and a pair of lights.
+   *
+   * Built from the shared batches like everything else, so a hundred and
+   * sixty of them cost six instanced draws rather than a hundred and sixty
+   * meshes. The collider is ONE box at body height: wheels you can catch a
+   * foot on would make the streets miserable to run down.
+   */
+  _car(x, z, rot, R) {
+    const g = this.groundY + 0.5;
+    const col = CITY.cars[Math.floor(R() * CITY.cars.length)];
+    const L = 2.1, W = 0.95;
+    /**
+     * The body is long in its own LOCAL +X, so every part hung off it has to
+     * be placed along that axis after rotation: a local (1,0,0) turned by
+     * `rot` about Y comes out at (cos, 0, -sin). The lights were being put
+     * on (sin, 0, cos) — the local +Z — which stuck the headlamps on the
+     * driver's door and the tail lights on the passenger's.
+     */
+    const s = Math.sin(rot), c = Math.cos(rot);
+    const fx = c, fz = -s;                          // the way the car points
+    this.batches.box.add(x, g + 0.62, z, L * 2, 0.72, W * 2, col, rot);
+    // The cabin, set back and slightly narrower — that step is most of what
+    // makes a box read as a car at a glance.
+    this.batches.box.add(x - fx * 0.15, g + 1.16, z - fz * 0.15,
+      L * 1.05, 0.5, W * 1.72, 0x2e333c, rot);
+    this.batches.box.add(x, g + 0.28, z, L * 2.02, 0.22, W * 1.78, 0x22262c, rot);
+    // Wheels, as four dark pucks.
+    for (const [ax, az] of [[-1.3, -0.82], [1.3, -0.82], [-1.3, 0.82], [1.3, 0.82]]) {
+      this.batches.post.add(
+        x + ax * c + az * s, g + 0.3, z - ax * s + az * c,
+        0.32, 0.26, 0.32, 0x1c1f24, 0, 0, Math.PI / 2);
+    }
+    // Lights: one warm pair at the front, one red at the back.
+    this.deco(x + fx * L * 0.98, g + 0.72, z + fz * L * 0.98, 0.08, 0.12, 0.55,
+      0xffeab0, rot);
+    this.deco(x - fx * L * 0.98, g + 0.72, z - fz * L * 0.98, 0.08, 0.12, 0.55,
+      0xc4483c, rot);
+    /**
+     * `addBox` is axis-aligned and takes no rotation, so a car turned a
+     * quarter used to keep a collider lying ACROSS the road while the car
+     * itself lay along it — an invisible barricade on one side and a car you
+     * could walk through on the other. These are the rotated box's own AABB.
+     */
+    this.collision.addBox(x, g + 0.62, z,
+      Math.abs(c) * L * 0.98 + Math.abs(s) * W * 0.98, 0.62,
+      Math.abs(s) * L * 0.98 + Math.abs(c) * W * 0.98, 'stone');
+  }
+
+  /**
+   * ═══ THE SKYWAYS ════════════════════════════════════════════════════════
+   *
+   * Covered pedestrian bridges over the main avenues.
+   *
+   * These are what make the rooftops a place rather than a set of islands:
+   * with the external stairs they give a continuous high route across the
+   * ward, so a fight can start in the street and end four storeys up without
+   * anybody needing a grapple. They sit at a fixed height so the route reads
+   * as a level rather than as scattered ledges.
+   */
+  _buildCitySkyways() {
+    const C = CITY;
+    const g = this.groundY + 0.5;
+    const y = g + C.skyway;
+    const half = Math.floor(C.span / 2);
+
+    // Again: the half-pitch is the street. A bridge OVER an avenue has to be
+    // over the avenue.
+    for (let k = -half - 1; k <= half; k++) {
+      const line = (k + 0.5) * C.pitch;
+      if (Math.abs(line) > C.reach) continue;
+      // Only over every other avenue, or the sky fills up with walkways.
+      if (((k % 2) + 2) % 2 !== 0) continue;
+
+      for (let m = -half; m <= half; m++) {
+        const at = m * C.pitch;               // mid-block, clear of junctions
+        if (Math.hypot(line, at) > C.reach - C.pitch * 0.3) continue;
+        for (const [px, pz, sx, sz] of [
+          [line, at, C.road * 0.68, 1.8],
+          [at, line, 1.8, C.road * 0.68],
+        ]) {
+          const alongZ = sz > sx;             // which way the bridge runs
+          this.solid(px, y, pz, sx, 0.22, sz, 0x6f7276, 'deck');
+          // A roof, so it reads as a covered bridge from the street below.
+          this.deco(px, y + 2.5, pz, sx + 0.15, 0.12, sz + 0.15, 0x5a5d61);
+          // A kerb and a top rail down each side, rather than a solid panel
+          // you cannot see the street through.
+          for (const s of [-1, 1]) {
+            const ox = alongZ ? s * sx : 0, oz = alongZ ? 0 : s * sz;
+            const rx = alongZ ? 0.08 : sx, rz = alongZ ? sz : 0.08;
+            this.deco(px + ox, y + 0.5, pz + oz, rx, 0.3, rz, 0x8a8d90);
+            this.deco(px + ox, y + 1.35, pz + oz, rx, 0.07, rz, 0x8a8d90);
+            this.deco(px + ox, y + 1.9, pz + oz, rx, 0.62, rz, 0x5a5d61);
+          }
+          this.lantern(px, y + 1.9, pz, 0x8fd8ff);
+
+          /**
+           * A stair down to the street, laid along the ROAD CENTRELINE.
+           *
+           * Without one the skyways are ledges you need a tongue to reach,
+           * which locks the whole high route to whoever brought the grapple.
+           * The centreline is the one strip of asphalt nothing parks on —
+           * cars sit at `road/2 - 2.3` from it — so the stair can descend a
+           * full fourteen units without ever coming down through a car.
+           * Tagged 'deck', so `deckStep` carries the 1.5 rise per tread.
+           */
+          const steps = 9;
+          for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const sy = y - t * C.skyway;
+            const run = 2.2 + t * 13;
+            if (alongZ) this.solid(px + run, sy, pz, 1.2, 0.12, 1.2, 0x5f6166, 'deck');
+            else this.solid(px, sy, pz + run, 1.2, 0.12, 1.2, 0x5f6166, 'deck');
+          }
+        }
+      }
+    }
+  }
+
   // ------------------------------------------------------- rock spires (W)
 
   _buildSpires() {
@@ -1727,11 +2486,44 @@ export class World {
         }
       }
     } else {
-      // Arena-adjacent spawns.
+      /**
+       * Arena-adjacent spawns — and the ONLY points here that nothing looked
+       * at before placing.
+       *
+       * Six positions on a 22-unit ring around the origin, with no question
+       * asked about what is standing on them. On every map built so far the
+       * answer was "nothing", because the middle of a map is always an arena
+       * — but the ward's middle is a plaza with streets round it and the
+       * streets have cars parked in them, so one life in six began inside a
+       * hatchback. So this ring, and only this ring, steps aside.
+       *
+       * Deliberately NOT applied to the points a map builder placed. The
+       * Mire's are at the centre of each hanging hut, and a hut has a mast
+       * up the middle of it: by this test all 23 are "blocked", and both
+       * discarding them and nudging them are worse than leaving them alone —
+       * one leaves the map with a single spawn, the other walks people off
+       * a deck into the water. An authored point is a decision; this ring
+       * is arithmetic, and arithmetic is the thing worth checking.
+       */
+      const blocked = (x, y, z) => {
+        for (const b of this.collision.boxes) {
+          if (b.tag === 'deck' || b.tag === 'roof' || b.disabled) continue;
+          if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ
+            && b.maxY > y - 1.0 && b.minY < y + 1.0) return true;
+        }
+        return false;
+      };
       for (let i = 0; i < 6; i++) {
         const a = (i / 6) * Math.PI * 2;
-        const d = 22;
-        const x = Math.cos(a) * d, z = Math.sin(a) * d;
+        let x = Math.cos(a) * 22, z = Math.sin(a) * 22;
+        const y = this.heightAt(x, z) + 1.2;
+        if (blocked(x, y, z)) {
+          // Out along the same spoke, which keeps the ring a ring.
+          for (const d of [26, 30, 18, 34]) {
+            const nx = Math.cos(a) * d, nz = Math.sin(a) * d;
+            if (!blocked(nx, this.heightAt(nx, nz) + 1.2, nz)) { x = nx; z = nz; break; }
+          }
+        }
         this.spawnPoints.push([x, this.heightAt(x, z) + 1.2, z]);
       }
     }

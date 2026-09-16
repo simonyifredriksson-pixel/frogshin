@@ -66,14 +66,26 @@ export const RARITY = {
   rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', odds: 20 },
   epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', odds: 10 },
   legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: 5 },
-  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 2.9 },
+  /**
+   * 2.95 rather than 2.9, and the extra twentieth of a point is ???'s.
+   *
+   * The ladder has to come to a hundred or every crate's board is a rounding
+   * error away from lying. ??? was halved to 0.05 and the point had to go
+   * somewhere; Mythic is the tier directly under it and the one that should
+   * absorb it.
+   */
+  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 2.95 },
   /**
    * ??? — and it stays ??? until somebody pulls one.
    *
-   * One in a thousand. It is the only tier whose items hide their own NAME
-   * until they are yours — see `secret` on a skin and `Shop.hidden`.
+   * ONE IN TWO THOUSAND. These cases cost six to twelve thousand froglets,
+   * so a ??? is a serious amount of money spent and is meant to be — the
+   * point of the tier is that seeing one in the Croaklands is an event.
+   *
+   * It is also the only tier whose items hide their own NAME until they are
+   * yours — see `secret` on a skin and `Shop.hidden`.
    */
-  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.1 },
+  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.05 },
 };
 
 export const RARITY_ORDER = [
@@ -1056,9 +1068,6 @@ const COLLECTIONS = [
     pal: [0x1f3a1a, 0x4e7a34, 0x8fc44a, 0xc9d98f, 0x9cff6b],
     blurb: 'Bamboo, moss and old jade. Everything in here grew before it '
       + 'was forged.',
-    frogs: ['Bamboo Frog', 'Moss Ronin', 'Jade Scout', 'Forest Shinobi',
-      'Mossblade Warrior', 'Jade Samurai', 'Ancient Warden', 'Verdant Ronin',
-      'Forest Shogun', 'The Bamboo Sage'],
     swords: ['Bamboo Blade', 'Moss Katana', 'Jade Edge', 'Forest Fang',
       'Ronin Blade', 'Verdant Katana', 'Warden Blade', 'Jade Reaver',
       "Shogun's Blade", 'Whisperleaf'],
@@ -1072,9 +1081,6 @@ const COLLECTIONS = [
     pal: [0x2a4a66, 0x6a9ec4, 0xbfe4ff, 0xe8f6ff, 0x8ff0ff],
     blurb: 'Nine things out of the deep winter, and one that was already '
       + 'there when it arrived.',
-    frogs: ['Snow Frog', 'Frost Scout', 'Ice Ronin', 'Frozen Shinobi',
-      'Glacier Warrior', 'Frost Warden', 'Crystal Samurai', 'Winter Phantom',
-      'Frost Emperor', 'The Still Winter'],
     swords: ['Frost Blade', 'Ice Katana', 'Snowfang', 'Frozen Edge',
       'Glacier Fang', 'Crystal Blade', 'Frost Reaper', "Winter's Edge",
       "Emperor's Frost", 'Heartfrost'],
@@ -1088,9 +1094,6 @@ const COLLECTIONS = [
     pal: [0x3a1a10, 0x8a3a1e, 0xff8a3c, 0xffca4a, 0xff6a2a],
     blurb: 'Ash, cinder and the things that walk out of a fire still '
       + 'burning.',
-    frogs: ['Ash Frog', 'Ember Scout', 'Cinder Ninja', 'Flame Ronin',
-      'Magma Warrior', 'Inferno Shinobi', 'Ember Warden', 'Cinder Lord',
-      'Inferno Shogun', 'The First Ash'],
     swords: ['Ash Blade', 'Ember Katana', 'Cinder Edge', 'Flamefang',
       'Magma Blade', 'Inferno Katana', 'Ember Reaper', 'Volcanic Fang',
       'Inferno Shogun Blade', 'Cinderheart'],
@@ -1104,9 +1107,6 @@ const COLLECTIONS = [
     pal: [0x3a0f14, 0x9c2430, 0xd94a4a, 0xd8ad2e, 0xffb03c],
     blurb: 'Scale, bone and gold. The ladder here ends somewhere that was '
       + 'never a frog.',
-    frogs: ['Dragon Initiate', 'Scale Runner', 'Crimson Shinobi', 'Dragon Ronin',
-      'Golden Scale', 'Dragon Warden', 'Elder Dragon', 'Dragon Samurai',
-      'Dragon Emperor', 'The Sleeping Wyrm'],
     swords: ['Scale Blade', 'Dragon Fang', 'Crimson Edge', 'Wyrm Katana',
       'Dragonbone Blade', 'Elder Fang', 'Dragon Reaver', 'Imperial Dragon',
       "Dragon Emperor's Fang", 'Wyrmheart'],
@@ -1120,9 +1120,6 @@ const COLLECTIONS = [
     pal: [0x5a4408, 0xb89a4a, 0xffd76b, 0xfff3c4, 0xffe08a],
     blurb: 'The most expensive case in the shop, and the brightest thing '
       + 'in it does not set.',
-    frogs: ['Sunlit Frog', 'Dawn Shinobi', 'Solar Scout', 'Golden Ronin',
-      'Sun Guardian', 'Celestial Warrior', 'Solar Warden', "Heaven's Champion",
-      'Divine Emperor', 'The Unsetting'],
     swords: ['Sunsteel Blade', 'Dawn Katana', 'Solar Edge', 'Golden Fang',
       'Sun Guardian', 'Celestial Blade', "Heaven's Reaver", 'Divine Edge',
       'Sword of the Sun', 'Daybreaker'],
@@ -1154,37 +1151,350 @@ function shade(hex, k) {
 }
 
 /**
- * The frog at rung `i` of a collection.
+ * ═══ THE FIFTY FROGS, ONE CONCEPT AT A TIME ══════════════════════════════
  *
- * Nothing below Uncommon gets geometry — a Common has to be the plain shape
- * so everything above it has something to be more than. From there it is
- * spines, then armour and glowing inlay, then a crown and a halo, and the
- * Mythic gets the whole lot with its own light around it.
+ * The swords and the kunai below are still generated from a ladder, because
+ * a katana is a katana and what changes up its tiers is genuinely its
+ * material and its shape. A FROG is a person. Generating fifty of them from
+ * one escalation produced exactly what you would expect: the same frog
+ * wearing slightly more of the same armour in five weathers, which is the
+ * complaint this table exists to answer.
+ *
+ * So every rung is written out, and every rung is somebody:
+ *
+ *   Common      ordinary clothes. No effects at all. This is the floor the
+ *               whole collection is measured against, and it has to be a
+ *               villager rather than a lesser warrior.
+ *   Uncommon    a trade, and the gear that goes with it — a hood, a satchel,
+ *               a set of plates. Recognisable at ten paces.
+ *   Rare        armour with an idea in it, and the first glowing anything.
+ *   Epic        a different silhouette. Horns, bulk, a shield.
+ *   Legendary   the outline changes again and the light starts to come from
+ *               INSIDE the frog rather than off it.
+ *   Mythic      royalty. A crown, a halo, and something in orbit.
+ *   ???         nothing else in the game looks like it. See the notes on
+ *               each one — they are the only skins here with an argument
+ *               attached rather than a description.
+ *
+ * `fx` keys are the shared cosmetic vocabulary in js/frog.js. Everything
+ * used here is something a builder actually reads; test_crates checks that
+ * claim for every skin in the game, which is how `embers` was caught sitting
+ * dead in two Legendaries for months.
+ */
+const FROG_CONCEPTS = {
+  // ── 🌿 VERDANT SAMURAI — nature, and the very old things in it ────────
+  verdant: [
+    { name: 'Mushroom Hopper', skin: 0x6f8f4a, belly: 0xd8d0a8, cloth: 0x6b4f33,
+      scarf: 0xc4694a, fx: {} },
+    { name: 'River Fisher', skin: 0x7aa04e, belly: 0xdfe0b0, cloth: 0x4a6b7a,
+      scarf: 0xe8dcc0, fx: {} },
+    // Woven bamboo over a monk's robe: plates the colour of dry cane.
+    { name: 'Bamboo Monk', skin: 0x6f9445, belly: 0xd8d8a8, cloth: 0xc9b978,
+      scarf: 0xb8863c, fx: { plates: 0xc9b978, pattern: 0x8a6a2a, moss: 0x6f9445 } },
+    // The cloak IS the skin. A hood and a pair of leaf ears off the cheeks.
+    { name: 'Leafcloak Scout', skin: 0x5c8a3a, belly: 0xc4d8a0, cloth: 0x2f4a20,
+      scarf: 0x8fc44a, fx: { hood: 0x3f6b28, fins: true } },
+    { name: 'Thornback', skin: 0x46613a, belly: 0xa8b894, cloth: 0x2a3a22,
+      scarf: 0x6b4f33, fx: { plates: 0x4a3a28, spikes: 6, horns: 2 } },
+    // The lantern is the light: a warm glow off the belt, nothing else lit.
+    { name: 'Lantern Keeper', skin: 0x4e7a34, belly: 0xc8cfa0, cloth: 0x35301f,
+      scarf: 0xffb347, fx: { hood: 0x2f4a20, pattern: 0xffb347, eyeGlow: 0xffd76b } },
+    // Ancient tree, worn as armour, with the roots still attached to it.
+    { name: 'Giantwood Guardian', skin: 0x3f4f2e, belly: 0x9aa878, cloth: 0x2a2a1a,
+      scarf: 0x6b5a2a, fx: {
+        plates: 0x5a4630, moss: 0x5f8f3a, spikes: 5, shield: 0x4a3a24,
+        emissive: 0x1a2410,
+      } },
+    /**
+     * Translucent, lit from within, and trailing the leaves it left behind.
+     *
+     * The leaves are `stars`, not `orbit`. An orbit is the top-tier tell —
+     * a ring of fragments turning round a frog means Mythic or ???, and it
+     * only means that while nothing below carries it. `stars` gives the
+     * same drifting motes without spending the signal, which matters more
+     * here than on any other skin: this one sits directly under the Ancient
+     * King of Roots, and the two have to be distinguishable at a glance.
+     */
+    { name: 'Spirit of the Grove', skin: 0x7fd8a0, belly: 0xdfffe8, cloth: 0x2a4a38,
+      scarf: 0xbfffd0, fx: {
+        aura: 0x7fffb0, pattern: 0xbfffd0, eyeGlow: 0xdfffe8, stars: 0x8fe0a0,
+        embers: 0xbfffd0, emissive: 0x1a3a26, fins: true,
+      } },
+    // Royal, and made of the forest rather than dressed in it.
+    { name: 'Ancient King of Roots', skin: 0x35301f, belly: 0xa8a070, cloth: 0x201c12,
+      scarf: 0xc9a227, fx: {
+        crown: 2.0, plates: 0x5a4630, moss: 0x4e7a34, pattern: 0xc9d98f,
+        eyeGlow: 0xc9ff6b, halo: 0xc9d98f, stars: 0xc9d98f,
+        orbit: 0x8fc44a, orbitN: 9, spikes: 6, emissive: 0x1a1a0e,
+      } },
+    /**
+     * ── ??? THE FORGOTTEN GROVE ───────────────────────────────────────
+     *
+     * It is not a frog in armour. The roots grew around it and became the
+     * shape — `wings` is what carries that, torn and bark-coloured, so the
+     * OUTLINE is wrong before you have read anything on it. Bark orbits it,
+     * and the eyes are two stars a very long way down a dark hole.
+     */
+    { name: 'The Forgotten Grove', skin: 0x1e2416, belly: 0x6f7a52, cloth: 0x12160d,
+      scarf: 0x3a4a22, secret: true, fx: {
+        wings: 0x4a3a26, wingGlow: 0x9cff6b, wingsTorn: true, wingSpan: 1.15,
+        moss: 0x3f6b28, orbit: 0x6b5a3a, orbitN: 11, stars: 0xdfffe8,
+        eyeGlow: 0xffffff, pattern: 0x9cff6b, emissive: 0x0e1408,
+        horns: 4, spikes: 6,
+      } },
+  ],
+
+  // ── ❄️ FROSTVEIL — a whole frozen civilisation ───────────────────────
+  frost: [
+    { name: 'Snowbound Traveller', skin: 0x8aa4b8, belly: 0xe4eef6, cloth: 0x3f5060,
+      scarf: 0xc44a4a, fx: {} },
+    { name: 'Ice Fisher', skin: 0x7f9aae, belly: 0xdfe8f2, cloth: 0x5a4a38,
+      scarf: 0xb8a078, fx: {} },
+    // The coat, and the bottles clinking on the belt.
+    { name: 'Winter Apothecary', skin: 0x8fa8bc, belly: 0xe8f0f8, cloth: 0x2f3f52,
+      scarf: 0x6fc4a8, fx: { hood: 0x2a3848, pattern: 0x8ff0c4 } },
+    { name: 'Frost Nomad', skin: 0x93a6b6, belly: 0xe0ebf4, cloth: 0x4a4038,
+      // Snow blowing off the layers, where the Sky Nomad has stitching.
+      scarf: 0xcfb894, fx: { hood: 0x6a5a48, fins: true, embers: 0xe8f4ff } },
+    // Ice worked like metal: polished plate and a slab of a shield.
+    { name: 'Glacier Knight', skin: 0x6a9ec4, belly: 0xdff0ff, cloth: 0x2a4a66,
+      scarf: 0xbfe4ff, fx: {
+        plates: 0x9fd4ef, shield: 0x7fc0e8, pattern: 0xe8f6ff, spikes: 3,
+      } },
+    // The aurora is the costume. Nothing on it is solid.
+    { name: 'Aurora Dancer', skin: 0x5a7fae, belly: 0xd8e8ff, cloth: 0x2a2f52,
+      scarf: 0x8fffd8, fx: {
+        pattern: 0x8fffd8, aura: 0x6affc4, stars: 0xdfffff, eyeGlow: 0x8ff0ff,
+      } },
+    { name: 'Frozen Colossus', skin: 0x4a6a86, belly: 0xbcd8ea, cloth: 0x22384a,
+      scarf: 0x8fc4e4, fx: {
+        plates: 0xa8dcf4, spikes: 6, horns: 2, emissive: 0x12303f,
+        shield: 0x88c4e0,
+      } },
+    // Almost not there, and it brings its own weather with it.
+    { name: 'Whiteout Revenant', skin: 0xc8d8e4, belly: 0xffffff, cloth: 0xa8bccc,
+      scarf: 0xffffff, fx: {
+        plates: 0xe8f4ff, aura: 0xffffff, embers: 0xffffff,
+        eyeGlow: 0xbfe4ff, pattern: 0xffffff, emissive: 0x6a8ca8,
+      } },
+    { name: 'Crown of Winter', skin: 0x2f4f6e, belly: 0xcfe8ff, cloth: 0x1a2f44,
+      scarf: 0xe8f6ff, fx: {
+        crown: 2.0, plates: 0xbfe4ff, halo: 0xe8f6ff, halo2: true,
+        orbit: 0xbfe4ff, orbitN: 9, stars: 0xffffff, eyeGlow: 0x8ff0ff,
+        spikes: 6, emissive: 0x18384f,
+      } },
+    /**
+     * ── ??? THE LAST WINTER ───────────────────────────────────────────
+     *
+     * Black and white, and the snow around it has stopped.
+     *
+     * `orbit` is doing the work: eleven pale fragments held in a ring that
+     * turns very slowly, so from a distance they read as flakes hanging in
+     * the air rather than as an effect playing. Everything else on it is
+     * deliberately colourless — it is the only skin in the game with no hue
+     * at all, and that is most of why it is recognisable.
+     */
+    { name: 'The Last Winter', skin: 0x1a1a1e, belly: 0xf4f4f6, cloth: 0x0e0e12,
+      scarf: 0xffffff, secret: true, fx: {
+        orbit: 0xffffff, orbitN: 11, stars: 0xffffff, embers: 0xdfe8f0,
+        eyeGlow: 0xffffff, pattern: 0xffffff, plates: 0x2a2a30,
+        emissive: 0x0a0a0e, spikes: 6, horns: 2,
+      } },
+  ],
+
+  // ── 🔥 EMBERBORN — several different kinds of fire ───────────────────
+  ember: [
+    { name: 'Campfire Cook', skin: 0x8a6a4a, belly: 0xdcc8a8, cloth: 0xb84a2a,
+      scarf: 0xe8dcc0, fx: {} },
+    { name: 'Coal Miner', skin: 0x5a5048, belly: 0xa89880, cloth: 0x3a342c,
+      scarf: 0xffb347, fx: {} },
+    { name: 'Ash Wanderer', skin: 0x7a7268, belly: 0xc4bcb0, cloth: 0x4a443c,
+      scarf: 0x9a9088, fx: { hood: 0x5a544c, pattern: 0xa89c8c, embers: 0xb8aca0 } },
+    { name: 'Forge Apprentice', skin: 0x8a5a3a, belly: 0xd8b890, cloth: 0x3a2a1e,
+      scarf: 0xc4884a, fx: { plates: 0x7a6a5a, pattern: 0xffb347, shield: 0x5a4a3a } },
+    // The armour is old and the cracks in it are lit.
+    { name: 'Flame Ronin', skin: 0x6a3020, belly: 0xc48a5a, cloth: 0x2a1810,
+      scarf: 0xff8a3c, fx: {
+        plates: 0x5a3020, pattern: 0xff8a3c, eyeGlow: 0xffca4a,
+        emissive: 0x3a1206,
+      } },
+    { name: 'Magma Smith', skin: 0x7a3a1e, belly: 0xd09060, cloth: 0x2a1a12,
+      scarf: 0xffca4a, fx: {
+        plates: 0x4a4038, pattern: 0xff6a2a, embers: 0xffb347,
+        eyeGlow: 0xff8a3c, shield: 0x5a4a3a, emissive: 0x3f1608,
+      } },
+    // Stops being a person. Horns, bulk and volcanic rock.
+    // Actually alight, which is what separates it from the Elder Wyrm —
+    // the two are otherwise the same idea of "horned thing in old plate".
+    { name: 'Infernal Beast', skin: 0x4a1c12, belly: 0x9a5a3a, cloth: 0x1e0c08,
+      scarf: 0xff6a2a, fx: {
+        horns: 4, spikes: 6, plates: 0x3a2018, eyeGlow: 0xffca4a,
+        pattern: 0xff6a2a, emissive: 0x4a1204, embers: 0xff8a3c,
+      } },
+    // Stone on the outside, and something molten moving under it.
+    { name: 'Living Volcano', skin: 0x3a342e, belly: 0x8a6a52, cloth: 0x201c18,
+      scarf: 0xff8a3c, fx: {
+        plates: 0x4a443c, pattern: 0xff4a1a, embers: 0xff8a3c,
+        aura: 0xff6a2a, eyeGlow: 0xffca4a, spikes: 5, emissive: 0x5a1a04,
+      } },
+    { name: 'Cinder Sovereign', skin: 0x2f221c, belly: 0xa87a58, cloth: 0x18100c,
+      scarf: 0xffca4a, fx: {
+        crown: 2.0, plates: 0x4a3028, halo: 0xff8a3c, orbit: 0xffca4a,
+        orbitN: 9, embers: 0xff8a3c, pattern: 0xffca4a, eyeGlow: 0xffe08a,
+        spikes: 6, horns: 2, emissive: 0x5a1c04,
+      } },
+    /**
+     * ── ??? THE FIRST FLAME ───────────────────────────────────────────
+     *
+     * Dormant, and then you notice the cracks.
+     *
+     * Deliberately NO `aura` and no orbit. This is the one skin in the game
+     * that is defined by what it does NOT have: a body of nearly black
+     * material, a handful of embers, and a pattern colour so bright it is
+     * effectively white — so the only light on it comes out of the seams.
+     * A big flaming shell around it would make it the same as the Cinder
+     * Sovereign with a different hat.
+     */
+    { name: 'The First Flame', skin: 0x14100e, belly: 0x3a2a22, cloth: 0x0a0806,
+      scarf: 0x2a1c14, secret: true, fx: {
+        pattern: 0xfff4d0, eyeGlow: 0xffffff, embers: 0xffb347,
+        plates: 0x1a1512, emissive: 0x6a1c00,
+      } },
+  ],
+
+  // ── 🐉 DRAGON ASCENSION — five different dragon cultures ─────────────
+  dragon: [
+    { name: 'Dragon Egg Keeper', skin: 0x7a8a5a, belly: 0xd8d0a0, cloth: 0x5a4a30,
+      scarf: 0xc4a05a, fx: {} },
+    { name: 'Mountain Rider', skin: 0x6a7a8a, belly: 0xc8d0d8, cloth: 0x4a3a2a,
+      scarf: 0x9c2430, fx: {} },
+    { name: 'Scale Hunter', skin: 0x7a6a4a, belly: 0xc8b890, cloth: 0x3a2a20,
+      scarf: 0xd94a4a, fx: { plates: 0x8a5a3a, pattern: 0xd8ad2e, spikes: 3 } },
+    { name: 'Sky Nomad', skin: 0x8ab0c4, belly: 0xdfeef6, cloth: 0x4a5a6a,
+      scarf: 0xe8c86a, fx: { hood: 0x3a4a5a, fins: true, pattern: 0xbfe4ff } },
+    // Western: plate, a shield and a pair of helm horns.
+    { name: 'Drake Knight', skin: 0x5a6068, belly: 0xb8bcc4, cloth: 0x2a2e34,
+      scarf: 0x9c2430, fx: {
+        plates: 0x8a9098, shield: 0x9c2430, horns: 2, pattern: 0xd8ad2e,
+      } },
+    // Eastern: robes, beads, and a serpent worked into the cloth.
+    { name: 'Serpent Monk', skin: 0x8a3a3a, belly: 0xe0c090, cloth: 0x5a1a1a,
+      scarf: 0xd8ad2e, fx: {
+        hood: 0x6a2020, pattern: 0xd8ad2e, eyeGlow: 0xffb03c, fins: true,
+      } },
+    // A third culture entirely: dragon technology, and it is powered.
+    { name: 'Storm Dragon Rider', skin: 0x3a4a6a, belly: 0xa8c4e4, cloth: 0x1e2838,
+      scarf: 0x8fd8ff, fx: {
+        plates: 0x5a6a8a, pattern: 0x8fd8ff, eyeGlow: 0xdfffff,
+        aura: 0x6ab0ff, spikes: 5, emissive: 0x16243a,
+      } },
+    { name: 'Elder Wyrm', skin: 0x4a2a24, belly: 0xa87a58, cloth: 0x241410,
+      scarf: 0x9c2430, fx: {
+        horns: 4, spikes: 6, plates: 0x6a4a34, pattern: 0xd8ad2e,
+        eyeGlow: 0xffb03c, emissive: 0x2a1008,
+      } },
+    { name: 'Dragon Throne', skin: 0x3a0f14, belly: 0xc49060, cloth: 0x1e080c,
+      scarf: 0xd8ad2e, fx: {
+        crown: 2.0, plates: 0x8a2430, halo: 0xd8ad2e, orbit: 0xffb03c,
+        orbitN: 9, stars: 0xffd76b, pattern: 0xd8ad2e, eyeGlow: 0xffca4a,
+        spikes: 6, horns: 2, emissive: 0x3a0a0e,
+      } },
+    /**
+     * ── ??? THE NAMELESS WYRM ─────────────────────────────────────────
+     *
+     * No wings and no neon, which were both asked for by name.
+     *
+     * What it has instead is `pattern` over a nearly black hide and four
+     * heavy horns — markings that read as something moving under the skin
+     * rather than as paint on it. It is the quietest ??? in the game on
+     * purpose: everything else at this tier announces itself, and this one
+     * is recognised rather than noticed.
+     */
+    { name: 'The Nameless Wyrm', skin: 0x16141a, belly: 0x4a4038, cloth: 0x0c0a0e,
+      scarf: 0x6a3a2a, secret: true, fx: {
+        pattern: 0xc49a4a, eyeGlow: 0xffb03c, emissive: 0x1a0c06,
+        horns: 4, spikes: 6, plates: 0x22202a, stars: 0xd8ad2e,
+      } },
+  ],
+
+  // ── ☀️ DIVINE SUN — civilisations that worshipped it ─────────────────
+  sun: [
+    { name: 'Dawn Pilgrim', skin: 0xa89a6a, belly: 0xe8dcb0, cloth: 0xc4b48a,
+      scarf: 0xd8ad2e, fx: {} },
+    { name: 'Sun Temple Servant', skin: 0xb8a878, belly: 0xf0e4c0, cloth: 0xe8dcc0,
+      scarf: 0xc9a227, fx: {} },
+    { name: 'Solar Scholar', skin: 0xa89858, belly: 0xefe0b0, cloth: 0x8a7a4a,
+      scarf: 0xffd76b, fx: { hood: 0x7a6a3a, pattern: 0xffd76b, stars: 0xffe08a } },
+    { name: 'Golden Courier', skin: 0xc4a84a, belly: 0xfff0c8, cloth: 0x6a5420,
+      scarf: 0xffe08a, fx: { pattern: 0xffe08a, fins: true } },
+    // The sword is the radiant part, so the eyes catch it and nothing else
+    // does — which is also what keeps it off the Glacier Knight's design.
+    { name: 'Sunblade Knight', skin: 0xdfd8c0, belly: 0xfffaf0, cloth: 0x8a7430,
+      scarf: 0xffd76b, fx: {
+        plates: 0xfff3c4, shield: 0xd8ad2e, pattern: 0xffd76b,
+        eyeGlow: 0xffffff,
+      } },
+    { name: 'Solar Priest', skin: 0xc8b070, belly: 0xfff0c8, cloth: 0xe8d8a0,
+      scarf: 0xffd76b, fx: {
+        hood: 0xd8c488, stars: 0xffe08a, pattern: 0xffd76b, eyeGlow: 0xfff3c4,
+      } },
+    { name: 'Daystar Guardian', skin: 0xb89a4a, belly: 0xffeeb8, cloth: 0x6a5420,
+      scarf: 0xfff3c4, fx: {
+        plates: 0xe8c86a, pattern: 0xfff3c4, eyeGlow: 0xffffff,
+        aura: 0xffd76b, spikes: 5, shield: 0xd8ad2e, emissive: 0x5a4408,
+      } },
+    /**
+     * Half of it is in daylight and half of it is not. The palette does
+     * that — a dark hide under gold plate, with the light reading as
+     * coming from one side only.
+     */
+    { name: 'Eclipse Monarch', skin: 0x20202a, belly: 0xffeeb8, cloth: 0x12121a,
+      scarf: 0xffd76b, fx: {
+        crown: 1.6, plates: 0xd8ad2e, halo: 0xfff3c4, pattern: 0xffd76b,
+        eyeGlow: 0xfff3c4, aura: 0x6a5aa8, emissive: 0x2a2060, spikes: 5,
+      } },
+    { name: 'Celestial Emperor', skin: 0xdfd0a0, belly: 0xfffaf0, cloth: 0x8a7430,
+      scarf: 0xfff3c4, fx: {
+        crown: 2.0, plates: 0xffe08a, halo: 0xfff3c4, halo2: true,
+        orbit: 0xffd76b, orbitN: 12, stars: 0xffffff, pattern: 0xfff3c4,
+        eyeGlow: 0xffffff, aura: 0xffd76b, emissive: 0x6a5408,
+      } },
+    /**
+     * ── ??? THE ONE WHO SAW THE SUN ───────────────────────────────────
+     *
+     * A piece of a dying star, in a frog.
+     *
+     * The body is the darkest thing in the collection and the core is the
+     * brightest thing in the game — `emissive` carries that, and the orbit
+     * is only five fragments so it reads as something coming APART rather
+     * than as a crown of light. The contrast is the whole design: it stands
+     * next to the Celestial Emperor and is obviously not more of the same.
+     */
+    { name: 'The One Who Saw the Sun', skin: 0x120e08, belly: 0x5a4a20, cloth: 0x080604,
+      scarf: 0xfff3c4, secret: true, fx: {
+        emissive: 0x8a6a00, pattern: 0xffffff, eyeGlow: 0xffffff,
+        orbit: 0xfff3c4, orbitN: 5, stars: 0xffffff, embers: 0xffd76b,
+        plates: 0x1a1610, aura: 0xffe08a,
+      } },
+  ],
+};
+
+/**
+ * The frog at rung `i` of a collection — read from FROG_CONCEPTS.
+ *
+ * Everything except the id and the rarity is written out per skin. See the
+ * note on the table for why a frog cannot be generated the way a katana can.
  */
 function collectionFrog(c, i) {
-  const [dark, mid, light, accent, glow] = c.pal;
-  const rarity = TIER_LADDER[i];
-  const fx = {};
-  if (i >= 2) fx.spikes = 3;
-  if (i >= 3) fx.fins = true;
-  if (i >= 4) { fx.plates = shade(mid, 0.8); fx.pattern = accent; }
-  if (i >= 5) { fx.eyeGlow = glow; fx.emissive = shade(dark, 0.9); }
-  if (i >= 6) { fx.spikes = 5; fx.aura = glow; fx.horns = 2; }
-  if (i >= 7) { fx.crown = 1.5; fx.halo = accent; fx.stars = accent; }
-  if (i >= 8) { fx.halo2 = true; fx.spikes = 6; fx.horns = 4; fx.crown = 1.8; }
-  if (i === 9) { fx.orbit = glow; fx.orbitN = 9; fx.embers = glow; }
+  const spec = FROG_CONCEPTS[c.id][i];
   const s = {
-    id: `frog_${c.id}_${i}`, name: c.frogs[i], rarity, set: c.id,
-    skin: i >= 7 ? shade(dark, 1.1) : shade(mid, 0.7 + i * 0.07),
-    belly: shade(light, 0.9 + i * 0.02),
-    cloth: shade(dark, 0.85),
-    scarf: i >= 6 ? accent : shade(light, 1.0),
-    fx,
+    id: `frog_${c.id}_${i}`, name: spec.name, rarity: TIER_LADDER[i], set: c.id,
+    skin: spec.skin, belly: spec.belly, cloth: spec.cloth, scarf: spec.scarf,
+    fx: spec.fx,
   };
-  if (rarity === 'secret') s.secret = true;
+  if (spec.secret) s.secret = true;
   return s;
 }
-
 /** The sword at rung `i`. Shape climbs, then the blade starts to glow. */
 function collectionSword(c, i) {
   const [dark, mid, light, accent, glow] = c.pal;
