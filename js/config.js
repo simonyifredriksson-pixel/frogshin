@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v145';
+export const BUILD = 'v146';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -920,19 +920,32 @@ export const CFG = {
      * fin turning toward you and the water closing over you are the part
      * worth having.
      */
-    alert: 1.2,
-    /** How close it has to actually BE to bite — no killing from the bay. */
-    biteRange: 4.5,
+    alert: 0.8,
+    /**
+     * HOW BIG. One number sizes the whole animal: the model is authored at
+     * unit scale and every derived measurement below is per-unit-of-scale,
+     * multiplied by this where it is used. At 3 the shark is about 25 units
+     * nose to tail — a frog is 1.75 tall, so it is roughly fourteen frogs
+     * long, which is the point.
+     */
+    scale: 3.0,
+    /**
+     * How close it has to BE to bite, per unit of scale — no killing from
+     * the bay. It tracks the size because the mouth does: a bigger animal
+     * reaches you sooner, which is also what lets it take somebody wading
+     * in water too shallow for it to swim into.
+     */
+    biteRange: 4.2,
 
-    cruiseSpeed: 11.0,
+    cruiseSpeed: 14.0,
     /**
      * How fast it moves when it is repositioning rather than loitering —
      * far enough from its patrol point that it is going somewhere. Set to
      * keep pace with a sprinting frog on land (31 u/s) so that running
      * around the ward does not leave it permanently behind.
      */
-    trackSpeed: 34.0,
-    cruiseAccel: 9.0,
+    trackSpeed: 40.0,
+    cruiseAccel: 11.0,
     cruiseTurn: 1.1,            // radians/s — a lazy circling turn
     strikeAccel: 240.0,         // a charge winds up fast — full speed in ~0.2s
     strikeTurn: 3.2,            // floor on the turn rate; strikeRadius usually wins
@@ -942,40 +955,39 @@ export const CFG = {
      * and the shark sailed straight past its victim and had to loop —
      * which the simulation caught and no amount of reading would have.
      */
-    strikeRadius: 6.0,
+    strikeRadius: 13.0,
     /**
      * Charge speed. Comfortably above a sprinting frog's 16.5 in the water,
      * so committing to a swim is committing — but slow enough to watch it
      * come, which is the point of the fin.
      */
-    strikeSpeed: 40.0,
+    strikeSpeed: 52.0,
 
     /** How far from the nearest water it patrols, near and far. */
-    patrolNear: 22,
-    patrolFar: 55,
+    patrolNear: 26,
+    patrolFar: 62,
     /** How often it picks a new wander point, and how fast it circles. */
     retargetEvery: 2.2,
     circleRate: 0.5,
     /** Never steer closer to the island than this past the swim line. */
-    standOff: 9,
+    standOff: 14,
     /**
      * How much water it needs under it. The shark may never go anywhere
      * shallower, charging or otherwise — it cannot beach itself, and the
      * shallows are the one place a swimmer is genuinely safer.
      */
-    draft: 1.6,
+    draft: 1.45,
 
     /** Depth of the back below the surface while cruising. */
-    cruiseDepth: 1.35,
+    cruiseDepth: 0.86,
     /** How high the fin's tip sits above the body origin — see `_place`. */
-    finTop: 2.4,
+    finTop: 2.45,
 
     /** The dolphin jump: every 25–30 seconds, as asked. */
     breachEvery: [25, 30],
-    breachTime: 1.35,
-    breachHeight: 7.5,
-    breachSpeed: 26.0,
-    breachPitch: 1.5,           // radians of nose-up / nose-down through it
+    breachTime: 1.75,
+    breachHeight: 5.2,
+    breachSpeed: 38.0,
   },
 
   // --------------------------------------------------------------- camera

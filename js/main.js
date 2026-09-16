@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v145';
+import * as THREE from '../lib/three.module.js?v=v146';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v145';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v145';
-import { Input } from './input.js?v=v145';
-import { Audio } from './audio.js?v=v145';
-import { World } from './world.js?v=v145';
-import { Effects } from './effects.js?v=v145';
-import { Atmosphere } from './atmosphere.js?v=v145';
-import { FollowCamera } from './camera.js?v=v145';
-import { Player } from './player.js?v=v145';
+} from './config.js?v=v146';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v146';
+import { Input } from './input.js?v=v146';
+import { Audio } from './audio.js?v=v146';
+import { World } from './world.js?v=v146';
+import { Effects } from './effects.js?v=v146';
+import { Atmosphere } from './atmosphere.js?v=v146';
+import { FollowCamera } from './camera.js?v=v146';
+import { Player } from './player.js?v=v146';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v145';
+} from './tournament.js?v=v146';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v145';
-import { RemotePlayer } from './remote.js?v=v145';
-import { HUD } from './hud.js?v=v145';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v145';
-import { FrogModel } from './frog.js?v=v145';
-import { DummyField } from './dummy.js?v=v145';
+import { coneHit } from './combat.js?v=v146';
+import { RemotePlayer } from './remote.js?v=v146';
+import { HUD } from './hud.js?v=v146';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v146';
+import { FrogModel } from './frog.js?v=v146';
+import { DummyField } from './dummy.js?v=v146';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v145';
-import { ToadModel } from './npc.js?v=v145';
+} from './rounds.js?v=v146';
+import { ToadModel } from './npc.js?v=v146';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v145';
-import { DungeonRun } from './dungeon.js?v=v145';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v145';
-import { JudgmentRun } from './judgment.js?v=v145';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v145';
-import { COMBO_NAMES } from './ascended.js?v=v145';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v145';
-import { MenuScene } from './menu.js?v=v145';
-import { Economy } from './economy.js?v=v145';
-import { Shop } from './shop.js?v=v145';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v145';
-import { Overworld } from './overworld.js?v=v145';
-import { InventoryScreen } from './inventoryui.js?v=v145';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v145';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v145';
-import { Cine } from './cinema.js?v=v145';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v145';
-import { MEMORIES } from './flashbacks.js?v=v145';
-import { GUARDIANS } from './guardians.js?v=v145';
-import { gearOfTier } from './gear.js?v=v145';
-import { Chat } from './chat.js?v=v145';
+} from './skins.js?v=v146';
+import { DungeonRun } from './dungeon.js?v=v146';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v146';
+import { JudgmentRun } from './judgment.js?v=v146';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v146';
+import { COMBO_NAMES } from './ascended.js?v=v146';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v146';
+import { MenuScene } from './menu.js?v=v146';
+import { Economy } from './economy.js?v=v146';
+import { Shop } from './shop.js?v=v146';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v146';
+import { Overworld } from './overworld.js?v=v146';
+import { InventoryScreen } from './inventoryui.js?v=v146';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v146';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v146';
+import { Cine } from './cinema.js?v=v146';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v146';
+import { MEMORIES } from './flashbacks.js?v=v146';
+import { GUARDIANS } from './guardians.js?v=v146';
+import { gearOfTier } from './gear.js?v=v146';
+import { Chat } from './chat.js?v=v146';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -4995,15 +4995,43 @@ class Game {
   _updateShark(dt, p) {
     const shark = this.world && this.world.shark;
     if (!shark) return;
-    const prey = (p && !p.health.dead && !p.health.protected && !p.spectating)
-      ? p : null;
-    shark.update(dt, prey);
-    if (!shark.bit || !prey) return;
+    const alive = p && !p.health.dead && !p.health.protected && !p.spectating;
 
-    prey.health.kill();
-    this.effects.splash(prey.pos);
-    Audio.hit(prey.pos, true);
-    this.followCam.shake(0.7);
+    /**
+     * IN THE LAKE is not the same as UNDERWATER, and the difference is the
+     * whole feel of being hunted.
+     *
+     * `player.inWater` means chest-deep — it goes false the moment your head
+     * clears the surface. Keying the hunt off it meant a swimmer could break
+     * the surface for one frame, bobbing on the spot, and the shark would
+     * shrug and go back to circling. You could tread water in front of it
+     * indefinitely.
+     *
+     * The rule is now the one that was asked for: it lets go when you are
+     * OUT, not when you come up for air. Out means standing on something
+     * whose surface is above the waterline — the beach, a pavement, the
+     * bridge deck. Swimming, surfacing, jumping and treading are all still
+     * being hunted, and so is wading, because standing on the lake bed is
+     * not standing on dry land however much of you is above the water.
+     */
+    let inLake = false;
+    if (alive && this.world.heightAt) {
+      const wl = CFG.world.waterLevel;
+      const overLake = this.world.heightAt(p.pos.x, p.pos.z) <= wl;
+      const dryFooting = p.grounded && p.pos.y > wl;
+      inLake = overLake && !dryFooting;
+    }
+    const prey = alive ? { pos: p.pos, inWater: inLake } : null;
+
+    shark.update(dt, prey);
+    // Breaking the surface throws water, whichever way it is going.
+    if (shark.brokeSurface) this.effects.splash(shark.pos);
+    if (!shark.bit || !alive) return;
+
+    p.health.kill();
+    this.effects.splash(p.pos);
+    Audio.hit(p.pos, true);
+    this.followCam.shake(0.9);
     this.hud.toast('Something took you', 1.6);
   }
 

@@ -9,12 +9,12 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v145';
-import { CFG } from './config.js?v=v145';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v145';
-import { findMap } from './maps.js?v=v145';
-import { Terrain, CollisionWorld } from './collision.js?v=v145';
-import { Shark } from './shark.js?v=v145';
+import * as THREE from '../lib/three.module.js?v=v146';
+import { CFG } from './config.js?v=v146';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v146';
+import { findMap } from './maps.js?v=v146';
+import { Terrain, CollisionWorld } from './collision.js?v=v146';
+import { Shark } from './shark.js?v=v146';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -2259,7 +2259,9 @@ export class World {
     let shore = start, swim = start;
     for (let d = start; d < limit; d += 0.5) {
       if (shore === start && this.heightAt(d, 0) <= W) shore = d;
-      if (this.heightAt(d, 0) <= W - CFG.shark.draft) { swim = d; break; }
+      // `draft` is per unit of scale, like everything else about the animal.
+      const draft = CFG.shark.draft * CFG.shark.scale;
+      if (this.heightAt(d, 0) <= W - draft) { swim = d; break; }
     }
     // The map's seeded generator, so every client's shark wanders and
     // breaches identically — the same reason the map itself is seeded.

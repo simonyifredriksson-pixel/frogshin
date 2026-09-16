@@ -38,9 +38,9 @@
  * whether you went in close to it or across the bay from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v145';
-import { CFG } from './config.js?v=v145';
-import { clamp } from './util.js?v=v145';
+import * as THREE from '../lib/three.module.js?v=v146';
+import { CFG } from './config.js?v=v146';
+import { clamp } from './util.js?v=v146';
 
 const _v = new THREE.Vector3();
 
@@ -78,8 +78,24 @@ export class Shark {
      */
     this.rnd = rnd || Math.random;
 
+    /**
+     * Everything that is a LENGTH scales with the animal.
+     *
+     * The model is authored at unit scale and `CFG.shark.scale` sizes it, so
+     * every measurement that has to agree with the body — how deep it
+     * cruises, how high the fin reaches, how far the mouth is from the
+     * middle, how much water it draws, how far it leaps — is derived here
+     * rather than written out a second time at the new size. Change `scale`
+     * and the whole animal, its patrol and its bite move together.
+     */
+    this.scale = S.scale;
+    this.depth = S.cruiseDepth * this.scale;
+    this.finTop = S.finTop * this.scale;
+    this.reach = S.biteRange * this.scale;
+    this.height = S.breachHeight * this.scale;
+
     this.state = SHARK.CRUISE;
-    this.pos = new THREE.Vector3(this.swimAt + 26, this.waterY - S.cruiseDepth, 0);
+    this.pos = new THREE.Vector3(this.swimAt + 26, this.waterY - this.depth, 0);
     this.yaw = 0;
     this.speed = S.cruiseSpeed;
 
@@ -100,6 +116,7 @@ export class Shark {
     this.bit = false;
 
     this.group = buildSharkModel();
+    this.group.scale.setScalar(this.scale);
     this.tailPivot = this.group.userData.tailPivot;
     this.group.position.copy(this.pos);
     scene.add(this.group);
@@ -151,6 +168,39 @@ export class Shark {
     if (ax >= az) p.x = (Math.sign(p.x) || 1) * this.swimAt;
     else p.z = (Math.sign(p.z) || 1) * this.swimAt;
     return p;
+  }
+
+  /**
+   * SWIM ROUND THE ISLAND, not into it.
+   *
+   * The lake is a square ring, so a straight line between two points on
+   * opposite faces goes overland. Left to itself the shark pointed at the
+   * target, hit the shoreline, and crawled along it at whatever sideways
+   * component its heading happened to have — pinned against the beach
+   * eighty units from a swimmer it could see, for ever. Four of forty-eight
+   * entries in the test simply never got there, which is the only way that
+   * behaviour was ever going to come to light.
+   *
+   * So when the direct path would cut the corner off, it aims at the CORNER
+   * instead — whichever of the four makes the whole journey shortest — and
+   * re-checks each frame, so it goes direct again the moment it can. Two
+   * hops gets you anywhere on a square ring.
+   *
+   * @returns [x, z] to steer at, or null when straight there is fine
+   */
+  _wayRound(tx, tz) {
+    const mx = (this.pos.x + tx) * 0.5, mz = (this.pos.z + tz) * 0.5;
+    if (Math.max(Math.abs(mx), Math.abs(mz)) >= this.swimAt) return null;
+    const r = this.swimAt;
+    let best = null, bestD = Infinity;
+    for (const cx of [-r, r]) {
+      for (const cz of [-r, r]) {
+        const d = Math.hypot(cx - this.pos.x, cz - this.pos.z)
+          + Math.hypot(tx - cx, tz - cz);
+        if (d < bestD) { bestD = d; best = [cx, cz]; }
+      }
+    }
+    return best;
   }
 
   /**
@@ -291,7 +341,16 @@ export class Shark {
      * heading, so it arcs into its turns and can overshoot — it is never
      * moved toward a point directly.
      */
-    const want = Math.atan2(this.target.x - this.pos.x, this.target.z - this.pos.z);
+    /**
+     * Aim at a point it can actually reach: the target pulled out to the
+     * swim line, and then routed round a corner if going straight there
+     * would take it overland.
+     */
+    this._keepOut(this.target);
+    const way = this._wayRound(this.target.x, this.target.z);
+    const aimX = way ? way[0] : this.target.x;
+    const aimZ = way ? way[1] : this.target.z;
+    const want = Math.atan2(aimX - this.pos.x, aimZ - this.pos.z);
     let d = want - this.yaw;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
@@ -345,29 +404,50 @@ export class Shark {
     this._keepOut(this.pos);
 
     // ---- vertical: the breach arc, or a gentle cruise depth --------------
+    const wasAbove = this.pos.y - this.depth * 0.4 > this.waterY;
     let pitch = 0;
     if (this.breachT > 0) {
       this.breachT -= dt;
-      const t = 1 - this.breachT / S.breachTime;       // 0 -> 1
+      if (this.breachT < 0) this.breachT = 0;
+      const t = 1 - this.breachT / S.breachTime;        // 0 -> 1
       /**
        * A DOLPHIN JUMP: one clean parabola out and back in.
        *
-       * `4t(1-t)` peaks at 1 exactly halfway, so the arc is symmetric and
-       * it re-enters the water at the same depth it left. Pitch follows the
-       * derivative, which is what puts the nose up on the way out and down
-       * on the way in — a breach with a level body reads as a plank being
-       * thrown.
+       * `4t(1-t)` peaks at 1 exactly halfway, so the arc is symmetric and it
+       * re-enters at the depth it left.
+       *
+       * PITCH IS THE DERIVATIVE OF THE ARC, not a separate fudge.
+       *
+       * The first version lerped the nose from +0.75 to -0.75 radians on its
+       * own clock, which is a body rotating on a schedule while separately
+       * being moved along a curve — the two disagree everywhere except the
+       * ends, and the result was a shark that swam through its own jump at
+       * the wrong angle and flattened out at the top. Taking the angle from
+       * the actual velocity makes the body point along the path by
+       * construction: steeply up off the surface, level at the apex, nose
+       * first on the way back in.
        */
       const arc = 4 * t * (1 - t);
-      this.pos.y = this.waterY - S.cruiseDepth + arc * S.breachHeight;
-      pitch = (0.5 - t) * S.breachPitch;
-      if (this.breachT <= 0) this.breachT = 0;
+      const rise = this.height;
+      this.pos.y = this.waterY - this.depth + arc * rise;
+      const vy = rise * 4 * (1 - 2 * t) / S.breachTime;
+      pitch = Math.atan2(vy, Math.max(4, this.speed));
+      // A slow roll through the arc, so it corkscrews rather than staying
+      // rigidly upright — the thing that makes a real breach look alive.
+      this._breachRoll = Math.sin(t * Math.PI) * 0.5;
     } else {
-      // Cruising depth, with a slow roll so the fin cuts rather than glides.
+      // Cruising depth, with a slow bob so the fin cuts rather than glides.
       const bob = Math.sin(this.pos.x * 0.06 + this.pos.z * 0.05) * 0.12;
-      this.pos.y = this.waterY - S.cruiseDepth + bob;
+      this.pos.y = this.waterY - this.depth + bob;
+      this._breachRoll = 0;
       pitch = 0;
     }
+    /**
+     * One-frame flags for the surface being broken, in either direction, so
+     * the game can throw a splash without knowing anything about breaching.
+     */
+    const nowAbove = this.pos.y - this.depth * 0.4 > this.waterY;
+    this.brokeSurface = nowAbove !== wasAbove;
 
     // ---- the bite -------------------------------------------------------
     if (this.state === SHARK.STRIKE) {
@@ -377,10 +457,10 @@ export class Shark {
        * The timer's whole job was to start the charge; what finishes you is
        * the shark reaching you, which is the version of this that can be
        * watched happening. It is also why there is no escape clause: a
-       * swimmer flees at 16.5 and this closes at 40.
+       * swimmer flees at 16.5 and this closes at `strikeSpeed`.
        */
       const dist = Math.hypot(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
-      if (dist <= S.biteRange) {
+      if (dist <= this.reach) {
         this.bit = true;
         this.soak = 0;
       }
@@ -395,9 +475,10 @@ export class Shark {
     this.group.position.copy(this.pos);
     this.group.rotation.set(0, this.yaw, 0);
     this.group.rotateX(pitch);
-    // Bank into the turn — read off how hard it is turning right now.
+    // Bank into the turn, and roll through a breach.
     const bank = clamp(this.speed * 0.006, 0, 0.5);
-    this.group.rotateZ(Math.sin(this.yaw * 2) * bank * 0.2);
+    this.group.rotateZ(Math.sin(this.yaw * 2) * bank * 0.2
+      + (this._breachRoll || 0));
 
     // Tail beat, faster when it is moving faster. This is the only thing
     // that separates "a shark" from "a shark-shaped rock being dragged".
@@ -407,30 +488,41 @@ export class Shark {
     }
 
     // The wake only exists while the fin is above the surface.
-    const finUp = this.pos.y + S.finTop > this.waterY + 0.05;
+    const finUp = this.pos.y + this.finTop > this.waterY + 0.05;
     this.wake.visible = finUp && this.breachT <= 0;
     if (this.wake.visible) {
       this.wake.position.set(this.pos.x, this.waterY + 0.06, this.pos.z);
       this.wake.rotation.y = this.yaw;
-      const s = 0.6 + clamp(this.speed / 40, 0, 1.6);
+      const s = (0.6 + clamp(this.speed / 40, 0, 1.6)) * this.scale;
       this.wake.scale.set(s, 1, s);
     }
+    void S;
   }
 }
 
 /**
  * The model: a slate-backed, pale-bellied fish with a fin that shows.
  *
- * Built from flat-shaded boxes like everything else in this game. The one
+ * ── IT FACES +Z, and that is not an arbitrary choice ──────────────────────
+ * `update` steers by a yaw and then moves along `(sin yaw, cos yaw)`, which
+ * at yaw 0 is +z. A model authored nose-first down -z therefore swims
+ * TAIL FIRST, for ever, and looks exactly like a shark being dragged
+ * backwards through a lake — which is what the first version did. Every
+ * offset below is measured with the snout at POSITIVE z and the tail at
+ * negative, so "forward" means the same thing to the model and the motion.
+ *
+ * Built from flat-shaded boxes like everything else in this game, at unit
+ * scale; `CFG.shark.scale` sizes the whole animal from one number. The one
  * dimension that is not a matter of taste is the DORSAL FIN's height — it
- * has to clear `CFG.shark.cruiseDepth` or the whole thing swims past
- * invisibly, which is the failure that would make this feature pointless.
+ * has to clear the cruising depth or the whole thing swims past invisibly,
+ * which is the failure that would make this feature pointless.
  */
 function buildSharkModel() {
   const g = new THREE.Group();
-  const back = 0x4a555e;
-  const belly = 0xcfcdc4;
-  const dark = 0x38414a;
+  const back = 0x3f4a54;          // darker than the first pass: it is scarier
+  const belly = 0xc8c6bd;
+  const dark = 0x2b333b;
+  const tooth = 0xeeeae0;
 
   const box = (w, h, d, color, x, y, z, parent) => {
     const m = new THREE.Mesh(
@@ -441,56 +533,71 @@ function buildSharkModel() {
     return m;
   };
 
-  // Body, in four tapering segments from snout to tail root. The model faces
-  // +z, which is the direction `yaw` is measured from.
-  box(1.5, 1.25, 2.2, back, 0, 0, 0.4);
-  box(1.25, 1.05, 1.8, back, 0, -0.02, 2.0);
-  box(0.85, 0.75, 1.4, back, 0, -0.04, 3.3);
-  box(0.5, 0.45, 1.1, back, 0, -0.04, 4.3);
-  // The snout, blunter underneath than on top.
-  box(1.0, 0.7, 1.4, back, 0, 0.1, -1.3);
-  box(0.7, 0.35, 0.9, dark, 0, -0.25, -1.8);
-  // Pale belly, so it reads as a shark from below and from the side.
-  box(1.3, 0.35, 3.6, belly, 0, -0.62, 0.9);
-  // Eyes.
-  for (const s of [-1, 1]) box(0.14, 0.14, 0.14, 0x14181c, s * 0.52, 0.22, -1.1);
-  // Gills.
-  for (let i = 0; i < 4; i++) {
-    box(0.06, 0.5, 0.06, dark, 0.74, 0.0, -0.4 + i * 0.28);
-    box(0.06, 0.5, 0.06, dark, -0.74, 0.0, -0.4 + i * 0.28);
+  // ---- body: tapering segments from the shoulders back to the tail root ---
+  box(1.62, 1.40, 2.3, back, 0, 0, -0.3);
+  box(1.34, 1.16, 1.9, back, 0, -0.03, -2.0);
+  box(0.92, 0.82, 1.5, back, 0, -0.06, -3.4);
+  box(0.54, 0.50, 1.2, back, 0, -0.06, -4.5);
+
+  // ---- head: a wedge that comes to a point, not a brick ------------------
+  box(1.40, 1.15, 1.3, back, 0, 0.04, 1.05);
+  box(1.05, 0.82, 1.0, back, 0, 0.10, 2.05);
+  box(0.62, 0.46, 0.8, back, 0, 0.16, 2.80);
+  /**
+   * THE MOUTH, which is most of what makes it frightening rather than
+   * merely large: a dark recess slung UNDER the snout, the way a shark's
+   * is, with a row of teeth along it. A mouth drawn at the tip reads as a
+   * dolphin's smile; underslung reads as a shark.
+   */
+  box(1.02, 0.42, 1.5, dark, 0, -0.44, 2.05);
+  for (let i = 0; i < 7; i++) {
+    const t = (i + 0.5) / 7;
+    const ox = (t - 0.5) * 0.92;
+    box(0.09, 0.22, 0.09, tooth, ox, -0.30, 2.62);
+    box(0.08, 0.17, 0.08, tooth, ox, -0.58, 2.44);
+  }
+  // Eyes, set wide and forward, and a pale flash under the jaw.
+  for (const s of [-1, 1]) {
+    box(0.16, 0.16, 0.16, 0x0d1013, s * 0.58, 0.22, 1.85);
+  }
+  box(1.08, 0.28, 2.0, belly, 0, -0.62, 1.4);
+
+  // ---- pale belly and gills ---------------------------------------------
+  box(1.40, 0.38, 3.8, belly, 0, -0.72, -1.0);
+  for (let i = 0; i < 5; i++) {
+    const z = 0.9 - i * 0.30;
+    box(0.06, 0.62, 0.06, dark, 0.80, -0.02, z);
+    box(0.06, 0.62, 0.06, dark, -0.80, -0.02, z);
   }
 
   /**
-   * THE DORSAL FIN — the thing you actually see.
+   * THE DORSAL FIN — the thing you actually see from the shore.
    *
-   * Raked backwards, because a vertical triangle reads as a sail. Built as
-   * three stacked slabs that step back as they rise, which at this art
-   * style is indistinguishable from a swept triangle and costs three boxes.
+   * Raked backwards (each slab steps toward -z as it rises) because a
+   * vertical triangle reads as a sail. Three slabs is indistinguishable
+   * from a swept triangle at this art style and costs three boxes.
    */
-  box(0.22, 0.8, 1.25, back, 0, 0.92, 1.0);
-  box(0.18, 0.62, 0.78, back, 0, 1.52, 1.34);
-  box(0.13, 0.42, 0.38, dark, 0, 2.0, 1.66);
+  box(0.24, 0.95, 1.35, back, 0, 1.02, -0.85);
+  box(0.19, 0.70, 0.85, back, 0, 1.70, -1.25);
+  box(0.14, 0.48, 0.42, dark, 0, 2.22, -1.60);
 
   /**
-   * Pectoral fins — and the size of these is not a matter of taste.
-   *
-   * The first pass made them three units across on a body one and a half
+   * Pectoral fins, and the size of these is not a matter of taste either.
+   * An early pass made them three units across on a body one and a half
    * wide, and rendered they were two grey slabs with a fish somewhere
-   * between them. Every fin on this model is now smaller than the body it
-   * hangs off, which is both correct and the only way the silhouette reads
-   * as an animal rather than as an aircraft.
+   * between them. Every fin is smaller than the body it hangs off.
    */
   for (const s of [-1, 1]) {
-    const f = box(0.95, 0.1, 0.55, back, s * 0.8, -0.38, 1.25);
-    f.rotation.z = s * 0.3;
-    f.rotation.y = s * -0.4;
-  }
-  // A small second dorsal and the pelvic pair, which is most of what makes
-  // the silhouette read as a shark rather than as a dolphin.
-  box(0.11, 0.26, 0.34, back, 0, 0.56, 3.6);
-  for (const s of [-1, 1]) {
-    const f = box(0.45, 0.09, 0.3, back, s * 0.34, -0.4, 3.3);
+    const f = box(1.05, 0.11, 0.62, back, s * 0.86, -0.42, -0.9);
     f.rotation.z = s * 0.32;
+    f.rotation.y = s * 0.42;
+  }
+  // Second dorsal and the pelvic pair — the detail that separates a shark
+  // silhouette from a dolphin's.
+  box(0.12, 0.30, 0.38, back, 0, 0.60, -3.7);
+  for (const s of [-1, 1]) {
+    const f = box(0.48, 0.10, 0.32, back, s * 0.36, -0.44, -3.4);
+    f.rotation.z = s * 0.34;
   }
 
   /**
@@ -498,20 +605,22 @@ function buildSharkModel() {
    * parented here rather than to the body.
    */
   const tail = new THREE.Group();
-  tail.position.set(0, 0, 4.8);
+  tail.position.set(0, 0, -4.7);
   g.add(tail);
-  box(0.26, 0.28, 0.9, back, 0, 0, 0.4, tail);
+  // A long caudal peduncle, so the fin grows out of the body instead of
+  // floating behind it — the first pass left a visible gap at this joint.
+  box(0.30, 0.34, 1.5, back, 0, 0, -0.55, tail);
   /**
    * Caudal fin: a long upper lobe and a short lower one, both raked hard
    * back. The asymmetry is the shark-specific part — an even fork is a
    * tuna — and the rake is what stops it reading as a rudder.
    */
-  const up = box(0.14, 1.35, 0.75, back, 0, 0.62, 1.05, tail);
-  up.rotation.x = -0.6;
-  const up2 = box(0.12, 0.55, 0.35, dark, 0, 1.35, 1.5, tail);
-  up2.rotation.x = -0.6;
-  const lo = box(0.14, 0.7, 0.5, back, 0, -0.38, 0.95, tail);
-  lo.rotation.x = 0.5;
+  const up = box(0.16, 1.85, 0.85, back, 0, 0.72, -1.05, tail);
+  up.rotation.x = 0.66;
+  const up2 = box(0.14, 0.7, 0.4, dark, 0, 1.62, -1.62, tail);
+  up2.rotation.x = 0.66;
+  const lo = box(0.16, 0.9, 0.55, back, 0, -0.46, -0.96, tail);
+  lo.rotation.x = -0.55;
 
   g.userData.tailPivot = tail;
   return g;
