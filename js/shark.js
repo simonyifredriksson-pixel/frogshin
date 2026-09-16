@@ -38,9 +38,9 @@
  * whether you went in close to it or across the bay from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v147';
-import { CFG } from './config.js?v=v147';
-import { clamp } from './util.js?v=v147';
+import * as THREE from '../lib/three.module.js?v=v148';
+import { CFG } from './config.js?v=v148';
+import { clamp } from './util.js?v=v148';
 
 const _v = new THREE.Vector3();
 

@@ -9,12 +9,12 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v147';
-import { CFG } from './config.js?v=v147';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v147';
-import { findMap } from './maps.js?v=v147';
-import { Terrain, CollisionWorld } from './collision.js?v=v147';
-import { Shark } from './shark.js?v=v147';
+import * as THREE from '../lib/three.module.js?v=v148';
+import { CFG } from './config.js?v=v148';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v148';
+import { findMap } from './maps.js?v=v148';
+import { Terrain, CollisionWorld } from './collision.js?v=v148';
+import { Shark } from './shark.js?v=v148';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -84,6 +84,84 @@ const CITY = {
   /** Parked cars: municipal whites and silvers, one taxi yellow. */
   cars: [0xd8d8d2, 0xb4b8bc, 0x8a9098, 0x3f4a5c, 0xc4483c, 0xe8b93a, 0x4a5a48],
 };
+/**
+ * ═══ KATAKANA, DRAWN AS BOXES ══════════════════════════════════════════════
+ *
+ * Nothing in this game is textured, so a sign that says something has to be
+ * built out of the same boxes everything else is. Each character is a handful
+ * of STROKES on a unit square — `[x, y, width, height, rotation?]`, origin
+ * bottom-left — which is very nearly how the characters are written anyway:
+ * katakana are two to four straight strokes each, which is exactly why they
+ * survive being drawn this way when kanji would come out as mush.
+ *
+ * They are stylised, not typographically correct, and they are meant to be
+ * read at the distance you read a sign across a street from — where the job
+ * is "that is Japanese writing", not "that is a well-cut 明朝".
+ */
+export const KANA = {
+  'ラ': [[0.52, 0.86, 0.60, 0.12], [0.50, 0.60, 0.82, 0.12],
+    [0.74, 0.32, 0.12, 0.46]],
+  'ー': [[0.50, 0.50, 0.86, 0.13]],
+  'メ': [[0.50, 0.50, 0.98, 0.12, -0.72], [0.56, 0.44, 0.72, 0.12, 0.86]],
+  'ン': [[0.28, 0.76, 0.36, 0.11, -0.5], [0.54, 0.44, 0.96, 0.11, 0.62]],
+  'シ': [[0.24, 0.80, 0.30, 0.10, -0.35], [0.24, 0.52, 0.30, 0.10, -0.35],
+    [0.56, 0.42, 0.92, 0.11, 0.66]],
+  'ネ': [[0.46, 0.93, 0.34, 0.10], [0.50, 0.72, 0.80, 0.11],
+    [0.52, 0.40, 0.12, 0.48], [0.32, 0.30, 0.44, 0.10, 0.5]],
+  'マ': [[0.50, 0.84, 0.82, 0.12], [0.38, 0.52, 0.58, 0.11, -0.7],
+    [0.60, 0.30, 0.50, 0.11, 0.6]],
+  'ビ': [[0.38, 0.52, 0.11, 0.74], [0.56, 0.86, 0.44, 0.11],
+    [0.54, 0.16, 0.68, 0.11], [0.86, 0.88, 0.09, 0.18],
+    [0.98, 0.88, 0.09, 0.18]],
+  'ル': [[0.30, 0.44, 0.11, 0.60], [0.58, 0.46, 0.11, 0.52],
+    [0.74, 0.72, 0.11, 0.34, 0.35]],
+  'ス': [[0.50, 0.86, 0.82, 0.12], [0.56, 0.52, 0.64, 0.11, 0.6],
+    [0.40, 0.28, 0.54, 0.11, -0.7]],
+  'カ': [[0.44, 0.82, 0.70, 0.11], [0.64, 0.46, 0.11, 0.62],
+    [0.34, 0.36, 0.11, 0.54, 0.5]],
+  'オ': [[0.50, 0.88, 0.72, 0.11], [0.56, 0.48, 0.11, 0.74],
+    [0.36, 0.46, 0.50, 0.11, 0.55]],
+  'ケ': [[0.40, 0.88, 0.44, 0.11, 0.4], [0.52, 0.66, 0.72, 0.11],
+    [0.62, 0.36, 0.11, 0.52]],
+  'コ': [[0.50, 0.86, 0.76, 0.12], [0.84, 0.56, 0.12, 0.72],
+    [0.50, 0.20, 0.76, 0.12]],
+  'ヒ': [[0.40, 0.54, 0.11, 0.68], [0.58, 0.84, 0.42, 0.11],
+    [0.52, 0.16, 0.72, 0.11]],
+  'テ': [[0.50, 0.90, 0.64, 0.11], [0.50, 0.66, 0.84, 0.11],
+    [0.54, 0.32, 0.11, 0.50]],
+  'レ': [[0.32, 0.52, 0.11, 0.72], [0.56, 0.24, 0.54, 0.11],
+    [0.76, 0.50, 0.11, 0.42]],
+  'ゲ': [[0.36, 0.88, 0.42, 0.11, 0.4], [0.48, 0.66, 0.68, 0.11],
+    [0.58, 0.36, 0.11, 0.52], [0.86, 0.90, 0.09, 0.18],
+    [0.98, 0.90, 0.09, 0.18]],
+  'ム': [[0.40, 0.62, 0.52, 0.11, -0.6], [0.44, 0.34, 0.52, 0.11, 0.55],
+    [0.56, 0.16, 0.74, 0.11]],
+  'バ': [[0.34, 0.50, 0.11, 0.66, 0.18], [0.58, 0.50, 0.11, 0.74, -0.14],
+    [0.86, 0.88, 0.09, 0.18], [0.98, 0.88, 0.09, 0.18]],
+  'ホ': [[0.50, 0.88, 0.76, 0.11], [0.50, 0.44, 0.11, 0.76],
+    [0.28, 0.40, 0.34, 0.10, 0.6], [0.72, 0.40, 0.34, 0.10, -0.6]],
+};
+
+/**
+ * The ads themselves. Ramen, cinema, beer, sushi, karaoke, coffee, games —
+ * the signage of a real ward, which is mostly food and mostly katakana.
+ *
+ * `icon` is drawn beside the word on the wide rooftop boards, where there is
+ * room for one; the narrow hanging banners are text only.
+ */
+export const CITY_ADS = [
+  { word: 'ラーメン', bg: 0xd8382c, fg: 0xfff3dc, icon: 'bowl' },
+  { word: 'シネマ', bg: 0x2b2f7a, fg: 0xffd84a, icon: 'film' },
+  { word: 'ビール', bg: 0xe8a81c, fg: 0x33230a, icon: 'glass' },
+  { word: 'スシ', bg: 0x10463c, fg: 0xf2e9d8, icon: 'bowl' },
+  { word: 'カラオケ', bg: 0x9b2fb0, fg: 0xffe9ff, icon: 'none' },
+  { word: 'コーヒー', bg: 0x54301c, fg: 0xf0dcb8, icon: 'glass' },
+  { word: 'テレビ', bg: 0x1e78b4, fg: 0xeaf6ff, icon: 'film' },
+  { word: 'ゲーム', bg: 0x1d8f5a, fg: 0xf0ffe8, icon: 'none' },
+  { word: 'バー', bg: 0x7a1030, fg: 0xffd9a0, icon: 'glass' },
+  { word: 'ホテル', bg: 0x2a4f8f, fg: 0xffffff, icon: 'none' },
+];
+
 const ROOF_EAVE = 0.78;
 
 /** Collects transforms + colours, then emits one InstancedMesh. */
@@ -1412,11 +1490,22 @@ export class World {
     }
     this.solid(cx, g + h + 3.3, cz, tw, 0.9, tw, 0x8c9096, 'stone');
 
-    // A rooftop billboard on a third of them: the only saturated colour
-    // anything above ten storeys has.
+    /**
+     * A rooftop HOARDING on a third of them, facing the street with an ad
+     * on it. It is the only saturated colour anything above ten storeys
+     * has, and at night it is what you navigate a skyline by.
+     */
     if (R() < 0.34) {
-      const bc = CITY.signs[Math.floor(R() * CITY.signs.length)];
-      this.glow(cx, g + h + 3.6, cz + d * 0.76, w * 0.72, 2.3, 0.16, bc);
+      const ad = CITY_ADS[Math.floor(R() * CITY_ADS.length)];
+      const face = R() < 0.5 ? 1 : -1;
+      const bw = Math.min(w * 0.82, 7.5);
+      this._adPanel(cx, g + h + 3.8, cz + face * (d + 0.4),
+        face > 0 ? 0 : Math.PI, bw, 2.2, ad, false);
+      // Legs, so it stands on the roof rather than floating over it.
+      for (const o of [-bw * 0.7, bw * 0.7]) {
+        this.deco(cx + o, g + h + 1.5, cz + face * (d + 0.4),
+          0.12, 1.2, 0.12, 0x2a2e34);
+      }
     }
 
     /**
@@ -1429,12 +1518,16 @@ export class World {
      * from the pavement, which is where the game is played.
      */
     if (R() < 0.5) {
-      const sc = CITY.signs[Math.floor(R() * CITY.signs.length)];
-      const sh = Math.min(h * 0.42, 9 + R() * 7);
-      const top = g + h - 2 - R() * (h * 0.3);
-      const ex = R() < 0.5 ? 1 : -1, ez = R() < 0.5 ? 1 : -1;
-      this.glow(cx + ex * (w * 0.84), top - sh * 0.5, cz + ez * (d + 0.3),
-        0.55, sh * 0.5, 0.14, sc);
+      const ad = CITY_ADS[Math.floor(R() * CITY_ADS.length)];
+      // Tall enough for the word, and no taller: a banner sized by the
+      // building rather than by its text ends up with four characters
+      // rattling around in nine storeys of empty board.
+      const sh = Math.min(h * 0.42, ad.word.length * 1.5 + 0.8);
+      const top = g + h - 2 - R() * (h * 0.25);
+      const ez = R() < 0.5 ? 1 : -1;
+      this._adPanel(cx + (R() < 0.5 ? 1 : -1) * (w * 0.8),
+        top - sh * 0.5, cz + ez * (d + 0.35),
+        ez > 0 ? 0 : Math.PI, 0.8, sh * 0.5, ad, true);
     }
 
     /**
@@ -1512,16 +1605,22 @@ export class World {
           nx ? 0.6 : uw * 0.88, 0.12, nz ? 0.6 : uw * 0.88,
           R() < 0.5 ? 0xc4483c : 0x2f7f8a);
 
-        // A vertical sign board, hung off the corner and most of the height
-        // of the building. These are the colour in the whole ward.
+        /**
+         * A vertical sign hung off the corner, with the shop's trade
+         * written down it. These are the colour in the whole ward, and at
+         * street level they are the ones you actually read.
+         */
         if (R() < 0.72) {
-          const col = CITY.signs[Math.floor(R() * CITY.signs.length)];
-          const sh = h * (0.4 + R() * 0.34);
-          this.glow(
-            px + nx * (dep + 0.35) + (nx ? 0 : uw * 0.84),
-            g + h - sh * 0.5,
-            pz + nz * (dep + 0.35) + (nz ? 0 : uw * 0.84),
-            nx ? 0.12 : 0.5, sh * 0.5, nz ? 0.5 : 0.12, col);
+          const ad = CITY_ADS[Math.floor(R() * CITY_ADS.length)];
+          const sh = Math.min(h * 0.72, ad.word.length * 1.35 + 0.7);
+          // Facing out along the frontage this unit belongs to.
+          const yaw = nz > 0 ? 0 : (nz < 0 ? Math.PI
+            : (nx > 0 ? Math.PI * 0.5 : -Math.PI * 0.5));
+          this._adPanel(
+            px + nx * (dep + 0.4) + (nx ? 0 : uw * 0.84),
+            g + h - sh * 0.5 - 0.4,
+            pz + nz * (dep + 0.4) + (nz ? 0 : uw * 0.84),
+            yaw, 0.7, sh * 0.5, ad, true);
         }
       }
     }
@@ -2312,6 +2411,104 @@ export class World {
     // And a light at the point, which is what you actually see at dusk.
     this.deco(cx + 30, 40, cz - 30, 2.2, 9, 2.2, 0xe8e2d2);
     this.lantern(cx + 30, 51, cz - 30, 0xffe08a);
+  }
+
+  /**
+   * ═══ AN ADVERTISEMENT ═══════════════════════════════════════════════════
+   *
+   * A lit board with Japanese writing on it, and optionally a little picture
+   * of what it is selling.
+   *
+   * All of it goes in the `glow` batch: an advertising hoarding at night is
+   * backlit, and a sign you cannot read after dark is not a sign. That also
+   * means the whole thing — board, border, every stroke of every character —
+   * costs nothing but instances in a batch that was already being drawn.
+   *
+   * `yaw` turns the board about Y; at 0 it faces +z. Strokes are placed in
+   * the board's own plane through `put`, so the layout code never has to
+   * think about which way the thing is pointing.
+   *
+   * @param vertical stack the characters top to bottom, as a hanging banner
+   *                 does. Only `ー` changes shape for it — a long-vowel mark
+   *                 is drawn along the line of writing, so it is a bar
+   *                 across the text horizontally and down it vertically.
+   */
+  _adPanel(cx, cy, cz, yaw, hw, hh, ad, vertical) {
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    /** Place a box at (u = across, v = up) in the board's plane. */
+    const put = (u, v, w, h, d, col, rot) => {
+      this.glow(cx + u * c + d * s, cy + v, cz - u * s + d * c,
+        w * 0.5, h * 0.5, 0.06, col, yaw, 0, rot || 0);
+    };
+
+    // The board, and a darker frame so it reads as a panel and not a lamp.
+    this.glow(cx, cy, cz, hw, hh, 0.1, ad.bg, yaw);
+    const edge = 0x1b1a1e;
+    put(0, hh - 0.08, hw * 2, 0.16, 0.12, edge);
+    put(0, -hh + 0.08, hw * 2, 0.16, 0.12, edge);
+    put(-hw + 0.08, 0, 0.16, hh * 2, 0.12, edge);
+    put(hw - 0.08, 0, 0.16, hh * 2, 0.12, edge);
+
+    const word = ad.word;
+    const n = word.length;
+    // Leave room for the icon on a wide board that has one.
+    const hasIcon = !vertical && ad.icon && ad.icon !== 'none' && hw > hh * 1.6;
+    const textW = (hw * 2 - 0.5) * (hasIcon ? 0.72 : 1);
+    const textL = hasIcon ? -hw + 0.25 + (hw * 2 - 0.5) * 0.28 : -hw + 0.25;
+
+    const cell = vertical
+      ? Math.min((hh * 2 - 0.5) / n, hw * 1.5)
+      : Math.min(textW / n, hh * 1.5);
+
+    for (let i = 0; i < n; i++) {
+      const ch = word[i];
+      let strokes = KANA[ch];
+      if (!strokes) continue;
+      // The long-vowel mark follows the line of writing.
+      if (vertical && ch === 'ー') strokes = [[0.5, 0.5, 0.14, 0.86]];
+      const u0 = vertical
+        ? -cell * 0.5
+        : textL + (i + 0.5) * (textW / n) - cell * 0.5;
+      const v0 = vertical
+        ? hh - 0.3 - (i + 1) * cell
+        : -cell * 0.5;
+      for (const st of strokes) {
+        put(u0 + st[0] * cell, v0 + st[1] * cell,
+          st[2] * cell, st[3] * cell, 0.1, ad.fg, st[4] || 0);
+      }
+    }
+
+    if (hasIcon) this._adIcon(put, ad, -hw + 0.25 + (hw * 2 - 0.5) * 0.14, 0,
+      Math.min(hh * 1.5, (hw * 2 - 0.5) * 0.24));
+  }
+
+  /** A small picture of what is being sold, in the board's own plane. */
+  _adIcon(put, ad, u, v, size) {
+    const k = size * 0.5;
+    if (ad.icon === 'bowl') {
+      // A ramen bowl: a tapered body, a rim, and three curls of steam.
+      put(u, v - k * 0.25, k * 1.5, k * 0.9, 0.1, ad.fg);
+      put(u, v + k * 0.25, k * 1.9, k * 0.22, 0.1, ad.fg);
+      put(u, v - k * 0.85, k * 0.7, k * 0.2, 0.1, ad.fg);
+      for (let i = -1; i <= 1; i++) {
+        put(u + i * k * 0.5, v + k * 0.85, k * 0.16, k * 0.5, 0.1, ad.fg,
+          i * 0.35);
+      }
+    } else if (ad.icon === 'film') {
+      // A strip of film: a dark band with sprocket holes down both edges.
+      put(u, v, k * 1.7, k * 2.0, 0.1, ad.fg);
+      for (let i = -2; i <= 2; i++) {
+        put(u - k * 0.62, v + i * k * 0.36, k * 0.24, k * 0.2, 0.14, ad.bg);
+        put(u + k * 0.62, v + i * k * 0.36, k * 0.24, k * 0.2, 0.14, ad.bg);
+      }
+      put(u, v, k * 0.7, k * 1.4, 0.14, ad.bg);
+    } else if (ad.icon === 'glass') {
+      // A glass: a tapered body on a stem and a foot.
+      put(u, v + k * 0.45, k * 1.1, k * 1.0, 0.1, ad.fg);
+      put(u, v - k * 0.25, k * 0.22, k * 0.5, 0.1, ad.fg);
+      put(u, v - k * 0.6, k * 0.9, k * 0.2, 0.1, ad.fg);
+      put(u, v + k * 0.82, k * 1.2, k * 0.2, 0.14, ad.bg);
+    }
   }
 
   /**
