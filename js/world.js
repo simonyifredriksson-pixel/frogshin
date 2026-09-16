@@ -9,12 +9,12 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v146';
-import { CFG } from './config.js?v=v146';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v146';
-import { findMap } from './maps.js?v=v146';
-import { Terrain, CollisionWorld } from './collision.js?v=v146';
-import { Shark } from './shark.js?v=v146';
+import * as THREE from '../lib/three.module.js?v=v147';
+import { CFG } from './config.js?v=v147';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v147';
+import { findMap } from './maps.js?v=v147';
+import { Terrain, CollisionWorld } from './collision.js?v=v147';
+import { Shark } from './shark.js?v=v147';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -232,7 +232,20 @@ export class World {
           blob:  new Batch(new THREE.IcosahedronGeometry(1, 0), this._mat()),
           rock:  new Batch(new THREE.DodecahedronGeometry(1, 0), this._mat()),
           post:  new Batch(new THREE.CylinderGeometry(1, 1, 1, 7), this._mat()),
-
+          /**
+           * THINGS THAT ARE LIT, rather than things that are lit UP.
+           *
+           * An unlit material, so a window with a bulb behind it, a shop
+           * sign or a paper lantern keeps its colour whatever the sun is
+           * doing. It exists because Shizuka Ward is at night: everything
+           * in the `box` batch is Lambert-shaded and goes the colour of the
+           * moon after dark, which would have turned a city full of lights
+           * into a city full of grey rectangles that used to be lights.
+           *
+           * One extra instanced draw for the whole map.
+           */
+          glow:  new Batch(new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshBasicMaterial({})),
         };
       }],
       ['Carving the land', () => this._buildTerrainMesh()],
@@ -243,9 +256,11 @@ export class World {
         this._buildSpawns();
         for (const k in this.batches) {
           // Foliage skips shadow casting — it is the most expensive caster
-          // and contributes the least to readability.
-          const cast = k !== 'blob' && k !== 'pine';
-          this.batches[k].mesh = this.batches[k].build(this.scene, cast, true);
+          // and contributes the least to readability. A light source casts
+          // nothing and receives nothing; it is the thing doing the lighting.
+          const cast = k !== 'blob' && k !== 'pine' && k !== 'glow';
+          this.batches[k].mesh = this.batches[k].build(
+            this.scene, cast, k !== 'glow');
         }
         this.collision.bake();
       }],
@@ -400,9 +415,22 @@ export class World {
     const size = this.map.waterSize || CFG.world.size;
     const geo = new THREE.PlaneGeometry(size, size, 40, 40);
     geo.rotateX(-Math.PI / 2);
+    /**
+     * A map may darken its own water.
+     *
+     * The default is a bright daylight lake with a strong emissive term, and
+     * that term is most of its colour — so under Shizuka Ward's night sky it
+     * came out glowing turquoise while every surface around it had gone to
+     * moonlight. Water does not emit; the emissive is there to keep a
+     * daytime lake from going flat, and a night map wants far less of it.
+     */
     const mat = new THREE.MeshLambertMaterial({
-      color: 0x2f7fa8, transparent: true, opacity: 0.72,
-      emissive: 0x0d3348, emissiveIntensity: 0.5,
+      color: this.map.waterColor || 0x2f7fa8,
+      transparent: true, opacity: 0.72,
+      emissive: this.map.waterEmissive === undefined
+        ? 0x0d3348 : this.map.waterEmissive,
+      emissiveIntensity: this.map.waterEmissiveIntensity === undefined
+        ? 0.5 : this.map.waterEmissiveIntensity,
       // DoubleSide matters: without it the surface vanishes when viewed from
       // below and being underwater looks like being in empty blue space.
       side: THREE.DoubleSide,
@@ -556,6 +584,18 @@ export class World {
   /** Visual-only box (no collision) — trim, banners, decoration. */
   deco(cx, cy, cz, hx, hy, hz, color, rotY = 0, rotX = 0, rotZ = 0) {
     this.batches.box.add(cx, cy, cz, hx * 2, hy * 2, hz * 2, color, rotY, rotX, rotZ);
+  }
+
+  /**
+   * Deco that IS a light: unlit, so it keeps its colour after dark.
+   *
+   * Use it for anything that would be glowing rather than reflecting — a
+   * window with someone's lamp on behind it, a shop sign, the paper
+   * lantern over a ramen cart, a vending machine's front. Everything else
+   * stays on `deco` and takes the moonlight like the rest of the world.
+   */
+  glow(cx, cy, cz, hx, hy, hz, color, rotY = 0, rotX = 0, rotZ = 0) {
+    this.batches.glow.add(cx, cy, cz, hx * 2, hy * 2, hz * 2, color, rotY, rotX, rotZ);
   }
 
   /** Pagoda-style flared roof: a 4-sided pyramid plus an overhanging slab. */
@@ -1299,8 +1339,7 @@ export class World {
      * untextured — and at this scale a grid of small dark quads is exactly
      * what a texture would have drawn anyway.
      */
-    const lit = 0xffd9a0;
-    const dark = 0x353a45;
+    const dark = 0x1b202a;        // an unlit window at night is a hole
     for (let f = 0; f < floors; f++) {
       const y = g + f * fh + fh * 0.55;
       /**
@@ -1327,15 +1366,33 @@ export class World {
               0.2, 0.09, spread * 0.96, 0x7a7c78);
           }
 
+          /**
+           * SOMEBODY IS STILL IN. A fifth of the windows have a light on,
+           * up from one in sixteen when the ward was an afternoon.
+           *
+           * A lit window goes in the `glow` batch so it stays the colour of
+           * a bulb after dark instead of being shaded down to the colour of
+           * the wall it is set into. On a nine-by-nine ward that is a few
+           * thousand small warm rectangles, which is most of what makes the
+           * skyline read as a city somebody left rather than a ruin — and
+           * all of it is one extra draw call.
+           */
           const cols = long ? Math.max(3, Math.round(spread / 2.2)) : 2;
           for (let i = 0; i < cols; i++) {
             const t = (i + 0.5) / cols;
             const off = (t - 0.5) * spread * 1.86;
-            const col = R() < 0.06 ? lit : dark;
-            if (ax === 'z') {
-              this.deco(cx + off, y, cz + s * (depth + 0.07), 0.66, 0.8, 0.06, col);
+            const on = R() < 0.2;
+            const px = ax === 'z' ? cx + off : cx + s * (depth + 0.07);
+            const pz = ax === 'z' ? cz + s * (depth + 0.07) : cz + off;
+            const hx = ax === 'z' ? 0.66 : 0.06;
+            const hz = ax === 'z' ? 0.06 : 0.66;
+            if (on) {
+              // Not every bulb in a city is the same bulb.
+              const warm = [0xffd9a0, 0xffe6bd, 0xcfe4ff, 0xffcf7a][
+                Math.floor(R() * 4)];
+              this.glow(px, y, pz, hx, 0.8, hz, warm);
             } else {
-              this.deco(cx + s * (depth + 0.07), y, cz + off, 0.06, 0.8, 0.66, col);
+              this.deco(px, y, pz, hx, 0.8, hz, dark);
             }
           }
         }
@@ -1359,7 +1416,7 @@ export class World {
     // anything above ten storeys has.
     if (R() < 0.34) {
       const bc = CITY.signs[Math.floor(R() * CITY.signs.length)];
-      this.deco(cx, g + h + 3.6, cz + d * 0.76, w * 0.72, 2.3, 0.16, bc);
+      this.glow(cx, g + h + 3.6, cz + d * 0.76, w * 0.72, 2.3, 0.16, bc);
     }
 
     /**
@@ -1376,7 +1433,7 @@ export class World {
       const sh = Math.min(h * 0.42, 9 + R() * 7);
       const top = g + h - 2 - R() * (h * 0.3);
       const ex = R() < 0.5 ? 1 : -1, ez = R() < 0.5 ? 1 : -1;
-      this.deco(cx + ex * (w * 0.84), top - sh * 0.5, cz + ez * (d + 0.3),
+      this.glow(cx + ex * (w * 0.84), top - sh * 0.5, cz + ez * (d + 0.3),
         0.55, sh * 0.5, 0.14, sc);
     }
 
@@ -1445,8 +1502,11 @@ export class World {
         this.deco(px, g + h + 0.2, pz, hx + 0.22, 0.3, hz + 0.22, 0x6f6c64);
 
         // The shopfront: a dark glazed recess facing the street.
-        this.deco(px + nx * (dep + 0.06), g + 1.5, pz + nz * (dep + 0.06),
-          nx ? 0.06 : uw * 0.78, 1.5, nz ? 0.06 : uw * 0.78, 0x23272e);
+        // A shopfront at night is a lit window, not a dark recess: the
+        // lights are on and nobody went home to turn them off.
+        this.glow(px + nx * (dep + 0.06), g + 1.5, pz + nz * (dep + 0.06),
+          nx ? 0.06 : uw * 0.78, 1.5, nz ? 0.06 : uw * 0.78,
+          R() < 0.75 ? 0xffe8bc : 0x9fd8e8);
         // And a striped awning over it.
         this.deco(px + nx * (dep + 0.55), g + 3.2, pz + nz * (dep + 0.55),
           nx ? 0.6 : uw * 0.88, 0.12, nz ? 0.6 : uw * 0.88,
@@ -1457,7 +1517,7 @@ export class World {
         if (R() < 0.72) {
           const col = CITY.signs[Math.floor(R() * CITY.signs.length)];
           const sh = h * (0.4 + R() * 0.34);
-          this.deco(
+          this.glow(
             px + nx * (dep + 0.35) + (nx ? 0 : uw * 0.84),
             g + h - sh * 0.5,
             pz + nz * (dep + 0.35) + (nz ? 0 : uw * 0.84),
@@ -1675,8 +1735,8 @@ export class World {
             const tz = at + t * (C.road * 0.5 + 1.2);
             this.batches.post.add(tx, g + 2.6, tz, 0.13, 5.2, 0.13, 0x2f3238);
             this.collision.addBox(tx, g + 2.6, tz, 0.2, 2.6, 0.2, 'stone');
-            this.deco(tx, g + 5.0, tz, 0.2, 0.6, 0.2,
-              R() < 0.5 ? 0x3f8f4a : 0xd8483c);
+            this.glow(tx, g + 5.0, tz, 0.2, 0.6, 0.2,
+              R() < 0.5 ? 0x4ee06a : 0xff4a3a);
           }
         }
       }
@@ -1706,7 +1766,7 @@ export class World {
     this.batches.post.add(x, g + 2.8, z, 0.17, 5.6, 0.17, 0x2f3238);
     this.collision.addBox(x, g + 2.8, z, 0.24, 2.8, 0.24, 'stone');
     // The head is the yellow slab the reference hangs off every pole.
-    this.deco(x, g + 5.7, z, 0.75, 0.22, 0.34, 0xe8c23a);
+    this.glow(x, g + 5.7, z, 0.75, 0.22, 0.34, 0xffe2a0);
     if (lit) this.lantern(x, g + 5.5, z, 0xffca6b);
     else this.deco(x, g + 5.5, z, 0.3, 0.2, 0.3, 0xffca6b);
   }
@@ -1716,7 +1776,7 @@ export class World {
     const g = this.groundY + 0.5;
     const col = this.rnd() < 0.5 ? 0xc4483c : 0x2f7f8a;
     this.solid(x, g + 0.95, z, 0.7, 0.95, 0.4, col, 'stone');
-    this.deco(x, g + 1.25, z + 0.44, 0.52, 0.55, 0.06, 0xfff0c4);
+    this.glow(x, g + 1.25, z + 0.44, 0.52, 0.55, 0.06, 0xfff0c4);
     this.deco(x, g + 0.35, z + 0.44, 0.52, 0.12, 0.06, 0x2a2e36);
   }
 
@@ -2156,6 +2216,26 @@ export class World {
     this.solid(gate, B.deck + 2.75, B.z, 0.5, 0.18, B.half, 0xd8483c, 'stone');
 
     /**
+     * AND AN INVISIBLE WALL, right behind the hoarding.
+     *
+     * The barriers say the bridge is shut; this one makes it so. A 2.6-unit
+     * hoarding is a thing a frog can clear — the jump alone reaches 3.6, and
+     * the double jump and the grapple go further — and what is on the other
+     * side is scenery with no ground under it, because the island the span
+     * reaches is past the edge of the heightfield.
+     *
+     * It is deliberately a hand's breadth BEHIND the visible barrier rather
+     * than in front of it, so what you walk into is the thing you can see.
+     * An invisible wall you meet before the obstacle is a bug; one you meet
+     * at the obstacle is the obstacle.
+     *
+     * 20 tall and wider than the carriageway, so it cannot be jumped, hopped
+     * round the railings, or grappled over.
+     */
+    this.collision.addBox(gate + 1.2, B.deck + 10, B.z,
+      0.6, 10, B.half + 2.5, 'stone');
+
+    /**
      * THE SIGNS. Two of them, one facing the city and one facing the
      * bridge, because a sign you can only read from the wrong side is not
      * a sign. Each is a board on two posts with a red bar across it, which
@@ -2232,6 +2312,274 @@ export class World {
     // And a light at the point, which is what you actually see at dusk.
     this.deco(cx + 30, 40, cz - 30, 2.2, 9, 2.2, 0xe8e2d2);
     this.lantern(cx + 30, 51, cz - 30, 0xffe08a);
+  }
+
+  /**
+   * ═══ WHAT EVERYBODY LEFT BEHIND ═════════════════════════════════════════
+   *
+   * The ward with its people taken out an hour ago, rather than a year.
+   *
+   * Every object here is one somebody was USING and did not put away — a
+   * ramen cart with the pot still on, a bicycle leaning where it was left,
+   * crates stacked outside a shop that is still lit, chairs pulled out from
+   * a table. Nothing is broken, tipped over or overgrown, because the
+   * moment you add rubble the question stops being "where did everybody go"
+   * and becomes "what happened here", which is a smaller one.
+   *
+   * It runs LAST, after the streets and the cars, so the pavements it
+   * dresses already exist.
+   */
+  _buildCityLife() {
+    const C = CITY;
+    const R = this.rnd;
+    const half = Math.floor(C.span / 2);
+    const g = this.groundY + 0.5;          // pavement top
+    const pad = C.pitch * 0.5 - C.road * 0.5;
+
+    for (let bx = -half; bx <= half; bx++) {
+      for (let bz = -half; bz <= half; bz++) {
+        const cx = bx * C.pitch, cz = bz * C.pitch;
+        if (Math.max(Math.abs(cx), Math.abs(cz)) > C.reach) continue;
+        if (bx === 0 && bz === 0) continue;             // the plaza has its own
+
+        // Each block dresses the pavement on one or two of its frontages.
+        for (const [nx, nz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+          if (R() > 0.55) continue;
+          // Out on the pavement, a little in from the kerb.
+          const ex = cx + nx * (pad - 2.6);
+          const ez = cz + nz * (pad - 2.6);
+          // Facing the street: the yaw a +z-facing prop needs to look outward.
+          const yaw = Math.atan2(nx, nz);
+          const along = (R() - 0.5) * pad * 1.2;
+          const px = ex + (nx ? 0 : along);
+          const pz = ez + (nz ? along : 0);
+
+          const roll = R();
+          if (roll < 0.22) this._ramenCart(px, g, pz, yaw, R);
+          else if (roll < 0.42) this._streetTable(px, g, pz, yaw, R);
+          else if (roll < 0.60) this._bicycle(px, g, pz, yaw, R);
+          else if (roll < 0.78) this._crateStack(px, g, pz, yaw, R);
+          else this._planter(px, g, pz, R);
+        }
+      }
+    }
+  }
+
+  /**
+   * A RAMEN CART — the yatai the whole "lively" brief hangs off.
+   *
+   * Built to the reference: a slatted wooden cart on one big spoked wheel
+   * and a pair of drop legs, four posts carrying a dark tiled roof, red
+   * noren curtains across the front with white characters on them, a paper
+   * lantern hanging under the eaves, and the counter still laid out — a
+   * stockpot, a pan, stacked bowls, bottles, a chopstick jar.
+   *
+   * The lantern and the noren are in the `glow` batch. At night they are
+   * the thing you see from the end of a street, and a ramen cart you cannot
+   * see is a ramen cart nobody knows is there.
+   *
+   * `yaw` faces the counter at the road. The prop is authored facing +z.
+   */
+  _ramenCart(x, y, z, yaw, R) {
+    const wood = 0x6b4f34, woodDark = 0x4a3724, roof = 0x2b2622;
+    const red = 0xc4382e, steel = 0x8d9298, cream = 0xf0e6cf;
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    /** Local (right, up, forward) -> world, so the cart can be authored flat. */
+    const P = (r, u, f) => [x + r * c + f * s, y + u, z - r * s + f * c];
+    const put = (r, u, f, hr, hu, hf, col, lit) => {
+      const p = P(r, u, f);
+      (lit ? this.glow : this.deco).call(this, p[0], p[1], p[2], hr, hu, hf, col, yaw);
+    };
+    const solidAt = (r, u, f, hr, hu, hf, col) => {
+      const p = P(r, u, f);
+      this.batches.box.add(p[0], p[1], p[2], hr * 2, hu * 2, hf * 2, col, yaw);
+      this.collision.addBox(p[0], p[1], p[2], hr, hu, hf, 'wood');
+    };
+
+    // ---- the body: a slatted box on a chassis ----
+    solidAt(0, 1.05, 0, 1.75, 0.62, 0.85, wood);
+    for (let i = 0; i < 5; i++) {
+      put(0, 0.5 + i * 0.28, 0.87, 1.72, 0.06, 0.03, woodDark);
+    }
+    put(0, 1.72, 0, 1.8, 0.09, 0.9, woodDark);          // worktop
+    // The counter shelf the customers lean on, out over the street.
+    put(0, 1.62, 1.35, 1.8, 0.07, 0.55, wood);
+    for (const r of [-1.55, 1.55]) put(r, 1.05, 1.3, 0.07, 0.55, 0.07, woodDark);
+
+    // ---- wheel one side, drop legs the other ----
+    this.batches.post.add(...P(-1.8, 0.62, -0.1), 1.3, 0.16, 1.3,
+      0x23262b, yaw, 0, Math.PI / 2);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI;
+      const p = P(-1.82, 0.62, -0.1);
+      this.deco(p[0], p[1], p[2], 0.05, 0.58, 0.05, 0x3a3f46, yaw, 0, a);
+    }
+    for (const f of [-0.62, 0.62]) {
+      put(1.55, 0.3, f, 0.07, 0.32, 0.07, 0x3a3f46);
+      put(1.55, 0.02, f, 0.22, 0.04, 0.22, woodDark);
+    }
+    // The pull handles, resting on the ground at the front.
+    for (const r of [-0.55, 0.55]) {
+      put(r, 0.52, -1.95, 0.06, 0.06, 1.15, wood, false);
+    }
+
+    // ---- posts and the roof ----
+    for (const r of [-1.62, 1.62]) {
+      for (const f of [-0.72, 1.28]) put(r, 2.35, f, 0.09, 0.72, 0.09, wood);
+    }
+    put(0, 3.12, 0.3, 1.95, 0.08, 1.5, roof);
+    put(0, 3.34, 0.3, 1.55, 0.16, 1.15, roof);
+    put(0, 3.52, 0.3, 1.0, 0.12, 0.7, roof);
+    // Eave lip, so the roof has an edge rather than stopping.
+    for (const f of [-1.24, 1.84]) put(0, 3.02, f, 1.98, 0.09, 0.1, woodDark);
+
+    /**
+     * THE NOREN: five separate red panels with white characters.
+     *
+     * Separate, with a real gap between them, because one wide red slab is
+     * a curtain and five narrow ones are a NOREN — the split is the whole
+     * silhouette. The characters are two or three white strokes apiece,
+     * which at any distance you will ever see this from is a character;
+     * they are pushed a hand's breadth proud of the cloth so they do not
+     * z-fight with it.
+     */
+    for (let i = 0; i < 5; i++) {
+      const r = (i - 2) * 0.68;
+      put(r, 2.48, 1.36, 0.29, 0.56, 0.035, red, true);
+      put(r, 2.62, 1.31, 0.19, 0.055, 0.02, cream, true);
+      put(r, 2.45, 1.31, 0.13, 0.055, 0.02, cream, true);
+      if (i % 2 === 0) put(r + 0.05, 2.30, 1.31, 0.055, 0.12, 0.02, cream, true);
+    }
+    put(0, 3.06, 1.36, 1.78, 0.07, 0.06, woodDark);     // the rail it hangs from
+
+    /**
+     * THE LANTERN. Hung under the near eave, and the single brightest thing
+     * on the cart — the paper one in the reference is what your eye goes to
+     * first, so it is a light here rather than an orange box.
+     */
+    const lp = P(0.95, 2.45, 1.15);
+    this.glow(lp[0], lp[1], lp[2], 0.3, 0.42, 0.3, 0xffab4a);
+    this.glow(lp[0], lp[1] + 0.46, lp[2], 0.16, 0.06, 0.16, 0x7a3b1e);
+    this.glow(lp[0], lp[1] - 0.46, lp[2], 0.16, 0.06, 0.16, 0x7a3b1e);
+    put(0.95, 2.95, 1.15, 0.03, 0.12, 0.03, 0x2a2018);
+    /**
+     * An anchor WITHOUT a `lantern()`.
+     *
+     * `World.lantern` is not instanced — a sphere, an additive sprite and a
+     * per-frame bob each — and forty carts of them put the ward past seven
+     * hundred draw calls on their own. The glow boxes above already are the
+     * lantern as far as the eye is concerned, so this takes the grapple
+     * point and leaves the cost behind.
+     */
+    this.collision.addAnchor(lp[0], lp[1], lp[2], 1.5);
+
+    // ---- what is still on the counter ----
+    put(-0.55, 2.02, 0.05, 0.42, 0.22, 0.42, steel);            // stockpot
+    put(-0.55, 2.26, 0.05, 0.45, 0.04, 0.45, 0x6f757c);         // its lid
+    put(-0.55, 2.34, 0.05, 0.07, 0.05, 0.07, 0x3a3f46);
+    put(0.5, 1.92, 0.1, 0.3, 0.1, 0.3, steel);                  // a pan
+    put(0.82, 1.92, 0.1, 0.22, 0.03, 0.05, 0x3a3f46);           // its handle
+    for (let i = 0; i < 3; i++) {                               // stacked bowls
+      put(1.25, 1.84 + i * 0.09, 0.45, 0.19, 0.045, 0.19, cream);
+    }
+    put(-1.35, 1.9, 0.5, 0.12, 0.1, 0.12, 0x2f3a2a);            // chopstick jar
+    for (let i = 0; i < 5; i++) {
+      put(-1.35 + (i - 2) * 0.03, 2.08, 0.5, 0.012, 0.12, 0.012, 0xd8c89a);
+    }
+    for (let i = 0; i < 4; i++) {                               // bottles
+      put(-0.1 + i * 0.17, 1.86, 0.62, 0.05, 0.13, 0.05,
+        [0x2a3a22, 0x4a2a1a, 0x1f2a38, 0x3a2a1a][i]);
+    }
+    // A bowl somebody left half-finished, which is the whole brief in one
+    // object: the cart is not closed, it is unattended.
+    put(0.95, 1.74, 1.35, 0.17, 0.05, 0.17, cream);
+    put(0.95, 1.79, 1.35, 0.13, 0.03, 0.13, 0x8a5a2a);
+
+    // A chalkboard leaning against the side.
+    put(1.95, 0.85, 0.2, 0.05, 0.55, 0.42, 0x23262b);
+    put(1.9, 0.85, 0.2, 0.02, 0.46, 0.34, 0x3d4a46);
+
+    this._clear(x, z, 3.4);
+  }
+
+  /** A folding table and two stools, with the cloth still on it. */
+  _streetTable(x, y, z, yaw, R) {
+    const cloth = R() < 0.5 ? 0xc4483c : 0xd8d2c4;
+    const wood = 0x6b4f34;
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    const P = (r, u, f) => [x + r * c + f * s, y + u, z - r * s + f * c];
+    const put = (r, u, f, hr, hu, hf, col) => {
+      const p = P(r, u, f);
+      this.deco(p[0], p[1], p[2], hr, hu, hf, col, yaw);
+    };
+    for (const r of [-0.7, 0.7]) {
+      for (const f of [-0.5, 0.5]) put(r, 0.36, f, 0.06, 0.36, 0.06, wood);
+    }
+    const top = P(0, 0.76, 0);
+    this.batches.box.add(top[0], top[1], top[2], 1.9, 0.1, 1.5, cloth, yaw);
+    this.collision.addBox(top[0], top[1], top[2], 0.95, 0.05, 0.75, 'wood');
+    // The chequer, in a few darker squares rather than a texture.
+    for (let i = 0; i < 6; i++) {
+      const r = ((i % 3) - 1) * 0.55, f = (Math.floor(i / 3) - 0.5) * 0.7;
+      put(r, 0.82, f, 0.24, 0.01, 0.24, 0xa8342c);
+    }
+    // Bowls and a bottle, left where they were.
+    put(-0.4, 0.86, 0.1, 0.16, 0.05, 0.16, 0xf0e6cf);
+    put(0.45, 0.86, -0.15, 0.16, 0.05, 0.16, 0xf0e6cf);
+    put(0.05, 0.93, 0.3, 0.05, 0.14, 0.05, 0x2a3a22);
+    // Two stools, one pushed back.
+    for (const [r, f] of [[-0.55, 1.1], [0.7, 1.35]]) {
+      put(r, 0.28, f, 0.22, 0.28, 0.22, wood);
+      put(r, 0.58, f, 0.26, 0.05, 0.26, 0x8a6a46);
+    }
+    this._clear(x, z, 2.2);
+  }
+
+  /** A bicycle leaning on its stand. */
+  _bicycle(x, y, z, yaw, R) {
+    const frame = [0x2f5a7a, 0x7a2f2f, 0x2f4a32, 0x3a3a3a][Math.floor(R() * 4)];
+    const s = Math.sin(yaw), c = Math.cos(yaw);
+    const P = (r, u, f) => [x + r * c + f * s, y + u, z - r * s + f * c];
+    for (const f of [-0.62, 0.62]) {
+      const p = P(0, 0.36, f);
+      this.batches.post.add(p[0], p[1], p[2], 0.72, 0.09, 0.72,
+        0x1e2126, yaw, 0, Math.PI / 2);
+    }
+    const put = (r, u, f, hr, hu, hf, col, rz) => {
+      const p = P(r, u, f);
+      this.deco(p[0], p[1], p[2], hr, hu, hf, col, yaw, 0, rz || 0);
+    };
+    put(0, 0.5, 0, 0.03, 0.03, 0.62, frame);
+    put(0, 0.62, -0.28, 0.03, 0.22, 0.03, frame, 0.3);
+    put(0, 0.66, 0.45, 0.03, 0.3, 0.03, frame, -0.2);
+    put(0, 0.84, 0.5, 0.26, 0.03, 0.03, 0x23262b);      // handlebars
+    put(0, 0.8, -0.3, 0.07, 0.04, 0.16, 0x23262b);      // saddle
+    put(0, 0.42, 0.2, 0.18, 0.14, 0.2, 0xb8ab8a);       // basket
+    this._clear(x, z, 1.4);
+  }
+
+  /** Crates and bottle cases stacked outside a shop. */
+  _crateStack(x, y, z, yaw, R) {
+    const n = 2 + Math.floor(R() * 3);
+    for (let i = 0; i < n; i++) {
+      const w = 0.42 + R() * 0.12;
+      const ox = (R() - 0.5) * 0.35, oz = (R() - 0.5) * 0.35;
+      const col = [0x7a5a34, 0x6b4f34, 0x3f5a6a, 0x5a3a2a][Math.floor(R() * 4)];
+      this.solid(x + ox, y + 0.3 + i * 0.6, z + oz, w, 0.3, w, col, 'wood');
+      this.deco(x + ox, y + 0.6 + i * 0.6, z + oz, w * 0.9, 0.03, w * 0.9, 0x2a2018);
+    }
+    this._clear(x, z, 1.4);
+  }
+
+  /** A planter, still watered an hour ago. */
+  _planter(x, y, z, R) {
+    this.solid(x, y + 0.3, z, 0.6, 0.3, 0.6, 0x6b6860, 'stone');
+    this.deco(x, y + 0.78, z, 0.5, 0.26, 0.5, 0x3f6a3c);
+    if (R() < 0.5) {
+      this.batches.post.add(x, y + 1.5, z, 0.09, 1.5, 0.09, 0x4a3a28);
+      this.batches.blob.add(x, y + 2.4, z, 1.1, 1.0, 1.1, 0x3a6a38);
+    }
+    this._clear(x, z, 1.3);
   }
 
   /**

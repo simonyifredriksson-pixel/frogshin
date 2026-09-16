@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v146';
-import { clamp, smoothstep } from './util.js?v=v146';
+import { CFG } from './config.js?v=v147';
+import { clamp, smoothstep } from './util.js?v=v147';
 
 export const MAPS = [
   {
@@ -288,6 +288,14 @@ export const MAPS = [
      */
     waterSize: 1600,
     /**
+     * A lake at night: dark, with just enough of the city's glow in it to
+     * read as water rather than as a hole. The default emissive is tuned
+     * for a daytime lake and under this sky it glowed turquoise.
+     */
+    waterColor: 0x15304a,
+    waterEmissive: 0x08182c,
+    waterEmissiveIntensity: 0.35,
+    /**
      * The ground IS the road. Terrain is asphalt everywhere, and a block is
      * simply a place where a pavement was laid on top of it — so the grid
      * can never disagree with itself.
@@ -315,19 +323,40 @@ export const MAPS = [
      * island beyond it, which are the point. 620 keeps the haze on the far
      * shore without erasing it.
      */
+    /**
+     * NIGHT, and the whole map is tuned around one tension.
+     *
+     * "Lively, and abandoned an hour ago" is a lighting problem before it is
+     * anything else: the lights have to be ON and numerous, and you still
+     * have to be able to see a frog coming. So the darkness is shallow —
+     * a strong cool ambient rather than a black sky — and everything that
+     * is meant to be a LIGHT goes in the unlit `glow` batch instead, where
+     * the sun cannot dim it. That is what "bright but not too bright"
+     * buys: the city is legible everywhere and the lamps still read as
+     * lamps, rather than a black map with headlights in it.
+     */
     atmosphere: {
       fogNear: 60,
       fogFar: 620,
-      fogColor: 0x6a7a92,
-      skyTop: 0x1f3a63,
-      skyMid: 0x4a6a96,
-      skyBottom: 0x9fb4cc,
-      cloudCount: 22,
+      fogColor: 0x121b2e,
+      skyTop: 0x05080f,
+      skyMid: 0x0d1424,
+      skyBottom: 0x22304c,      // the city's own glow on the underside of the sky
+      cloudCount: 12,
       leaves: false,
-      sunColor: 0xffe2c0,
-      sunIntensity: 1.05,
-      ambient: 0x8fa6c4,
-      ambientIntensity: 0.78,
+      // Moonlight: cool, low, and coming from somewhere rather than nowhere.
+      sunColor: 0x9db4e0,
+      sunIntensity: 0.30,
+      /**
+       * A strong ambient is doing most of the work. Dropping it to what a
+       * real night would be makes the ward unplayable — you cannot see a
+       * frog against an unlit wall — and the brief asked for lively, not
+       * pitch black. This keeps every surface readable while leaving the
+       * lamps, signs and windows visibly brighter than everything round
+       * them, which is what sells it as night.
+       */
+      ambient: 0x4a5c8c,
+      ambientIntensity: 0.82,
     },
     groundY: 6,
     features: [
@@ -337,6 +366,8 @@ export const MAPS = [
       ['Hanging the skyways', (w) => w._buildCitySkyways()],
       ['Walling the waterfront', (w) => w._buildCityShore()],
       ['Closing the bridge', (w) => w._buildCityBridge()],
+      // Last, so the pavements it dresses already exist.
+      ['Leaving in a hurry', (w) => w._buildCityLife()],
       ['Something in the lake', (w) => w._buildCityShark()],
     ],
     flats: [],
