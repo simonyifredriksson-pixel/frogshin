@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v144';
-import { clamp, smoothstep } from './util.js?v=v144';
+import { CFG } from './config.js?v=v145';
+import { clamp, smoothstep } from './util.js?v=v145';
 
 export const MAPS = [
   {
@@ -337,6 +337,7 @@ export const MAPS = [
       ['Hanging the skyways', (w) => w._buildCitySkyways()],
       ['Walling the waterfront', (w) => w._buildCityShore()],
       ['Closing the bridge', (w) => w._buildCityBridge()],
+      ['Something in the lake', (w) => w._buildCityShark()],
     ],
     flats: [],
     basins: [],

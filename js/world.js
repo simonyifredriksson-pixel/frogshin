@@ -9,11 +9,12 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v144';
-import { CFG } from './config.js?v=v144';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v144';
-import { findMap } from './maps.js?v=v144';
-import { Terrain, CollisionWorld } from './collision.js?v=v144';
+import * as THREE from '../lib/three.module.js?v=v145';
+import { CFG } from './config.js?v=v145';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v145';
+import { findMap } from './maps.js?v=v145';
+import { Terrain, CollisionWorld } from './collision.js?v=v145';
+import { Shark } from './shark.js?v=v145';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -275,6 +276,10 @@ export class World {
    * does not touch its texture, so this is already safe.
    */
   dispose() {
+    // The shark owns its own meshes, and the arena rebuilds the world on
+    // every map change — leaving it behind would put a second one in the
+    // lake each time somebody voted for the city again.
+    if (this.shark) { this.shark.dispose(); this.shark = null; }
     const seen = new Set();
     const free = (o) => {
       if (!o || seen.has(o)) return;
@@ -2227,6 +2232,38 @@ export class World {
     // And a light at the point, which is what you actually see at dusk.
     this.deco(cx + 30, 40, cz - 30, 2.2, 9, 2.2, 0xe8e2d2);
     this.lantern(cx + 30, 51, cz - 30, 0xffe08a);
+  }
+
+  /**
+   * Put the shark in the lake.
+   *
+   * `shoreAt` is the Chebyshev distance of the actual waterline, solved
+   * from the map's own height function rather than written down twice —
+   * the shelf has been retuned once already, and a shark patrolling a
+   * shoreline the map no longer has would cruise across the beach.
+   */
+  _buildCityShark() {
+    const W = CFG.world.waterLevel;
+    const start = CITY.reach + CITY.pitch * 0.5;
+    const limit = CFG.world.size * 0.5;
+    /**
+     * Both lines are SOLVED from the map's own height function rather than
+     * written down a second time. The shelf has already been retuned once,
+     * and a shark patrolling a shoreline the map no longer has would cruise
+     * across the beach.
+     *
+     *   shore   where the water starts — what the patrol hugs.
+     *   swim    where it is `draft` deep — the closest the shark may ever
+     *           come to the island, so it physically cannot beach itself.
+     */
+    let shore = start, swim = start;
+    for (let d = start; d < limit; d += 0.5) {
+      if (shore === start && this.heightAt(d, 0) <= W) shore = d;
+      if (this.heightAt(d, 0) <= W - CFG.shark.draft) { swim = d; break; }
+    }
+    // The map's seeded generator, so every client's shark wanders and
+    // breaches identically — the same reason the map itself is seeded.
+    this.shark = new Shark(this.scene, shore, swim, this.rnd);
   }
 
   // ------------------------------------------------------- rock spires (W)

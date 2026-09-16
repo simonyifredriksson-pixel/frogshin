@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v144';
+export const BUILD = 'v145';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -886,6 +886,96 @@ export const CFG = {
      */
     windFrom: 100,
     windFull: 450,
+  },
+
+  // ---------------------------------------------------------------- shark
+  /**
+   * ═══ THE SHARK IN THE LAKE ═══════════════════════════════════════════
+   *
+   * Shizuka Ward only. See js/shark.js for how these fit together — the
+   * short version is that `bite` is a CONTRACT (1.2 seconds in the water
+   * and you are eaten) and everything else exists to make that contract
+   * survivable to look at.
+   *
+   * The two that actually matter:
+   *
+   *   patrolFar    how far the shark ever wanders from the water nearest
+   *                you. It keeps the fin somewhere you can SEE it, and it
+   *                keeps the charge to a couple of seconds rather than a
+   *                long boring swim across the bay.
+   *   strikeSpeed  how fast it comes once it commits. Above a sprinting
+   *                frog in water (16.5) by enough that fleeing is not an
+   *                answer, below the speed at which it stops being legible.
+   */
+  shark: {
+    /**
+     * Seconds in the water before it COMMITS. At 1.2 it turns and charges;
+     * it eats you when it gets to you.
+     *
+     * This is not the same as "eaten at 1.2s", and the difference is the
+     * whole feel of the thing. A bite on a timer has to be solved backwards
+     * — the shark needs whatever speed arrives on schedule, which at range
+     * is a torpedo and up close is a shark politely slowing down. A CHARGE
+     * on a timer just needs one honest speed, and the seconds between the
+     * fin turning toward you and the water closing over you are the part
+     * worth having.
+     */
+    alert: 1.2,
+    /** How close it has to actually BE to bite — no killing from the bay. */
+    biteRange: 4.5,
+
+    cruiseSpeed: 11.0,
+    /**
+     * How fast it moves when it is repositioning rather than loitering —
+     * far enough from its patrol point that it is going somewhere. Set to
+     * keep pace with a sprinting frog on land (31 u/s) so that running
+     * around the ward does not leave it permanently behind.
+     */
+    trackSpeed: 34.0,
+    cruiseAccel: 9.0,
+    cruiseTurn: 1.1,            // radians/s — a lazy circling turn
+    strikeAccel: 240.0,         // a charge winds up fast — full speed in ~0.2s
+    strikeTurn: 3.2,            // floor on the turn rate; strikeRadius usually wins
+    /**
+     * The radius the strike turn is solved from, so a faster charge turns
+     * harder. A FIXED turn rate meant a thirty-unit turn circle at speed,
+     * and the shark sailed straight past its victim and had to loop —
+     * which the simulation caught and no amount of reading would have.
+     */
+    strikeRadius: 6.0,
+    /**
+     * Charge speed. Comfortably above a sprinting frog's 16.5 in the water,
+     * so committing to a swim is committing — but slow enough to watch it
+     * come, which is the point of the fin.
+     */
+    strikeSpeed: 40.0,
+
+    /** How far from the nearest water it patrols, near and far. */
+    patrolNear: 22,
+    patrolFar: 55,
+    /** How often it picks a new wander point, and how fast it circles. */
+    retargetEvery: 2.2,
+    circleRate: 0.5,
+    /** Never steer closer to the island than this past the swim line. */
+    standOff: 9,
+    /**
+     * How much water it needs under it. The shark may never go anywhere
+     * shallower, charging or otherwise — it cannot beach itself, and the
+     * shallows are the one place a swimmer is genuinely safer.
+     */
+    draft: 1.6,
+
+    /** Depth of the back below the surface while cruising. */
+    cruiseDepth: 1.35,
+    /** How high the fin's tip sits above the body origin — see `_place`. */
+    finTop: 2.4,
+
+    /** The dolphin jump: every 25–30 seconds, as asked. */
+    breachEvery: [25, 30],
+    breachTime: 1.35,
+    breachHeight: 7.5,
+    breachSpeed: 26.0,
+    breachPitch: 1.5,           // radians of nose-up / nose-down through it
   },
 
   // --------------------------------------------------------------- camera

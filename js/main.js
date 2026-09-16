@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v144';
+import * as THREE from '../lib/three.module.js?v=v145';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v144';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v144';
-import { Input } from './input.js?v=v144';
-import { Audio } from './audio.js?v=v144';
-import { World } from './world.js?v=v144';
-import { Effects } from './effects.js?v=v144';
-import { Atmosphere } from './atmosphere.js?v=v144';
-import { FollowCamera } from './camera.js?v=v144';
-import { Player } from './player.js?v=v144';
+} from './config.js?v=v145';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v145';
+import { Input } from './input.js?v=v145';
+import { Audio } from './audio.js?v=v145';
+import { World } from './world.js?v=v145';
+import { Effects } from './effects.js?v=v145';
+import { Atmosphere } from './atmosphere.js?v=v145';
+import { FollowCamera } from './camera.js?v=v145';
+import { Player } from './player.js?v=v145';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v144';
+} from './tournament.js?v=v145';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v144';
-import { RemotePlayer } from './remote.js?v=v144';
-import { HUD } from './hud.js?v=v144';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v144';
-import { FrogModel } from './frog.js?v=v144';
-import { DummyField } from './dummy.js?v=v144';
+import { coneHit } from './combat.js?v=v145';
+import { RemotePlayer } from './remote.js?v=v145';
+import { HUD } from './hud.js?v=v145';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v145';
+import { FrogModel } from './frog.js?v=v145';
+import { DummyField } from './dummy.js?v=v145';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v144';
-import { ToadModel } from './npc.js?v=v144';
+} from './rounds.js?v=v145';
+import { ToadModel } from './npc.js?v=v145';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v144';
-import { DungeonRun } from './dungeon.js?v=v144';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v144';
-import { JudgmentRun } from './judgment.js?v=v144';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v144';
-import { COMBO_NAMES } from './ascended.js?v=v144';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v144';
-import { MenuScene } from './menu.js?v=v144';
-import { Economy } from './economy.js?v=v144';
-import { Shop } from './shop.js?v=v144';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v144';
-import { Overworld } from './overworld.js?v=v144';
-import { InventoryScreen } from './inventoryui.js?v=v144';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v144';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v144';
-import { Cine } from './cinema.js?v=v144';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v144';
-import { MEMORIES } from './flashbacks.js?v=v144';
-import { GUARDIANS } from './guardians.js?v=v144';
-import { gearOfTier } from './gear.js?v=v144';
-import { Chat } from './chat.js?v=v144';
+} from './skins.js?v=v145';
+import { DungeonRun } from './dungeon.js?v=v145';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v145';
+import { JudgmentRun } from './judgment.js?v=v145';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v145';
+import { COMBO_NAMES } from './ascended.js?v=v145';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v145';
+import { MenuScene } from './menu.js?v=v145';
+import { Economy } from './economy.js?v=v145';
+import { Shop } from './shop.js?v=v145';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v145';
+import { Overworld } from './overworld.js?v=v145';
+import { InventoryScreen } from './inventoryui.js?v=v145';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v145';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v145';
+import { Cine } from './cinema.js?v=v145';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v145';
+import { MEMORIES } from './flashbacks.js?v=v145';
+import { GUARDIANS } from './guardians.js?v=v145';
+import { gearOfTier } from './gear.js?v=v145';
+import { Chat } from './chat.js?v=v145';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -4912,6 +4912,7 @@ class Game {
       this._updateLocalClone(dt);
 
       this.world.update(dt, this.camera.position);
+      this._updateShark(dt, p);
 
       const speed = Math.hypot(p.vel.x, p.vel.z);
       this.followCam.update(p.renderPos, speed, dt, {
@@ -4973,6 +4974,37 @@ class Game {
     for (const r of this.remotes.values()) {
       r.model.setTagger(R.isTagMode && R.isTagger(r.id));
     }
+  }
+
+  /**
+   * Drive the lake's shark, and let it eat the local player.
+   *
+   * Shizuka Ward only — `world.shark` is undefined everywhere else, so every
+   * other map pays one property read per frame for this.
+   *
+   * The kill goes through `health.kill()`, which is the same door the void
+   * uses: it sets `justDied`, and the existing death/respawn/kill-feed path
+   * picks it up from there and puts the frog back on a spawn point. Every
+   * spawn point in the ward is on dry land, so "you respawn in the city"
+   * falls out of the map rather than needing to be arranged.
+   *
+   * A dead or protected frog is not prey: without the guard the shark would
+   * keep biting a corpse it happened to be swimming through, and a player
+   * respawning next to the water would be eaten through spawn protection.
+   */
+  _updateShark(dt, p) {
+    const shark = this.world && this.world.shark;
+    if (!shark) return;
+    const prey = (p && !p.health.dead && !p.health.protected && !p.spectating)
+      ? p : null;
+    shark.update(dt, prey);
+    if (!shark.bit || !prey) return;
+
+    prey.health.kill();
+    this.effects.splash(prey.pos);
+    Audio.hit(prey.pos, true);
+    this.followCam.shake(0.7);
+    this.hud.toast('Something took you', 1.6);
   }
 
   /**

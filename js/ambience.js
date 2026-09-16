@@ -29,8 +29,8 @@
  * surface, and costs nothing.
  */
 
-import * as THREE from '../lib/three.module.js?v=v144';
-import { clamp } from './util.js?v=v144';
+import * as THREE from '../lib/three.module.js?v=v145';
+import { clamp } from './util.js?v=v145';
 
 /** Scratch colour for the cross-fade. Allocates nothing per frame. */
 const _grade = new THREE.Color();
