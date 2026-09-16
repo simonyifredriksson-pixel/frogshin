@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v143';
-import { CFG } from './config.js?v=v143';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v143';
-import { FrogModel } from './frog.js?v=v143';
-import { Grapple, GrappleState } from './grapple.js?v=v143';
-import { Combat, Health } from './combat.js?v=v143';
-import { Stamina } from './stamina.js?v=v143';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v143';
-import { Audio } from './audio.js?v=v143';
+import * as THREE from '../lib/three.module.js?v=v144';
+import { CFG } from './config.js?v=v144';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v144';
+import { FrogModel } from './frog.js?v=v144';
+import { Grapple, GrappleState } from './grapple.js?v=v144';
+import { Combat, Health } from './combat.js?v=v144';
+import { Stamina } from './stamina.js?v=v144';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v144';
+import { Audio } from './audio.js?v=v144';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v143';
+} from './abilities.js?v=v144';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -63,6 +63,17 @@ export class Player {
     this.interactPressed = false; // E pressed where there are no crates
     this.tagMode = false;        // the katana tags rather than wounds
     this.isJuggernaut = false;   // slower, tougher, wearing the toad
+    /**
+     * OVERDRIVE. Set per round by the game, cleared the moment it ends.
+     *
+     * It changes four things and nothing else: the speed the movement code
+     * steers toward, whether stamina is spent, what a katana hit is worth,
+     * and whether a fast hit shakes the camera. It does NOT add a movement
+     * state, touch the grapple, or alter how any of them work — every line
+     * below reads the same fields the normal mode does, just with different
+     * numbers in them.
+     */
+    this.isOverdrive = false;
     this.spectating = false;     // knocked out and watching
 
     // --- juggernaut leap (its replacement for the grapple) ---
@@ -632,14 +643,27 @@ export class Player {
       // The juggernaut moves at half pace and gets only half the sprint
       // BONUS (2.0x becomes 1.5x), so running still helps it but never lets
       // it run a frog down — it has to corner you, which is the mode.
-      const boost = this.sprinting ? this._sprintMult(sp.speedMult) : 1;
+      /**
+       * OVERDRIVE swaps the NUMBERS these four lines read, and nothing else.
+       *
+       * Same acceleration model, same friction, same wish vector, same
+       * momentum-preserving `_accelerate` — a faster frog is the existing
+       * frog steering toward a higher cap. That is the whole of the speed
+       * change, and it is why wall jumps, air control and the grapple all
+       * behave exactly as they always did at the new speed.
+       */
+      const OD = this.isOverdrive ? CFG.overdrive : null;
+      const boost = this.sprinting
+        ? this._sprintMult(OD ? OD.sprintMult : sp.speedMult) : 1;
       // Rooted mid-leap-charge: you cannot walk out of your own wind-up.
       const scale = this.leapCharge > 0 ? 0
         : (this.isJuggernaut ? CFG.juggernaut.moveScale : 1);
-      const wishSpeed = (this.grounded ? CFG.move.runSpeed : CFG.move.airSpeed)
-        * boost * scale;
-      const accel = (this.grounded ? CFG.move.groundAccel : CFG.move.airAccel)
-        * (this.sprinting ? sp.accelMult : 1);
+      const runTop = OD ? OD.runSpeed : CFG.move.runSpeed;
+      const airTop = OD ? OD.airSpeed : CFG.move.airSpeed;
+      const wishSpeed = (this.grounded ? runTop : airTop) * boost * scale;
+      const groundA = OD ? OD.groundAccel : CFG.move.groundAccel;
+      const accel = (this.grounded ? groundA : CFG.move.airAccel)
+        * (this.sprinting ? (OD ? OD.accelMult : sp.accelMult) : 1);
       if (this.grounded && !this.inWater) {
         this._friction(dt, this.sprinting ? sp.frictionMult : 1);
       } else {
@@ -2126,7 +2150,37 @@ export class Player {
    */
   swordDamage(h) {
     if (this.isJuggernaut) return CFG.juggernaut.swordDamage;
+    /**
+     * OVERDRIVE: DAMAGE = SPEED × 0.5.
+     *
+     * Read off `this.vel` at the instant the cone resolved — `_applyHits`
+     * runs after the move for this frame, so this is the speed the frog was
+     * actually travelling when the blade connected, not the speed it had
+     * when the swing started. That distinction is the mode: you commit to a
+     * swing early and the hit is worth whatever you are doing when it lands.
+     *
+     * No combo ramp and no weapon multiplier — speed IS the damage, so a
+     * first swing at 400 and a third swing at 400 are the same blow.
+     */
+    if (this.isOverdrive) {
+      return this.overdriveSpeed * CFG.overdrive.damagePerSpeed;
+    }
     return h.damage;
+  }
+
+  /**
+   * The frog's speed on the 0–500 Overdrive scale.
+   *
+   * FULL 3D velocity, so a dive or a swing off the existing grapple counts
+   * — those are the only ways past 400, which is where a flat-out ground
+   * sprint tops out. See `CFG.overdrive` for why this is a scale and not
+   * units per second; the short version is that the collision sweep takes
+   * at most six sub-steps and 500 u/s would put you through a wall.
+   */
+  get overdriveSpeed() {
+    const O = CFG.overdrive;
+    const u = Math.hypot(this.vel.x, this.vel.y, this.vel.z);
+    return Math.min(O.maxSpeed, u * (O.maxSpeed / O.fullSpeedAt));
   }
 
   _applyHits(hits, cam) {
@@ -2141,6 +2195,26 @@ export class Player {
       }
       return;
     }
+    /**
+     * OVERDRIVE'S IMPACT SHAKE.
+     *
+     * Once per swing, not once per frog caught in it — a cone that clips two
+     * opponents is one impact, and re-triggering would stack into a rattle.
+     *
+     * Every condition here is load-bearing: it fires only on a katana cone
+     * that actually CONNECTED (we are inside the hits loop), only for the
+     * frog that landed it (`cam` is the local camera and remotes never reach
+     * this code), and only STRICTLY above the threshold — 350 exactly is no
+     * shake, 351 shakes. Moving fast, jumping and sprinting do not touch
+     * this; nothing outside a successful hit can reach it.
+     */
+    if (this.isOverdrive && hits.length) {
+      const O = CFG.overdrive;
+      if (this.overdriveSpeed > O.shakeAbove) {
+        cam.impact(O.shakeTime, O.shakeStrength);
+      }
+    }
+
     for (const h of hits) {
       _tmp.set(h.target.pos.x, h.target.pos.y + 1.0, h.target.pos.z);
       this.effects.hitBurst(_tmp, { x: h.dirX, y: 0, z: h.dirZ }, h.heavy);
@@ -2575,6 +2649,28 @@ export class Player {
         Audio.footstep(this.pos);
         this.effects.dustPuff(this.pos, this.sprinting ? 4 : 2,
           this.sprinting ? 1.8 : 0.9, 0xc8bda6);
+      }
+    }
+
+    /**
+     * OVERDRIVE'S SPEED WAKE, driven by actual speed rather than by whether
+     * Shift is held — so a grapple swing or a dive is just as windy as a
+     * sprint, which is the point of a mode where speed is the currency.
+     *
+     * Ramped from `windFrom` to `windFull` on the 0–500 scale: nothing when
+     * you are stood still, subtle at a walk, strong at 450+.
+     */
+    if (this.isOverdrive && !this.inWater) {
+      const O = CFG.overdrive;
+      const t = clamp((this.overdriveSpeed - O.windFrom)
+        / Math.max(1, O.windFull - O.windFrom), 0, 1);
+      if (t > 0) {
+        this._odRush = (this._odRush || 0) - dt;
+        if (this._odRush <= 0) {
+          this._odRush = 0.05 - t * 0.026;
+          _tmp.set(-Math.sin(this.visualYaw), 0, -Math.cos(this.visualYaw));
+          this.effects.speedRush(this.pos, _tmp, t);
+        }
       }
     }
 

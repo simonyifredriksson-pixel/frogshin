@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v143';
+export const BUILD = 'v144';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -603,7 +603,12 @@ export const CFG = {
     voteTime: 22,            // seconds to pick a mode
     startCountdown: 5,       // "get ready" before a round begins
     endTime: 9,              // results screen before voting again
-    duration: { tag: 180, infection: 180, ffa: 300, juggernaut: 240 },
+    duration: {
+      tag: 180, infection: 180, ffa: 300, juggernaut: 240,
+      // Shorter than FFA: at Overdrive speeds a kill takes one clean hit, so
+      // five minutes of it is a long time.
+      overdrive: 240,
+    },
     defaultMode: 'ffa',      // used if nobody votes
     tagImmunity: 2.5,        // stops instant tag-backs
     taggerCooldown: 0.2,     // taggers throw faster (they have infinite kunai)
@@ -807,6 +812,80 @@ export const CFG = {
     regenRate: 9.0,
     respawnTime: 3.0,
     spawnProtection: 2.0,
+  },
+
+  // ------------------------------------------------------------ OVERDRIVE
+  /**
+   * ═══ FROGSHIN: OVERDRIVE ═════════════════════════════════════════════
+   *
+   * A game MODE, not a movement system. Every value here is an override
+   * that is applied while an Overdrive round is playing and dropped the
+   * instant it ends — nothing in `move`, `sprint`, `grapple` or `combat` is
+   * touched, so the normal modes are bit-for-bit what they were.
+   *
+   * ── the speed number, and why it is not units per second ──────────────
+   * "Maximum speed 500" cannot be 500 engine units/s, and that is a hard
+   * limit of the EXISTING movement system rather than a preference.
+   * `CollisionWorld.moveCharacter` splits a frame's travel into at most SIX
+   * sub-steps of 0.44 units (`min(6, ceil(dist / (radius * 0.8)))`), so
+   * above about 2.6 units per frame the capsule starts skipping straight
+   * through walls. At 60fps that ceiling is ~158 u/s and at 30fps it is
+   * ~79. 500 u/s would put a frog through the side of every building in
+   * Shizuka Ward, and fixing that means rewriting the collision sweep —
+   * which is exactly the movement-system overhaul this mode must not be.
+   *
+   * So SPEED IS A SCALE. The frog genuinely moves far faster in engine
+   * terms (58 u/s flat out against the normal 31), and `fullSpeedAt` maps
+   * that to the 0–500 readout the damage formula, the shake threshold and
+   * the HUD all use. Every number in the brief is exact on that scale:
+   * 500 max, damage = speed × 0.5, shake above 350.
+   *
+   * ── health ────────────────────────────────────────────────────────────
+   * 250, because the brief's own damage table needs it. `500 speed = 250
+   * damage` against Frogshin's normal 100 health would make every hit
+   * above 200 speed identical — a one-shot — and collapse the top 60% of
+   * the range into one outcome. At 250 the table reads as intended: a
+   * full-speed hit is exactly lethal and a half-speed one takes half. Set
+   * this to 1.0 to get one-shot Overdrive instead; nothing else changes.
+   */
+  overdrive: {
+    /** Health pool as a multiple of `combat.maxHealth`. 2.5 => 250. */
+    healthScale: 2.5,
+
+    // --- movement overrides (the same fields the normal mode reads) ---
+    runSpeed: 18.0,          // was 15.5
+    airSpeed: 17.0,          // was 14.0
+    sprintMult: 3.2,         // was 2.0  =>  57.6 u/s flat out, against 31
+    accelMult: 1.6,          // reach it quickly; sprint.accelMult is 1.5
+    groundAccel: 360,        // must beat runSpeed * friction, as in `move`
+
+    /**
+     * Engine units/s that read as the full 500.
+     *
+     * 72 puts a flat-out ground sprint (18 × 3.2 = 57.6) at exactly 400,
+     * which leaves the top fifth of the bar for what you can only get by
+     * diving or by swinging off the existing grapple — so the 500 hit is
+     * something you set up, not something you hold down Shift for.
+     */
+    fullSpeedAt: 72,
+    maxSpeed: 500,
+
+    /** DAMAGE = SPEED × 0.5, exactly as specified. */
+    damagePerSpeed: 0.5,
+
+    // --- the impact shake ---
+    /** Strictly ABOVE this: 350 is no shake, 351 shakes. */
+    shakeAbove: 350,
+    shakeTime: 0.3,
+    shakeStrength: 1.0,
+
+    /**
+     * Where the speed wake starts and where it is at full strength, on the
+     * 0–500 scale. Below `windFrom` there is nothing at all, so standing
+     * still is calm.
+     */
+    windFrom: 100,
+    windFull: 450,
   },
 
   // --------------------------------------------------------------- camera

@@ -5,58 +5,58 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v143';
+import * as THREE from '../lib/three.module.js?v=v144';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v143';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v143';
-import { Input } from './input.js?v=v143';
-import { Audio } from './audio.js?v=v143';
-import { World } from './world.js?v=v143';
-import { Effects } from './effects.js?v=v143';
-import { Atmosphere } from './atmosphere.js?v=v143';
-import { FollowCamera } from './camera.js?v=v143';
-import { Player } from './player.js?v=v143';
+} from './config.js?v=v144';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v144';
+import { Input } from './input.js?v=v144';
+import { Audio } from './audio.js?v=v144';
+import { World } from './world.js?v=v144';
+import { Effects } from './effects.js?v=v144';
+import { Atmosphere } from './atmosphere.js?v=v144';
+import { FollowCamera } from './camera.js?v=v144';
+import { Player } from './player.js?v=v144';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v143';
+} from './tournament.js?v=v144';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v143';
-import { RemotePlayer } from './remote.js?v=v143';
-import { HUD } from './hud.js?v=v143';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v143';
-import { FrogModel } from './frog.js?v=v143';
-import { DummyField } from './dummy.js?v=v143';
+import { coneHit } from './combat.js?v=v144';
+import { RemotePlayer } from './remote.js?v=v144';
+import { HUD } from './hud.js?v=v144';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v144';
+import { FrogModel } from './frog.js?v=v144';
+import { DummyField } from './dummy.js?v=v144';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v143';
-import { ToadModel } from './npc.js?v=v143';
+} from './rounds.js?v=v144';
+import { ToadModel } from './npc.js?v=v144';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v143';
-import { DungeonRun } from './dungeon.js?v=v143';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v143';
-import { JudgmentRun } from './judgment.js?v=v143';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v143';
-import { COMBO_NAMES } from './ascended.js?v=v143';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v143';
-import { MenuScene } from './menu.js?v=v143';
-import { Economy } from './economy.js?v=v143';
-import { Shop } from './shop.js?v=v143';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v143';
-import { Overworld } from './overworld.js?v=v143';
-import { InventoryScreen } from './inventoryui.js?v=v143';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v143';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v143';
-import { Cine } from './cinema.js?v=v143';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v143';
-import { MEMORIES } from './flashbacks.js?v=v143';
-import { GUARDIANS } from './guardians.js?v=v143';
-import { gearOfTier } from './gear.js?v=v143';
-import { Chat } from './chat.js?v=v143';
+} from './skins.js?v=v144';
+import { DungeonRun } from './dungeon.js?v=v144';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v144';
+import { JudgmentRun } from './judgment.js?v=v144';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v144';
+import { COMBO_NAMES } from './ascended.js?v=v144';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v144';
+import { MenuScene } from './menu.js?v=v144';
+import { Economy } from './economy.js?v=v144';
+import { Shop } from './shop.js?v=v144';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v144';
+import { Overworld } from './overworld.js?v=v144';
+import { InventoryScreen } from './inventoryui.js?v=v144';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v144';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v144';
+import { Cine } from './cinema.js?v=v144';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v144';
+import { MEMORIES } from './flashbacks.js?v=v144';
+import { GUARDIANS } from './guardians.js?v=v144';
+import { gearOfTier } from './gear.js?v=v144';
+import { Chat } from './chat.js?v=v144';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -4966,12 +4966,36 @@ class Game {
     p.combatEnabled = R.combatEnabled;
     p.tagMode = R.isTagMode && R.playing;
     p.spectating = spec;
+    this._setOverdrive(p, R.isOverdriveMode);
     this._setJuggernaut(p, jug);
     p.model.setTagger(R.isTagMode && isIt);
 
     for (const r of this.remotes.values()) {
       r.model.setTagger(R.isTagMode && R.isTagger(r.id));
     }
+  }
+
+  /**
+   * Turn OVERDRIVE on or off for the local player.
+   *
+   * Three switches, and every one of them is reversible by flipping the same
+   * switch back — which is the requirement that "when the player leaves
+   * Overdrive, all normal Frogshin settings should return". Nothing here
+   * writes to CFG, so the normal modes cannot be affected even in principle.
+   *
+   * It is called from `_applyRoundRoles` every time the round state changes,
+   * so ending the round, voting a different mode, or dropping to the menu
+   * all clear it without anything needing to remember to.
+   */
+  _setOverdrive(p, on) {
+    if (p.isOverdrive === on) return;
+    p.isOverdrive = on;
+    p.stamina.infinite = on;
+    // 250 against the normal 100, so the brief's damage table has a range:
+    // see CFG.overdrive. Rescales current hp proportionally, so switching
+    // mid-round is never a free heal.
+    p.health.setMaxScale(on ? CFG.overdrive.healthScale : 1);
+    if (!on) p.stamina.reset();
   }
 
   /**
@@ -5769,14 +5793,21 @@ class Game {
   _updateVitals() {
     const p = this.player;
     if (!p || !p.health) return;
-    this.hud.setHealth(p.health.fraction);
+    this.hud.setHealth(p.health.fraction, p.health.max);
     this.hud.setCritical(p.health.fraction < 0.28 && !p.health.dead);
   }
 
   _updateHud(dt, speed) {
     const p = this.player;
     this._updateVitals();
-    this.hud.setStamina(p.stamina.fraction, p.stamina.exhausted);
+    // In Overdrive the stamina bar becomes the speed meter — stamina is
+    // infinite there, so the bar would otherwise sit permanently full.
+    if (p.isOverdrive) {
+      this.hud.setSpeed(p.overdriveSpeed, true);
+    } else {
+      this.hud.setSpeed(0, false);
+      this.hud.setStamina(p.stamina.fraction, p.stamina.exhausted);
+    }
 
     // Audible bookends for the lockout so the rule is learnable without
     // having to watch the bar.

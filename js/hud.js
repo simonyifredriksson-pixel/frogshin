@@ -6,13 +6,13 @@
  * damage vignette). Everything else stays off screen until it matters.
  */
 
-import { clamp } from './util.js?v=v143';
-import { CFG } from './config.js?v=v143';
-import { staminaBand } from './stamina.js?v=v143';
-import { modeAvailable } from './rounds.js?v=v143';
-import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v143';
-import { Audio } from './audio.js?v=v143';
-import { PX, setIcon } from './icons.js?v=v143';
+import { clamp } from './util.js?v=v144';
+import { CFG } from './config.js?v=v144';
+import { staminaBand } from './stamina.js?v=v144';
+import { modeAvailable } from './rounds.js?v=v144';
+import { ITEM_ICONS, SLOT_LABELS } from './items.js?v=v144';
+import { Audio } from './audio.js?v=v144';
+import { PX, setIcon } from './icons.js?v=v144';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,10 +131,18 @@ export class HUD {
 
   // ---------------------------------------------------------------- meters
 
-  setHealth(frac) {
+  /**
+   * @param frac 0..1
+   * @param max  the pool this fraction is OF. Defaults to the standard 100,
+   *             but Overdrive runs a 250 pool and the juggernaut a far
+   *             bigger one — reading `CFG.combat.maxHealth` unconditionally
+   *             showed "100" to a frog holding 250, which is a readout that
+   *             lies about the only number a fighting player watches.
+   */
+  setHealth(frac, max = CFG.combat.maxHealth) {
     const pct = clamp(frac, 0, 1) * 100;
     this.healthFill.style.width = pct + '%';
-    this.healthText.textContent = Math.ceil(clamp(frac, 0, 1) * CFG.combat.maxHealth);
+    this.healthText.textContent = Math.ceil(clamp(frac, 0, 1) * max);
     this.healthFill.classList.toggle('low', frac < 0.3);
     this.healthFill.classList.toggle('mid', frac >= 0.3 && frac < 0.6);
     // Pulse the bar when health drops.
@@ -674,6 +682,47 @@ export class HUD {
     if (exhausted !== this._stamSpent) {
       this._stamSpent = exhausted;
       this.staminaBar.classList.toggle('spent', exhausted);
+    }
+  }
+
+  /**
+   * OVERDRIVE'S SPEED METER, shown in place of the stamina bar.
+   *
+   * It reuses the stamina bar's own elements rather than adding a widget,
+   * because in Overdrive stamina is infinite and that bar is otherwise a
+   * permanently full green rectangle taking up the space. Nothing about the
+   * stamina system changes; this only writes to the same two nodes while
+   * the mode is on, and `setStamina` paints over it again the moment it is
+   * off.
+   *
+   * The readout exists because the mode's rules are stated in this number:
+   * a hit above 350 shakes and 500 is a kill, and neither is something a
+   * player can act on if the only feedback is how fast the ground looks.
+   *
+   * @param speed 0..500
+   * @param on    false restores the bar to stamina duty
+   */
+  setSpeed(speed, on) {
+    if (on !== this._speedOn) {
+      this._speedOn = on;
+      this.staminaBar.classList.toggle('overdrive', !!on);
+      if (!on) { this._stamBand = null; this._speedBand = null; }
+    }
+    if (!on) return;
+    const max = CFG.overdrive.maxSpeed;
+    const f = clamp(speed / max, 0, 1);
+    this.staminaFill.style.width = (f * 100) + '%';
+    this.staminaText.textContent = Math.round(speed);
+    /**
+     * The band changes exactly at the shake threshold, so the bar turning
+     * is the same event as a hit starting to kick — one thing to learn
+     * rather than two numbers to memorise.
+     */
+    const band = speed > CFG.overdrive.shakeAbove ? 's-darkred'
+      : (f > 0.45 ? 's-yellow' : 's-bright');
+    if (band !== this._speedBand) {
+      this._speedBand = band;
+      this.staminaFill.className = 'fill ' + band;
     }
   }
 

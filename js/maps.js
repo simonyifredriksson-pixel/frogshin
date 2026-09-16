@@ -16,8 +16,8 @@
  * around that height instead of moving it.
  */
 
-import { CFG } from './config.js?v=v143';
-import { clamp, smoothstep } from './util.js?v=v143';
+import { CFG } from './config.js?v=v144';
+import { clamp, smoothstep } from './util.js?v=v144';
 
 export const MAPS = [
   {
@@ -270,22 +270,32 @@ export const MAPS = [
      * Nothing to climb but the buildings, and those have stairs. The limit
      * only ever engages on the rim.
      */
-    climbLimitY: Infinity,
-    climbLimitRadius: CFG.world.size * 0.5 * 0.94,
     /**
-     * SQUARE, because a city block grid IS a square and cutting it to a
-     * circle both wasted the corners of the world and left the ward with a
-     * ragged edge no street grid would ever have. Nine blocks by nine now,
-     * against the five-and-a-bit rings a disc of the same reach allowed.
+     * NOTHING is off limits any more, because there is nothing to climb.
+     *
+     * The ward used to be ringed by a hundred and seventy units of
+     * mountain, and the limit existed to stop you walking up it. It is a
+     * LAKE now: the ground runs flat to the waterfront and then shelves
+     * away under the surface. A beach is walkable by design and open water
+     * is its own boundary, so a climb rule here would only be a rule about
+     * something that is not there.
      */
-    climbLimitShape: 'square',
+    climbLimitY: Infinity,
+    /**
+     * The lake is wider than the heightfield. The bridge crosses it to an
+     * island well past the terrain's edge, so the water has to reach the
+     * horizon or the map ends in a visible seam of nothing.
+     */
+    waterSize: 1600,
     /**
      * The ground IS the road. Terrain is asphalt everywhere, and a block is
      * simply a place where a pavement was laid on top of it — so the grid
      * can never disagree with itself.
      */
     palette: {
-      sand: 0x35383d,
+      // `sand` is the band below the waterline, which on this map is the
+      // lake bed and the wet shingle at the foot of the beach.
+      sand: 0x7a7565,
       grass: 0x3a3d42,
       grass2: 0x34373c,
       dirt: 0x3d4045,
@@ -297,13 +307,17 @@ export const MAPS = [
       rockFromY: 40,
     },
     /**
-     * Late afternoon going blue — the light in the reference. A deep sky, a
-     * warm haze at street level, and the fog pulled in so the far end of an
-     * avenue fades instead of showing you the rim.
+     * Late afternoon going blue — the light in the reference photograph.
+     *
+     * `fogFar` had to go a long way out when the mountain became a lake.
+     * At 300 it was doing a job — hiding the rim at the end of an avenue —
+     * and the thing at the end of an avenue now is the bridge and the
+     * island beyond it, which are the point. 620 keeps the haze on the far
+     * shore without erasing it.
      */
     atmosphere: {
-      fogNear: 40,
-      fogFar: 300,
+      fogNear: 60,
+      fogFar: 620,
       fogColor: 0x6a7a92,
       skyTop: 0x1f3a63,
       skyMid: 0x4a6a96,
@@ -321,30 +335,47 @@ export const MAPS = [
       ['Painting the lanes', (w) => w._buildCityStreets()],
       ['Parking the cars', (w) => w._buildCityCars()],
       ['Hanging the skyways', (w) => w._buildCitySkyways()],
+      ['Walling the waterfront', (w) => w._buildCityShore()],
+      ['Closing the bridge', (w) => w._buildCityBridge()],
     ],
     flats: [],
     basins: [],
 
     height(w, x, z) {
-      const S = CFG.world.size;
-      // CHEBYSHEV: four straight walls round a square ward. See the note on
-      // the Mire's height function — the rim and `climbLimitShape` have to
-      // be cut with the same ruler or the corners become invisible walls.
-      const d = Math.max(Math.abs(x), Math.abs(z)) / (S * 0.5);
-      // Dead flat. See the note above: every kerb and every painted line in
-      // the ward is placed against this number.
-      let h = 6;
       /**
-       * And the rim, which is the rest of the city, too far to reach.
-       *
-       * It starts at 0.945 — 198 units — because the outermost block reaches
-       * 190. An earlier draft started climbing at 181 against blocks that
-       * reached 184 and buried the whole outer ring of the ward in a
-       * hillside, so the eight units between them are deliberate: they are
-       * the outskirts, open asphalt with the city behind you.
+       * CHEBYSHEV, `max(|x|, |z|)` — a square ward with a square shoreline.
+       * See the note on the Mire's height function: cutting a square world
+       * with a circle throws away its four corners.
        */
-      const edge = smoothstep(clamp((d - 0.945) / 0.055, 0, 1));
-      h += edge * 170;
+      const d = Math.max(Math.abs(x), Math.abs(z));
+      // Dead flat across the whole ward. See the note above: every kerb and
+      // every painted line in it is placed against this one number.
+      let h = 6;
+
+      /**
+       * AND THEN THE LAKE.
+       *
+       * This used to be a hundred and seventy units of mountain. A wall is
+       * an honest boundary but it is also a full stop — it says the world
+       * ends here — whereas water says the world carries on and you cannot
+       * walk it. The ward is an island now, with a bridge across to another
+       * one you can see from the waterfront.
+       *
+       * The shelf runs 178 -> 218 and drops 26, which puts the actual
+       * water's edge at about 187: eleven units of beach past the last kerb
+       * at 176, enough to stand on and look out from. A first pass ran the
+       * same drop over 28 units starting at 172 and left two and a half —
+       * a kerb, then immediately the lake, which is a quay rather than a
+       * shore and gave the waterfront nowhere to be.
+       *
+       * The steepest part is a gradient of 0.98 against a walk limit of
+       * 1.38, so wading back out never leaves anyone stuck against their
+       * own shoreline.
+       */
+      const t = smoothstep(clamp((d - 178) / 40, 0, 1));
+      h -= t * 26;
+      // A little relief on the lake bed so the shallows are not a mirror.
+      if (t > 0) h += w.noise.fbm(x * 0.013, z * 0.013, 2) * 3.2 * t;
       return h;
     },
   },

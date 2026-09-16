@@ -8,8 +8,8 @@
  * without becoming a long dead stop.
  */
 
-import { CFG } from './config.js?v=v143';
-import { clamp } from './util.js?v=v143';
+import { CFG } from './config.js?v=v144';
+import { clamp } from './util.js?v=v144';
 
 export class Stamina {
   constructor(max = CFG.stamina.max) {
@@ -20,12 +20,23 @@ export class Stamina {
     // One-frame flags the game loop reads for feedback (sound, HUD flash).
     this.justExhausted = false;
     this.justRecovered = false;
+    /**
+     * OVERDRIVE: the tank is bottomless.
+     *
+     * Set here rather than at each of the nine call sites that spend or
+     * drain, because "no stamina drain" has to mean the sprint, the jump,
+     * the double jump, the wall jump, the dash and the water breach — and a
+     * flag checked in one place cannot be forgotten at the seventh of them.
+     * The bar stays full, `canAct` is always true, and nothing else in the
+     * mode has to know stamina exists.
+     */
+    this.infinite = false;
   }
 
-  get fraction() { return clamp(this.value / this.max, 0, 1); }
+  get fraction() { return this.infinite ? 1 : clamp(this.value / this.max, 0, 1); }
 
   /** True when the player is allowed to sprint or jump. */
-  get canAct() { return !this.exhausted && this.value > 0; }
+  get canAct() { return this.infinite || (!this.exhausted && this.value > 0); }
 
   /** How much of the lockout is left, 0..1 — drives the HUD warning. */
   get recoveryProgress() {
@@ -38,6 +49,7 @@ export class Stamina {
    * in which case nothing is spent and the action must not happen.
    */
   spend(amount) {
+    if (this.infinite) return true;
     if (!this.canAct) return false;
     this.value = Math.max(0, this.value - amount);
     this.sinceSpend = 0;
@@ -51,6 +63,7 @@ export class Stamina {
    * of sprint on the same frame.
    */
   drain(amount) {
+    if (this.infinite) return true;
     if (!this.canAct) return false;
     this.value = Math.max(0, this.value - amount);
     this.sinceSpend = 0;
@@ -67,6 +80,14 @@ export class Stamina {
   update(dt) {
     this.justExhausted = false;
     this.justRecovered = false;
+    // Infinite means the bar is simply pinned full — leaving a stale
+    // `exhausted` behind would lock sprint the moment the mode ended.
+    if (this.infinite) {
+      this.value = this.max;
+      this.exhausted = false;
+      this.sinceSpend = 999;
+      return;
+    }
 
     this.sinceSpend += dt;
     if (this.sinceSpend >= CFG.stamina.regenDelay && this.value < this.max) {

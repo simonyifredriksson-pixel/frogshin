@@ -6,9 +6,9 @@
  * screen shake used by every impactful action in the game.
  */
 
-import * as THREE from '../lib/three.module.js?v=v143';
-import { CFG } from './config.js?v=v143';
-import { clamp, damp, lerp } from './util.js?v=v143';
+import * as THREE from '../lib/three.module.js?v=v144';
+import { CFG } from './config.js?v=v144';
+import { clamp, damp, lerp } from './util.js?v=v144';
 
 const _desired = new THREE.Vector3();
 const _focus = new THREE.Vector3();
@@ -34,6 +34,10 @@ export class FollowCamera {
     this.roll = 0;
     this.punch = 0;              // extra distance from punchOut(), decaying
     this.punchDecay = 1;
+    // Overdrive's 0.3s impact shake — its own clock, see impact().
+    this.impactTime = 0;
+    this.impactDuration = 0.3;
+    this.impactStrength = 0;
   }
 
   /** Feed accumulated mouse delta. */
@@ -49,6 +53,31 @@ export class FollowCamera {
   /** Add screen shake. `amount` is roughly 0..1. */
   shake(amount) {
     this.trauma = clamp(this.trauma + amount, 0, 1);
+  }
+
+  /**
+   * A time-boxed IMPACT: heavy hit, smooth return, done.
+   *
+   * Overdrive's high-speed katana connect. It is a separate channel from
+   * `trauma` on purpose — trauma is an accumulating pool that decays at a
+   * fixed rate, so asking it for "exactly 0.3 seconds" means computing an
+   * amount from the decay constant and hoping nothing else adds to the pool
+   * in the meantime. This owns its own clock and always lasts exactly
+   * `duration`.
+   *
+   * The envelope is (1 - t)², which is what makes it SMOOTH rather than
+   * jittery: it starts at full strength and arrives at zero with zero
+   * slope, so the camera settles instead of snapping back. The offsets are
+   * layered sines like the trauma shake — deliberately not random noise,
+   * which reads as a rattle and is the thing that makes shake nauseating.
+   */
+  impact(duration, strength = 1) {
+    // A stronger hit replaces a weaker one in flight rather than adding, so
+    // two fast kills in a row cannot stack into something unreadable.
+    if (this.impactTime > 0 && this.impactStrength > strength) return;
+    this.impactDuration = Math.max(0.05, duration || 0.3);
+    this.impactTime = this.impactDuration;
+    this.impactStrength = strength;
   }
 
   /**
@@ -157,6 +186,23 @@ export class FollowCamera {
       shakeRoll = Math.sin(t * 1.9 + 0.4) * s * 0.05;
     }
 
+    /**
+     * The Overdrive impact, on top of whatever trauma is doing.
+     *
+     * Heavier than a normal hit (0.95 against 0.42) and over in 0.3s. The
+     * (1 - t)² envelope lands it at exactly zero with zero slope, so the
+     * frame it ends is indistinguishable from a still camera — no snap.
+     */
+    if (this.impactTime > 0) {
+      this.impactTime = Math.max(0, this.impactTime - dt);
+      const k = this.impactTime / this.impactDuration;   // 1 -> 0
+      const e = k * k * this.impactStrength;
+      const t = (this.impactDuration - this.impactTime) * 46;
+      shakeX += (Math.sin(t) + Math.sin(t * 2.1) * 0.45) * e * 0.95;
+      shakeY += (Math.sin(t * 1.6 + 1.3) + Math.sin(t * 2.7) * 0.45) * e * 0.8;
+      shakeRoll += Math.sin(t * 1.25 + 0.7) * e * 0.045;
+    }
+
     this.cam.position.set(_desired.x + shakeX, _desired.y + shakeY, _desired.z + shakeZ);
     this.cam.lookAt(this.focus);
 
@@ -178,6 +224,7 @@ export class FollowCamera {
     this.initialised = false;
     this.currentDistance = this.distance;
     this.trauma = 0;
+    this.impactTime = 0;
     this.punch = 0;
     this.update(target, 0, 1 / 60);
   }

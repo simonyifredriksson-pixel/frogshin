@@ -17,12 +17,12 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v143';
-import { clamp } from './util.js?v=v143';
+import { CFG } from './config.js?v=v144';
+import { clamp } from './util.js?v=v144';
 
 export const MODES = {
   TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',
-  JUGGERNAUT: 'juggernaut',
+  JUGGERNAUT: 'juggernaut', OVERDRIVE: 'overdrive',
 };
 
 /** Squad sizes offered by the TEAM mode: 1v1 through 5v5. */
@@ -52,6 +52,12 @@ export const MODE_INFO = {
       + 'of health, against everyone else. Slow, though. Kill it, or be killed '
       + 'and watch the rest try. Needs three players.',
     minPlayers: CFG.juggernaut.minPlayers,
+  },
+  [MODES.OVERDRIVE]: {
+    name: 'OVERDRIVE',
+    blurb: 'Same frog, same grapple, no stamina and twice the top speed. The '
+      + 'katana hurts as hard as you were moving — 500 speed is a kill. '
+      + 'Landing it at that speed is the whole game.',
   },
 };
 
@@ -112,7 +118,7 @@ export class RoundManager {
     this.taggers = new Set();
     this.immunity = new Map();      // playerId -> seconds of no-tag-back left
     this.votes = new Map();         // playerId -> { mode, taggers }
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
+    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
     this.startingTaggers = new Set();
     // Juggernaut mode: who the monster is, and who it has already put out.
     this.juggernaut = null;
@@ -147,11 +153,19 @@ export class RoundManager {
   get isTagMode() { return this.mode === MODES.TAG || this.mode === MODES.INFECTION; }
   get isTeamMode() { return this.mode === MODES.TEAM; }
   get isJuggernautMode() { return this.mode === MODES.JUGGERNAUT; }
+  /**
+   * OVERDRIVE is a free-for-all with the speed rules bolted on, so
+   * everything that asks "is this a fight?" has to say yes to it — scoring,
+   * damage, the leaderboard. It is checked as its own getter rather than
+   * folded into `isFfaMode` because the things that differ (stamina, top
+   * speed, sword damage) are asked about by name.
+   */
+  get isOverdriveMode() { return this.mode === MODES.OVERDRIVE; }
   get playing() { return this.phase === PHASE.PLAYING; }
   /** Damage and deaths matter in the shooting modes, not the chases. */
   get combatEnabled() {
     return this.mode === MODES.FFA || this.mode === MODES.TEAM
-      || this.mode === MODES.JUGGERNAUT;
+      || this.mode === MODES.JUGGERNAUT || this.mode === MODES.OVERDRIVE;
   }
 
   isJuggernaut(id) { return this.isJuggernautMode && this.juggernaut === id; }
@@ -210,7 +224,7 @@ export class RoundManager {
   }
 
   _recount() {
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
+    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
     for (const v of this.votes.values()) {
       if (this.tally[v.mode] !== undefined) this.tally[v.mode]++;
     }
@@ -232,7 +246,7 @@ export class RoundManager {
     let bestVotes = -1;
     // Deterministic order so a tie always resolves the same way everywhere.
     for (const m of [MODES.TAG, MODES.INFECTION, MODES.FFA, MODES.TEAM,
-      MODES.JUGGERNAUT]) {
+      MODES.JUGGERNAUT, MODES.OVERDRIVE]) {
       if (!modeAvailable(m, playerCount)) continue;
       if (this.tally[m] > bestVotes) { bestVotes = this.tally[m]; bestMode = m; }
     }
@@ -328,7 +342,9 @@ export class RoundManager {
    * @returns { text, outcome: 'survivors'|'taggers'|'ffa' }
    */
   _timeUpResult(playerIds) {
-    if (this.mode === MODES.FFA) {
+    // Overdrive scores like a free-for-all: most kills on the board wins,
+    // and the economy pays it out the same way.
+    if (this.mode === MODES.FFA || this.mode === MODES.OVERDRIVE) {
       return { text: 'TIME — check the scoreboard', outcome: 'ffa' };
     }
     if (this.mode === MODES.TEAM) {
@@ -602,7 +618,7 @@ export class RoundManager {
     this.teamSize = s.ts || 2;
     this.teamKills = s.tk || [0, 0];
     this.roundNumber = s.n || 0;
-    this.tally = s.v || { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0 };
+    this.tally = s.v || { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
     this.taggers = new Set(s.tg || []);
     this.juggernaut = s.jg || null;
     this.juggernautHealth = s.jh || 1;

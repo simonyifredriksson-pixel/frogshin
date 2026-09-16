@@ -9,11 +9,11 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v143';
-import { CFG } from './config.js?v=v143';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v143';
-import { findMap } from './maps.js?v=v143';
-import { Terrain, CollisionWorld } from './collision.js?v=v143';
+import * as THREE from '../lib/three.module.js?v=v144';
+import { CFG } from './config.js?v=v144';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v144';
+import { findMap } from './maps.js?v=v144';
+import { Terrain, CollisionWorld } from './collision.js?v=v144';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -49,7 +49,7 @@ const CITY = {
    * of an apartment building. Anything placed on a street derives from the
    * half-pitch; anything placed on a block derives from the whole one.
    */
-  pitch: 44,
+  pitch: 40,
   /** Asphalt between two blocks, kerb to kerb. */
   road: 16,
   /** How many blocks across, counting both ways from the middle. */
@@ -62,13 +62,18 @@ const CITY = {
    * rings, 41 blocks, and four corners of the world left empty. Nine by
    * nine is 81, and it is also simply what a ward looks like.
    *
-   * It has to clear the boundary hill: a block reaches `pitch/2 - road/2`
-   * past its own centre, so 176 + 14 = 190 against a rim that starts at
-   * 198. Those eight units are the outskirts. An earlier draft had the
-   * blocks reaching past where the rim began and buried its whole outer
-   * ring in a hillside, which is the failure this margin exists for.
+   * It has to stop at the WATERFRONT: a block reaches `pitch/2 - road/2`
+   * past its own centre, so 160 + 12 = 172, which is exactly where the
+   * ground starts dropping away into the lake. An earlier draft had the
+   * blocks reaching past where the edge began and built its whole outer
+   * ring into a hillside, which is the failure this margin exists for.
+   *
+   * The ward gave up some ground when the mountain became a lake — 40 of
+   * pitch against 44, so it is still nine blocks by nine, just tighter.
+   * That is the right trade: a wall tells you where the map stops, and
+   * open water with a bridge across it tells you the map goes on.
    */
-  reach: 180,
+  reach: 164,
   /** The flat the whole city sits on. Well above the waterline: no sea. */
   ground: 6,
   /** How high the pedestrian bridges run over the avenues. */
@@ -378,7 +383,16 @@ export class World {
   }
 
   _buildWater() {
-    const { size, waterLevel } = CFG.world;
+    const { waterLevel } = CFG.world;
+    /**
+     * A map may ask for water WIDER than its own terrain.
+     *
+     * Shizuka Ward does: it is an island in a lake, and the lake has to run
+     * past the heightfield and out under the far island so the horizon is
+     * water rather than the edge of a 420-unit plane with nothing beyond
+     * it. Every other map leaves this alone and gets exactly what it had.
+     */
+    const size = this.map.waterSize || CFG.world.size;
     const geo = new THREE.PlaneGeometry(size, size, 40, 40);
     geo.rotateX(-Math.PI / 2);
     const mat = new THREE.MeshLambertMaterial({
@@ -1174,6 +1188,16 @@ export class World {
         if (bx === 0 && bz === 0) { this._cityPlaza(cx, cz, inner); continue; }
 
         /**
+         * The block the bridge lands on is left as an open approach.
+         *
+         * `_cityBridgeDeck` ramps up from 150 to the deck at 176, and that
+         * run passes straight through this plot — so a building here would
+         * be a tower with a road through the middle of it. Leaving it bare
+         * also gives the closure somewhere to be seen from.
+         */
+        if (bx === Math.floor(C.reach / C.pitch) && bz === 0) continue;
+
+        /**
          * Towers toward the middle, low shops at the edges. A skyline has
          * to have a shape or the whole ward reads as one height, and the
          * cheapest shape that works is "tall in the centre".
@@ -1874,6 +1898,335 @@ export class World {
         }
       }
     }
+  }
+
+  /**
+   * ═══ THE WATERFRONT ═════════════════════════════════════════════════════
+   *
+   * A parapet along the top of the beach, all the way round the ward.
+   *
+   * It is what turns "the asphalt stops and then there is a slope" into an
+   * edge somebody built: a low wall you can vault, with lamps on it and the
+   * lake on the other side. It also stops the outermost pavements from
+   * ending in mid-air, which is what the mountain used to hide.
+   */
+  _buildCityShore() {
+    const C = CITY;
+    const R = this.rnd;
+    const g = this.groundY;
+    const edge = C.reach + C.pitch * 0.5 - 4;     // 176, just past the kerbs
+
+    for (const axis of ['x', 'z']) {
+      for (const s of [-1, 1]) {
+        for (let m = -edge; m <= edge; m += 4) {
+          // The corners are built by the other axis, so stop short of them.
+          if (Math.abs(m) > edge - 2) continue;
+          const px = axis === 'x' ? s * edge : m;
+          const pz = axis === 'x' ? m : s * edge;
+          const hx = axis === 'x' ? 0.55 : 2.05;
+          const hz = axis === 'x' ? 2.05 : 0.55;
+          this.solid(px, g + 0.62, pz, hx, 0.62, hz, 0x8e8b82, 'stone');
+          this.deco(px, g + 1.3, pz, hx + 0.12, 0.08, hz + 0.12, 0x6f6c63);
+        }
+        // Lamps along it, and a bench or two facing the water.
+        for (let m = -edge + 20; m < edge - 20; m += 34) {
+          const px = axis === 'x' ? s * (edge - 3) : m;
+          const pz = axis === 'x' ? m : s * (edge - 3);
+          this._cityLamp(px, pz, R() < 0.5);
+        }
+      }
+    }
+  }
+
+  /**
+   * ═══ THE CLOSED BRIDGE ══════════════════════════════════════════════════
+   *
+   * A red suspension bridge out of the ward, across the lake, to an island
+   * you can see from the waterfront — and it is SHUT. Barriers across the
+   * carriageway, hazard stripes, and signs saying so.
+   *
+   * ── why it is closed, structurally ────────────────────────────────────
+   * Because the island is off the map. The heightfield stops at 210 and the
+   * island sits at 436, so a frog that walked the whole span would be
+   * standing on scenery with no ground under it and no way back except the
+   * water. Rather than pretend that is fine, the closure is real: the
+   * approach is solid and walkable up to a barrier you cannot get past, and
+   * everything beyond it is a view. The signs are not set dressing
+   * explaining a rule — they ARE the rule, and they sit exactly where it
+   * starts.
+   *
+   * ── the shape ─────────────────────────────────────────────────────────
+   * Two towers, each a pair of legs crossed by horizontal braces, a main
+   * cable in two catenaries over them, and vertical suspenders down to the
+   * deck. The cable is what makes a suspension bridge read as one, so it is
+   * built as real sagging geometry rather than a straight line: 26 short
+   * segments per span, each tilted to its own chord.
+   */
+  _buildCityBridge() {
+    const B = {
+      z: 0,
+      deck: 13,                         // roadway height, ~11 above the water
+      x0: 176, xa: 232, xb: 384, x1: 436,
+      top: 74,                          // tower tops
+      half: 7.0,                        // half the carriageway
+      red: 0xc4462a, dark: 0x8e3220, lit: 0xd9603f,
+      steel: 0x6a6e74,
+    };
+    this._cityBridgeDeck(B);
+    this._cityBridgeTower(B, B.xa);
+    this._cityBridgeTower(B, B.xb);
+    this._cityBridgeCables(B);
+    this._cityBridgeClosure(B);
+    this._cityIsland(B);
+  }
+
+  /** The carriageway, its railings, and the piers holding it up. */
+  _cityBridgeDeck(B) {
+    const g = this.groundY;
+    /**
+     * The first stretch is SOLID and the rest is scenery.
+     *
+     * `solidTo` is a few units past the barrier, so the approach you can
+     * actually reach has ground under it and the closure has something to
+     * stand on. Past that the deck is deco: nothing can get there, and a
+     * collider out at 400 would only be a shelf floating over open water.
+     */
+    const solidTo = B.x0 + 26;
+
+    /**
+     * The approach ramp, up off the street to deck height.
+     *
+     * It starts at 150, inside the ward — which is why `_buildCity` leaves
+     * that plot empty. Tagged 'deck' so `deckStep` carries the rise, the
+     * same as every other walkway in the game.
+     */
+    const steps = 14;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = 150 + t * (B.x0 - 150);
+      const y = g + 0.5 + t * (B.deck - g - 0.5);
+      this.solid(x, y, B.z, 1.2, 0.3, B.half, 0x9a968c, 'deck');
+      // A kerb down each side so the ramp is a road and not a plank.
+      for (const s of [-1, 1]) {
+        this.deco(x, y + 0.5, B.z + s * B.half, 1.2, 0.3, 0.25, 0x8e8b82);
+      }
+    }
+
+    for (let x = B.x0; x < B.x1; x += 4) {
+      const solid = x <= solidTo;
+      if (solid) this.solid(x + 2, B.deck, B.z, 2.1, 0.32, B.half, B.red, 'deck');
+      else this.deco(x + 2, B.deck, B.z, 2.1, 0.32, B.half, B.red);
+      // Under-deck truss, which is most of what makes it read as a bridge
+      // rather than a plank from below.
+      this.deco(x + 2, B.deck - 0.9, B.z, 2.1, 0.55, B.half * 0.86, B.dark);
+      // Railings down both edges.
+      for (const s of [-1, 1]) {
+        this.deco(x + 2, B.deck + 0.85, B.z + s * B.half, 2.1, 0.5, 0.12, B.lit);
+      }
+    }
+
+    // Piers, down into the lake at the two towers and the far anchorage.
+    for (const px of [B.xa, B.xb]) {
+      this.deco(px, B.deck * 0.5 - 8, B.z, 5.5, B.deck * 0.5 + 8, 9.0, 0x7d7a72);
+    }
+  }
+
+  /**
+   * One tower: two legs, crossed by braces, with the road passing between.
+   *
+   * The braces are the Golden Gate's signature — the portal openings they
+   * leave are what the reference photograph is mostly made of — so there
+   * are five of them, closer together near the top exactly as in the real
+   * thing, and the legs taper as they rise.
+   */
+  _cityBridgeTower(B, x) {
+    const legs = [-B.half - 1.2, B.half + 1.2];
+    for (const oz of legs) {
+      // Stacked drums, each a little narrower than the last.
+      const segs = 9;
+      for (let i = 0; i < segs; i++) {
+        const t = i / segs;
+        const y0 = -4 + t * (B.top + 4);
+        const y1 = -4 + ((i + 1) / segs) * (B.top + 4);
+        const w = 2.9 - t * 1.0;
+        this.deco(x, (y0 + y1) * 0.5, B.z + oz, w, (y1 - y0) * 0.5, w, B.red);
+      }
+      // A cap, so the top is a finished thing and not a cut-off box.
+      this.deco(x, B.top + 1.0, B.z + oz, 1.9, 0.5, 1.9, B.dark);
+      this.lantern(x, B.top + 3.2, B.z + oz, 0xff5a4a);
+    }
+    // The crossbeams. Tightening toward the top is what gives the tower its
+    // proportions — evenly spaced ones read as a pylon, not a suspension
+    // bridge tower.
+    for (const t of [0.30, 0.55, 0.73, 0.87, 0.97]) {
+      const y = B.deck + t * (B.top - B.deck);
+      const w = 2.6 - t * 0.9;
+      this.deco(x, y, B.z, w, 1.0, B.half + 1.2, B.red);
+      this.deco(x, y - 1.1, B.z, w * 0.9, 0.22, B.half + 1.2, B.dark);
+    }
+    // And the beam the road passes under.
+    this.deco(x, B.deck + 7.0, B.z, 2.9, 1.3, B.half + 1.2, B.red);
+  }
+
+  /**
+   * The main cables and their suspenders.
+   *
+   * A catenary per span, approximated by short tilted segments. `sag` is
+   * measured down from the tower tops, and the middle of the main span
+   * comes to rest just above the deck — which is the line your eye actually
+   * reads as "suspension bridge".
+   */
+  _cityBridgeCables(B) {
+    const spans = [
+      [B.x0, B.xa, (B.top - B.deck) * 0.62],   // shore side
+      [B.xa, B.xb, B.top - B.deck - 3.0],      // the main span, deepest sag
+      [B.xb, B.x1, (B.top - B.deck) * 0.62],   // island side
+    ];
+    const N = 26;
+    // The cable ends at the deck at each anchorage and at the tower tops.
+    const heightAt = (x0, x1, sag, t) => {
+      const ends = (x0 === B.xa && x1 === B.xb) ? B.top : B.top;
+      const end0 = (x0 === B.x0) ? B.deck + 1.5 : ends;
+      const end1 = (x1 === B.x1) ? B.deck + 1.5 : ends;
+      // A parabola through both ends with `sag` at the middle.
+      return end0 + (end1 - end0) * t - sag * 4 * t * (1 - t);
+    };
+
+    for (const [x0, x1, sag] of spans) {
+      for (const oz of [-B.half - 1.2, B.half + 1.2]) {
+        let px = x0, py = heightAt(x0, x1, sag, 0);
+        for (let i = 1; i <= N; i++) {
+          const t = i / N;
+          const nx = x0 + (x1 - x0) * t;
+          const ny = heightAt(x0, x1, sag, t);
+          const dx = nx - px, dy = ny - py;
+          const len = Math.hypot(dx, dy);
+          // rotZ tilts a box that is long in x up to the chord's angle.
+          this.deco((px + nx) * 0.5, (py + ny) * 0.5, B.z + oz,
+            len * 0.5 + 0.06, 0.3, 0.3, B.dark, 0, 0, Math.atan2(dy, dx));
+          px = nx; py = ny;
+        }
+        // Suspenders: thin verticals from the cable down to the roadway.
+        for (let i = 1; i < N; i++) {
+          const t = i / N;
+          const sx = x0 + (x1 - x0) * t;
+          const sy = heightAt(x0, x1, sag, t);
+          if (sy - B.deck < 1.6) continue;      // none where they would be stubs
+          this.deco(sx, (sy + B.deck + 0.9) * 0.5, B.z + oz,
+            0.1, (sy - B.deck - 0.9) * 0.5, 0.1, B.dark);
+        }
+      }
+    }
+  }
+
+  /**
+   * ROAD CLOSED.
+   *
+   * Everything here is at the ward end, where a player actually arrives, and
+   * all of it is solid: two lines of water-filled barriers, a hazard-striped
+   * hoarding across the full width, and signs on both sides of it. The
+   * hoarding is what stops you — it is 2.6 tall against a jump of 17.5 units
+   * per second, which sounds beatable until you notice there is nothing to
+   * land on and a railing behind it.
+   *
+   * The cones and the digger are the part that makes it read as roadworks
+   * rather than as a wall somebody put there.
+   */
+  _cityBridgeClosure(B) {
+    const R = this.rnd;
+    const gate = B.x0 + 14;
+
+    // Hazard-striped hoarding right across the carriageway.
+    const bays = 7;
+    for (let i = 0; i < bays; i++) {
+      const t = (i + 0.5) / bays;
+      const oz = (t - 0.5) * B.half * 2;
+      const w = (B.half * 2) / bays * 0.46;
+      this.solid(gate, B.deck + 1.3, B.z + oz, 0.35, 1.3, w, 0xe8b93a, 'stone');
+      // The diagonal stripe, in two darker bars.
+      this.deco(gate - 0.38, B.deck + 1.75, B.z + oz, 0.06, 0.34, w * 0.92, 0x2a2e36);
+      this.deco(gate - 0.38, B.deck + 0.85, B.z + oz, 0.06, 0.34, w * 0.92, 0x2a2e36);
+    }
+    // A rail along the top, so the barrier has a lip rather than an edge.
+    this.solid(gate, B.deck + 2.75, B.z, 0.5, 0.18, B.half, 0xd8483c, 'stone');
+
+    /**
+     * THE SIGNS. Two of them, one facing the city and one facing the
+     * bridge, because a sign you can only read from the wrong side is not
+     * a sign. Each is a board on two posts with a red bar across it, which
+     * is about as close to "ROAD CLOSED" as an untextured game can get —
+     * and the striped barrier under it is doing the same job again.
+     */
+    for (const s of [-1, 1]) {
+      const sx = gate - s * 5.5;
+      for (const oz of [-2.4, 2.4]) {
+        this.solid(sx, B.deck + 1.5, B.z + oz, 0.16, 1.5, 0.16, 0x4a4d52, 'stone');
+      }
+      this.deco(sx, B.deck + 3.4, B.z, 0.12, 1.5, 3.1, 0xe8e2d2);
+      this.deco(sx - s * 0.14, B.deck + 3.4, B.z, 0.06, 0.34, 2.5, 0xd8483c);
+      this.deco(sx - s * 0.14, B.deck + 4.3, B.z, 0.06, 0.16, 2.2, 0x2a2e36);
+      this.deco(sx - s * 0.14, B.deck + 2.5, B.z, 0.06, 0.16, 2.2, 0x2a2e36);
+      this.lantern(sx, B.deck + 5.4, B.z, 0xffb347);
+    }
+
+    // Cones, in a taper leading up to the barrier.
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8;
+      const cx = gate - 13 + t * 11;
+      const oz = (1 - t) * B.half * 0.85;
+      for (const s of [-1, 1]) {
+        this.deco(cx, B.deck + 0.42, B.z + s * oz, 0.28, 0.42, 0.28, 0xd8483c);
+        this.deco(cx, B.deck + 0.72, B.z + s * oz, 0.13, 0.12, 0.13, 0xe8e2d2);
+      }
+    }
+
+    // A digger and a stack of pipe, parked where the work stopped.
+    const dx = gate - 9;
+    this.solid(dx, B.deck + 1.1, B.z - 3.4, 1.9, 1.0, 1.2, 0xe8b93a, 'stone');
+    this.deco(dx - 0.4, B.deck + 2.5, B.z - 3.4, 0.9, 0.7, 1.0, 0x2e333c);
+    this.deco(dx + 2.2, B.deck + 2.2, B.z - 3.4, 1.8, 0.22, 0.3, 0xe8b93a, 0, 0, 0.5);
+    for (let i = 0; i < 3; i++) {
+      this.solid(gate - 4.5, B.deck + 0.5 + i * 0.85, B.z + 3.6 + (i % 2) * 0.5,
+        1.5, 0.42, 0.42, 0x6a6e74, 'stone');
+    }
+    void R;
+  }
+
+  /**
+   * The island the bridge is going to.
+   *
+   * Pure scenery — it is past the heightfield and nothing can reach it —
+   * so it is built to read at distance and no closer: a headland, a little
+   * town along the shore, and a light at the point. Anything finer than
+   * that is detail nobody will ever stand next to.
+   */
+  _cityIsland(B) {
+    const R = this.rnd;
+    const cx = B.x1 + 44, cz = B.z;
+
+    // The landmass: overlapping rock drums, highest inland.
+    for (let i = 0; i < 26; i++) {
+      const a = R() * Math.PI * 2;
+      const d = R() * 54;
+      const x = cx + Math.cos(a) * d;
+      const z = cz + Math.sin(a) * d * 0.8;
+      const near = 1 - d / 54;
+      const h = 6 + near * 30 + R() * 8;
+      this.batches.rock.add(x, h * 0.4, z, 16 + R() * 12, h, 15 + R() * 11,
+        near > 0.5 ? 0x5c6a52 : 0x6a6f60);
+    }
+    // A town along the near shore, facing the bridge.
+    for (let i = 0; i < 16; i++) {
+      const x = cx - 40 + R() * 34;
+      const z = cz + (R() - 0.5) * 78;
+      const h = 6 + R() * 16;
+      this.deco(x, 10 + h * 0.5, z, 3 + R() * 3, h * 0.5, 3 + R() * 3,
+        [0x9a9a95, 0x8e908c, 0xa4a29a][Math.floor(R() * 3)]);
+      if (R() < 0.3) this.lantern(x, 12 + h, z, 0xffd9a0);
+    }
+    // And a light at the point, which is what you actually see at dusk.
+    this.deco(cx + 30, 40, cz - 30, 2.2, 9, 2.2, 0xe8e2d2);
+    this.lantern(cx + 30, 51, cz - 30, 0xffe08a);
   }
 
   // ------------------------------------------------------- rock spires (W)

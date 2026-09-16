@@ -8,8 +8,8 @@
  * nothing is allocated during gameplay.
  */
 
-import * as THREE from '../lib/three.module.js?v=v143';
-import { clamp } from './util.js?v=v143';
+import * as THREE from '../lib/three.module.js?v=v144';
+import { clamp } from './util.js?v=v144';
 
 const VERT = `
   attribute float aSize;
@@ -339,6 +339,55 @@ export class Effects {
         -dir.z * 5 + (Math.random() - 0.5) * 3,
         c.r, c.g, c.b,
         0.28 + Math.random() * 0.26, 0.25 + Math.random() * 0.22, -1.0, 3.5
+      );
+    }
+  }
+
+  /**
+   * OVERDRIVE'S SPEED WAKE: air tearing past the frog.
+   *
+   * `t` is 0..1 — nothing at all at the bottom, a strong rush at the top.
+   *
+   * Placed in the WORLD, in a ring around and behind the frog, and never on
+   * the screen. That is the whole rule for this effect: the brief asks for
+   * "the player feels extremely fast" without "the player can't see", and
+   * every technique that would break it — grain, noise, a full-screen
+   * overlay, blur, chromatic fringing — works by putting something between
+   * the camera and the game. Particles streaming past you read as speed
+   * from outside the frog as well, and cost nothing in visibility because
+   * you can simply look through them.
+   *
+   * They also stay BEHIND and BESIDE: nothing spawns in the cone the player
+   * is looking down, so an opponent you are closing on is never occluded by
+   * your own speed.
+   */
+  speedRush(pos, dir, t) {
+    if (t <= 0) return;
+    const n = 1 + Math.floor(t * 3);
+    for (let i = 0; i < n; i++) {
+      // Spawned out to the side and slightly behind, then swept backwards.
+      const side = (Math.random() - 0.5) * 2;
+      const back = 0.4 + Math.random() * 1.4;
+      const ox = -dir.z * side * 1.5 - dir.x * back;
+      const oz = dir.x * side * 1.5 - dir.z * back;
+      const sp = 9 + t * 26;
+      this.spark.spawn(
+        pos.x + ox, pos.y + 0.3 + Math.random() * 1.7, pos.z + oz,
+        -dir.x * sp + (Math.random() - 0.5) * 2.0,
+        (Math.random() - 0.5) * 1.6,
+        -dir.z * sp + (Math.random() - 0.5) * 2.0,
+        0.86, 0.94, 1.0,
+        0.06 + t * 0.13, 0.12 + Math.random() * 0.16, 0.5, 2.6
+      );
+    }
+    // A little ground dust torn up underneath, only once it is really moving.
+    if (t > 0.45 && Math.random() < t) {
+      this.dust.spawn(
+        pos.x + (Math.random() - 0.5) * 1.2, pos.y + 0.06,
+        pos.z + (Math.random() - 0.5) * 1.2,
+        -dir.x * (5 + t * 8), 1.2 + Math.random() * 1.4, -dir.z * (5 + t * 8),
+        0.80, 0.76, 0.66,
+        0.22 + t * 0.3, 0.26 + Math.random() * 0.24, -1.4, 2.4
       );
     }
   }
