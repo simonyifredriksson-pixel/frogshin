@@ -5,42 +5,42 @@
  * the water every half-minute or so, and eats anybody who stays in the lake
  * for more than a moment.
  *
- * ── the problem this file is mostly about ─────────────────────────────────
- * Two requirements pull against each other. The shark must reach a swimmer
- * within 1.2 seconds, every time, wherever they went in — AND it must swim
- * there. A thing that appears next to you is not a shark, it is a trapdoor
- * with teeth, and the whole point of the fin is that you watched it coming.
+ * ── the shape of it ───────────────────────────────────────────────────────
+ * `CFG.shark.alert` seconds in the water and it COMMITS: turns, and charges
+ * at one honest speed until it arrives. The timer starts the chase; what
+ * finishes you is the shark reaching you.
  *
- * Teleporting is off the table, and so is "make it fast enough to cross the
- * lake in 1.2s" — the lake is four hundred units across, and 330 units a
- * second is a missile, not an animal.
+ * That ordering matters. An earlier version EATS you on the timer instead,
+ * which forces the speed to be solved backwards from the arrival time — at
+ * range that is a torpedo and up close it is a shark politely slowing down,
+ * and neither is a thing you can watch happen. A charge on a timer needs
+ * only one speed, and the seconds between the fin turning toward you and
+ * the water closing over you are the part worth having.
  *
- * So the shark is never far away in the first place. It PATROLS THE WATER
- * NEAREST THE PLAYER: the cruise target wanders inside a ring 22–55 units
- * from the point on the shoreline you are standing nearest to. That single
- * decision is what makes both halves work —
- *
- *   - the strike is only ever ~55 units, which is a believable 46 u/s charge
- *     over 1.2 seconds rather than a teleport, and
- *   - the fin is where you can SEE it, which is the other thing that was
- *     asked for. A shark cruising the far side of a lake is a shark nobody
- *     ever knows about.
- *
+ * ── it is never far away, and that is deliberate ──────────────────────────
+ * The cruise target wanders inside a ring 26–62 units from the point on the
+ * shoreline nearest the player, and it repositions briskly when it falls
+ * behind. That keeps the FIN somewhere you can see it, which is half of why
+ * this exists — a shark cruising the far side of a lake is a shark nobody
+ * ever knows about — and it keeps a charge down to a couple of seconds.
  * It is a cheat, and it is invisible, because a lake this size has no "far
- * side" you can observe from the shore anyway.
+ * side" you can watch from the shore anyway.
  *
  * ── it really does swim ───────────────────────────────────────────────────
  * Position is integrated along a heading with a capped turn rate, never
- * lerped toward a target. It banks into its turns, it overshoots and comes
- * back around, and it cannot pivot on the spot — a charging shark turns at
- * 3.2 rad/s and a cruising one at 1.1. The strike speed is solved from the
- * distance remaining and the time left, so the bite lands on schedule
- * whether you went in close to it or across the bay from it.
+ * lerped toward a target, and never corrected afterwards: it banks into its
+ * turns, it can overshoot, and it slides along the shoreline rather than
+ * being shoved off it. The turn rate is solved from a fixed RADIUS, so the
+ * faster it charges the harder it turns — a fixed rate gave it a turn
+ * circle wider than the distance to its prey, and it sailed straight past.
+ *
+ * It also never leaves the water. `swimAt` is solved from the map's own
+ * height function at build time, and the charge is not exempt from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v148';
-import { CFG } from './config.js?v=v148';
-import { clamp } from './util.js?v=v148';
+import * as THREE from '../lib/three.module.js?v=v149';
+import { CFG } from './config.js?v=v149';
+import { clamp } from './util.js?v=v149';
 
 const _v = new THREE.Vector3();
 
@@ -269,10 +269,10 @@ export class Shark {
       /**
        * IT IS COMING. One honest speed, straight at you, until it arrives.
        *
-       * No solved-for-arrival-time speed any more: the 1.2 seconds is when
-       * it COMMITS, not when it bites, so the charge only has to be fast —
-       * it does not have to be fast by a computed amount. That is why this
-       * is a constant and the eat is simply what happens when it gets here.
+       * No solved-for-arrival-time speed: `alert` is when it COMMITS, not
+       * when it bites, so the charge only has to be fast — it does not have
+       * to be fast by a computed amount. That is why this is a constant and
+       * the eat is simply what happens when it gets here.
        */
       this.target.set(player.pos.x, 0, player.pos.z);
       wantSpeed = S.strikeSpeed;
@@ -549,12 +549,30 @@ function buildSharkModel() {
    * is, with a row of teeth along it. A mouth drawn at the tip reads as a
    * dolphin's smile; underslung reads as a shark.
    */
-  box(1.02, 0.42, 1.5, dark, 0, -0.44, 2.05);
+  box(1.02, 0.42, 1.2, dark, 0, -0.44, 1.95);
+  /**
+   * TEETH THAT HIDE UNDER THE SNOUT.
+   *
+   * The row used to be wider than the nose above it, so the outermost tooth
+   * each side stuck past the silhouette. From ABOVE — which is how you see
+   * a shark cruising past you in a lake — that is two bright specks on its
+   * head, and they read as a pair of little lights rather than as a mouth.
+   *
+   * The fix is a tolerance, not a deletion: ±0.23 of tooth under ±0.31 of
+   * snout, so the nose covers them completely from overhead. They sit just
+   * FORWARD of the mouth recess rather than inside it — the first attempt
+   * tucked them so far back that the dark box swallowed them and the shark
+   * lost its teeth altogether, which fixes the complaint by removing the
+   * feature.
+   *
+   * From the front and from underneath, where a mouth is meant to be read
+   * from — and where you are when it is eating you — nothing has changed.
+   */
   for (let i = 0; i < 7; i++) {
     const t = (i + 0.5) / 7;
-    const ox = (t - 0.5) * 0.92;
-    box(0.09, 0.22, 0.09, tooth, ox, -0.30, 2.62);
-    box(0.08, 0.17, 0.08, tooth, ox, -0.58, 2.44);
+    const ox = (t - 0.5) * 0.44;
+    box(0.08, 0.24, 0.10, tooth, ox, -0.30, 2.62);
+    box(0.07, 0.18, 0.09, tooth, ox, -0.57, 2.56);
   }
   // Eyes, set wide and forward, and a pale flash under the jaw.
   for (const s of [-1, 1]) {

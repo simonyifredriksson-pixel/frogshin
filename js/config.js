@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v148';
+export const BUILD = 'v149';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -937,14 +937,14 @@ export const CFG = {
      */
     biteRange: 4.2,
 
-    cruiseSpeed: 14.0,
+    cruiseSpeed: 17.0,
     /**
      * How fast it moves when it is repositioning rather than loitering —
      * far enough from its patrol point that it is going somewhere. Set to
      * keep pace with a sprinting frog on land (31 u/s) so that running
      * around the ward does not leave it permanently behind.
      */
-    trackSpeed: 40.0,
+    trackSpeed: 52.0,
     cruiseAccel: 11.0,
     cruiseTurn: 1.1,            // radians/s — a lazy circling turn
     strikeAccel: 240.0,         // a charge winds up fast — full speed in ~0.2s
@@ -957,11 +957,17 @@ export const CFG = {
      */
     strikeRadius: 13.0,
     /**
-     * Charge speed. Comfortably above a sprinting frog's 16.5 in the water,
-     * so committing to a swim is committing — but slow enough to watch it
-     * come, which is the point of the fin.
+     * Charge speed. Five times what a sprinting frog manages in water
+     * (16.5), so committing to a swim is committing and there is no version
+     * of fleeing that works.
+     *
+     * It is still a speed you can WATCH arrive rather than one that
+     * teleports: over the couple of seconds a charge takes, 82 units a
+     * second is a bow wave crossing the bay at you. `strikeRadius` keeps
+     * the turn circle tight enough that it still converges at this speed —
+     * a fixed turn RATE would have it sailing straight past again.
      */
-    strikeSpeed: 52.0,
+    strikeSpeed: 82.0,
 
     /** How far from the nearest water it patrols, near and far. */
     patrolNear: 26,
