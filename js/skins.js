@@ -8,36 +8,6 @@
  */
 
 /**
- * ═══ RARITY TIERS AND WHAT EACH IS WORTH ════════════════════════════════
- *
- * Two mechanisms, because the top of the ladder and the bottom of it are
- * answering different questions. See `tierChances` for the arithmetic.
- *
- * ── the top three are ANCHORED ──────────────────────────────────────────
- * A Legendary is 0.80% to pull, a Mythic 0.20%, a Secret 0.03% — per item,
- * in every crate in the game. These are headline numbers a player quotes to
- * a friend, so they are stated outright rather than falling out of whatever
- * else happens to be in the pool.
- *
- * ── the four below are WEIGHTED ─────────────────────────────────────────
- * They share whatever the anchored tiers leave, in proportion. That is what
- * makes a crate whose floor is Uncommon genuinely better per roll rather
- * than a commons machine with the commons deleted, and it is what the
- * Celestial Forge's 5,000 froglets buy: no commons at all, two Legendaries
- * instead of one, and the only Mythic in the game.
- *
- * ── WHY THESE FOUR NUMBERS ──────────────────────────────────────────────
- * They are chosen so the ladder holds at the join. In a five-tier crate
- * they come out at exactly 62% / 24% / 10% / 3.2%, which puts Epic four
- * times a Legendary — and the ladder is the whole point of having tiers.
- *
- * The previous curve was 7992 / 1598 / 320 / 64, a clean division by five
- * all the way down, and it could not survive Legendary moving to 0.80%:
- * Epic landed at 0.6365%, so a Legendary would have been EASIER to pull
- * than an Epic. Raising the top of a ladder means re-spacing the rungs
- * under it, or it stops being a ladder.
- */
-/**
  * ═══ ONE ODDS TABLE, FOR EVERY CASE IN THE GAME ══════════════════════════
  *
  * `odds` is the chance of the TIER, as a percentage. Every crate uses the
@@ -55,37 +25,66 @@
  * and twenty-five opens.
  *
  * A per-TIER table is the version a player can actually hold in their head:
- * a third of opens are Common, one in twenty is Legendary, one in a thousand
- * is ???. It reads the same on every case because it IS the same on every
+ * a third of opens are Common, one in twenty is Legendary, one in 543 is
+ * Mythic and one in two thousand is ???. It reads the same on every case
+ * because it IS the same on every
  * case, and a crate that is missing a tier simply shares that tier's slice
  * out among the ones it has — see `tierChances`.
  */
+/**
+ * ═══ THE TWO TOP TIERS ARE WRITTEN AS ODDS, NOT AS PERCENTAGES ══════════
+ *
+ * "One in five hundred and forty-three" is the number that was asked for,
+ * and it is the number a player repeats to somebody else. A percentage is a
+ * lossy way of storing it: 0.184% reads back as one in 543.48, and the
+ * moment somebody rounds it to 0.18 the tier quietly becomes one in 556.
+ *
+ * So the ladder stores the ODDS and derives the percentage. `ONE_IN(543)`
+ * is exactly 543 when inverted, and `test_crates` asserts that round trip
+ * rather than a decimal, so a future edit that means to move the tier has
+ * to say which number it is moving it to.
+ *
+ * MYTHIC WAS ONE IN THIRTY-FOUR. At 2.95% it turned up in roughly one case
+ * in thirty — often enough that a Mythic was something you had a few of,
+ * which is not what the tier is for. At one in 543 it is a thing that
+ * happens to somebody in the lobby rather than to everybody.
+ */
+const ONE_IN = (n) => 100 / n;
+
+/**
+ * The five ordinary tiers keep their 35 : 27 : 20 : 10 : 5 shape and are
+ * scaled to fill whatever the top two leave. Taking 2.77 points off Mythic
+ * had to put them somewhere, and spreading it down the ladder in the
+ * proportions that were already there is the only redistribution that
+ * changes no relationship a player can see.
+ *
+ * The scale is computed rather than typed so the seven come to exactly a
+ * hundred by construction. A hand-typed table is one arithmetic slip away
+ * from a shop whose odds board does not add up.
+ */
+const _TOP = ONE_IN(543) + ONE_IN(2000);
+const _BASE = { common: 35, uncommon: 27, rare: 20, epic: 10, legendary: 5 };
+const _K = (100 - _TOP) / 97;
+
 export const RARITY = {
-  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', odds: 35 },
-  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', odds: 27 },
-  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', odds: 20 },
-  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', odds: 10 },
-  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: 5 },
-  /**
-   * 2.95 rather than 2.9, and the extra twentieth of a point is ???'s.
-   *
-   * The ladder has to come to a hundred or every crate's board is a rounding
-   * error away from lying. ??? was halved to 0.05 and the point had to go
-   * somewhere; Mythic is the tier directly under it and the one that should
-   * absorb it.
-   */
-  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: 2.95 },
+  common:    { id: 'common',    name: 'Common',    color: '#4b69ff', odds: _BASE.common * _K },
+  uncommon:  { id: 'uncommon',  name: 'Uncommon',  color: '#8847ff', odds: _BASE.uncommon * _K },
+  rare:      { id: 'rare',      name: 'Rare',      color: '#d32ce6', odds: _BASE.rare * _K },
+  epic:      { id: 'epic',      name: 'Epic',      color: '#eb4b4b', odds: _BASE.epic * _K },
+  legendary: { id: 'legendary', name: 'Legendary', color: '#ffd700', odds: _BASE.legendary * _K },
+  /** ONE IN FIVE HUNDRED AND FORTY-THREE. See the note above. */
+  mythic:    { id: 'mythic',    name: 'Mythic',    color: '#8ffaff', odds: ONE_IN(543) },
   /**
    * ??? — and it stays ??? until somebody pulls one.
    *
-   * ONE IN TWO THOUSAND. These cases cost six to twelve thousand froglets,
-   * so a ??? is a serious amount of money spent and is meant to be — the
-   * point of the tier is that seeing one in the Croaklands is an event.
+   * ONE IN TWO THOUSAND. A ??? is a serious amount of money spent and is
+   * meant to be — the point of the tier is that seeing one in the
+   * Croaklands is an event.
    *
    * It is also the only tier whose items hide their own NAME until they are
    * yours — see `secret` on a skin and `Shop.hidden`.
    */
-  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: 0.05 },
+  secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: ONE_IN(2000) },
 };
 
 export const RARITY_ORDER = [
@@ -941,38 +940,38 @@ export function findSkin(kind, id) {
 export const CRATES = [
   // ── the standard cases ──────────────────────────────────────────────
   {
-    id: 'crate_kunai', kind: 'kunai', set: 'base', price: 1800,
+    id: 'crate_kunai', kind: 'kunai', set: 'base', price: 1600,
     name: 'Common Kunai Case',
     blurb: 'Nine blades. Nine ways to miss.',
     color: '#c0392b',
   },
   {
-    id: 'crate_sword', kind: 'swords', set: 'base', price: 2800,
+    id: 'crate_sword', kind: 'swords', set: 'base', price: 2600,
     name: 'Common Sword Case',
     blurb: 'Steel for the frog who takes their duels seriously.',
     color: '#5f9ec4',
   },
   {
-    id: 'crate_frog', kind: 'frogs', set: 'base', price: 3600,
+    id: 'crate_frog', kind: 'frogs', set: 'base', price: 3200,
     name: 'Common Frog Case',
     blurb: 'A whole new you. Same terrible habits.',
     color: '#4e9a3c',
   },
   // ── Swampforged: wood, chipped iron, poison ─────────────────────────
   {
-    id: 'crate_swamp_kunai', kind: 'kunai', set: 'swamp', price: 2000,
+    id: 'crate_swamp_kunai', kind: 'kunai', set: 'swamp', price: 1800,
     name: 'Swampforged Kunai Case',
     blurb: 'Nine blades pulled out of the mire. Two of them still drip.',
     color: '#6ac02a', anim: 'swamp',
   },
   {
-    id: 'crate_swamp_sword', kind: 'swords', set: 'swamp', price: 3000,
+    id: 'crate_swamp_sword', kind: 'swords', set: 'swamp', price: 2700,
     name: 'Swampforged Sword Case',
     blurb: 'Rotwood to royalty. Everything in here was forged in a bog.',
     color: '#7aa84a', anim: 'swamp',
   },
   {
-    id: 'crate_swamp_frog', kind: 'frogs', set: 'swamp', price: 4500,
+    id: 'crate_swamp_frog', kind: 'frogs', set: 'swamp', price: 3600,
     name: 'Bogswamp Crate',
     blurb: 'Nine frogs out of the wetlands, up to and including their king.',
     color: '#4a7a3a', anim: 'swamp',
@@ -987,44 +986,58 @@ export const CRATES = [
    * Mythic — the only Mythic in the game.
    */
   {
-    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 4200,
+    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 3200,
     name: 'Celestial Kunai Case',
     blurb: 'Dark metal and starlight. Nothing common has ever been in one.',
     color: '#7fbcff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 5600,
+    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 4200,
     name: 'Celestial Sword Case',
     blurb: 'Nine blades of heavenly metal — and one that is not quite a blade.',
     color: '#8fd8ff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 6600,
+    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 5000,
     name: 'Celestial Forge Crate',
     blurb: 'Ancient gold, blue fire, and the rarest frog anybody owns.',
     color: '#ffd24a', anim: 'celestial',
   },
   /**
-   * ── THE ECLIPSE COLLECTION ────────────────────────────────────────
+   * ── THE ECLIPSE COLLECTION, AND THE TOP OF THE SHOP ───────────────
    *
-   * Three crates that are meant to be opened as a SET. Each hides one ???
-   * at 0.03%, the three of them are pieces of the same thing, and owning
-   * all three is the only way to the title — see `eclipseFound`.
+   * Three crates that are meant to be opened as a SET. Each hides one ???,
+   * the three of them are pieces of the same thing, and owning all three is
+   * the only way to the title — see `eclipseFound`.
+   *
+   * ── the price is the point ────────────────────────────────────────
+   * 96,000 / 114,000 / 132,000, against 8,600 for the dearest case in the
+   * whole of the rest of the shop. That is not a rung above the Divine Sun,
+   * it is a different kind of purchase: the Forbidden Frog Crate costs more
+   * than fifteen Sun crates and is the last thing anybody buys.
+   *
+   * IT IS A BAD DEAL IN DUPLICATES, DELIBERATELY. Every other case hands
+   * back 17–53% of its own price once your collection is full; these hand
+   * back about one per cent, because what is bought here is the title and
+   * three items nothing else in the game looks like — not a payout. The
+   * anti-farm ceiling in test_dupe guards the other direction, so this end
+   * is safe by construction, and the shop card is what has to be honest
+   * about it.
    */
   {
-    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 3100,
+    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 96000,
     name: 'Eclipse Kunai Crate',
     blurb: 'Nine blades cut from the dark. One of them is not a blade.',
     color: '#a87aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 4100,
+    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 114000,
     name: 'Eclipse Sword Crate',
     blurb: 'Nightsteel, void and corona — and something with no name yet.',
     color: '#8f6aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 5000,
+    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 132000,
     name: 'Forbidden Frog Crate',
     blurb: 'An old power nobody was supposed to dig back up.',
     color: '#ffb43a', anim: 'eclipse',
@@ -1048,117 +1061,72 @@ export const CRATES = [
  *
  *   2 Common · 2 Uncommon · 2 Rare · 1 Epic · 1 Legendary · 1 Mythic · 1 ???
  *
- * ── why these are built rather than written out ───────────────────────
- * The sets above this line are hand-written because each one is a handful
- * of items with their own ideas. A hundred and fifty literals is a
- * different problem: the thing that matters about them is the LADDER — that
- * a Rare visibly out-dresses an Uncommon, and does so the same way in every
- * collection — and a ladder is exactly what you cannot see in a wall of
- * hex. Written as a table, the progression is the code.
+ * A collection is now only what the three concept tables have in common: an
+ * id, a name, a price and a line of copy for the case. Everything a player
+ * can SEE is written out per item in FROG_CONCEPTS, SWORD_CONCEPTS and
+ * KUNAI_CONCEPTS.
  *
- * A collection supplies five colours and thirty names. The tier decides
- * everything else, identically across all five, so a Frostveil Epic and an
- * Emberborn Epic wear the same amount of armour in different weather.
+ * ── what used to be here, and why it went ─────────────────────────────
+ * A five-colour palette and thirty names, from which a hundred and fifty
+ * skins were generated by tier. The argument was that the LADDER is the
+ * thing that matters and a ladder is what you cannot see in a wall of hex.
+ * That argument was right about the ladder and wrong about the conclusion:
+ * what it produced was five collections that were one collection under a
+ * hue rotation, and no amount of visible progression fixes an item you have
+ * already seen four times in another colour.
  */
 const COLLECTIONS = [
   {
     id: 'verdant', name: 'Verdant Samurai', color: '#6aa832',
-    price: { frogs: 6000, swords: 4500, kunai: 3000 },
-    // dark, mid, light, accent, glow
-    pal: [0x1f3a1a, 0x4e7a34, 0x8fc44a, 0xc9d98f, 0x9cff6b],
+    price: { frogs: 4400, swords: 3400, kunai: 2400 },
     blurb: 'Bamboo, moss and old jade. Everything in here grew before it '
       + 'was forged.',
-    swords: ['Bamboo Blade', 'Moss Katana', 'Jade Edge', 'Forest Fang',
-      'Ronin Blade', 'Verdant Katana', 'Warden Blade', 'Jade Reaver',
-      "Shogun's Blade", 'Whisperleaf'],
-    kunai: ['Bamboo Kunai', 'Moss Kunai', 'Jade Kunai', 'Forest Kunai',
-      'Ronin Kunai', 'Verdant Fang', 'Warden Kunai', 'Jade Shard',
-      'Shogun Kunai', "The Sage's Needle"],
   },
   {
     id: 'frost', name: 'Frostveil', color: '#8fd8ff',
-    price: { frogs: 7500, swords: 5500, kunai: 4000 },
-    pal: [0x2a4a66, 0x6a9ec4, 0xbfe4ff, 0xe8f6ff, 0x8ff0ff],
+    price: { frogs: 5400, swords: 4000, kunai: 3000 },
     blurb: 'Nine things out of the deep winter, and one that was already '
       + 'there when it arrived.',
-    swords: ['Frost Blade', 'Ice Katana', 'Snowfang', 'Frozen Edge',
-      'Glacier Fang', 'Crystal Blade', 'Frost Reaper', "Winter's Edge",
-      "Emperor's Frost", 'Heartfrost'],
-    kunai: ['Snow Kunai', 'Frost Kunai', 'Ice Fang', 'Frozen Kunai',
-      'Glacier Kunai', 'Crystal Shard', 'Winter Fang', 'Frost Reaper',
-      "Emperor's Kunai", 'Stillfrost'],
   },
   {
     id: 'ember', name: 'Emberborn', color: '#ff8a3c',
-    price: { frogs: 9000, swords: 7000, kunai: 5000 },
-    pal: [0x3a1a10, 0x8a3a1e, 0xff8a3c, 0xffca4a, 0xff6a2a],
+    price: { frogs: 6400, swords: 5000, kunai: 3600 },
     blurb: 'Ash, cinder and the things that walk out of a fire still '
       + 'burning.',
-    swords: ['Ash Blade', 'Ember Katana', 'Cinder Edge', 'Flamefang',
-      'Magma Blade', 'Inferno Katana', 'Ember Reaper', 'Volcanic Fang',
-      'Inferno Shogun Blade', 'Cinderheart'],
-    kunai: ['Ash Kunai', 'Ember Kunai', 'Cinder Kunai', 'Flame Fang',
-      'Magma Kunai', 'Inferno Kunai', 'Ember Shard', 'Volcanic Fang',
-      'Inferno Kunai', 'Ashfall'],
   },
   {
     id: 'dragon', name: 'Dragon Ascension', color: '#d94a4a',
-    price: { frogs: 10500, swords: 8500, kunai: 6500 },
-    pal: [0x3a0f14, 0x9c2430, 0xd94a4a, 0xd8ad2e, 0xffb03c],
+    price: { frogs: 7400, swords: 6000, kunai: 4400 },
     blurb: 'Scale, bone and gold. The ladder here ends somewhere that was '
       + 'never a frog.',
-    swords: ['Scale Blade', 'Dragon Fang', 'Crimson Edge', 'Wyrm Katana',
-      'Dragonbone Blade', 'Elder Fang', 'Dragon Reaver', 'Imperial Dragon',
-      "Dragon Emperor's Fang", 'Wyrmheart'],
-    kunai: ['Scale Kunai', 'Dragon Kunai', 'Crimson Fang', 'Wyrm Kunai',
-      'Dragonbone Kunai', 'Elder Kunai', 'Dragon Shard', 'Imperial Fang',
-      'Dragon Emperor Kunai', 'Wyrmscale'],
   },
   {
     id: 'sun', name: 'Divine Sun', color: '#ffd76b',
-    price: { frogs: 12000, swords: 10000, kunai: 8000 },
-    pal: [0x5a4408, 0xb89a4a, 0xffd76b, 0xfff3c4, 0xffe08a],
-    blurb: 'The most expensive case in the shop, and the brightest thing '
+    price: { frogs: 8600, swords: 7000, kunai: 5400 },
+    blurb: 'The dearest case outside the Eclipse, and the brightest thing '
       + 'in it does not set.',
-    swords: ['Sunsteel Blade', 'Dawn Katana', 'Solar Edge', 'Golden Fang',
-      'Sun Guardian', 'Celestial Blade', "Heaven's Reaver", 'Divine Edge',
-      'Sword of the Sun', 'Daybreaker'],
-    kunai: ['Sunlit Kunai', 'Dawn Kunai', 'Solar Kunai', 'Golden Fang',
-      'Sun Shard', 'Celestial Kunai', "Heaven's Kunai", 'Divine Shard',
-      'Kunai of the Sun', 'Sunfall'],
   },
 ];
 
 /**
  * The ladder every collection climbs. Ten rungs, and the tier is the rung.
  *
- * `pal` is the collection's five colours — dark, mid, light, accent, glow —
- * and each rung says which of them to use and what the frog is WEARING. The
- * escalation is deliberately the same in all five so a player who has
- * learned to read one case can read the other fourteen.
+ * This is now the ONLY thing the rung decides. What the item at that rung
+ * looks like is written out, one at a time, in the three concept tables
+ * below — see the note on SWORD_CONCEPTS.
  */
 const TIER_LADDER = [
   'common', 'common', 'uncommon', 'uncommon', 'rare', 'rare',
   'epic', 'legendary', 'mythic', 'secret',
 ];
 
-/** Darken or lighten a hex by a factor, staying inside 0..255 per channel. */
-function shade(hex, k) {
-  const r = Math.min(255, Math.round(((hex >> 16) & 255) * k));
-  const g = Math.min(255, Math.round(((hex >> 8) & 255) * k));
-  const b = Math.min(255, Math.round((hex & 255) * k));
-  return (r << 16) | (g << 8) | b;
-}
-
 /**
  * ═══ THE FIFTY FROGS, ONE CONCEPT AT A TIME ══════════════════════════════
  *
- * The swords and the kunai below are still generated from a ladder, because
- * a katana is a katana and what changes up its tiers is genuinely its
- * material and its shape. A FROG is a person. Generating fifty of them from
- * one escalation produced exactly what you would expect: the same frog
- * wearing slightly more of the same armour in five weathers, which is the
- * complaint this table exists to answer.
+ * A FROG is a person. Generating fifty of them from one escalation produced
+ * exactly what you would expect: the same frog wearing slightly more of the
+ * same armour in five weathers, which is the complaint this table exists to
+ * answer.
  *
  * So every rung is written out, and every rung is somebody:
  *
@@ -1180,6 +1148,21 @@ function shade(hex, k) {
  * used here is something a builder actually reads; test_crates checks that
  * claim for every skin in the game, which is how `embers` was caught sitting
  * dead in two Legendaries for months.
+ *
+ * ── AND THE NAMES ARE NAMES ─────────────────────────────────────────────
+ * The top of this table used to be called The Forgotten Grove, The Last
+ * Winter, The First Flame, The Nameless Wyrm and The One Who Saw the Sun.
+ * Five skins, one grammar — "The" plus a portentous noun phrase — which is
+ * the sound of a table being filled in rather than five things being named,
+ * and it reads that way on the card.
+ *
+ * The rule now: A NAME IS SOMETHING SOMEBODY WOULD SAY OUT LOUD. One or two
+ * words, concrete, and no "The X of Y" or "The One Who". So the five are
+ * Deadwood, Blackice, Burnt Offering, Hollowscale and Sunblind — each one
+ * still saying exactly what the skin is, in the register a player would use
+ * telling a friend what they pulled. The lower rungs keep the trade names
+ * they already had (Coal Miner, Ice Fisher, Campfire Cook) because those
+ * were already people rather than epithets.
  */
 const FROG_CONCEPTS = {
   // ── 🌿 VERDANT SAMURAI — nature, and the very old things in it ────────
@@ -1192,7 +1175,7 @@ const FROG_CONCEPTS = {
     { name: 'Bamboo Monk', skin: 0x6f9445, belly: 0xd8d8a8, cloth: 0xc9b978,
       scarf: 0xb8863c, fx: { plates: 0xc9b978, pattern: 0x8a6a2a, moss: 0x6f9445 } },
     // The cloak IS the skin. A hood and a pair of leaf ears off the cheeks.
-    { name: 'Leafcloak Scout', skin: 0x5c8a3a, belly: 0xc4d8a0, cloth: 0x2f4a20,
+    { name: 'Leafcloak', skin: 0x5c8a3a, belly: 0xc4d8a0, cloth: 0x2f4a20,
       scarf: 0x8fc44a, fx: { hood: 0x3f6b28, fins: true } },
     { name: 'Thornback', skin: 0x46613a, belly: 0xa8b894, cloth: 0x2a3a22,
       scarf: 0x6b4f33, fx: { plates: 0x4a3a28, spikes: 6, horns: 2 } },
@@ -1200,7 +1183,7 @@ const FROG_CONCEPTS = {
     { name: 'Lantern Keeper', skin: 0x4e7a34, belly: 0xc8cfa0, cloth: 0x35301f,
       scarf: 0xffb347, fx: { hood: 0x2f4a20, pattern: 0xffb347, eyeGlow: 0xffd76b } },
     // Ancient tree, worn as armour, with the roots still attached to it.
-    { name: 'Giantwood Guardian', skin: 0x3f4f2e, belly: 0x9aa878, cloth: 0x2a2a1a,
+    { name: 'Old Growth', skin: 0x3f4f2e, belly: 0x9aa878, cloth: 0x2a2a1a,
       scarf: 0x6b5a2a, fx: {
         plates: 0x5a4630, moss: 0x5f8f3a, spikes: 5, shield: 0x4a3a24,
         emissive: 0x1a2410,
@@ -1212,30 +1195,30 @@ const FROG_CONCEPTS = {
      * a ring of fragments turning round a frog means Mythic or ???, and it
      * only means that while nothing below carries it. `stars` gives the
      * same drifting motes without spending the signal, which matters more
-     * here than on any other skin: this one sits directly under the Ancient
-     * King of Roots, and the two have to be distinguishable at a glance.
+     * here than on any other skin: this one sits directly under Rootking,
+     * and the two have to be distinguishable at a glance.
      */
-    { name: 'Spirit of the Grove', skin: 0x7fd8a0, belly: 0xdfffe8, cloth: 0x2a4a38,
+    { name: 'Greenmantle', skin: 0x7fd8a0, belly: 0xdfffe8, cloth: 0x2a4a38,
       scarf: 0xbfffd0, fx: {
         aura: 0x7fffb0, pattern: 0xbfffd0, eyeGlow: 0xdfffe8, stars: 0x8fe0a0,
         embers: 0xbfffd0, emissive: 0x1a3a26, fins: true,
       } },
     // Royal, and made of the forest rather than dressed in it.
-    { name: 'Ancient King of Roots', skin: 0x35301f, belly: 0xa8a070, cloth: 0x201c12,
+    { name: 'Rootking', skin: 0x35301f, belly: 0xa8a070, cloth: 0x201c12,
       scarf: 0xc9a227, fx: {
         crown: 2.0, plates: 0x5a4630, moss: 0x4e7a34, pattern: 0xc9d98f,
         eyeGlow: 0xc9ff6b, halo: 0xc9d98f, stars: 0xc9d98f,
         orbit: 0x8fc44a, orbitN: 9, spikes: 6, emissive: 0x1a1a0e,
       } },
     /**
-     * ── ??? THE FORGOTTEN GROVE ───────────────────────────────────────
+     * ── ??? DEADWOOD ──────────────────────────────────────────────────
      *
      * It is not a frog in armour. The roots grew around it and became the
      * shape — `wings` is what carries that, torn and bark-coloured, so the
      * OUTLINE is wrong before you have read anything on it. Bark orbits it,
      * and the eyes are two stars a very long way down a dark hole.
      */
-    { name: 'The Forgotten Grove', skin: 0x1e2416, belly: 0x6f7a52, cloth: 0x12160d,
+    { name: 'Deadwood', skin: 0x1e2416, belly: 0x6f7a52, cloth: 0x12160d,
       scarf: 0x3a4a22, secret: true, fx: {
         wings: 0x4a3a26, wingGlow: 0x9cff6b, wingsTorn: true, wingSpan: 1.15,
         moss: 0x3f6b28, orbit: 0x6b5a3a, orbitN: 11, stars: 0xdfffe8,
@@ -1246,14 +1229,14 @@ const FROG_CONCEPTS = {
 
   // ── ❄️ FROSTVEIL — a whole frozen civilisation ───────────────────────
   frost: [
-    { name: 'Snowbound Traveller', skin: 0x8aa4b8, belly: 0xe4eef6, cloth: 0x3f5060,
+    { name: 'Snowbound', skin: 0x8aa4b8, belly: 0xe4eef6, cloth: 0x3f5060,
       scarf: 0xc44a4a, fx: {} },
     { name: 'Ice Fisher', skin: 0x7f9aae, belly: 0xdfe8f2, cloth: 0x5a4a38,
       scarf: 0xb8a078, fx: {} },
     // The coat, and the bottles clinking on the belt.
     { name: 'Winter Apothecary', skin: 0x8fa8bc, belly: 0xe8f0f8, cloth: 0x2f3f52,
       scarf: 0x6fc4a8, fx: { hood: 0x2a3848, pattern: 0x8ff0c4 } },
-    { name: 'Frost Nomad', skin: 0x93a6b6, belly: 0xe0ebf4, cloth: 0x4a4038,
+    { name: 'Furlined', skin: 0x93a6b6, belly: 0xe0ebf4, cloth: 0x4a4038,
       // Snow blowing off the layers, where the Sky Nomad has stitching.
       scarf: 0xcfb894, fx: { hood: 0x6a5a48, fins: true, embers: 0xe8f4ff } },
     // Ice worked like metal: polished plate and a slab of a shield.
@@ -1272,19 +1255,19 @@ const FROG_CONCEPTS = {
         shield: 0x88c4e0,
       } },
     // Almost not there, and it brings its own weather with it.
-    { name: 'Whiteout Revenant', skin: 0xc8d8e4, belly: 0xffffff, cloth: 0xa8bccc,
+    { name: 'Whiteout', skin: 0xc8d8e4, belly: 0xffffff, cloth: 0xa8bccc,
       scarf: 0xffffff, fx: {
         plates: 0xe8f4ff, aura: 0xffffff, embers: 0xffffff,
         eyeGlow: 0xbfe4ff, pattern: 0xffffff, emissive: 0x6a8ca8,
       } },
-    { name: 'Crown of Winter', skin: 0x2f4f6e, belly: 0xcfe8ff, cloth: 0x1a2f44,
+    { name: 'Rimecrown', skin: 0x2f4f6e, belly: 0xcfe8ff, cloth: 0x1a2f44,
       scarf: 0xe8f6ff, fx: {
         crown: 2.0, plates: 0xbfe4ff, halo: 0xe8f6ff, halo2: true,
         orbit: 0xbfe4ff, orbitN: 9, stars: 0xffffff, eyeGlow: 0x8ff0ff,
         spikes: 6, emissive: 0x18384f,
       } },
     /**
-     * ── ??? THE LAST WINTER ───────────────────────────────────────────
+     * ── ??? BLACKICE ──────────────────────────────────────────────────
      *
      * Black and white, and the snow around it has stopped.
      *
@@ -1294,7 +1277,7 @@ const FROG_CONCEPTS = {
      * deliberately colourless — it is the only skin in the game with no hue
      * at all, and that is most of why it is recognisable.
      */
-    { name: 'The Last Winter', skin: 0x1a1a1e, belly: 0xf4f4f6, cloth: 0x0e0e12,
+    { name: 'Blackice', skin: 0x1a1a1e, belly: 0xf4f4f6, cloth: 0x0e0e12,
       scarf: 0xffffff, secret: true, fx: {
         orbit: 0xffffff, orbitN: 11, stars: 0xffffff, embers: 0xdfe8f0,
         eyeGlow: 0xffffff, pattern: 0xffffff, plates: 0x2a2a30,
@@ -1326,25 +1309,25 @@ const FROG_CONCEPTS = {
     // Stops being a person. Horns, bulk and volcanic rock.
     // Actually alight, which is what separates it from the Elder Wyrm —
     // the two are otherwise the same idea of "horned thing in old plate".
-    { name: 'Infernal Beast', skin: 0x4a1c12, belly: 0x9a5a3a, cloth: 0x1e0c08,
+    { name: 'Cinderbeast', skin: 0x4a1c12, belly: 0x9a5a3a, cloth: 0x1e0c08,
       scarf: 0xff6a2a, fx: {
         horns: 4, spikes: 6, plates: 0x3a2018, eyeGlow: 0xffca4a,
         pattern: 0xff6a2a, emissive: 0x4a1204, embers: 0xff8a3c,
       } },
     // Stone on the outside, and something molten moving under it.
-    { name: 'Living Volcano', skin: 0x3a342e, belly: 0x8a6a52, cloth: 0x201c18,
+    { name: 'Caldera', skin: 0x3a342e, belly: 0x8a6a52, cloth: 0x201c18,
       scarf: 0xff8a3c, fx: {
         plates: 0x4a443c, pattern: 0xff4a1a, embers: 0xff8a3c,
         aura: 0xff6a2a, eyeGlow: 0xffca4a, spikes: 5, emissive: 0x5a1a04,
       } },
-    { name: 'Cinder Sovereign', skin: 0x2f221c, belly: 0xa87a58, cloth: 0x18100c,
+    { name: 'Emberlord', skin: 0x2f221c, belly: 0xa87a58, cloth: 0x18100c,
       scarf: 0xffca4a, fx: {
         crown: 2.0, plates: 0x4a3028, halo: 0xff8a3c, orbit: 0xffca4a,
         orbitN: 9, embers: 0xff8a3c, pattern: 0xffca4a, eyeGlow: 0xffe08a,
         spikes: 6, horns: 2, emissive: 0x5a1c04,
       } },
     /**
-     * ── ??? THE FIRST FLAME ───────────────────────────────────────────
+     * ── ??? BURNT OFFERING ────────────────────────────────────────────
      *
      * Dormant, and then you notice the cracks.
      *
@@ -1352,10 +1335,10 @@ const FROG_CONCEPTS = {
      * that is defined by what it does NOT have: a body of nearly black
      * material, a handful of embers, and a pattern colour so bright it is
      * effectively white — so the only light on it comes out of the seams.
-     * A big flaming shell around it would make it the same as the Cinder
-     * Sovereign with a different hat.
+     * A big flaming shell around it would make it Emberlord in a different
+     * hat.
      */
-    { name: 'The First Flame', skin: 0x14100e, belly: 0x3a2a22, cloth: 0x0a0806,
+    { name: 'Burnt Offering', skin: 0x14100e, belly: 0x3a2a22, cloth: 0x0a0806,
       scarf: 0x2a1c14, secret: true, fx: {
         pattern: 0xfff4d0, eyeGlow: 0xffffff, embers: 0xffb347,
         plates: 0x1a1512, emissive: 0x6a1c00,
@@ -1364,9 +1347,9 @@ const FROG_CONCEPTS = {
 
   // ── 🐉 DRAGON ASCENSION — five different dragon cultures ─────────────
   dragon: [
-    { name: 'Dragon Egg Keeper', skin: 0x7a8a5a, belly: 0xd8d0a0, cloth: 0x5a4a30,
+    { name: 'Egg Keeper', skin: 0x7a8a5a, belly: 0xd8d0a0, cloth: 0x5a4a30,
       scarf: 0xc4a05a, fx: {} },
-    { name: 'Mountain Rider', skin: 0x6a7a8a, belly: 0xc8d0d8, cloth: 0x4a3a2a,
+    { name: 'Highland Guide', skin: 0x6a7a8a, belly: 0xc8d0d8, cloth: 0x4a3a2a,
       scarf: 0x9c2430, fx: {} },
     { name: 'Scale Hunter', skin: 0x7a6a4a, belly: 0xc8b890, cloth: 0x3a2a20,
       scarf: 0xd94a4a, fx: { plates: 0x8a5a3a, pattern: 0xd8ad2e, spikes: 3 } },
@@ -1383,7 +1366,7 @@ const FROG_CONCEPTS = {
         hood: 0x6a2020, pattern: 0xd8ad2e, eyeGlow: 0xffb03c, fins: true,
       } },
     // A third culture entirely: dragon technology, and it is powered.
-    { name: 'Storm Dragon Rider', skin: 0x3a4a6a, belly: 0xa8c4e4, cloth: 0x1e2838,
+    { name: 'Stormrider', skin: 0x3a4a6a, belly: 0xa8c4e4, cloth: 0x1e2838,
       scarf: 0x8fd8ff, fx: {
         plates: 0x5a6a8a, pattern: 0x8fd8ff, eyeGlow: 0xdfffff,
         aura: 0x6ab0ff, spikes: 5, emissive: 0x16243a,
@@ -1393,14 +1376,14 @@ const FROG_CONCEPTS = {
         horns: 4, spikes: 6, plates: 0x6a4a34, pattern: 0xd8ad2e,
         eyeGlow: 0xffb03c, emissive: 0x2a1008,
       } },
-    { name: 'Dragon Throne', skin: 0x3a0f14, belly: 0xc49060, cloth: 0x1e080c,
+    { name: 'Wyrmcrown', skin: 0x3a0f14, belly: 0xc49060, cloth: 0x1e080c,
       scarf: 0xd8ad2e, fx: {
         crown: 2.0, plates: 0x8a2430, halo: 0xd8ad2e, orbit: 0xffb03c,
         orbitN: 9, stars: 0xffd76b, pattern: 0xd8ad2e, eyeGlow: 0xffca4a,
         spikes: 6, horns: 2, emissive: 0x3a0a0e,
       } },
     /**
-     * ── ??? THE NAMELESS WYRM ─────────────────────────────────────────
+     * ── ??? HOLLOWSCALE ───────────────────────────────────────────────
      *
      * No wings and no neon, which were both asked for by name.
      *
@@ -1410,7 +1393,7 @@ const FROG_CONCEPTS = {
      * purpose: everything else at this tier announces itself, and this one
      * is recognised rather than noticed.
      */
-    { name: 'The Nameless Wyrm', skin: 0x16141a, belly: 0x4a4038, cloth: 0x0c0a0e,
+    { name: 'Hollowscale', skin: 0x16141a, belly: 0x4a4038, cloth: 0x0c0a0e,
       scarf: 0x6a3a2a, secret: true, fx: {
         pattern: 0xc49a4a, eyeGlow: 0xffb03c, emissive: 0x1a0c06,
         horns: 4, spikes: 6, plates: 0x22202a, stars: 0xd8ad2e,
@@ -1421,7 +1404,7 @@ const FROG_CONCEPTS = {
   sun: [
     { name: 'Dawn Pilgrim', skin: 0xa89a6a, belly: 0xe8dcb0, cloth: 0xc4b48a,
       scarf: 0xd8ad2e, fx: {} },
-    { name: 'Sun Temple Servant', skin: 0xb8a878, belly: 0xf0e4c0, cloth: 0xe8dcc0,
+    { name: 'Temple Sweeper', skin: 0xb8a878, belly: 0xf0e4c0, cloth: 0xe8dcc0,
       scarf: 0xc9a227, fx: {} },
     { name: 'Solar Scholar', skin: 0xa89858, belly: 0xefe0b0, cloth: 0x8a7a4a,
       scarf: 0xffd76b, fx: { hood: 0x7a6a3a, pattern: 0xffd76b, stars: 0xffe08a } },
@@ -1438,7 +1421,7 @@ const FROG_CONCEPTS = {
       scarf: 0xffd76b, fx: {
         hood: 0xd8c488, stars: 0xffe08a, pattern: 0xffd76b, eyeGlow: 0xfff3c4,
       } },
-    { name: 'Daystar Guardian', skin: 0xb89a4a, belly: 0xffeeb8, cloth: 0x6a5420,
+    { name: 'Daystar', skin: 0xb89a4a, belly: 0xffeeb8, cloth: 0x6a5420,
       scarf: 0xfff3c4, fx: {
         plates: 0xe8c86a, pattern: 0xfff3c4, eyeGlow: 0xffffff,
         aura: 0xffd76b, spikes: 5, shield: 0xd8ad2e, emissive: 0x5a4408,
@@ -1453,14 +1436,14 @@ const FROG_CONCEPTS = {
         crown: 1.6, plates: 0xd8ad2e, halo: 0xfff3c4, pattern: 0xffd76b,
         eyeGlow: 0xfff3c4, aura: 0x6a5aa8, emissive: 0x2a2060, spikes: 5,
       } },
-    { name: 'Celestial Emperor', skin: 0xdfd0a0, belly: 0xfffaf0, cloth: 0x8a7430,
+    { name: 'Noonbringer', skin: 0xdfd0a0, belly: 0xfffaf0, cloth: 0x8a7430,
       scarf: 0xfff3c4, fx: {
         crown: 2.0, plates: 0xffe08a, halo: 0xfff3c4, halo2: true,
         orbit: 0xffd76b, orbitN: 12, stars: 0xffffff, pattern: 0xfff3c4,
         eyeGlow: 0xffffff, aura: 0xffd76b, emissive: 0x6a5408,
       } },
     /**
-     * ── ??? THE ONE WHO SAW THE SUN ───────────────────────────────────
+     * ── ??? SUNBLIND ──────────────────────────────────────────────────
      *
      * A piece of a dying star, in a frog.
      *
@@ -1468,9 +1451,9 @@ const FROG_CONCEPTS = {
      * brightest thing in the game — `emissive` carries that, and the orbit
      * is only five fragments so it reads as something coming APART rather
      * than as a crown of light. The contrast is the whole design: it stands
-     * next to the Celestial Emperor and is obviously not more of the same.
+     * next to Noonbringer and is obviously not more of the same.
      */
-    { name: 'The One Who Saw the Sun', skin: 0x120e08, belly: 0x5a4a20, cloth: 0x080604,
+    { name: 'Sunblind', skin: 0x120e08, belly: 0x5a4a20, cloth: 0x080604,
       scarf: 0xfff3c4, secret: true, fx: {
         emissive: 0x8a6a00, pattern: 0xffffff, eyeGlow: 0xffffff,
         orbit: 0xfff3c4, orbitN: 5, stars: 0xffffff, embers: 0xffd76b,
@@ -1495,51 +1478,389 @@ function collectionFrog(c, i) {
   if (spec.secret) s.secret = true;
   return s;
 }
-/** The sword at rung `i`. Shape climbs, then the blade starts to glow. */
+/**
+ * ═══ THE FIFTY SWORDS, ONE WEAPON AT A TIME ══════════════════════════════
+ *
+ * These were generated too, and the argument for it was that "a katana is a
+ * katana". It is not. `buildKatana` makes TEN genuinely different weapons —
+ * a knife, a sabre, a saw, a cleaver, a spear, an axe, a maul, a fang, a
+ * bar of light — and the generator used four of them, in the same order, in
+ * all five collections. Rung four was a serrated blade with a square tsuba
+ * whether you opened the Verdant case or the Divine Sun one, so the only
+ * thing fifty froglets of difference bought was a hue rotation.
+ *
+ * ── the rule that replaced it ─────────────────────────────────────────
+ * EVERY COLLECTION USES ALL TEN SILHOUETTES, EXACTLY ONCE EACH, IN ITS OWN
+ * ORDER. That single constraint does most of the work: no two swords inside
+ * a case can be confused with each other, and the same rung in two different
+ * cases is a different weapon rather than the same weapon repainted. The
+ * Verdant Rare is an axe; the Frostveil Rare is a sabre.
+ *
+ * The tier still escalates, but through what a weapon IS rather than a
+ * multiplier: commons are tools and sidearms, the middle is fighting steel,
+ * and the top two are the only ones that glow, lengthen and orbit. `orbit`
+ * stays a Mythic-and-??? tell — test_crates fails if anything below carries
+ * it, which is the whole reason the effect means something.
+ *
+ *   shape  katana · curved · serrated · broad · fang · dagger · light ·
+ *          spear · axe · hammer          (js/frog.js `buildKatana`)
+ *   tsuba  disc · square · cross · ring · none
+ *   long   blade length multiplier
+ *   runes / aura / tassel / glow / orbit + orbitN
+ */
+const SWORD_CONCEPTS = {
+  // ── 🌿 VERDANT SAMURAI — grown, then sharpened ────────────────────────
+  verdant: [
+    { name: 'Reed Tanto', blade: 0xbfc9a8, edge: 0xdfe8c4, guard: 0x6a6a4a,
+      grip: 0x3a4a28, fx: { shape: 'dagger', tsuba: 'none' } },
+    { name: 'Cane Cutter', blade: 0xc9b978, edge: 0xe4d8a0, guard: 0x8a7a4a,
+      grip: 0x4a3a20, fx: { shape: 'katana', tsuba: 'disc' } },
+    { name: 'Bamboo Spear', blade: 0xa8c47a, edge: 0xd8e8a8, guard: 0x7a8a48,
+      grip: 0x3f5a24, fx: { shape: 'spear', tsuba: 'none', tassel: 0xc9d98f } },
+    { name: 'Moss Sabre', blade: 0x7aa04e, edge: 0xa8c86a, guard: 0x4e6a30,
+      grip: 0x26381a, fx: { shape: 'curved', tsuba: 'disc', tassel: 0x8fc44a } },
+    // A woodsman's axe that was never meant to be a weapon and is anyway.
+    { name: 'Woodsman', blade: 0x9aa88a, edge: 0xc4d0a8, guard: 0x5a4a30,
+      grip: 0x33301c, fx: { shape: 'axe', tsuba: 'none', runes: 0x9cff6b } },
+    { name: 'Thornsaw', blade: 0x6f8f4a, edge: 0xbfe07a, guard: 0x3f5a24,
+      grip: 0x1f2e12, fx: { shape: 'serrated', tsuba: 'square', runes: 0x8fff5a } },
+    { name: 'Jade Cleaver', blade: 0x4e9a6a, edge: 0x8fe0b0, guard: 0x2a5a3a,
+      grip: 0x143024, fx: {
+        shape: 'broad', tsuba: 'cross', runes: 0x6affb0, aura: 0x4ad88a,
+      } },
+    { name: 'Grove Maul', blade: 0x5a6a3a, edge: 0x9ab86a, guard: 0x8a7a30,
+      grip: 0x2a2a14, glow: 0x9cff6b, fx: {
+        shape: 'hammer', tsuba: 'none', runes: 0xc9ff8a, aura: 0x9cff6b,
+        glow: true, long: 1.1,
+      } },
+    { name: 'Heartwood', blade: 0x9cff6b, edge: 0xdfffc4, guard: 0xc9d98f,
+      grip: 0x1f3a1a, glow: 0x9cff6b, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0x9cff6b, tassel: 0xc9d98f, long: 1.25,
+        orbit: 0x8fc44a, orbitN: 7,
+      } },
+    // ??? The only sword in the set that is dark. Bark, and light in it.
+    { name: 'Whisperleaf', blade: 0x2a3a1e, edge: 0xdfffc4, guard: 0x6b5a3a,
+      grip: 0x12160d, glow: 0x9cff6b, fx: {
+        shape: 'fang', tsuba: 'ring', glow: true, runes: 0xdfffc4,
+        aura: 0x6b8f3a, long: 1.35, orbit: 0x9cff6b, orbitN: 11,
+      } },
+  ],
+
+  // ── ❄️ FROSTVEIL — worked ice and the tools of a frozen trade ─────────
+  frost: [
+    { name: 'Coldsnap', blade: 0xb4c4d0, edge: 0xdfeaf4, guard: 0x6a7a8a,
+      grip: 0x2a3440, fx: { shape: 'katana', tsuba: 'disc' } },
+    { name: 'Ice Pick', blade: 0xa8bcc8, edge: 0xd8e8f0, guard: 0x5a6a78,
+      grip: 0x3a3028, fx: { shape: 'spear', tsuba: 'none' } },
+    { name: 'Sleetfang', blade: 0xbfd8e8, edge: 0xeaf6ff, guard: 0x7a94a8,
+      grip: 0x22303c, fx: { shape: 'dagger', tsuba: 'square', tassel: 0x8fd8ff } },
+    { name: 'Floe Saw', blade: 0x9fc4dc, edge: 0xdff0ff, guard: 0x5a7f9a,
+      grip: 0x1e2e3a, fx: { shape: 'serrated', tsuba: 'disc', tassel: 0xbfe4ff } },
+    { name: 'Drift Sabre', blade: 0x8fbcd8, edge: 0xdff0ff, guard: 0x4a7a9c,
+      grip: 0x18283a, fx: { shape: 'curved', tsuba: 'ring', runes: 0x8ff0ff } },
+    { name: 'Icebreaker', blade: 0x8aa8bc, edge: 0xcfe4f4, guard: 0x4a5a6a,
+      grip: 0x1a222c, fx: { shape: 'hammer', tsuba: 'none', runes: 0xbfe4ff } },
+    { name: 'Glacier Splitter', blade: 0x6a9ec4, edge: 0xcfeaff, guard: 0x3a6a8a,
+      grip: 0x12222e, fx: {
+        shape: 'axe', tsuba: 'none', runes: 0x8ff0ff, aura: 0x6ad8ff,
+      } },
+    { name: "Winter's Weight", blade: 0x5f92b8, edge: 0xdff4ff, guard: 0x2a4a66,
+      grip: 0x0e1a24, glow: 0x8ff0ff, fx: {
+        shape: 'broad', tsuba: 'cross', runes: 0xdff4ff, aura: 0x8ff0ff,
+        glow: true, long: 1.1,
+      } },
+    { name: 'Rimecaller', blade: 0x8ff0ff, edge: 0xffffff, guard: 0xe8f6ff,
+      grip: 0x2a4a66, glow: 0x8ff0ff, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0x8ff0ff, tassel: 0xe8f6ff, long: 1.25,
+        orbit: 0xbfe4ff, orbitN: 7,
+      } },
+    // ??? Black iron and white light, and nothing in between.
+    { name: 'Stillfrost', blade: 0x1a2430, edge: 0xffffff, guard: 0x8fa8bc,
+      grip: 0x0a0e14, glow: 0xdff4ff, fx: {
+        shape: 'fang', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0xbfe4ff, long: 1.35, orbit: 0xffffff, orbitN: 11,
+      } },
+  ],
+
+  // ── 🔥 EMBERBORN — a forge, and what comes out of it ──────────────────
+  ember: [
+    { name: 'Coalbite', blade: 0x6a6058, edge: 0x9a9088, guard: 0x4a4038,
+      grip: 0x2a241e, fx: { shape: 'fang', tsuba: 'none' } },
+    { name: 'Forge Second', blade: 0xa89078, edge: 0xd8c0a0, guard: 0x7a5a38,
+      grip: 0x3a2a1a, fx: { shape: 'katana', tsuba: 'square' } },
+    { name: 'Splitting Axe', blade: 0x9a8a7a, edge: 0xc8b8a4, guard: 0x6a4a2a,
+      grip: 0x33241a, fx: { shape: 'axe', tsuba: 'none', tassel: 0xb84a2a } },
+    { name: 'Cinder Tanto', blade: 0x8a6a5a, edge: 0xc49a7a, guard: 0x5a3a24,
+      grip: 0x2a1a12, fx: { shape: 'dagger', tsuba: 'disc', tassel: 0xff8a3c } },
+    { name: 'Anvilfall', blade: 0x7a5a48, edge: 0xc4906a, guard: 0x8a3a1e,
+      grip: 0x241410, fx: { shape: 'hammer', tsuba: 'none', runes: 0xff6a2a } },
+    { name: 'Emberdance', blade: 0xc4703a, edge: 0xffb06a, guard: 0x8a3a1e,
+      grip: 0x2a1408, fx: { shape: 'curved', tsuba: 'disc', runes: 0xff8a3c } },
+    { name: 'Slagtooth', blade: 0x8a3a1e, edge: 0xff9a4a, guard: 0x5a2410,
+      grip: 0x1e0c06, fx: {
+        shape: 'serrated', tsuba: 'square', runes: 0xff6a2a, aura: 0xff6a2a,
+      } },
+    { name: 'Magma Lance', blade: 0xd8582a, edge: 0xffc47a, guard: 0xffca4a,
+      grip: 0x2a1008, glow: 0xff8a3c, fx: {
+        shape: 'spear', tsuba: 'none', runes: 0xffca4a, aura: 0xff8a3c,
+        glow: true, long: 1.1,
+      } },
+    { name: 'Bellowsbreaker', blade: 0xff8a3c, edge: 0xffe0a8, guard: 0xffca4a,
+      grip: 0x3a1a10, glow: 0xff6a2a, fx: {
+        shape: 'broad', tsuba: 'cross', glow: true, runes: 0xffffff,
+        aura: 0xff6a2a, tassel: 0xffca4a, long: 1.2,
+        orbit: 0xffca4a, orbitN: 7,
+      } },
+    // ??? Cold to look at until you see what is coming through the seams.
+    { name: 'Ashfall', blade: 0x1a1210, edge: 0xfff4d0, guard: 0x6a4a28,
+      grip: 0x0a0806, glow: 0xffb347, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0xfff4d0,
+        aura: 0xff6a2a, long: 1.4, orbit: 0xffb347, orbitN: 11,
+      } },
+  ],
+
+  // ── 🐉 DRAGON ASCENSION — scale, bone and gold ────────────────────────
+  dragon: [
+    { name: 'Scale Pike', blade: 0x9aa4a8, edge: 0xc8d0d4, guard: 0x6a5a3a,
+      grip: 0x3a2e20, fx: { shape: 'spear', tsuba: 'none' } },
+    { name: 'Talon Knife', blade: 0xb8a88a, edge: 0xe0d4b8, guard: 0x7a6a4a,
+      grip: 0x2e2418, fx: { shape: 'dagger', tsuba: 'none' } },
+    { name: 'Drakesteel', blade: 0xa89aa4, edge: 0xd8ccd4, guard: 0x8a5a30,
+      grip: 0x2a2028, fx: { shape: 'katana', tsuba: 'square', tassel: 0x9c2430 } },
+    { name: 'Hornsplitter', blade: 0xa08a72, edge: 0xd0bc9c, guard: 0x6a3a24,
+      grip: 0x2a1a12, fx: { shape: 'axe', tsuba: 'none', tassel: 0xd94a4a } },
+    { name: 'Wyrmcleaver', blade: 0x8a6a68, edge: 0xc49a90, guard: 0x9c2430,
+      grip: 0x24141a, fx: { shape: 'broad', tsuba: 'disc', runes: 0xffb03c } },
+    { name: 'Serpentine', blade: 0xb04a52, edge: 0xe89a88, guard: 0x6a1a20,
+      grip: 0x1e0a10, fx: { shape: 'curved', tsuba: 'ring', runes: 0xd8ad2e } },
+    { name: 'Bonecrusher', blade: 0xd4c8a8, edge: 0xf0e8cc, guard: 0x8a2430,
+      grip: 0x201014, fx: {
+        shape: 'hammer', tsuba: 'none', runes: 0xffb03c, aura: 0xd94a4a,
+      } },
+    { name: 'Sawtooth Jaw', blade: 0xd94a4a, edge: 0xffb08a, guard: 0xd8ad2e,
+      grip: 0x2a0a0e, glow: 0xff6a4a, fx: {
+        shape: 'serrated', tsuba: 'cross', runes: 0xffca4a, aura: 0xff6a4a,
+        glow: true, long: 1.1,
+      } },
+    { name: 'Elder Fang', blade: 0xd8ad2e, edge: 0xffe8a8, guard: 0xd94a4a,
+      grip: 0x3a0f14, glow: 0xffb03c, fx: {
+        shape: 'fang', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0xffb03c, tassel: 0xd8ad2e, long: 1.2,
+        orbit: 0xffb03c, orbitN: 7,
+      } },
+    // ??? Not a blade a dragon was killed with. One it left behind.
+    { name: 'Wyrmheart', blade: 0x16101a, edge: 0xffd8a8, guard: 0x6a3a2a,
+      grip: 0x0a0608, glow: 0xffb03c, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0xd8ad2e,
+        aura: 0x9c2430, long: 1.4, orbit: 0xd8ad2e, orbitN: 11,
+      } },
+  ],
+
+  // ── ☀️ DIVINE SUN — temple brass through to the thing itself ──────────
+  sun: [
+    { name: 'Brass Service', blade: 0xc4b078, edge: 0xe8dcb0, guard: 0x8a7a4a,
+      grip: 0x4a3c20, fx: { shape: 'katana', tsuba: 'disc' } },
+    { name: 'Temple Mallet', blade: 0xa8986a, edge: 0xd0c498, guard: 0x7a6838,
+      grip: 0x3a3018, fx: { shape: 'hammer', tsuba: 'none' } },
+    { name: 'Dawn Sabre', blade: 0xd8c488, edge: 0xf4e8bc, guard: 0x9a8440,
+      grip: 0x3a2e14, fx: { shape: 'curved', tsuba: 'disc', tassel: 0xffd76b } },
+    { name: 'Pilgrim Pike', blade: 0xc8b878, edge: 0xece0b0, guard: 0x8a7430,
+      grip: 0x342a12, fx: { shape: 'spear', tsuba: 'none', tassel: 0xfff3c4 } },
+    { name: 'Gilt Tanto', blade: 0xe0c86a, edge: 0xfff0c0, guard: 0xb89a4a,
+      grip: 0x2e2410, fx: { shape: 'dagger', tsuba: 'square', runes: 0xffe08a } },
+    { name: 'Sunsplitter', blade: 0xd8bc60, edge: 0xffeaa8, guard: 0xa88430,
+      grip: 0x2a2010, fx: { shape: 'axe', tsuba: 'none', runes: 0xffd76b } },
+    { name: 'Coronal', blade: 0xffca5a, edge: 0xfff3c4, guard: 0x8a7430,
+      grip: 0x241c08, fx: {
+        shape: 'serrated', tsuba: 'cross', runes: 0xfff3c4, aura: 0xffd76b,
+      } },
+    { name: 'Daybreaker', blade: 0xffd76b, edge: 0xfffaf0, guard: 0xb89a4a,
+      grip: 0x1e1808, glow: 0xffe08a, fx: {
+        shape: 'broad', tsuba: 'ring', runes: 0xffffff, aura: 0xffe08a,
+        glow: true, long: 1.15,
+      } },
+    { name: 'Solar Fang', blade: 0xfff3c4, edge: 0xffffff, guard: 0xffd76b,
+      grip: 0x5a4408, glow: 0xffe08a, fx: {
+        shape: 'fang', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0xffd76b, tassel: 0xfff3c4, long: 1.2,
+        orbit: 0xffd76b, orbitN: 8,
+      } },
+    // ??? The pair to Sunblind, and the same argument: a black object
+    // around a white one.
+    { name: 'Last Light', blade: 0x120e08, edge: 0xffffff, guard: 0x8a6a00,
+      grip: 0x080604, glow: 0xfff3c4, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0xffe08a, long: 1.45, orbit: 0xfff3c4, orbitN: 12,
+      } },
+  ],
+};
+
+/** The sword at rung `i` of a collection — read from SWORD_CONCEPTS. */
 function collectionSword(c, i) {
-  const [dark, mid, light, accent, glow] = c.pal;
+  const spec = SWORD_CONCEPTS[c.id][i];
   const rarity = TIER_LADDER[i];
-  const SHAPE = ['katana', 'katana', 'curved', 'curved', 'serrated',
-    'serrated', 'broad', 'broad', 'light', 'light'];
-  const TSUBA = ['disc', 'square', 'disc', 'cross', 'square',
-    'cross', 'ring', 'ring', 'ring', 'ring'];
-  const fx = { shape: SHAPE[i], tsuba: TSUBA[i] };
-  if (i >= 3) fx.tassel = accent;
-  if (i >= 4) fx.runes = glow;
-  if (i >= 6) fx.aura = glow;
-  if (i >= 7) { fx.glow = true; fx.long = 1.15; }
-  if (i >= 8) fx.long = 1.3;
-  if (i === 9) { fx.orbit = glow; fx.orbitN = 3; }
   const s = {
-    id: `sword_${c.id}_${i}`, name: c.swords[i], rarity, set: c.id,
-    blade: shade(light, 0.8 + i * 0.03),
-    edge: i >= 7 ? accent : shade(light, 1.1),
-    guard: i >= 6 ? accent : shade(mid, 0.9),
-    grip: shade(dark, 0.8),
-    glow: shade(glow, 0.5 + i * 0.06),
-    fx,
+    id: `sword_${c.id}_${i}`, name: spec.name, rarity, set: c.id,
+    blade: spec.blade, edge: spec.edge, guard: spec.guard, grip: spec.grip,
+    fx: spec.fx,
   };
+  if (spec.glow !== undefined) s.glow = spec.glow;
   if (rarity === 'secret') s.secret = true;
   return s;
 }
 
-/** The kunai at rung `i`. The cheapest of the three, and the plainest. */
+/**
+ * ═══ THE FIFTY KUNAI ═════════════════════════════════════════════════════
+ *
+ * The cheapest of the three and the hardest to make different, because a
+ * thrown blade has to stay a thrown blade: `createKunaiMesh` offers five
+ * profiles, not ten, so a collection cannot give each of its ten a
+ * silhouette of its own the way the swords do.
+ *
+ * ── so the pairing is the design ──────────────────────────────────────
+ * Each collection uses each of the five profiles TWICE, and the two that
+ * share a profile are put at opposite ends of the ladder — the Common
+ * needle and the Mythic needle are the same shape in a dull grey and a
+ * white-hot glow, which reads as the same weapon at two very different
+ * points of its life rather than as a repeat. The order differs per
+ * collection, so a rung is a different profile in each case.
+ *
+ * `big` is the other lever and it is held back for the top two, where the
+ * blade is visibly oversized in the hand. A Common that threw a 1.2× kunai
+ * would make the tier tell meaningless.
+ *
+ *   shape   classic · needle · broad · crystal · star   (js/items.js)
+ *   ribbon  colour of the streamer off the ring
+ *   glow    the blade is lit rather than shaded
+ *   big     blade scale
+ */
+const KUNAI_CONCEPTS = {
+  verdant: [
+    { name: 'Reed Kunai', blade: 0x4a5a34, facet: 0x8fa86a, wrap: 0x6b4f33,
+      ring: 0x2a3a1e, fx: { shape: 'classic' } },
+    { name: 'Thorn Needle', blade: 0x3f5a28, facet: 0x9cbf70, wrap: 0x5a4a28,
+      ring: 0x22301a, fx: { shape: 'needle' } },
+    { name: 'Mosscut', blade: 0x4e7a34, facet: 0xa8c86a, wrap: 0x35301f,
+      ring: 0x1f3a1a, fx: { shape: 'classic' } },
+    { name: 'Cane Leaf', blade: 0x8a9a52, facet: 0xc9d98f, wrap: 0x6a5a30,
+      ring: 0x3a3a1e, fx: { shape: 'broad', ribbon: 0xc9d98f } },
+    { name: 'Bramble Spike', blade: 0x3a5a20, facet: 0xbfe07a, wrap: 0x2a3a18,
+      ring: 0x18240e, fx: { shape: 'needle', ribbon: 0x8fc44a } },
+    { name: 'Seedstar', blade: 0x6f9445, facet: 0xc9d98f, wrap: 0x4a3a20,
+      ring: 0x24301a, fx: { shape: 'star', ribbon: 0x9cff6b } },
+    { name: 'Jade Shard', blade: 0x3f8a5a, facet: 0x8fe0b0, wrap: 0x1e4a32,
+      ring: 0x0e2a1c, fx: { shape: 'broad', ribbon: 0x6affb0, glow: true } },
+    { name: 'Grovecut', blade: 0x5a8a3a, facet: 0xbfff8a, wrap: 0x2a4a20,
+      ring: 0x14280e, fx: { shape: 'crystal', ribbon: 0x9cff6b, glow: true } },
+    { name: "Sage's Needle", blade: 0x9cff6b, facet: 0xdfffc4, wrap: 0xc9d98f,
+      ring: 0x1f3a1a, fx: { shape: 'star', ribbon: 0x9cff6b, glow: true, big: 1.2 } },
+    { name: 'Quietleaf', blade: 0x1e2416, facet: 0xdfffc4, wrap: 0x3a4a22,
+      ring: 0x0e1408, fx: { shape: 'crystal', ribbon: 0x9cff6b, glow: true, big: 1.35 } },
+  ],
+
+  frost: [
+    { name: 'Sleet Needle', blade: 0x5a6e7e, facet: 0xa8bcc8, wrap: 0x3f5060,
+      ring: 0x22303c, fx: { shape: 'needle' } },
+    { name: 'Frost Kunai', blade: 0x4a5e6e, facet: 0x9fb4c4, wrap: 0x5a4a38,
+      ring: 0x1e2a34, fx: { shape: 'classic' } },
+    { name: 'Floe Shard', blade: 0x6a8ea8, facet: 0xbfd8e8, wrap: 0x2f3f52,
+      ring: 0x1a2632, fx: { shape: 'broad', ribbon: 0x8fd8ff } },
+    { name: 'Snowcut', blade: 0x5f8098, facet: 0xb4cfe0, wrap: 0x4a4038,
+      ring: 0x18242e, fx: { shape: 'classic', ribbon: 0xbfe4ff } },
+    { name: 'Hailstone', blade: 0x7fb0d0, facet: 0xdff0ff, wrap: 0x2a4a66,
+      ring: 0x12202c, fx: { shape: 'crystal', ribbon: 0x8ff0ff } },
+    { name: 'Icicle', blade: 0x6a9ec4, facet: 0xe4f4ff, wrap: 0x22384a,
+      ring: 0x0e1a24, fx: { shape: 'needle', ribbon: 0xbfe4ff } },
+    { name: 'Snowflake', blade: 0x8fc4e4, facet: 0xeaf8ff, wrap: 0x2a4a66,
+      ring: 0x101c28, fx: { shape: 'star', ribbon: 0x8ff0ff, glow: true } },
+    { name: 'Glacier Chip', blade: 0x9fd4ef, facet: 0xf4fbff, wrap: 0x1a2f44,
+      ring: 0x0c1620, fx: { shape: 'broad', ribbon: 0xbfe4ff, glow: true } },
+    { name: 'Rimeshard', blade: 0x8ff0ff, facet: 0xffffff, wrap: 0xe8f6ff,
+      ring: 0x2a4a66, fx: { shape: 'crystal', ribbon: 0x8ff0ff, glow: true, big: 1.2 } },
+    { name: 'Stilledge', blade: 0x14181e, facet: 0xffffff, wrap: 0xa8bccc,
+      ring: 0x080a0e, fx: { shape: 'star', ribbon: 0xffffff, glow: true, big: 1.35 } },
+  ],
+
+  ember: [
+    { name: 'Soot Kunai', blade: 0x4a423a, facet: 0x8a8078, wrap: 0x3a342c,
+      ring: 0x22201c, fx: { shape: 'classic' } },
+    { name: 'Coal Chip', blade: 0x5a5048, facet: 0x9a9088, wrap: 0x4a443c,
+      ring: 0x2a2624, fx: { shape: 'broad' } },
+    { name: 'Forge Pin', blade: 0x7a5a3a, facet: 0xc49a6a, wrap: 0x3a2a1e,
+      ring: 0x1e1610, fx: { shape: 'needle', ribbon: 0xb84a2a } },
+    { name: 'Cinder Star', blade: 0x8a5a38, facet: 0xd0a070, wrap: 0x2a1810,
+      ring: 0x18100a, fx: { shape: 'star', ribbon: 0xff8a3c } },
+    { name: 'Emberfang', blade: 0xa8582a, facet: 0xe8a06a, wrap: 0x2a1a12,
+      ring: 0x160c08, fx: { shape: 'classic', ribbon: 0xff6a2a } },
+    { name: 'Slag Shard', blade: 0x8a3a1e, facet: 0xff9a4a, wrap: 0x2a1408,
+      ring: 0x140a04, fx: { shape: 'crystal', ribbon: 0xff8a3c } },
+    { name: 'Flue Spike', blade: 0xc4602a, facet: 0xffb06a, wrap: 0x3a1a10,
+      ring: 0x1a0c06, fx: { shape: 'needle', ribbon: 0xff6a2a, glow: true } },
+    { name: 'Magma Chip', blade: 0xd8582a, facet: 0xffc47a, wrap: 0x5a2410,
+      ring: 0x1e0c06, fx: { shape: 'broad', ribbon: 0xffca4a, glow: true } },
+    { name: 'Bellowstar', blade: 0xff8a3c, facet: 0xffe0a8, wrap: 0xffca4a,
+      ring: 0x3a1a10, fx: { shape: 'star', ribbon: 0xff6a2a, glow: true, big: 1.2 } },
+    { name: 'Deadcoal', blade: 0x14100e, facet: 0xfff4d0, wrap: 0x2a1c14,
+      ring: 0x0a0806, fx: { shape: 'crystal', ribbon: 0xffb347, glow: true, big: 1.35 } },
+  ],
+
+  dragon: [
+    { name: 'Scale Chip', blade: 0x7a8a8a, facet: 0xc8d0d4, wrap: 0x5a4a30,
+      ring: 0x2e2820, fx: { shape: 'broad' } },
+    { name: 'Talon Pin', blade: 0x8a7a5a, facet: 0xc8b890, wrap: 0x3a2a20,
+      ring: 0x201810, fx: { shape: 'needle' } },
+    { name: 'Drake Kunai', blade: 0x7a6a74, facet: 0xb8acbc, wrap: 0x4a3a2a,
+      ring: 0x241c24, fx: { shape: 'classic', ribbon: 0x9c2430 } },
+    { name: 'Hornshard', blade: 0x9a8a72, facet: 0xd8c4a0, wrap: 0x5a2a20,
+      ring: 0x281410, fx: { shape: 'crystal', ribbon: 0xd94a4a } },
+    { name: 'Wyrm Star', blade: 0x8a4a4a, facet: 0xd08a78, wrap: 0x3a1418,
+      ring: 0x1e0a0e, fx: { shape: 'star', ribbon: 0xffb03c } },
+    { name: 'Serpent Fang', blade: 0xb04a52, facet: 0xe89a88, wrap: 0x6a1a20,
+      ring: 0x1e0a10, fx: { shape: 'classic', ribbon: 0xd8ad2e } },
+    { name: 'Bone Shard', blade: 0xd4c8a8, facet: 0xf0e8cc, wrap: 0x8a2430,
+      ring: 0x201014, fx: { shape: 'crystal', ribbon: 0xffb03c, glow: true } },
+    { name: 'Sawtooth Pin', blade: 0xd94a4a, facet: 0xffb08a, wrap: 0xd8ad2e,
+      ring: 0x2a0a0e, fx: { shape: 'needle', ribbon: 0xffca4a, glow: true } },
+    { name: 'Elder Scale', blade: 0xd8ad2e, facet: 0xffe8a8, wrap: 0xd94a4a,
+      ring: 0x3a0f14, fx: { shape: 'broad', ribbon: 0xffb03c, glow: true, big: 1.2 } },
+    { name: 'Coldblood', blade: 0x16141a, facet: 0xffd8a8, wrap: 0x4a3a2a,
+      ring: 0x0a0608, fx: { shape: 'star', ribbon: 0xd8ad2e, glow: true, big: 1.35 } },
+  ],
+
+  sun: [
+    { name: 'Brass Pin', blade: 0x9a8a5a, facet: 0xd8c890, wrap: 0x6a5420,
+      ring: 0x342a12, fx: { shape: 'needle' } },
+    { name: 'Temple Star', blade: 0xa89858, facet: 0xe0d0a0, wrap: 0x8a7a4a,
+      ring: 0x3a3018, fx: { shape: 'star' } },
+    { name: 'Dawn Kunai', blade: 0xb89a4a, facet: 0xe8d8a0, wrap: 0x5a4408,
+      ring: 0x2e2410, fx: { shape: 'classic', ribbon: 0xffd76b } },
+    { name: 'Gilt Leaf', blade: 0xc4a84a, facet: 0xf0e0b0, wrap: 0x6a5420,
+      ring: 0x2a2010, fx: { shape: 'broad', ribbon: 0xfff3c4 } },
+    { name: 'Solar Kunai', blade: 0xd8bc60, facet: 0xffeaa8, wrap: 0x8a7430,
+      ring: 0x241c08, fx: { shape: 'classic', ribbon: 0xffe08a } },
+    { name: 'Sun Shard', blade: 0xe0c86a, facet: 0xfff0c0, wrap: 0xb89a4a,
+      ring: 0x2e2410, fx: { shape: 'crystal', ribbon: 0xffd76b } },
+    { name: 'Corona Leaf', blade: 0xffca5a, facet: 0xfff3c4, wrap: 0x8a7430,
+      ring: 0x1e1808, fx: { shape: 'broad', ribbon: 0xffd76b, glow: true } },
+    { name: 'Daybreak Star', blade: 0xffd76b, facet: 0xfffaf0, wrap: 0xb89a4a,
+      ring: 0x1a1406, fx: { shape: 'star', ribbon: 0xffe08a, glow: true } },
+    { name: 'Solar Pin', blade: 0xfff3c4, facet: 0xffffff, wrap: 0xffd76b,
+      ring: 0x5a4408, fx: { shape: 'needle', ribbon: 0xffd76b, glow: true, big: 1.2 } },
+    { name: 'Lastlight', blade: 0x120e08, facet: 0xffffff, wrap: 0x5a4a20,
+      ring: 0x080604, fx: { shape: 'crystal', ribbon: 0xfff3c4, glow: true, big: 1.35 } },
+  ],
+};
+
+/** The kunai at rung `i` of a collection — read from KUNAI_CONCEPTS. */
 function collectionKunai(c, i) {
-  const [dark, mid, light, accent, glow] = c.pal;
+  const spec = KUNAI_CONCEPTS[c.id][i];
   const rarity = TIER_LADDER[i];
-  const SHAPE = ['classic', 'classic', 'needle', 'needle', 'broad',
-    'broad', 'crystal', 'crystal', 'star', 'star'];
-  const fx = { shape: SHAPE[i] };
-  if (i >= 4) fx.ribbon = accent;
-  if (i >= 6) fx.glow = true;
-  if (i >= 8) fx.big = 1.2;
   const s = {
-    id: `kunai_${c.id}_${i}`, name: c.kunai[i], rarity, set: c.id,
-    blade: shade(mid, 0.7 + i * 0.05),
-    facet: shade(light, 0.85 + i * 0.02),
-    wrap: i >= 6 ? accent : shade(dark, 1.3),
-    ring: shade(dark, 0.8),
-    fx,
+    id: `kunai_${c.id}_${i}`, name: spec.name, rarity, set: c.id,
+    blade: spec.blade, facet: spec.facet, wrap: spec.wrap, ring: spec.ring,
+    fx: spec.fx,
   };
   if (rarity === 'secret') s.secret = true;
   return s;
@@ -1585,7 +1906,7 @@ export const ECLIPSE_SET = {
   kunai: 'kunai_ecl_secret',
 };
 
-export const ECLIPSE_TITLE = 'THE ONE WHO FOUND THE ECLIPSE';
+export const ECLIPSE_TITLE = 'ECLIPSEBOUND';
 
 /** Which of the three somebody has, and whether that is all of them. */
 export function eclipseProgress(economy) {

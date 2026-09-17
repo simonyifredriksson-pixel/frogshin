@@ -7,22 +7,22 @@
  * layer drains once per frame.
  */
 
-import * as THREE from '../lib/three.module.js?v=v150';
-import { CFG } from './config.js?v=v150';
-import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v150';
-import { FrogModel } from './frog.js?v=v150';
-import { Grapple, GrappleState } from './grapple.js?v=v150';
-import { Combat, Health } from './combat.js?v=v150';
-import { Stamina } from './stamina.js?v=v150';
-import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v150';
-import { Audio } from './audio.js?v=v150';
+import * as THREE from '../lib/three.module.js?v=v151';
+import { CFG } from './config.js?v=v151';
+import { clamp, damp, dampAngle, lerp, angleDelta } from './util.js?v=v151';
+import { FrogModel } from './frog.js?v=v151';
+import { Grapple, GrappleState } from './grapple.js?v=v151';
+import { Combat, Health } from './combat.js?v=v151';
+import { Stamina } from './stamina.js?v=v151';
+import { Inventory, SLOT_KEYS, ITEMS } from './items.js?v=v151';
+import { Audio } from './audio.js?v=v151';
 // The rules the three chained abilities run on — what may be targeted, what
 // counts as a perfect release, where a step lands. See js/abilities.js.
 import {
   SHELL, shellPerfect, shellRelease, shellBurst,
   pickTongueTarget, tonguePullPoint,
   nextStepTarget, stepCandidates, stepStandPoint, bossAnchors, planLightningStep,
-} from './abilities.js?v=v150';
+} from './abilities.js?v=v151';
 
 const _wish = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
@@ -133,6 +133,25 @@ export class Player {
     this.trapImmune = new Map();
     /** LIGHTNING STEP — the chain state machine; see `_updateStep`. */
     this.step = null;
+
+    /**
+     * ═══ PROP HUNT ══════════════════════════════════════════════════════
+     *
+     * `disguise` is the index of the prop being worn on the current map, or
+     * -1 for "a frog". An INDEX rather than an id because it is what goes on
+     * the wire twenty times a second, and because the map already decides
+     * which list it indexes into — see js/prophunt.js.
+     *
+     * `propLocked` is Shift: bolted to the spot. It is checked in `update`
+     * beside the Earth Shell seal, for the same reason and with the same
+     * consequence — no movement reaches the body and the facing freezes,
+     * while the camera stays yours. See `sealedInStone`.
+     *
+     * Both are set by the game rather than by the player, so ending a round
+     * clears them without the player class knowing what a round is.
+     */
+    this.disguise = -1;
+    this.propLocked = false;
 
     // Frogath the Divine's two forms. Cosmetic; see setDivinePhase.
     this.divinePhase = 1;
@@ -345,6 +364,20 @@ export class Player {
       // into it — the two hide you from different people.
       sx: this.spectating ? 1 : 0,
       jg: this.isJuggernaut ? 1 : 0,
+      /**
+       * PROP HUNT: which prop, and whether it is bolted down.
+       *
+       * `pr` is the index PLUS ONE so that 0 means "not disguised" and the
+       * field packs as a single small integer — sent every packet, like
+       * `jg`, because a watcher who misses the frame you changed into a
+       * lamppost keeps swinging at a frog that is not there.
+       *
+       * `pl` matters to watchers too: an unlocked prop sways and a locked
+       * one does not, and that sway is the only tell a hunter gets. It has
+       * to be the same on every screen. See `propBob` in js/prophunt.js.
+       */
+      pr: this.disguise >= 0 ? this.disguise + 1 : 0,
+      pl: this.propLocked ? 1 : 0,
       cl: c ? [
         r2(c.x), r2(c.y), r2(c.z), r2(c.yaw), r2(c.speed),
         (c.grounded ? 1 : 0) | (c.moving ? 2 : 0) | (c.sprinting ? 4 : 0)
@@ -430,8 +463,19 @@ export class Player {
       return;
     }
 
+    /**
+     * BOLTED DOWN. A locked prop is furniture and furniture does not steer.
+     *
+     * Zeroing the axis here rather than refusing to apply it later is what
+     * also freezes the FACING: `_updateFacing` only writes `yaw` when there
+     * is movement input, so a prop that reads no input keeps the heading it
+     * locked on — the same mechanism, and the same reason, as the statue's.
+     * See the note on `sealedInStone`.
+     */
+    const propLocked = this.propLocked && this.isDisguised;
     const active = input && input.locked;
-    if (active) input.moveAxis(_axis); else { _axis.x = 0; _axis.y = 0; }
+    if (active && !propLocked) input.moveAxis(_axis);
+    else { _axis.x = 0; _axis.y = 0; }
 
     // World-space wish direction from camera-relative input.
     cam.flatForward(_fwd);
@@ -445,7 +489,16 @@ export class Player {
     // Sprint is a held modifier: Shift plus any movement input. Facing always
     // follows the movement direction, so the run is never a backpedal.
     // It works underwater too, as a gentler swim boost.
-    this.sprinting = active && hasInput && !this.solemn && this.stamina.canAct
+    /**
+     * A PROP NEVER SPRINTS, and Shift is why.
+     *
+     * While disguised, Shift is the lock — so a tap of it would otherwise
+     * both bolt you down and shove you forward on the same frame. Excluding
+     * disguises here is also the balance the mode wants: see
+     * `CFG.prophunt.speedMult`.
+     */
+    this.sprinting = active && hasInput && !this.isDisguised
+      && !this.solemn && this.stamina.canAct
       && (input.down('ShiftLeft') || input.down('ShiftRight'));
 
     if (this.sprinting) {
@@ -495,6 +548,23 @@ export class Player {
         const slot = this.inventory.slots[i];
         if (slot && slot.item.id === now) answer();
       }
+    } else if (active && propLocked) {
+      /**
+       * Locked: every action press is EATEN rather than ignored.
+       *
+       * Same argument as the shell's, and it is the one thing about this
+       * branch that is not obvious: `consume` is what clears a key from the
+       * buffer, so a player mashing Space against a lamppost they have
+       * bolted down would otherwise jump the instant they let Shift go.
+       */
+      input.consume('Space');
+      input.consume('KeyQ');
+      input.consume('KeyG');
+      input.consume('KeyE');
+      input.consume('MouseRight');
+      input.consumeAttack();
+      input.takeWheel();
+      this.jumpHeld = false;
     } else if (active) {
       if (input.consume('Space')) this.jumpBuffer = CFG.move.jumpBuffer;
       this.jumpHeld = input.down('Space');
@@ -655,9 +725,17 @@ export class Player {
       const OD = this.isOverdrive ? CFG.overdrive : null;
       const boost = this.sprinting
         ? this._sprintMult(OD ? OD.sprintMult : sp.speedMult) : 1;
-      // Rooted mid-leap-charge: you cannot walk out of your own wind-up.
+      /**
+       * Rooted mid-leap-charge: you cannot walk out of your own wind-up.
+       *
+       * A PROP IS SLOW, by the same one multiplier the juggernaut is slow
+       * by. The skill of being a prop is picking your spot before anyone
+       * arrives; a lamppost that can outrun a frog is tag with a costume.
+       * See `CFG.prophunt.speedMult`.
+       */
       const scale = this.leapCharge > 0 ? 0
-        : (this.isJuggernaut ? CFG.juggernaut.moveScale : 1);
+        : this.isJuggernaut ? CFG.juggernaut.moveScale
+          : this.isDisguised ? CFG.prophunt.speedMult : 1;
       const runTop = OD ? OD.runSpeed : CFG.move.runSpeed;
       const airTop = OD ? OD.airSpeed : CFG.move.airSpeed;
       const wishSpeed = (this.grounded ? runTop : airTop) * boost * scale;
@@ -1352,6 +1430,9 @@ export class Player {
    * is what records it.
    */
   get sealedInStone() { return !!this.shell; }
+
+  /** Wearing a prop rather than a frog. See the note in the constructor. */
+  get isDisguised() { return this.disguise >= 0; }
 
   /**
    * A blow the stone turned aside.

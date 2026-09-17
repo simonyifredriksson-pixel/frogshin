@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v150';
+export const BUILD = 'v151';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -608,6 +608,16 @@ export const CFG = {
       // Shorter than FFA: at Overdrive speeds a kill takes one clean hit, so
       // five minutes of it is a long time.
       overdrive: 240,
+      /**
+       * The longest round in the game, and it has to be.
+       *
+       * A prop hunt is a SEARCH. Shizuka Ward is 420 units across with
+       * forty-eight ramen carts and a lamppost on every corner; a hunter
+       * who has to walk up to things and look at them needs time to cover
+       * that, and a three-minute round is one where the props win by
+       * default because the map is bigger than the clock.
+       */
+      prophunt: 300,
     },
     defaultMode: 'ffa',      // used if nobody votes
     tagImmunity: 2.5,        // stops instant tag-backs
@@ -886,6 +896,72 @@ export const CFG = {
      */
     windFrom: 100,
     windFull: 450,
+  },
+
+  // ------------------------------------------------------------ prop hunt
+  /**
+   * ═══ PROP HUNT ═══════════════════════════════════════════════════════
+   *
+   * See js/prophunt.js for the disguises themselves. These are the numbers
+   * that decide whether the mode is a game or a formality.
+   */
+  prophunt: {
+    /**
+     * Two, not three.
+     *
+     * One hunter against one prop is a real round — a whole map, one person
+     * hiding in it and one person walking up to lampposts — which is more
+     * than can be said for a one-on-one juggernaut. Below two there is
+     * nobody to hide from.
+     */
+    minPlayers: 2,
+
+    /**
+     * Hunters as a share of the lobby, rounded UP and capped at one short
+     * of everybody.
+     *
+     * A quarter rather than a third because the hunters have every
+     * advantage that matters: they move freely, they can see, and they have
+     * blades against props that mostly cannot fight back. Four props to one
+     * hunter is the ratio at which a hunter has to actually search instead
+     * of sweeping a street in formation.
+     */
+    hunterFraction: 0.25,
+
+    /**
+     * Seconds at the start where hunters cannot move and props can.
+     *
+     * The mode does not work without it. A hunter who watches the round
+     * begin sees the entire lobby standing in the open turning into
+     * furniture, and the search is over before it starts.
+     */
+    hideTime: 15,
+
+    /**
+     * What a prop's body is scaled to while disguised.
+     *
+     * The collider follows the PROP, not the frog — a ramen cart that slips
+     * through a doorway a cart could not fit through is the tell that ends
+     * the disguise. `r` and `h` come off the prop's own definition; this is
+     * the floor, so the very small props (a bicycle) still cannot walk
+     * through a wall a frog would be stopped by.
+     */
+    minRadius: 0.55,
+
+    /**
+     * A prop moves at this multiple of the normal run speed.
+     *
+     * Slower, and deliberately: the whole skill of being a prop is choosing
+     * where to be BEFORE the hunters arrive, and a lamppost that can outrun
+     * a frog turns the mode into tag with a costume.
+     */
+    speedMult: 0.72,
+
+    /** Health, as a multiple of `combat.maxHealth`. A prop is found once. */
+    healthScale: 0.4,
+
+    /** Froglets a hunter is paid for finding one. */
+    findReward: 120,
   },
 
   // ---------------------------------------------------------------- shark

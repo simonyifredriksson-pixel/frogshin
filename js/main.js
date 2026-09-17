@@ -5,58 +5,61 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v150';
+import * as THREE from '../lib/three.module.js?v=v151';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v150';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v150';
-import { Input } from './input.js?v=v150';
-import { Audio } from './audio.js?v=v150';
-import { World } from './world.js?v=v150';
-import { Effects } from './effects.js?v=v150';
-import { Atmosphere } from './atmosphere.js?v=v150';
-import { FollowCamera } from './camera.js?v=v150';
-import { Player } from './player.js?v=v150';
+} from './config.js?v=v151';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v151';
+import { Input } from './input.js?v=v151';
+import { Audio } from './audio.js?v=v151';
+import { World } from './world.js?v=v151';
+import { Effects } from './effects.js?v=v151';
+import { Atmosphere } from './atmosphere.js?v=v151';
+import { FollowCamera } from './camera.js?v=v151';
+import { Player } from './player.js?v=v151';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v150';
+} from './tournament.js?v=v151';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v150';
-import { RemotePlayer } from './remote.js?v=v150';
-import { HUD } from './hud.js?v=v150';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v150';
-import { FrogModel } from './frog.js?v=v150';
-import { DummyField } from './dummy.js?v=v150';
+import { coneHit } from './combat.js?v=v151';
+import { RemotePlayer } from './remote.js?v=v151';
+import { HUD } from './hud.js?v=v151';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v151';
+import { FrogModel } from './frog.js?v=v151';
+import { DummyField } from './dummy.js?v=v151';
 import {
-  RoundManager, PHASE, MODES, MODE_INFO, maxTaggers,
-} from './rounds.js?v=v150';
-import { ToadModel } from './npc.js?v=v150';
+  RoundManager, PHASE, MODES, MODE_INFO, MODE_ORDER, maxTaggers,
+} from './rounds.js?v=v151';
+import {
+  propsFor, propAt, buildProp, propBob,
+} from './prophunt.js?v=v151';
+import { ToadModel } from './npc.js?v=v151';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v150';
-import { DungeonRun } from './dungeon.js?v=v150';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v150';
-import { JudgmentRun } from './judgment.js?v=v150';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v150';
-import { COMBO_NAMES } from './ascended.js?v=v150';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v150';
-import { MenuScene } from './menu.js?v=v150';
-import { Economy } from './economy.js?v=v150';
-import { Shop } from './shop.js?v=v150';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v150';
-import { Overworld } from './overworld.js?v=v150';
-import { InventoryScreen } from './inventoryui.js?v=v150';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v150';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v150';
-import { Cine } from './cinema.js?v=v150';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v150';
-import { MEMORIES } from './flashbacks.js?v=v150';
-import { GUARDIANS } from './guardians.js?v=v150';
-import { gearOfTier } from './gear.js?v=v150';
-import { Chat } from './chat.js?v=v150';
+} from './skins.js?v=v151';
+import { DungeonRun } from './dungeon.js?v=v151';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v151';
+import { JudgmentRun } from './judgment.js?v=v151';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v151';
+import { COMBO_NAMES } from './ascended.js?v=v151';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v151';
+import { MenuScene } from './menu.js?v=v151';
+import { Economy } from './economy.js?v=v151';
+import { Shop } from './shop.js?v=v151';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v151';
+import { Overworld } from './overworld.js?v=v151';
+import { InventoryScreen } from './inventoryui.js?v=v151';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v151';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v151';
+import { Cine } from './cinema.js?v=v151';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v151';
+import { MEMORIES } from './flashbacks.js?v=v151';
+import { GUARDIANS } from './guardians.js?v=v151';
+import { gearOfTier } from './gear.js?v=v151';
+import { Chat } from './chat.js?v=v151';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -4383,7 +4386,21 @@ class Game {
     this.hud.addKill(killerName, victim.name, this.player.name);
     if (ev.by && ev.by === this.net.selfId) {
       this.player.kills++;
-      this.hud.toast(`You slew ${victim.name}!`, 2.0);
+      /**
+       * PROP HUNT: finding one is paid on the spot, and named as a FIND.
+       *
+       * Paid here rather than at the end of the round because it is the
+       * only feedback a hunter gets that walking up to scenery and swinging
+       * at it was the right idea — and the reward has to land on the swing
+       * that worked, not four minutes later.
+       */
+      const R = this.round;
+      if (R && R.isPropHunt && R.isHunter(this.player.id)) {
+        this.economy.award(CFG.prophunt.findReward, 'Prop found');
+        this.hud.toast(`Found ${victim.name}!`, 2.0);
+      } else {
+        this.hud.toast(`You slew ${victim.name}!`, 2.0);
+      }
       this._divineAscend();
     }
   }
@@ -4747,7 +4764,21 @@ class Game {
     if (!p || !p.health) return;
     if (!p.health.dead) { this._elimAsked = false; return; }
 
-    if (this.round && this.round.isJuggernautMode && this.round.playing) {
+    /**
+     * The two modes where dying puts you OUT rather than respawning you.
+     *
+     * A found prop stays found. Respawning it would hand the hunters the
+     * same prop to find again somewhere else, and there would be no way for
+     * a prop hunt to end except the clock.
+     *
+     * The rule itself lives in `RoundManager.eliminate`, which refuses a
+     * request for a hunter — so a hunter who dies to the lake, the void or
+     * another hunter falls through to the ordinary respawn below.
+     */
+    const R = this.round;
+    const knockout = R && R.playing
+      && (R.isJuggernautMode || (R.isPropHunt && R.isProp(p.id)));
+    if (knockout) {
       if (!this._elimAsked) {
         this._elimAsked = true;
         this._requestEliminate(p.id);
@@ -4932,6 +4963,8 @@ class Game {
       this.atmo.update(dt, this.camera.position);
       this.effects.update(dt);
 
+      this._updateHideWindow(p);
+      this._updateProps(dt, p);
       this._updatePracticeRing(p);
       this._updateStatue(p);
 
@@ -4969,10 +5002,164 @@ class Game {
     p.spectating = spec;
     this._setOverdrive(p, R.isOverdriveMode);
     this._setJuggernaut(p, jug);
+    this._setPropRole(p);
     p.model.setTagger(R.isTagMode && isIt);
 
     for (const r of this.remotes.values()) {
       r.model.setTagger(R.isTagMode && R.isTagger(r.id));
+    }
+  }
+
+  /**
+   * ═══ PROP HUNT: WHO IS FURNITURE ════════════════════════════════════════
+   *
+   * Derived from the round every frame, like every other role, so there is
+   * no way to end a round still wearing a lamppost — voting a different mode
+   * clears it because `R.isProp` stops being true, not because anything
+   * remembered to undress you.
+   *
+   * ── the hunters cannot move for the first fifteen seconds ────────────
+   * `CFG.prophunt.hideTime`. Without it the mode does not exist: a hunter
+   * who watches the round start sees the whole lobby standing in the open
+   * turning into street furniture, and there is nothing left to search for.
+   * It borrows `cinematic`, which is the existing "you are here but not
+   * playing" state — gravity and collision still run, so a hunter held on a
+   * rooftop settles onto it rather than hanging in the air.
+   */
+  _setPropRole(p) {
+    const R = this.round;
+    const isProp = R.isProp(p.id) && R.playing;
+
+    if (!isProp) {
+      if (p.disguise >= 0) {
+        p.disguise = -1;
+        p.propLocked = false;
+        p.health.setMaxScale(1);
+      }
+      // Coming out of the hiding window, or out of the mode entirely.
+      if (this._propHeld) { p.cinematic = false; this._propHeld = false; }
+      if (!R.isPropHunt) this._propHint = 0;
+      return;
+    }
+
+    // First time as a prop this round: pick one, and tell them how it works.
+    if (p.disguise < 0) {
+      p.disguise = 0;
+      p.propLocked = false;
+      p.health.setMaxScale(CFG.prophunt.healthScale);
+      const def = propAt(this.mapId, 0);
+      this.hud.toast(`You are a ${def.name} — C changes it, SHIFT holds you still`, 5.5);
+      this.hud.announce('HIDE', 'good', true);
+    }
+  }
+
+  /**
+   * Hold the hunters still while the props scatter, and count it down.
+   *
+   * Runs for every frame of a prop hunt rather than only for hunters,
+   * because the props need the clock on screen too — knowing how long you
+   * have to find a corner is most of the decision about which corner.
+   */
+  _updateHideWindow(p) {
+    const R = this.round;
+    if (!R.isPropHunt || !R.playing) return;
+    const spent = (CFG.rounds.duration.prophunt || 300) - R.timer;
+    const left = CFG.prophunt.hideTime - spent;
+    const hunter = R.isHunter(p.id);
+
+    if (hunter && left > 0) {
+      p.cinematic = true;
+      this._propHeld = true;
+      const s = Math.ceil(left);
+      if (s !== this._propHint) {
+        this._propHint = s;
+        this.hud.toast(`Eyes shut — ${s}`, 1.1);
+      }
+    } else if (this._propHeld) {
+      p.cinematic = false;
+      this._propHeld = false;
+      if (hunter) this.hud.announce('HUNT', 'danger', true);
+    }
+  }
+
+  /**
+   * ═══ THE PROPS THEMSELVES ═══════════════════════════════════════════════
+   *
+   * One group per disguised player, built on demand and parked in a map
+   * keyed by player id. The frog underneath is hidden rather than replaced —
+   * see the note in `RemotePlayer._applyMeta` for why a prop is not a rig.
+   *
+   * ── the local player's controls ──────────────────────────────────────
+   * C cycles the disguise and SHIFT bolts it down, both of them refused
+   * while locked and while the round is not running. Cycling is refused
+   * while locked on purpose: a lamppost that turns into a ramen cart
+   * without moving is a lamppost that has told everyone watching exactly
+   * what it is.
+   */
+  _updateProps(dt, p) {
+    const R = this.round;
+    this._propT = (this._propT || 0) + dt;
+    if (!this._propGroups) this._propGroups = new Map();
+
+    // ---- local input ----
+    if (p.isDisguised && R.playing && this.input.locked && !p.health.dead) {
+      if (this.input.consume('ShiftLeft') || this.input.consume('ShiftRight')) {
+        p.propLocked = !p.propLocked;
+        this.hud.toast(p.propLocked ? 'Holding still' : 'Loose', 1.2);
+        Audio.tone({
+          freq: p.propLocked ? 180 : 260, to: p.propLocked ? 90 : 340,
+          dur: 0.16, type: 'square', volume: 0.14, pos: p.pos,
+        });
+      }
+      if (!p.propLocked && this.input.consume('KeyC')) {
+        const list = propsFor(this.mapId);
+        p.disguise = (p.disguise + 1) % list.length;
+        this.hud.toast(list[p.disguise].name, 1.6);
+      }
+    }
+
+    // ---- everyone who is currently something else ----
+    const seen = new Set();
+    const show = (id, disguise, locked, pos, yaw) => {
+      if (disguise < 0) return;
+      seen.add(id);
+      let held = this._propGroups.get(id);
+      if (!held || held.index !== disguise) {
+        if (held) this.scene.remove(held.group);
+        const group = buildProp(this.mapId, disguise);
+        this.scene.add(group);
+        held = { index: disguise, group, def: group.userData.prop };
+        this._propGroups.set(id, held);
+      }
+      held.group.visible = true;
+      held.group.position.set(
+        pos.x, pos.y + propBob(held.def, this._propT, locked), pos.z);
+      /**
+       * A LOCKED PROP DOES NOT TURN, and this is where that is enforced for
+       * the things that are not symmetrical — a ramen cart, a shrine hut, a
+       * bicycle. The player's own yaw is already frozen by `Player.update`,
+       * but a watcher interpolates a remote's yaw between packets, so the
+       * heading is pinned here as well and both ends agree.
+       */
+      if (!locked) held.group.rotation.y = yaw;
+    };
+
+    show(p.id, p.disguise, p.propLocked, p.pos, p.visualYaw);
+    for (const r of this.remotes.values()) {
+      if (r.hidden && r.disguise < 0) continue;
+      show(r.id, r.disguise, r.propLocked, r.pos, r.yaw);
+    }
+
+    // Anyone who stopped being a prop — found, left, or the round ended.
+    for (const [id, held] of this._propGroups) {
+      if (seen.has(id)) continue;
+      this.scene.remove(held.group);
+      this._propGroups.delete(id);
+    }
+    // The local frog is hidden whenever it is wearing something else.
+    if (p.model && p.model.root) {
+      if (p.isDisguised) p.model.root.visible = false;
+      else if (!p.spectating) p.model.root.visible = true;
     }
   }
 
@@ -5478,6 +5665,25 @@ class Game {
         if (wasJug) this.economy.award(E.taggerWinReward, 'Won as juggernaut');
       } else if (R.outcome === 'survivors' && !wasJug) {
         this.economy.award(E.roundWinReward, 'Juggernaut down');
+      }
+      return;
+    }
+
+    /**
+     * PROP HUNT pays both sides, and it has to.
+     *
+     * A prop's whole round can be "stood behind a vending machine and was
+     * never found", which is a win and does not put a single kill on the
+     * board — so paying only the hunters would mean the side that played
+     * the mode correctly earned nothing. The hunters' own finds are paid as
+     * they happen (`CFG.prophunt.findReward`); this is the round win on top.
+     */
+    if (R.mode === MODES.PROPHUNT) {
+      const wasHunter = R.isHunter(me);
+      if (R.outcome === 'taggers') {
+        if (wasHunter) this.economy.award(E.taggerWinReward, 'Found them all');
+      } else if (R.outcome === 'survivors' && !wasHunter) {
+        this.economy.award(E.roundWinReward, 'Never found');
       }
       return;
     }

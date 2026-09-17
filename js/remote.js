@@ -11,13 +11,13 @@
  * a remote frog's dash looks and sounds identical to your own.
  */
 
-import * as THREE from '../lib/three.module.js?v=v150';
-import { CFG } from './config.js?v=v150';
-import { clamp, lerp, angleDelta, damp } from './util.js?v=v150';
-import { FrogModel } from './frog.js?v=v150';
-import { ToadModel } from './npc.js?v=v150';
-import { findSkin, DEFAULT_SKIN } from './skins.js?v=v150';
-import { Audio } from './audio.js?v=v150';
+import * as THREE from '../lib/three.module.js?v=v151';
+import { CFG } from './config.js?v=v151';
+import { clamp, lerp, angleDelta, damp } from './util.js?v=v151';
+import { FrogModel } from './frog.js?v=v151';
+import { ToadModel } from './npc.js?v=v151';
+import { findSkin, DEFAULT_SKIN } from './skins.js?v=v151';
+import { Audio } from './audio.js?v=v151';
 
 const _tmp = new THREE.Vector3();
 const _dir = new THREE.Vector3();
@@ -85,6 +85,9 @@ export class RemotePlayer {
     this._forced = false;
     this.spectating = false;
     this.isJuggernautModel = false;
+    /** PROP HUNT — index of the prop worn, or -1. See `_applyMeta`. */
+    this.disguise = -1;
+    this.propLocked = false;
     // Set by the game: spawns the visual-only kunai this player's clone threw.
     this.onCloneThrow = null;
 
@@ -476,10 +479,18 @@ export class RemotePlayer {
   _applyVisibility() {
     const F = CFG.abilities.invisibility.friendlyOpacity;
 
-    // Spectators are gone to everybody — teammates included. That is what
-    // makes being knocked out feel like leaving the fight rather than
-    // haunting it.
-    const meHidden = this._forced || this.spectating
+    /**
+     * Spectators are gone to everybody — teammates included. That is what
+     * makes being knocked out feel like leaving the fight rather than
+     * haunting it.
+     *
+     * A DISGUISED PLAYER IS HIDDEN FROM EVERYONE, without exception.
+     * Unlike invisibility there is no "friendly" case and no fade: the prop
+     * standing in their place is what people see, and a frog showing
+     * through it at 30% opacity would be a lamppost with a ghost in it.
+     * `Game._updateProps` is what puts the prop there.
+     */
+    const meHidden = this._forced || this.spectating || this.disguise >= 0
       || (this.invisible && this._hunting);
     this.hidden = meHidden;
     this.model.root.visible = !meHidden;
@@ -616,6 +627,25 @@ export class RemotePlayer {
     this.invisible = !!s.iv;
     this.spectating = !!s.sx;
     this.setJuggernaut(!!s.jg);
+    /**
+     * PROP HUNT: what this player currently looks like.
+     *
+     * Kept as plain state rather than swapped into `this.model`, which the
+     * juggernaut does. A prop is not a rig — it has no legs to animate, no
+     * nameplate to draw and nothing for `update` to pose — so the frog
+     * model stays where it is and is simply HIDDEN while the prop group
+     * stands in its place. `Game._updateProps` owns that group, because it
+     * owns the scene and the map the prop list comes from.
+     *
+     * Sent as index-plus-one; see `Player.netState`.
+     */
+    this.disguise = (s.pr || 0) - 1;
+    this.propLocked = !!s.pl;
+    // Visibility is normally resolved when the VIEWER's relationship
+    // changes; a disguise changes it from the other end, so it is re-run
+    // here or a player who just became a lamppost stays a visible frog
+    // until the next time somebody's team changed.
+    this._applyVisibility();
     this.cloneState = s.cl || null;
     if (s.at) this.attackIndex = s.at - 1;
 

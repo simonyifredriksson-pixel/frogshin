@@ -17,13 +17,31 @@
  *               everyone is infected, or the survivors run out the clock.
  */
 
-import { CFG } from './config.js?v=v150';
-import { clamp } from './util.js?v=v150';
+import { CFG } from './config.js?v=v151';
+import { clamp } from './util.js?v=v151';
 
 export const MODES = {
   TAG: 'tag', INFECTION: 'infection', FFA: 'ffa', TEAM: 'team',
-  JUGGERNAUT: 'juggernaut', OVERDRIVE: 'overdrive',
+  JUGGERNAUT: 'juggernaut', OVERDRIVE: 'overdrive', PROPHUNT: 'prophunt',
 };
+
+/**
+ * Every mode, in the order the vote screen lists them and the order a tie
+ * resolves in. Written once: `_resolveVote` used to carry its own copy and a
+ * mode added to `MODES` but forgotten here could win a vote it was never
+ * offered, or — as happened — be unvotable while its button was on screen.
+ */
+export const MODE_ORDER = [
+  MODES.TAG, MODES.INFECTION, MODES.FFA, MODES.TEAM,
+  MODES.JUGGERNAUT, MODES.OVERDRIVE, MODES.PROPHUNT,
+];
+
+/** A fresh zeroed tally. One place, so a new mode cannot be half-added. */
+export function emptyTally() {
+  const t = {};
+  for (const m of MODE_ORDER) t[m] = 0;
+  return t;
+}
 
 /** Squad sizes offered by the TEAM mode: 1v1 through 5v5. */
 export const MAX_TEAM_SIZE = 5;
@@ -58,6 +76,14 @@ export const MODE_INFO = {
     blurb: 'Same frog, same grapple, no stamina and twice the top speed. The '
       + 'katana hurts as hard as you were moving — 500 speed is a kill. '
       + 'Landing it at that speed is the whole game.',
+  },
+  [MODES.PROPHUNT]: {
+    name: 'PROP HUNT',
+    blurb: 'Everyone but the hunters turns into the scenery — a lamppost, a '
+      + 'ramen cart, a stilt hut, whatever this map is full of. C changes '
+      + 'what you are, SHIFT bolts you to the spot. Hunters have blades and '
+      + 'the clock. Needs two players.',
+    minPlayers: CFG.prophunt.minPlayers,
   },
 };
 
@@ -118,7 +144,7 @@ export class RoundManager {
     this.taggers = new Set();
     this.immunity = new Map();      // playerId -> seconds of no-tag-back left
     this.votes = new Map();         // playerId -> { mode, taggers }
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
+    this.tally = emptyTally();
     this.startingTaggers = new Set();
     // Juggernaut mode: who the monster is, and who it has already put out.
     this.juggernaut = null;
@@ -161,18 +187,43 @@ export class RoundManager {
    * speed, sword damage) are asked about by name.
    */
   get isOverdriveMode() { return this.mode === MODES.OVERDRIVE; }
+  /**
+   * PROP HUNT reuses `taggers` for its hunters and `eliminated` for the
+   * props that have been found.
+   *
+   * Deliberately not a third set. Both of those already do exactly the right
+   * thing everywhere else in the class — `removePlayer` clears them, the
+   * wire carries them, `_beginVoting` resets them — and a parallel `hunters`
+   * set would be a fourth place to forget one of those.
+   *
+   * What it is NOT is a tag mode: `isTagMode` gates the kunai swap, the
+   * tag immunity and the "you are it" HUD, none of which apply here. See
+   * `applyTag`, which refuses a prop-hunt round outright.
+   */
+  get isPropHunt() { return this.mode === MODES.PROPHUNT; }
+  isHunter(id) { return this.isPropHunt && this.taggers.has(id); }
+  /** Disguised, and still standing. */
+  isProp(id) {
+    return this.isPropHunt && !this.taggers.has(id) && !this.eliminated.has(id);
+  }
+  /** Props still hidden, out of a lobby. */
+  propsLeft(playerIds) {
+    return playerIds.filter((id) => this.isProp(id)).length;
+  }
   get playing() { return this.phase === PHASE.PLAYING; }
   /** Damage and deaths matter in the shooting modes, not the chases. */
   get combatEnabled() {
     return this.mode === MODES.FFA || this.mode === MODES.TEAM
-      || this.mode === MODES.JUGGERNAUT || this.mode === MODES.OVERDRIVE;
+      || this.mode === MODES.JUGGERNAUT || this.mode === MODES.OVERDRIVE
+      || this.mode === MODES.PROPHUNT;
   }
 
   isJuggernaut(id) { return this.isJuggernautMode && this.juggernaut === id; }
 
   /**
-   * Knocked out and watching. Only juggernaut mode eliminates anyone — in
-   * Tag being caught makes you a tagger, which is a role change, not an exit.
+   * Knocked out and watching. Juggernaut and Prop Hunt are the two modes
+   * that eliminate anyone — in Tag being caught makes you a tagger, which
+   * is a role change, not an exit.
    */
   isSpectating(id) { return this.eliminated.has(id); }
 
@@ -224,7 +275,7 @@ export class RoundManager {
   }
 
   _recount() {
-    this.tally = { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
+    this.tally = emptyTally();
     for (const v of this.votes.values()) {
       if (this.tally[v.mode] !== undefined) this.tally[v.mode]++;
     }
@@ -245,8 +296,7 @@ export class RoundManager {
     let bestMode = null;
     let bestVotes = -1;
     // Deterministic order so a tie always resolves the same way everywhere.
-    for (const m of [MODES.TAG, MODES.INFECTION, MODES.FFA, MODES.TEAM,
-      MODES.JUGGERNAUT, MODES.OVERDRIVE]) {
+    for (const m of MODE_ORDER) {
       if (!modeAvailable(m, playerCount)) continue;
       if (this.tally[m] > bestVotes) { bestVotes = this.tally[m]; bestMode = m; }
     }
@@ -312,6 +362,12 @@ export class RoundManager {
                    playerIds.length > 1 &&
                    playerIds.every((id) => this.taggers.has(id))) {
           this._finish('EVERYONE INFECTED — taggers win!', 'taggers');
+        } else if (this.isPropHunt && playerIds.length > 1) {
+          // The hunters win by finding everything. Running the clock out is
+          // the props' win and is handled in `_timeUpResult`.
+          if (this.propsLeft(playerIds) === 0) {
+            this._finish('EVERY PROP FOUND — hunters win!', 'taggers');
+          }
         } else if (this.isJuggernautMode && this.juggernaut) {
           // The juggernaut wins by clearing the field; the frogs win by
           // bringing it down. Its own death is reported through eliminate().
@@ -358,6 +414,22 @@ export class RoundManager {
         text: `${TEAM_NAMES[win]} WINS — ${Math.max(a, b)} to ${Math.min(a, b)}`,
         outcome: 'team' + win,
       };
+    }
+    /**
+     * PROP HUNT on the clock: anybody still hidden has won.
+     *
+     * Scored as 'survivors' — the same outcome tag the runners get for
+     * outlasting a tag round — so the economy pays it out without needing to
+     * learn a seventh mode. The props ARE the survivors.
+     */
+    if (this.mode === MODES.PROPHUNT) {
+      const left = this.propsLeft(playerIds);
+      return left > 0
+        ? {
+          text: `TIME — ${left} prop${left === 1 ? '' : 's'} never found!`,
+          outcome: 'survivors',
+        }
+        : { text: 'EVERY PROP FOUND — hunters win!', outcome: 'taggers' };
     }
     if (this.mode === MODES.JUGGERNAUT) {
       // Outlasting the clock counts as beating it — the frogs held the field.
@@ -437,6 +509,27 @@ export class RoundManager {
       }
       const n = Math.min(this.taggerCount, Math.max(1, pool.length - 1));
       for (let i = 0; i < n && i < pool.length; i++) this.taggers.add(pool[i]);
+    }
+
+    /**
+     * PROP HUNT: deal the hunters.
+     *
+     * A FRACTION of the lobby rather than the vote's tagger count, because
+     * the count picker is a chase-mode control and the balance here is a
+     * ratio: one hunter to three or four props. `CFG.prophunt.hunterFraction`
+     * is that ratio, rounded up so a two-player lobby is one of each, and
+     * capped so there is always at least one prop left to find — a round
+     * where everybody is a hunter ends the instant it starts.
+     */
+    if (this.isPropHunt && playerIds.length) {
+      const pool = playerIds.slice();
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+      }
+      const want = Math.ceil(pool.length * CFG.prophunt.hunterFraction);
+      const n = clamp(want, 1, Math.max(1, pool.length - 1));
+      for (let i = 0; i < n; i++) this.taggers.add(pool[i]);
     }
     // Remembered separately from `taggers`, which changes as people are
     // tagged — the economy pays a bonus for having STARTED as an infector.
@@ -548,7 +641,15 @@ export class RoundManager {
    * @returns true if this actually put someone out
    */
   eliminate(victimId) {
-    if (!this.authority || !this.playing || !this.isJuggernautMode) return false;
+    if (!this.authority || !this.playing) return false;
+    // The two modes where being killed puts you out rather than respawning
+    // you. In a prop hunt a found prop is out; a hunter cannot be put out
+    // at all, which is what stops props killing their way to a win.
+    if (this.isPropHunt) {
+      if (!this.isProp(victimId)) return false;
+    } else if (!this.isJuggernautMode) {
+      return false;
+    }
     if (this.eliminated.has(victimId)) return false;
     this.eliminated.add(victimId);
     if (this.onEliminate) this.onEliminate(victimId, victimId === this.juggernaut);
@@ -568,6 +669,22 @@ export class RoundManager {
       this._finish('THE JUGGERNAUT FLED — frogs win!', 'survivors');
     }
     this._recount();
+    /**
+     * A prop hunt with nobody left to hunt, or nobody left hunting, is over.
+     *
+     * Checked here rather than left to `update` because both of those are
+     * states the PLAYING branch cannot see: it asks how many props are left,
+     * and a lobby that has lost its last hunter still has props in it. The
+     * round would run its full four minutes with nothing happening.
+     */
+    if (this.isPropHunt && this.authority && this.playing) {
+      const ids = Array.from(new Set([...this.taggers, ...this.votes.keys()]));
+      if (this.taggers.size === 0) {
+        this._finish('THE HUNTERS LEFT — props win!', 'survivors');
+      } else if (ids.length && this.propsLeft(ids) === 0) {
+        this._finish('EVERY PROP FOUND — hunters win!', 'taggers');
+      }
+    }
   }
 
   // --------------------------------------------------------- replication
@@ -618,7 +735,7 @@ export class RoundManager {
     this.teamSize = s.ts || 2;
     this.teamKills = s.tk || [0, 0];
     this.roundNumber = s.n || 0;
-    this.tally = s.v || { tag: 0, infection: 0, ffa: 0, team: 0, juggernaut: 0, overdrive: 0 };
+    this.tally = s.v || emptyTally();
     this.taggers = new Set(s.tg || []);
     this.juggernaut = s.jg || null;
     this.juggernautHealth = s.jh || 1;

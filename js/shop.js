@@ -10,10 +10,10 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v150';
-import { Audio } from './audio.js?v=v150';
-import { PX } from './icons.js?v=v150';
-import { CFG } from './config.js?v=v150';
+} from './skins.js?v=v151';
+import { Audio } from './audio.js?v=v151';
+import { PX } from './icons.js?v=v151';
+import { CFG } from './config.js?v=v151';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
@@ -116,6 +116,53 @@ function swordSVG(s) {
       blade = `<polygon points="56,2 63,9 21,51 14,44" fill="${hex(s.edge)}"
           opacity="0.55"/>
         <polygon points="55,5 60,10 20,50 15,45" fill="${hex(s.blade)}"/>`;
+      break;
+    /**
+     * ═══ THE FOUR THAT ARE NOT SWORDS ═══════════════════════════════════
+     *
+     * A knife, a spear, an axe and a maul. `buildKatana` has built all four
+     * for a long time — js/weapons.js needs them for the gear list — but the
+     * card did not, so every cosmetic skin carrying one of these shapes was
+     * previewed as a katana.
+     *
+     * That was survivable while only GEAR used them. It stopped being
+     * survivable when the fifty collection swords were written out one at a
+     * time: half of them are now one of these four, and a case whose card
+     * shows ten katanas is exactly the complaint the rewrite was answering.
+     *
+     * All four follow the in-world rule — the weight of a polearm is at the
+     * far END of it, not in the hand — because that is the only thing that
+     * separates them from a sword at card size.
+     */
+    case 'dagger':
+      // Short and straight: it stops less than halfway down the blade run.
+      blade = `<polygon points="50,16 56,22 30,48 24,42" fill="${hex(s.blade)}"/>
+        <polygon points="50,16 56,22 42,36 36,30" fill="${hex(s.edge)}"/>`;
+      break;
+    case 'spear':
+      // A long plain shaft with a leaf head socketed on the end.
+      blade = `<rect x="12" y="30" width="46" height="4" fill="${hex(s.grip)}"
+          transform="rotate(-45 35 32)"/>
+        <polygon points="58,2 52,14 44,12 50,4" fill="${hex(s.blade)}"/>
+        <polygon points="58,2 52,14 55,7" fill="${hex(s.edge)}"/>
+        <rect x="42" y="14" width="10" height="4" fill="${hex(s.guard)}"
+          transform="rotate(-45 47 16)"/>`;
+      break;
+    case 'axe':
+      // A short haft, and all of the mass hung off one side of the top.
+      blade = `<rect x="16" y="32" width="34" height="5" fill="${hex(s.grip)}"
+          transform="rotate(-45 33 34)"/>
+        <polygon points="46,6 60,14 56,30 40,22" fill="${hex(s.blade)}"/>
+        <polygon points="60,14 56,30 62,24" fill="${hex(s.edge)}"/>`;
+      break;
+    case 'hammer':
+      // No edge anywhere on it. A block on the end of a stick.
+      blade = `<rect x="16" y="32" width="34" height="5" fill="${hex(s.grip)}"
+          transform="rotate(-45 33 34)"/>
+        <rect x="40" y="6" width="20" height="18" fill="${hex(s.blade)}"
+          transform="rotate(-45 50 15)"/>
+        <rect x="40" y="6" width="20" height="5" fill="${hex(s.edge)}"
+          transform="rotate(-45 50 15)"/>`;
       break;
     default:
       blade = `<polygon points="54,6 60,12 22,50 16,44" fill="${hex(s.blade)}"/>
