@@ -10,12 +10,24 @@ import {
   CATALOG, RARITY, RARITY_ORDER, DEFAULT_SKIN, BULK_SIZES,
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
-} from './skins.js?v=v151';
-import { Audio } from './audio.js?v=v151';
-import { PX } from './icons.js?v=v151';
-import { CFG } from './config.js?v=v151';
+  CHAMPION_LABEL, CHAMPION_TITLE,
+} from './skins.js?v=v152';
+import { Audio } from './audio.js?v=v152';
+import { PX } from './icons.js?v=v152';
+import { CFG } from './config.js?v=v152';
 
 const $ = (id) => document.getElementById(id);
+
+/**
+ * The champion's name goes into innerHTML, and it is the one string on these
+ * screens that a person typed. It is already capped at 24 characters on the
+ * way out of localStorage; this is the other half.
+ */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 const MAX_ABILITIES = CFG.abilities.maxEquipped;
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -164,6 +176,19 @@ function swordSVG(s) {
         <rect x="40" y="6" width="20" height="5" fill="${hex(s.edge)}"
           transform="rotate(-45 50 15)"/>`;
       break;
+    /**
+     * CAPSTONE. Narrow, dead straight, with a dark spine and an ivory hamon
+     * down the cutting edge and a flat angled tip — the same three-band
+     * stack the model has, because the whole point of this blade is that it
+     * is identifiable by shape rather than by glow, and a card that drew it
+     * as a standard katana would be giving away the one thing it has.
+     */
+    case 'keystone':
+      blade = `<polygon points="55,5 61,11 21,51 15,45" fill="${hex(s.blade)}"/>
+        <polygon points="55,5 58,8 18,48 15,45" fill="${hex(s.grip)}"/>
+        <polygon points="58,8 61,11 21,51 18,48" fill="${hex(s.edge)}"/>
+        <polygon points="55,5 61,11 56,16 50,10" fill="${hex(s.edge)}"/>`;
+      break;
     default:
       blade = `<polygon points="54,6 60,12 22,50 16,44" fill="${hex(s.blade)}"/>
         <polygon points="54,6 60,12 42,30 36,24" fill="${hex(s.edge)}"/>`;
@@ -186,6 +211,19 @@ function swordSVG(s) {
       guard = `<circle cx="20" cy="44" r="8" fill="none" stroke="${g}" stroke-width="4"/>`;
       break;
     case 'none': guard = ''; break;
+    // The arch, as the guard. See `buildKatana`.
+    case 'keystone': {
+      const lit = f.emblemGlow ? hex(f.emblemGlow) : g;
+      const w = [0, 1, 2, 3, 4].map((i) => {
+        const a = Math.PI - (i / 4) * Math.PI;
+        const x = 20 + Math.cos(a) * 9, y = 44 - Math.sin(a) * 9;
+        return `<rect x="${(x - 2.2).toFixed(1)}" y="${(y - 2.2).toFixed(1)}"
+          width="4.4" height="4.4" fill="${i === 2 ? lit : g}"
+          transform="rotate(${(-a * 180 / Math.PI).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+      }).join('');
+      guard = `<rect x="11" y="43" width="18" height="3" fill="${g}"/>${w}`;
+      break;
+    }
     default:
       guard = `<rect x="12" y="41" width="16" height="6" fill="${g}"
         transform="rotate(-45 20 44)"/>`;
@@ -1097,14 +1135,36 @@ export class Shop {
     // Name the right boss, too: the two Frogath rewards come from different
     // fights, and "BEAT FROGATH" on the Ascended's gear would send you back
     // down the dungeon for something that is not there.
-    const lockLabel = skin.reward
-      ? (skin.id.includes('divine') ? 'BEAT THE ASCENDED' : 'BEAT FROGATH')
-      : 'LOCKED';
+    const lockLabel = skin.oneOfOne ? 'TOURNAMENT'
+      : skin.reward
+        ? (skin.id.includes('divine') ? 'BEAT THE ASCENDED' : 'BEAT FROGATH')
+        : 'LOCKED';
+    /**
+     * ═══ THE ONE OF ONE'S OWN PLATE ═════════════════════════════════════
+     *
+     * Every other card says what the thing is. This one says what it MEANS,
+     * because the whole value of the item is a fact about the world rather
+     * than a fact about the item: there is one, and this is who has it.
+     *
+     * Only drawn on a card that is actually owned. On anybody else's screen
+     * KEYSTONE is a locked card marked TOURNAMENT, with no owner line — a
+     * name under a skin you do not have would read as a taunt, and worse,
+     * it would be a name this save has no business knowing.
+     */
+    const champ = skin.oneOfOne && owned
+      ? `<div class="skin-one">${CHAMPION_LABEL}</div>`
+        + `<div class="skin-one-sub">${CHAMPION_TITLE}</div>`
+        + (this.economy.championOwner
+          ? `<div class="skin-one-own">OWNER: ${esc(this.economy.championOwner)}</div>`
+          : '')
+      : '';
+    if (skin.oneOfOne) card.classList.add('one-of-one');
     card.innerHTML =
       `<div class="skin-art">${face.svg}</div>`
       + `<div class="skin-name">${face.name}</div>`
       + `<div class="skin-tier" style="color:${face.color}">`
       + `${face.tier}</div>`
+      + champ
       + (equipped ? '<div class="tag">ON</div>'
         : (owned ? '' : `<div class="tag">${lockLabel}</div>`));
 

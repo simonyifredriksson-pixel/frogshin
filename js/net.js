@@ -16,9 +16,9 @@
  * for one client to directly write another's health.
  */
 
-import { CFG, BUILD } from './config.js?v=v151';
-import { roomCode as makeRoomCode } from './util.js?v=v151';
-import { ECLIPSE_TITLE } from './skins.js?v=v151';
+import { CFG, BUILD } from './config.js?v=v152';
+import { roomCode as makeRoomCode } from './util.js?v=v152';
+import { ECLIPSE_TITLE, CHAMPION_MARK } from './skins.js?v=v152';
 
 export const NetRole = { OFFLINE: 'offline', HOST: 'host', CLIENT: 'client' };
 
@@ -45,17 +45,24 @@ export function cleanSkins(s) {
 /**
  * A PLAYER'S TITLE — validated as an exact match, never sanitised as text.
  *
- * There is exactly one title in the game: the Eclipse. A title is drawn
- * beside somebody's name in everyone else's lobby, so accepting free text
- * here would be handing every peer a line of writing on every other peer's
- * screen — a much bigger thing than a name, which at least sits on a frog
- * you can see. You either have the title or you do not.
+ * There are exactly TWO titles in the game: the Eclipse, and the one-of-one's
+ * mark. A title is drawn beside somebody's name in everyone else's lobby, so
+ * accepting free text here would be handing every peer a line of writing on
+ * every other peer's screen — a much bigger thing than a name, which at
+ * least sits on a frog you can see. You either have a title or you do not.
+ *
+ * MATCHED AGAINST A LIST, not sanitised, and that distinction is the whole
+ * security property: no input can ever produce a string that is not already
+ * written in this build. A peer claiming to hold the 1/1 while wearing an
+ * ordinary frog is a peer whose packet says a word this client already knows
+ * how to draw, and nothing more.
  *
  * Unrecognised values become `null` rather than an error, so an older build
  * or a newer one simply shows no title.
  */
+const TITLES = [ECLIPSE_TITLE, CHAMPION_MARK];
 export function cleanTitle(t) {
-  return t === ECLIPSE_TITLE ? ECLIPSE_TITLE : null;
+  return TITLES.indexOf(t) === -1 ? null : t;
 }
 
 /**

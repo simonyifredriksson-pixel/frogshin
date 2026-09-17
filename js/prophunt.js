@@ -47,7 +47,7 @@
  * one is arithmetically still.
  */
 
-import * as THREE from '../lib/three.module.js?v=v151';
+import * as THREE from '../lib/three.module.js?v=v152';
 
 // ---------------------------------------------------------------- geometry
 
@@ -373,6 +373,27 @@ export const PROPS = {
 };
 
 /**
+ * The marker that sits over a prop while the reveal is firing.
+ *
+ * A DIAMOND ABOVE IT, not a tint on the prop itself. Tinting was the first
+ * idea and it is the wrong one: a lamppost that turns gold for five seconds
+ * is still a lamppost behind a wall, so the reveal would only work on props
+ * a hunter could already see. A marker floating clear of the prop's own
+ * height carries over street furniture and reads from across a junction,
+ * which is what "revealed" has to mean on a 420-unit map.
+ *
+ * Unlit on purpose — it is a HUD element that happens to live in the world,
+ * and a Lambert marker would go dark in the shadow of the building it is
+ * meant to be giving away.
+ */
+export function buildRevealMark() {
+  const g = new THREE.Group();
+  g.add(part(G.cone, 0xffe08a, 0.55, 0.60, 0.55, 0, 0.30, 0, 0, Math.PI, true));
+  g.add(part(G.cone, 0xfff4d0, 0.34, 0.34, 0.34, 0, 0.46, 0, 0, Math.PI, true));
+  return g;
+}
+
+/**
  * The disguises available on a map.
  *
  * Falls back to the city's rather than to an empty list: an unknown map id
@@ -407,6 +428,41 @@ export function buildProp(mapId, index) {
   const g = def.build();
   g.userData.prop = def;
   return g;
+}
+
+/**
+ * ═══ THE REVEAL PULSE ════════════════════════════════════════════════════
+ *
+ * Every `revealEvery` seconds the hidden props light up for `revealFor`.
+ *
+ * A PURE FUNCTION OF THE ROUND CLOCK, and that is the whole design. Nothing
+ * about the pulse is stored, broadcast or decided by the host: every client
+ * is handed the same `sinceHide` by `RoundManager.timer` and arrives at the
+ * same answer, so a reveal cannot fire on the hunter's screen a second
+ * before it fires on the prop's — which would be the one bug that makes the
+ * mechanic unfair rather than tense.
+ *
+ * The window sits at the END of each cycle rather than the start, so the
+ * first one lands at 25 seconds instead of at 0. A pulse on the very frame
+ * the hunters are released would reveal everybody before anybody had
+ * finished choosing a corner.
+ *
+ * @param sinceHide seconds since the hunters were let go — negative while
+ *                  the props are still scattering, which is never a reveal.
+ * @returns { on, left, next } — whether it is firing, how long is left of
+ *          it, and how long until the next one starts.
+ */
+export function revealAt(sinceHide, every, forSecs) {
+  const E = every || 30;
+  const F = Math.min(forSecs || 5, E);
+  if (!(sinceHide >= 0)) {
+    // Still hiding. The first pulse is a full cycle away.
+    return { on: false, left: 0, next: E - F + Math.max(0, -(sinceHide || 0)) };
+  }
+  const phase = sinceHide % E;
+  const from = E - F;
+  if (phase >= from) return { on: true, left: E - phase, next: 0 };
+  return { on: false, left: 0, next: from - phase };
 }
 
 /**

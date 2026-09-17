@@ -1027,6 +1027,61 @@ kbd {
 .skin-card.locked { opacity: 0.5; cursor: default; }
 .skin-card.locked:hover { transform: none; }
 .skin-card.equipped { border-color: var(--gold); box-shadow: 0 0 12px rgba(255,200,90,0.5); }
+
+/**
+ * ═══ THE ONE OF ONE ═════════════════════════════════════════════════════
+ *
+ * Ivory rules above and below, the tier, the title, and the owner's name —
+ * the plate the brief asked for, rendered as something engraved rather than
+ * as a badge. It is deliberately QUIET: no animation, no gradient, no
+ * colour but the skin's own antique gold and ivory. The card next to it
+ * belongs to a Secret and glows; this one does not have to, which is the
+ * whole point of the tier.
+ */
+.skin-card.one-of-one {
+  background: linear-gradient(180deg, #1c2a26, #10171a);
+  border-color: #b9974e;
+}
+.skin-card.one-of-one.equipped { box-shadow: 0 0 14px rgba(185,151,78,0.55); }
+.skin-one {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(232,226,208,0.55);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #e8e2d0;
+}
+.skin-one-sub {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: #b9974e;
+}
+.skin-one-own {
+  margin-top: 3px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(232,226,208,0.55);
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  color: #8fbcd8;
+  /* A long name must not push the card wider than its neighbours. */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/**
+ * The in-world marker: worn beside the name, at the size of a footnote.
+ *
+ * The brief was explicit that the exclusivity should read as prestigious
+ * rather than obnoxious, and that there must be no giant text over the
+ * player's head. So it is nine pixels of antique gold on the nameplate and
+ * nothing else — somebody who knows what it means will see it, and somebody
+ * who does not will not be shouted at.
+ */
+.one-of-one-mark {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #b9974e;
+  opacity: 0.95;
+}
 .skin-art {
   height: 62px;
   display: flex; align-items: center; justify-content: center;

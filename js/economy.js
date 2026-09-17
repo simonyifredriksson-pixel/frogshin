@@ -11,10 +11,10 @@
  * busy round, and localStorage is synchronous.
  */
 
-import { CFG } from './config.js?v=v151';
+import { CFG } from './config.js?v=v152';
 // Only for `revoke`: a staked skin that was being worn falls back to the
 // default rather than leaving the player in something they no longer own.
-import { DEFAULT_SKIN } from './skins.js?v=v151';
+import { DEFAULT_SKIN } from './skins.js?v=v152';
 
 export class Economy {
   constructor() {
@@ -42,6 +42,17 @@ export class Economy {
      */
     this.statueOpened = false;
     this.ascendedBeaten = false;
+    /**
+     * ═══ THE 1/1 ══════════════════════════════════════════════════════════
+     *
+     * Who KEYSTONE was awarded to. Stored as a name rather than derived,
+     * because unlike the Eclipse title this is not a fact about the local
+     * collection — it is a fact about a tournament that happened, and it has
+     * to survive being read on a screen belonging to somebody who is not the
+     * owner. Ownership itself is still just `owned.frogs`, as it is for
+     * everything else; this is only the line the collection prints under it.
+     */
+    this.championOwner = '';
     /**
      * Where each dungeon MODE was left off, or null. Room index, 0-based.
      *
@@ -115,6 +126,9 @@ export class Economy {
       if (Array.isArray(d.loadout)) this.loadout = d.loadout;
       this.crystal = !!d.crystal;
       this.statueOpened = !!d.statueOpened;
+      // A hand-edited save could put anything here; it is drawn on screen.
+      this.championOwner = typeof d.championOwner === 'string'
+        ? d.championOwner.slice(0, 24) : '';
       this.ascendedBeaten = !!d.ascendedBeaten;
       // Handed to Progress.load, which validates every field of it.
       this.realm = (d.realm && typeof d.realm === 'object') ? d.realm : null;
@@ -176,6 +190,7 @@ export class Economy {
         loadout: this.loadout,
         crystal: this.crystal,
         statueOpened: this.statueOpened,
+        championOwner: this.championOwner,
         ascendedBeaten: this.ascendedBeaten,
         dungeonRuns: this.dungeonRuns,
         dungeonDeepest: this.dungeonDeepest,

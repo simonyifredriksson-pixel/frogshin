@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v151';
+export const BUILD = 'v152';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -962,6 +962,31 @@ export const CFG = {
 
     /** Froglets a hunter is paid for finding one. */
     findReward: 120,
+
+    /**
+     * ═══ THE REVEAL ══════════════════════════════════════════════════════
+     *
+     * Every 30 seconds, every prop still hidden lights up for 5.
+     *
+     * Without it a good prop is unbeatable. The mode's failure state is a
+     * player who picked a perfect corner in the first fifteen seconds and
+     * then did nothing for five minutes while a hunter walked past them
+     * eleven times — which is not a stand-off, it is two people not playing.
+     * The reveal puts a clock on hiding: a spot only has to survive until
+     * the next pulse, and after that it is a spot somebody has SEEN.
+     *
+     * Five seconds is long enough for a hunter to take a bearing and start
+     * moving, and short enough that a prop who breaks for new cover the
+     * instant it fires can still get away. That trade — stay and be found,
+     * or move while everyone is looking — is the decision the mode wanted.
+     *
+     * It is derived from the ROUND CLOCK, never broadcast. Every client
+     * computes the same window from `RoundManager.timer`, so a pulse cannot
+     * fire on one screen and not another, and it costs nothing on the wire.
+     * See `revealAt` in js/prophunt.js.
+     */
+    revealEvery: 30,
+    revealFor: 5,
   },
 
   // ---------------------------------------------------------------- shark

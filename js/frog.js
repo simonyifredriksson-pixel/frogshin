@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v151';
-import { CFG } from './config.js?v=v151';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v151';
+import * as THREE from '../lib/three.module.js?v=v152';
+import { CFG } from './config.js?v=v152';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v152';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -37,6 +37,9 @@ const WRAP_SIDES = 24;
  * the highlight's far edge is the furthest, at 0.209.
  */
 const LID_SHUT = 0.216;
+
+/** Held for the one-of-one's draw flash, so it allocates nothing per frame. */
+const WHITE = new THREE.Color(0xffffff);
 
 /**
  * The ninja idle stance: a low guard held whenever the frog is standing
@@ -249,6 +252,38 @@ export function buildKatana(m, fx) {
       k.add(mesh(G.cone, m.edge, 0.12, 0.34, 0.30, 0, tipY + 0.06, 0));
       break;
     /**
+     * ═══ CAPSTONE — the one-of-one's blade ══════════════════════════════
+     *
+     * The narrowest, straightest blade in the game, and the only one with
+     * no effect on it whatsoever: no glow, no runes, no aura, no orbit.
+     *
+     * That absence IS the design. Every other top-tier sword here announces
+     * itself by emitting something, which means they are all the same sword
+     * at different wavelengths — turn the lights off and a Mythic and a ???
+     * are two grey katanas. This one is recognisable by its OUTLINE: it is
+     * visibly narrower than everything else, perfectly straight where the
+     * good blades curve, and it ends in a flat angled kissaki instead of a
+     * cone. The test the brief set was "does it still look amazing with all
+     * the effects off", and the only way to pass that is to not have any.
+     *
+     * The three-material stack across the blade — dark spine, steel body,
+     * ivory hamon along the cutting edge — is what stops a narrow blade
+     * reading as a stick. It is also the only place on the whole item where
+     * three colours meet.
+     */
+    case 'keystone': {
+      blade.scale.set(0.044, 1.42 * L, 0.105);
+      blade.position.y = 0.80 * L;
+      // The hamon: a bright temper line down the cutting edge.
+      k.add(mesh(G.box, m.edge, 0.048, 1.36 * L, 0.030, 0, 0.80 * L, 0.041));
+      // The spine behind it, in the grip's dark colour.
+      k.add(mesh(G.box, m.grip, 0.046, 1.36 * L, 0.024, 0, 0.80 * L, -0.044));
+      // A flat, angled kissaki rather than a cone â€” the tip is a facet.
+      k.add(mesh(G.box, m.steel, 0.044, 0.22, 0.092, 0, tipY - 0.07, 0.006, 0, 0, 0.17));
+      k.add(mesh(G.box, m.edge, 0.047, 0.10, 0.034, 0, tipY - 0.02, 0.034, 0, 0, 0.17));
+      break;
+    }
+    /**
      * â•â•â• THE THREE THAT ARE NOT SWORDS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      *
      * A spear, an axe and a maul, added for the WEAPONS table in
@@ -397,6 +432,32 @@ export function buildKatana(m, fx) {
       break;
     case 'none':
       break;
+    /**
+     * ═══ THE GUARD IS THE EMBLEM ════════════════════════════════════════
+     *
+     * CAPSTONE's tsuba is the keystone arch itself, lying flat around the
+     * blade: a springing bar behind, five wedges rising over the front, and
+     * the crown wedge lit.
+     *
+     * This is the whole of "the emblem appears on one other part of the
+     * skin". It is on the chest, and it is here, and it is on the back of
+     * the mantle at a third the size â€” and that is all. The instruction was
+     * not to repeat it everywhere, and a guard is the one place on a sword
+     * where a symbol is structural rather than decorative.
+     */
+    case 'keystone': {
+      const arch = m.bladeEmblem || m.gold;
+      k.add(mesh(G.box, m.gold, 0.34, 0.030, 0.075, 0, 0.07, -0.05));
+      for (let i = 0; i < 5; i++) {
+        const a = Math.PI - (i / 4) * Math.PI;
+        const crown = i === 2;
+        k.add(mesh(G.box, crown ? arch : m.gold,
+          crown ? 0.075 : 0.058, 0.032, crown ? 0.090 : 0.072,
+          Math.cos(a) * 0.145, 0.07, -0.05 + Math.sin(a) * 0.145,
+          0, -a + Math.PI / 2, 0));
+      }
+      break;
+    }
     default:                                   // disc
       k.add(mesh(G.cyl, m.gold, 0.165, 0.028, 0.165, 0, 0.07, 0));
       break;
@@ -503,6 +564,18 @@ export class FrogModel {
       this.mats.bladeShard = new THREE.MeshBasicMaterial({ color: sfx.orbit });
     }
     if (sfx.tassel) this.mats.tassel = new THREE.MeshLambertMaterial({ color: sfx.tassel });
+    /**
+     * CAPSTONE's guard, which is the keystone arch in metal.
+     *
+     * Named apart from the frog's `emblemLit` because a frog and its sword
+     * carry the emblem in two different colours in principle, and because
+     * `buildKatana` is also called by js/weapons.js with a gear look that
+     * has no frog attached to it at all.
+     */
+    if (sfx.emblemGlow) {
+      this.mats.bladeEmblem = new THREE.MeshBasicMaterial({ color: sfx.emblemGlow });
+    }
+    if (sfx.trim) this.mats.bladeTrim = new THREE.MeshLambertMaterial({ color: sfx.trim });
     if (sfx.aura) {
       this.mats.aura = new THREE.MeshBasicMaterial({
         color: sfx.aura, transparent: true, opacity: 0.22, depthWrite: false,
@@ -510,6 +583,17 @@ export class FrogModel {
     }
     if (ffx.pattern) this.mats.inlay = new THREE.MeshBasicMaterial({ color: ffx.pattern });
     if (ffx.eyeGlow) this.mats.eyeLit = new THREE.MeshBasicMaterial({ color: ffx.eyeGlow });
+    /**
+     * A LUMINOUS IRIS — the pupil, and nothing else.
+     *
+     * `eyeGlow` lights the whole eyeball, sclera included. On a frog whose
+     * eyes are radius-0.23 mounds that is two headlights, which is right for
+     * the Forgotten One and wrong for anything that is meant to look calm.
+     * Keystone's brief asked for a glow you notice when you look closely and
+     * not before, so `iris` lights the PUPIL alone and leaves the white to
+     * be lit by the world like the rest of the frog.
+     */
+    if (ffx.iris) this.mats.irisLit = new THREE.MeshBasicMaterial({ color: ffx.iris });
     if (ffx.halo) {
       this.mats.halo = new THREE.MeshBasicMaterial({
         color: ffx.halo, transparent: true, opacity: 0.9,
@@ -540,6 +624,52 @@ export class FrogModel {
       });
       this.mats.plateDark = new THREE.MeshLambertMaterial({
         color: new THREE.Color(ffx.plates).multiplyScalar(0.66),
+      });
+    }
+    /**
+     * ═══ KEYSTONE — the one-of-one's own materials ══════════════════════
+     *
+     * Five, and only one of them is lit.
+     *
+     * `emblemLit` is a `MeshBasicMaterial` and everything else here is
+     * Lambert, which is the entire effects budget of this skin: a single
+     * 0.06-unit wedge at the centre of the chest emblem is the only thing
+     * on the whole frog that emits rather than reflects. That is the point
+     * — see the note on the skin in js/skins.js. Adding a second lit
+     * material here is how this skin stops being clean.
+     *
+     * The metal is deliberately given a small emissive term rather than
+     * being lit: antique gold in a night ward has to stay readable without
+     * becoming a lamp, and 0.10 of its own colour is the difference between
+     * "old metal" and "flat brown".
+     */
+    if (ffx.diadem) {
+      this.mats.diadem = new THREE.MeshLambertMaterial({
+        color: ffx.diadem,
+        emissive: new THREE.Color(ffx.diadem).multiplyScalar(0.10),
+      });
+      this.mats.diademDark = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(ffx.diadem).multiplyScalar(0.55),
+      });
+    }
+    if (ffx.mantle) {
+      this.mats.mantle = new THREE.MeshLambertMaterial({ color: ffx.mantle });
+      this.mats.mantleDark = new THREE.MeshLambertMaterial({
+        color: new THREE.Color(ffx.mantle).multiplyScalar(0.62),
+      });
+    }
+    if (ffx.trim) this.mats.trim = new THREE.MeshLambertMaterial({ color: ffx.trim });
+    if (ffx.emblem) {
+      this.mats.emblem = new THREE.MeshLambertMaterial({
+        color: ffx.emblem,
+        emissive: new THREE.Color(ffx.emblem).multiplyScalar(0.12),
+      });
+    }
+    if (ffx.emblemGlow) {
+      this.mats.emblemLit = new THREE.MeshBasicMaterial({ color: ffx.emblemGlow });
+      // The motes that appear only while standing still. Faint, and few.
+      this.mats.mote = new THREE.MeshBasicMaterial({
+        color: ffx.emblemGlow, transparent: true, opacity: 0.55, depthWrite: false,
       });
     }
     if (ffx.moss) this.mats.moss = new THREE.MeshLambertMaterial({ color: ffx.moss });
@@ -1152,8 +1282,15 @@ export class FrogModel {
        */
       const g = this.girth;
       g.add(mesh(G.lowSphere, M.plate, 0.46, 0.33, 0.42, 0, 0.56, 0.20));
-      // A raised ridge down the middle of it, so it is not a smooth blob.
-      g.add(mesh(G.box, M.plateDark, 0.07, 0.30, 0.07, 0, 0.58, 0.56));
+      /**
+       * A raised ridge down the middle of it, so it is not a smooth blob —
+       * UNLESS an emblem is going there, in which case the ridge would run
+       * straight through the middle of it. One or the other owns the centre
+       * line of the chest; on Keystone it is the emblem.
+       */
+      if (!M.emblem) {
+        g.add(mesh(G.box, M.plateDark, 0.07, 0.30, 0.07, 0, 0.58, 0.56));
+      }
       // A gorget at the neck: clear of the torso (0.443 at this height) and
       // of the skull (0.388), so it rings the gap between them.
       b.add(mesh(G.wrap, M.plateDark, 0.48, 0.11, 0.45, 0, 0.86, 0));
@@ -1165,6 +1302,29 @@ export class FrogModel {
         arm.shoulder.add(mesh(G.box, M.plateDark, 0.27, 0.045, 0.26, 0, -0.15, 0));
       }
     }
+    /**
+     * ═══════════════════════════════════════════════════════════════════
+     * ═══ KEYSTONE — THE ONE OF ONE ═════════════════════════════════════
+     * ═══════════════════════════════════════════════════════════════════
+     *
+     * Four pieces, built in the order they are meant to be read:
+     * the CREST (from across the map), the MANTLE (from across a street),
+     * the EMBLEM (from a duel's distance), and the SEAMS (from nowhere at
+     * all — they are for the person who owns it).
+     *
+     * Every offset below is checked against the rig it sits on. The skull
+     * is a 0.44 × 0.36 × 0.42 ellipsoid at the head's origin, the eye
+     * mounds are radius-0.23 spheres at (±0.28, 0.26, 0.10), the cowl is
+     * 0.47 × 0.40 × 0.38 at (0, 0.02, −0.156), and the torso is 0.52 ×
+     * 0.46 × 0.46 centred at y 0.62. Those five numbers decide everything
+     * here — see `_buildHead` and the note on the crown, which is the
+     * cautionary tale: it spent months as seven points buried inside the
+     * eyeballs because nobody measured.
+     */
+    if (M.diadem) this._buildDiadem(F, M);
+    if (M.mantle) this._buildMantle(F, M);
+    if (M.emblem) this._buildEmblem(F, M);
+
     // Moss: tufts around the torso and over the crown, each pushed out to
     // the body's own surface at its height so it sits ON the frog.
     if (M.moss) {
@@ -1343,6 +1503,23 @@ export class FrogModel {
         e.white.material = M.eyeLit;
       }
     }
+    /**
+     * The restrained version: a lit iris in a normal eye.
+     *
+     * The pupil is also shrunk. At full size it fills most of the visible
+     * eyeball, so lighting it is barely different from lighting the whole
+     * thing — and the sclera is dropped to a pale ivory rather than left
+     * stark white, because a cold blue iris needs something warm and
+     * slightly dim around it or the contrast reads as a glare rather than
+     * as an eye.
+     */
+    if (M.irisLit) {
+      for (const e of this.eyes) {
+        e.pupil.material = M.irisLit;
+        e.pupil.scale.set(0.072, 0.098, 0.072);
+      }
+      this.mats.eye.color.setHex(0xe4e0d2);
+    }
     if (F.eclipse) this._buildEclipse();
     if (F.divine) this._buildDivine();
   }
@@ -1366,6 +1543,529 @@ export class FrogModel {
    * Mounted on the BODY so they squash and lean with it. On the root they
    * would slide around over the animation and read as a sticker.
    */
+  /**
+   * ═══ KEYSTONE'S HEADPIECE ═══════════════════════════════════════════════
+   *
+   * A ridge over the crown and ONE curved crest sweeping off the back. That
+   * is the whole thing, and the restraint is the design: one strong
+   * silhouette element beats twenty small ones, and this rig has a cemetery
+   * of small ones that nobody can see from more than four units away.
+   *
+   * ── WHY THERE IS NO CIRCLET ───────────────────────────────────────────
+   * The obvious ceremonial headpiece is a band around the skull, and on this
+   * frog it is geometrically impossible. The eyes are radius-0.23 mounds
+   * centred at (±0.28, 0.26, 0.10) — 0.297 from the head's axis, reaching up
+   * to y 0.49 — while the SKULL only reaches y 0.36. Any ring wide enough to
+   * clear the eyeballs is a ring floating above a head it never touches, and
+   * any ring that touches the head passes straight through both eyes. This
+   * is the same trap the crown fell into: seven points buried inside the
+   * eyeballs for months because nobody did the arithmetic.
+   *
+   * So the headpiece lives on the CENTRELINE, in the 0.10-unit channel
+   * between the eyes where there is nothing to hit, and on the BACK of the
+   * skull where there is nothing at all. Both are clear at every angle, and
+   * the shape it produces — a spine running front to back, rising into a
+   * fin — is more distinctive than a circlet would have been anyway.
+   */
+  _buildDiadem(F, M) {
+    const h = this.head;
+
+    /**
+     * The ridge: five plates following the skull's own curve from the brow
+     * over the crown. Each one is placed ON the surface at its own z rather
+     * than on a straight line, so it reads as something fitted to the head
+     * instead of a bar laid across it.
+     *
+     * The skull is 0.44 × 0.36 × 0.42, and the cowl over the back of it is
+     * bigger again, so the ridge has to rise as it goes back — these are the
+     * heights of the cowl, not of the bare skull.
+     */
+    const RIDGE = [
+      [0.345, 0.20, 0.055, 0.075],   // z, y, halfWidth, length — at the brow
+      [0.235, 0.345, 0.052, 0.085],
+      [0.080, 0.430, 0.050, 0.100],  // over the crown
+      [-0.090, 0.445, 0.048, 0.100],
+      [-0.235, 0.405, 0.045, 0.095],
+    ];
+    for (const [z, y, w, len] of RIDGE) {
+      h.add(mesh(G.box, M.diadem, w, 0.05, len, 0, y, z));
+      // A hairline of ivory down the top of it, which is the only place on
+      // the head the trim colour appears.
+      if (M.trim) h.add(mesh(G.box, M.trim, w * 0.34, 0.052, len * 0.8, 0, y + 0.012, z));
+    }
+    // The brow terminal: a small keystone wedge where the ridge meets the
+    // face, wider at the top than the bottom like the stone it is named for.
+    h.add(mesh(G.box, M.diadem, 0.085, 0.10, 0.045, 0, 0.145, 0.375));
+    if (M.trim) h.add(mesh(G.box, M.trim, 0.050, 0.030, 0.050, 0, 0.175, 0.378));
+
+    /**
+     * ── THE CREST ───────────────────────────────────────────────────────
+     *
+     * One curve, rising up and back off the crown. This is the thing that
+     * makes the skin recognisable at range, so it is the only part of the
+     * design allowed to be large — and it is still only 0.5 units tall,
+     * which is a third of the frog.
+     *
+     * Built as seven tapering segments along a quadratic rather than as one
+     * angled slab, because a straight fin reads as a knife stuck in the head
+     * and a curved one reads as something forged to a shape. The taper is
+     * what keeps it elegant instead of blunt.
+     */
+    /**
+     * ── IT HAS TO BE BIG ENOUGH TO CHANGE THE OUTLINE ──────────────────
+     *
+     * The first version of this crest was 0.44 tall and swept back 0.40,
+     * and against a default frog at twenty units it was INDISTINGUISHABLE —
+     * a two-pixel nub on the skull. That is the brief's own final test
+     * ("would I recognise it in a crowd of a hundred?") failing outright,
+     * and no amount of detail on the chest fixes a silhouette.
+     *
+     * So it is now 0.55 tall and sweeps 0.72 BACK, which is the important
+     * number: height alone just makes a spike, and a spike is what the
+     * brief said not to make. The long backward sweep is what turns the
+     * outline into a shape nothing else in the game has — the head reads as
+     * an arrowhead rather than as a ball.
+     *
+     * It is still smaller than the head it sits on, so the frog is not
+     * gigantic and the proportions are untouched.
+     */
+    const N = 9;
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const y = 0.40 + t * 0.55;
+      const z = -0.24 - t * 0.24 - t * t * 0.48;
+      const tall = 0.17 - t * 0.075;
+      const wide = 0.055 - t * 0.022;
+      // Leaning further back as it climbs, so the top of the curve is
+      // nearly horizontal and the whole thing sweeps rather than spikes.
+      const lean = 0.30 + t * 0.78;
+      h.add(mesh(G.box, M.diadem, wide, tall, 0.26 - t * 0.07, 0, y, z, lean));
+      if (M.trim && i > 1) {
+        h.add(mesh(G.box, M.trim, wide * 0.30, tall * 0.92, 0.265 - t * 0.07,
+          0, y + 0.005, z, lean));
+      }
+    }
+    // The crest's root, covering the join so it does not look posted on.
+    h.add(mesh(G.lowSphere, M.diademDark || M.diadem, 0.085, 0.075, 0.115,
+      0, 0.395, -0.255));
+
+    /**
+     * Two studs low on the sides of the cowl, at z −0.26 where the eyes
+     * cannot reach. They are the only symmetrical metal on the head, and
+     * they exist to stop the profile view being a bare cheek.
+     */
+    for (const sx of [-1, 1]) {
+      h.add(mesh(G.lowSphere, M.diadem, 0.055, 0.055, 0.045,
+        sx * 0.355, 0.12, -0.255));
+    }
+  }
+
+  /**
+   * ═══ KEYSTONE'S MANTLE — AND WHY IT IS ONLY ON ONE SHOULDER ═════════════
+   *
+   * Every other frog in this game is bilaterally symmetrical. Every one.
+   * That makes asymmetry the cheapest and by far the strongest recognition
+   * cue available: a lopsided outline is identifiable at any range, at any
+   * speed, from any angle and in any lighting, and it costs four boxes.
+   *
+   * It hangs off the LEFT shoulder and is parented to the BODY rather than
+   * to the arm. A cape on the shoulder joint swings with every punch and
+   * reads as a flag tied to the wrist; on the body it leans and squashes
+   * with the torso, which is what cloth does.
+   */
+  _buildMantle(F, M) {
+    const b = this.body;
+    const D = M.mantleDark || M.mantle;
+
+    /**
+     * ── AND IT HAS TO STAND PROUD OF THE BODY ──────────────────────────
+     *
+     * Same lesson as the crest. The first mantle hung flat against the
+     * back at x −0.40, inside the frog's own width — so it changed the
+     * colour of the shoulder and nothing else, and the silhouette was a
+     * default frog. A cape that does not break the outline is paint.
+     *
+     * It now reaches x −0.62, clear of the torso's own 0.52 half-width, and
+     * falls to the knee. That overhang is the entire point: one side of
+     * this frog is a straight draped edge and the other is a frog, and THAT
+     * is what somebody recognises across an arena.
+     */
+    b.add(mesh(G.lowSphere, M.mantle, 0.42, 0.28, 0.40, -0.46, 0.80, -0.02));
+    /**
+     * ── AND IT HANGS DOWN THE SIDE, NOT DOWN THE BACK ──────────────────
+     *
+     * The second version of this hung the fall behind the frog at z −0.40
+     * to −0.46. From the side and from behind it was a cape; FROM THE
+     * FRONT it was nothing at all, because it was directly behind a body
+     * wider than it was. Half the time you see another player in this game
+     * you are looking at their front.
+     *
+     * The fall is therefore centred on z −0.10 — beside the torso rather
+     * than behind it — and pushed out to x −0.66, clear of the 0.52 body
+     * and the 0.46 shoulder. What that buys is the thing the whole skin is
+     * for: from straight on, one side of this frog is a long straight
+     * draped edge falling to the ankle and the other side is an ordinary
+     * round frog. Nothing else in the game is lopsided, so the outline
+     * alone identifies it, at any range and from any angle.
+     */
+    const FALL = [
+      [-0.56, 0.68, -0.08, 0.30, 0.26, 0.40],
+      [-0.63, 0.46, -0.10, 0.26, 0.26, 0.46],
+      [-0.66, 0.24, -0.11, 0.22, 0.26, 0.48],
+      [-0.64, 0.02, -0.11, 0.20, 0.24, 0.44],
+      [-0.58, -0.16, -0.10, 0.18, 0.20, 0.36],
+    ];
+    for (const [x, y, z, w, hgt, depth] of FALL) {
+      b.add(mesh(G.box, M.mantle, w, hgt, depth, x, y, z, 0, 0, 0.16));
+    }
+    // An ivory hem along the bottom edge, and a darker lining showing at it.
+    b.add(mesh(G.box, D, 0.19, 0.06, 0.37, -0.57, -0.27, -0.10, 0, 0, 0.16));
+    if (M.trim) {
+      b.add(mesh(G.box, M.trim, 0.20, 0.022, 0.38, -0.572, -0.24, -0.10, 0, 0, 0.16));
+    }
+
+    /**
+     * The clasp: the one piece of metal holding the whole thing on, at the
+     * collarbone where it can actually be seen from the front. Without it
+     * the mantle reads as a towel.
+     */
+    b.add(mesh(G.lowSphere, M.diadem || D, 0.085, 0.085, 0.060, -0.40, 0.855, 0.15));
+    if (M.trim) {
+      b.add(mesh(G.box, M.trim, 0.040, 0.040, 0.030, -0.40, 0.875, 0.185));
+    }
+
+    /**
+     * ── THE MARK ON THE BACK ────────────────────────────────────────────
+     *
+     * Three wedges, 0.05 across, on the shoulder of the cape. The emblem
+     * proper is on the chest; this is a maker's mark, and it is the reward
+     * for being the one person who ever walks behind the champion.
+     *
+     * Three rather than five on purpose — the full arch is the chest's, and
+     * repeating it whole would be the "put the logo everywhere" failure.
+     */
+    if (M.emblem) {
+      for (let i = 0; i < 3; i++) {
+        const a = Math.PI - (i / 2) * Math.PI;
+        b.add(mesh(G.box, M.emblem, 0.030, 0.038, 0.020,
+          -0.40 + Math.cos(a) * 0.075, 0.70 + Math.sin(a) * 0.075, -0.50,
+          0, 0, a - Math.PI / 2));
+      }
+    }
+  }
+
+  /**
+   * ═══ THE EMBLEM — "THE ONE WHO COULD NOT BE REPLACED" ══════════════════
+   *
+   * A five-stone arch with the keystone lit.
+   *
+   * This is the one idea the whole skin is built on, and the reason it is an
+   * ARCH rather than a monogram or a rune: remove the wedge at the crown of
+   * an arch and the arch falls. There is no second one, and nothing else
+   * will do in its place. That is the concept stated as a piece of masonry
+   * instead of as a slogan, and it is why it reads as something off an
+   * ancient building rather than as a logo.
+   *
+   * ── the lit wedge is the ENTIRE effects budget ──────────────────────────
+   * One 0.075-unit box of `emblemLit`. It is the only unlit material on the
+   * frog, the only thing that pulses, and the only bright colour anywhere on
+   * the skin. Everything else here is metal and cloth catching the world's
+   * own light — which is the test the brief actually set: turn every
+   * particle off and this still has to look like the rarest thing in the
+   * game. With this wedge dark it still does, because the arch is a SHAPE.
+   *
+   * Sized against the breastplate it sits on: `plates` puts a 0.46 × 0.33 ×
+   * 0.42 dome at (0, 0.56, 0.20) in `girth`, whose front face runs from
+   * z 0.586 at the top of the arch to z 0.603 at its feet. The emblem sits
+   * at 0.61 — proud of it everywhere, and by no more than two centimetres.
+   */
+  _buildEmblem(F, M) {
+    const g = this.girth;
+    const b = this.body;
+
+    /**
+     * ── KEYSTONE'S OWN ARMOUR ───────────────────────────────────────────
+     *
+     * Flat, thin, and on one shoulder. The shared `plates` set is a domed
+     * breastplate plus two round pauldrons, and it turns this rig into a
+     * barrel — which is what "do not make it bulky" rules out, and what
+     * makes every armoured skin in the game the same shape.
+     *
+     * A 0.12-deep plate adds a little to the frog's depth and nothing to
+     * its width. What it adds instead is a hard, straight-edged panel on a
+     * body made entirely of spheres, which reads as armour precisely
+     * BECAUSE it does not follow the curve.
+     *
+     * ── IT HAS TO CLEAR THE BELLY, NOT THE TORSO ────────────────────────
+     * The obvious reference is the torso ellipsoid, whose front face is at
+     * z 0.46. That is the wrong shape: the pale belly patch is a SEPARATE
+     * sphere pushed forward, `BEL = [0.40, 0.34, 0.33]` at z 0.20, so its
+     * nose reaches 0.53 — seven centimetres proud of the torso. A plate
+     * sized off the torso sits behind it, and the render showed exactly
+     * that: a belly bulging through a breastplate with the emblem stranded
+     * on the wrong side of it. The same trap the obi's note warns about, in
+     * the same place, for the same reason.
+     *
+     * Front face at 0.55, which clears the belly's nose everywhere across
+     * the plate's own height.
+     */
+    const plate = this.mats.diademDark
+      ? new THREE.MeshLambertMaterial({ color: 0x1e2c26 })
+      : this.mats.clothDark;
+    this.mats.champPlate = plate;
+    // The chest panel: a flat slab across the pectorals, edged in ivory.
+    g.add(mesh(G.box, plate, 0.60, 0.38, 0.12, 0, 0.600, 0.490));
+    if (M.trim) {
+      g.add(mesh(G.box, M.trim, 0.615, 0.016, 0.125, 0, 0.785, 0.492));
+      g.add(mesh(G.box, M.trim, 0.615, 0.016, 0.125, 0, 0.415, 0.492));
+    }
+    // A thin collar, sitting in the gap between the torso and the skull.
+    b.add(mesh(G.wrap, plate, 0.455, 0.075, 0.425, 0, 0.885, 0));
+    if (M.diadem) b.add(mesh(G.wrap, M.diadem, 0.445, 0.022, 0.415, 0, 0.935, 0));
+
+    /**
+     * ONE PAULDRON, on the RIGHT — the shoulder the mantle leaves bare.
+     *
+     * Two would restore the symmetry the mantle was added to break. One
+     * says the armour was made for this frog and made around the mantle,
+     * which is the difference between a costume and a commission.
+     */
+    const right = this.arms[1];
+    if (right) {
+      right.shoulder.add(mesh(G.box, plate, 0.26, 0.12, 0.28, 0.02, -0.03, 0));
+      right.shoulder.add(mesh(G.box, plate, 0.23, 0.09, 0.25, 0.03, -0.14, 0));
+      if (M.diadem) {
+        right.shoulder.add(mesh(G.box, M.diadem, 0.265, 0.020, 0.285, 0.02, 0.035, 0));
+      }
+    }
+
+    /**
+     * ── THE EMBLEM ──────────────────────────────────────────────────────
+     *
+     * Scaled up twice from the first pass, which was a 0.27-wide arch of
+     * 0.05 wedges and rendered as an illegible white smear. At any real
+     * distance an emblem has to be a SHAPE, and what makes an arch read as
+     * an arch is the GAPS between its stones — so the wedges are small
+     * relative to the radius and there is no base bar closing the bottom
+     * of it. The springing line went because it merged with the two foot
+     * wedges and turned the whole thing back into a smear.
+     */
+    /**
+     * SMALL STONES ON A WIDE ARC.
+     *
+     * At R 0.20 with 0.09-deep wedges the five stones touched, and an arch
+     * whose stones touch is not an arch — it is a white croquet hoop
+     * painted on the chest, which is what the render showed. The radius is
+     * down to 0.15 and the stones to two thirds of their size, so there is
+     * daylight between them and the eye reads five separate pieces holding
+     * each other up. That is the whole idea of the emblem.
+     */
+    /**
+     * The stones are sized against the ARC they sit on, not by eye.
+     *
+     * Five stones over a half-circle of radius R are 0.785·R apart along
+     * it. At R 0.15 with 0.044-wide stones the gaps were bigger than the
+     * stones and the emblem read as five scattered tiles; at R 0.20 with
+     * 0.09 stones they touched and it read as a solid hoop. 0.075 on a
+     * 0.145 arc leaves a joint about a third of a stone wide, which is
+     * what masonry looks like and what makes the eye read five pieces
+     * holding each other up rather than one painted shape.
+     */
+    const R = 0.145;
+    for (let i = 0; i < 5; i++) {
+      const a = Math.PI - (i / 4) * Math.PI;
+      const keystone = i === 2;
+      const mat = keystone && M.emblemLit ? M.emblemLit : M.emblem;
+      g.add(mesh(G.box, mat,
+        keystone ? 0.090 : 0.075,
+        keystone ? 0.112 : 0.085,
+        keystone ? 0.034 : 0.028,
+        Math.cos(a) * R, 0.600 + Math.sin(a) * R, 0.565,
+        0, 0, a - Math.PI / 2));
+      /**
+       * The keystone gets a shadow-wedge behind it in the solid colour, so
+       * that when the light is off — and it does go off; see `_updateAlive`
+       * — there is still a wedge there rather than a gap in the arch.
+       */
+      if (keystone) {
+        g.add(mesh(G.box, M.emblem, 0.074, 0.108, 0.020,
+          0, 0.600 + R, 0.552, 0, 0, a - Math.PI / 2));
+      }
+    }
+    /** Held for the pulse. See `_updateKeystone`. */
+    this.keystoneLit = M.emblemLit ? g.children[g.children.length - 2] : null;
+
+    /**
+     * ── THE WAIST ───────────────────────────────────────────────────────
+     *
+     * A plate over the obi with a short panel hanging from it. Deliberately
+     * plain: the chest already has the emblem and the head already has the
+     * crest, and a third thing competing with them is how a clean skin stops
+     * being clean.
+     */
+    if (M.diadem) {
+      g.add(mesh(G.box, M.diadem, 0.26, 0.070, 0.055, 0, 0.300, 0.440));
+      if (M.trim) g.add(mesh(G.box, M.trim, 0.19, 0.020, 0.060, 0, 0.300, 0.443));
+      // The hanging panel, in the cloth's own colour with an ivory edge.
+      g.add(mesh(G.box, this.mats.clothDark, 0.17, 0.22, 0.045, 0, 0.185, 0.440));
+      if (M.trim) g.add(mesh(G.box, M.trim, 0.175, 0.016, 0.048, 0, 0.080, 0.441));
+    }
+
+    /**
+     * ── SEAMS ───────────────────────────────────────────────────────────
+     *
+     * Four ivory hairlines on the armour. They are 0.015 units thick and
+     * nobody will ever see them from gameplay distance, which is the point:
+     * the brief asked for detail that rewards looking closely, and detail
+     * that is visible from across the arena is not detail, it is pattern.
+     */
+    if (M.trim) {
+      for (const sx of [-1, 1]) {
+        g.add(mesh(G.box, M.trim, 0.015, 0.28, 0.124, sx * 0.238, 0.600, 0.492));
+      }
+      // And one across the pauldron, on the side that has one.
+      if (right) {
+        right.shoulder.add(mesh(G.box, M.trim, 0.235, 0.012, 0.26, 0.03, -0.088, 0));
+      }
+    }
+  }
+
+  /**
+   * ═══ KEYSTONE, MOVING ═══════════════════════════════════════════════════
+   *
+   * Four things, and all four are small enough that describing them takes
+   * longer than seeing them. That is the intent: the brief asked for effects
+   * that make the skin feel alive without BEING the skin, and the ceiling on
+   * every number here is "somebody has to look twice to notice".
+   *
+   *   1. THE EMBLEM BREATHES. The lit wedge fades between 0.45 and 1.0 on a
+   *      slow sine. Not a flash, not a strobe — the period is over four
+   *      seconds, so at a glance it is simply lit.
+   *   2. MOTES, ONLY WHEN STANDING STILL. Three of them, drifting up past the
+   *      chest, and they fade out entirely the moment the frog moves. A
+   *      particle that survives a sprint is a trail; one that only exists
+   *      while you are still is punctuation.
+   *   3. THE STANCE SHIFTS. Standing idle, the frog slowly settles its
+   *      weight and lets the crest drift a few degrees. It reads as patience
+   *      rather than as an animation playing.
+   *   4. THE DRAW FLASHES. One clean pulse down the hamon when the katana
+   *      comes out, decaying in a fifth of a second. Calm, then instant.
+   *
+   * What is deliberately NOT here: any aura, any trail, any orbit, any
+   * screen effect, anything that scales with speed. At full sprint this skin
+   * emits exactly what it emits standing still, which is almost nothing —
+   * and that is what keeps the silhouette readable at speed instead of
+   * hiding it inside its own effects.
+   */
+  _animateKeystone(dt, t, s, stance, speed) {
+    /**
+     * The emblem's slow breath.
+     *
+     * Driven on the MATERIAL rather than by swapping meshes, so the solid
+     * wedge behind it (see `_buildEmblem`) shows through as the light drops
+     * and the arch never has a hole in it.
+     */
+    const lit = this.mats.emblemLit;
+    if (lit) {
+      const k = 0.45 + (0.5 + Math.sin(t * 1.45) * 0.5) * 0.55;
+      if (!this._emblemBase) this._emblemBase = lit.color.clone();
+      lit.color.copy(this._emblemBase).multiplyScalar(k);
+    }
+
+    /**
+     * Three motes, and they only exist while the frog is standing still.
+     *
+     * Built on first use rather than in the constructor: most frogs wearing
+     * this skin will be the only one in the lobby, and every OTHER frog
+     * would otherwise carry three unused meshes for the whole match.
+     */
+    if (this.mats.mote) {
+      if (!this.motes) {
+        this.motes = [];
+        for (let i = 0; i < 3; i++) {
+          const m = mesh(G.box, this.mats.mote, 0.035, 0.035, 0.035, 0, 0, 0);
+          m.castShadow = false;
+          this.body.add(m);
+          this.motes.push({ mesh: m, t: i / 3, a: i * 2.1, r: 0.30 + i * 0.07 });
+        }
+      }
+      // Fades with movement rather than switching off, so breaking into a
+      // walk does not make three specks vanish on the same frame.
+      const still = clamp(1 - speed * 0.7, 0, 1) * (stance ? 1 : 0.25);
+      for (const m of this.motes) {
+        m.t += dt * 0.32;
+        if (m.t >= 1) m.t -= 1;
+        m.a += dt * 0.55;
+        m.mesh.position.set(
+          Math.cos(m.a) * m.r, 0.45 + m.t * 0.62, Math.sin(m.a) * m.r * 0.6 + 0.30);
+        // Fade in at the bottom, out at the top, and out entirely if moving.
+        const fade = Math.sin(m.t * Math.PI);
+        m.mesh.visible = still > 0.05;
+        m.mesh.scale.setScalar(0.6 + fade * 0.7);
+        this.mats.mote.opacity = 0.50 * still;
+      }
+    }
+
+    /**
+     * THE IDLE: a weight shift, and the crest drifting with it.
+     *
+     * Two damped sines a prime ratio apart (0.42 and 0.27 Hz), so the two
+     * never line up and the loop never reads as a loop. Amplitudes are in
+     * HUNDREDTHS of a radian — this is a frog settling its weight, not a
+     * frog swaying.
+     */
+    if (stance) {
+      this._calm = damp(this._calm === undefined ? 0 : this._calm, 1, 1.6, dt);
+    } else {
+      this._calm = damp(this._calm === undefined ? 0 : this._calm, 0, 8, dt);
+    }
+    const calm = this._calm || 0;
+    if (calm > 0.01) {
+      this.body.rotation.z += Math.sin(t * 0.42) * 0.030 * calm;
+      this.body.rotation.y += Math.sin(t * 0.27) * 0.045 * calm;
+      // The head lags the body, which is what makes it read as weight
+      // moving rather than as the whole frog rotating.
+      this.head.rotation.z += Math.sin(t * 0.42 - 0.6) * 0.022 * calm;
+    }
+
+    /**
+     * THE DRAW. One clean pulse down the hamon as the blade comes round.
+     *
+     * Fired on the RISING EDGE of the swing rather than on a timer, so it
+     * lands on the exact frame the katana starts moving — which is what
+     * makes it read as "calm, then instant precision" rather than as a
+     * light that happens to be blinking. It decays to nothing in 0.2s, so
+     * it is over before the swing is.
+     *
+     * This rig has no sheathed state: the katana is always in the hand and
+     * the scabbard on the back is scenery. The swing IS the draw.
+     */
+    const swinging = (s.attackT || 0) > 0;
+    if (swinging && !this._wasSwing) this._drawT = 0.2;
+    this._wasSwing = swinging;
+
+    if (this._drawT > 0) {
+      this._drawT = Math.max(0, this._drawT - dt);
+      const k = this._drawT / 0.2;
+      const e = this.mats.edge;
+      if (e && e.color) {
+        if (!this._edgeBase) this._edgeBase = e.color.clone();
+        e.color.copy(this._edgeBase).lerp(WHITE, k * 0.8);
+      }
+    } else if (this._edgeBase && this.mats.edge) {
+      this.mats.edge.color.copy(this._edgeBase);
+      this._edgeBase = null;
+    }
+  }
+
+  /**
+   * Fire the one-of-one's draw flash. A no-op on every other skin, so the
+   * caller does not have to know which frog it is holding.
+   */
+  flashDraw() {
+    if (this.fx && this.fx.emblem) this._drawT = 0.2;
+  }
+
   _buildWings(F, M, b) {
     const torn = !!F.wingsTorn;
     const span = F.wingSpan || 1;
@@ -2815,6 +3515,7 @@ export class FrogModel {
     }
     if (this.eclipse) this._animateEclipse(dt, t, s, stance, speed);
     if (this.divine) this._animateDivine(dt, t);
+    if (this.fx.emblem) this._animateKeystone(dt, t, s, stance, speed);
 
     // Throat pulse â€” a frog is never quite still.
     this.croakPulse = damp(this.croakPulse, 0, 6, dt);

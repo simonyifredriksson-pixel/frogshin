@@ -5,61 +5,62 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v151';
+import * as THREE from '../lib/three.module.js?v=v152';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v151';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v151';
-import { Input } from './input.js?v=v151';
-import { Audio } from './audio.js?v=v151';
-import { World } from './world.js?v=v151';
-import { Effects } from './effects.js?v=v151';
-import { Atmosphere } from './atmosphere.js?v=v151';
-import { FollowCamera } from './camera.js?v=v151';
-import { Player } from './player.js?v=v151';
+} from './config.js?v=v152';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v152';
+import { Input } from './input.js?v=v152';
+import { Audio } from './audio.js?v=v152';
+import { World } from './world.js?v=v152';
+import { Effects } from './effects.js?v=v152';
+import { Atmosphere } from './atmosphere.js?v=v152';
+import { FollowCamera } from './camera.js?v=v152';
+import { Player } from './player.js?v=v152';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v151';
+} from './tournament.js?v=v152';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v151';
-import { RemotePlayer } from './remote.js?v=v151';
-import { HUD } from './hud.js?v=v151';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v151';
-import { FrogModel } from './frog.js?v=v151';
-import { DummyField } from './dummy.js?v=v151';
+import { coneHit } from './combat.js?v=v152';
+import { RemotePlayer } from './remote.js?v=v152';
+import { HUD } from './hud.js?v=v152';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v152';
+import { FrogModel } from './frog.js?v=v152';
+import { DummyField } from './dummy.js?v=v152';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, MODE_ORDER, maxTaggers,
-} from './rounds.js?v=v151';
+} from './rounds.js?v=v152';
 import {
-  propsFor, propAt, buildProp, propBob,
-} from './prophunt.js?v=v151';
-import { ToadModel } from './npc.js?v=v151';
+  propsFor, propAt, buildProp, propBob, revealAt, buildRevealMark,
+} from './prophunt.js?v=v152';
+import { ToadModel } from './npc.js?v=v152';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
-} from './skins.js?v=v151';
-import { DungeonRun } from './dungeon.js?v=v151';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v151';
-import { JudgmentRun } from './judgment.js?v=v151';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v151';
-import { COMBO_NAMES } from './ascended.js?v=v151';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v151';
-import { MenuScene } from './menu.js?v=v151';
-import { Economy } from './economy.js?v=v151';
-import { Shop } from './shop.js?v=v151';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v151';
-import { Overworld } from './overworld.js?v=v151';
-import { InventoryScreen } from './inventoryui.js?v=v151';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v151';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v151';
-import { Cine } from './cinema.js?v=v151';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v151';
-import { MEMORIES } from './flashbacks.js?v=v151';
-import { GUARDIANS } from './guardians.js?v=v151';
-import { gearOfTier } from './gear.js?v=v151';
-import { Chat } from './chat.js?v=v151';
+  CHAMPION, CHAMPION_MARK, isChampion,
+} from './skins.js?v=v152';
+import { DungeonRun } from './dungeon.js?v=v152';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v152';
+import { JudgmentRun } from './judgment.js?v=v152';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v152';
+import { COMBO_NAMES } from './ascended.js?v=v152';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v152';
+import { MenuScene } from './menu.js?v=v152';
+import { Economy } from './economy.js?v=v152';
+import { Shop } from './shop.js?v=v152';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v152';
+import { Overworld } from './overworld.js?v=v152';
+import { InventoryScreen } from './inventoryui.js?v=v152';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v152';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v152';
+import { Cine } from './cinema.js?v=v152';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v152';
+import { MEMORIES } from './flashbacks.js?v=v152';
+import { GUARDIANS } from './guardians.js?v=v152';
+import { gearOfTier } from './gear.js?v=v152';
+import { Chat } from './chat.js?v=v152';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -334,7 +335,7 @@ class Game {
        * it against the same constant (see `cleanTitle` in net.js), so this
        * is a claim that is verified, not one that is trusted.
        */
-      title: eclipseFound(this.economy) ? ECLIPSE_TITLE : null,
+      title: this._titleNow(),
     };
   }
 
@@ -1345,7 +1346,7 @@ class Game {
      * secret lands this runs — once, because the comparison below only
      * sends when it has actually changed.
      */
-    const title = eclipseFound(this.economy) ? ECLIPSE_TITLE : null;
+    const title = this._titleNow();
     if (title !== this._sentTitle) {
       this._sentTitle = title;
       // Our own copy too, or the roster would show everyone else's title
@@ -1354,6 +1355,29 @@ class Game {
       this.net.sendEvent({ t: 'title', s: title });
       this._refreshLobby();
     }
+  }
+
+  /**
+   * ═══ WHAT IS WRITTEN BESIDE YOUR NAME ═══════════════════════════════════
+   *
+   * The 1/1's mark, or the Eclipse title, or nothing.
+   *
+   * ── THE 1/1 WINS, AND IT IS EARNED BY WEARING IT ──────────────────────
+   * The Eclipse title is granted by OWNING three things; the champion's mark
+   * is granted by WEARING one. That difference is deliberate. The Eclipse is
+   * a collection achievement and stays true whatever you have on, but a
+   * one-of-one that announced itself while its owner was dressed as a common
+   * Bog Frog would be announcing a fact about a save file. This marks the
+   * frog people are actually looking at.
+   *
+   * It takes precedence because there is one of it. Somebody holding both
+   * shows the rarer, which is not close.
+   */
+  _titleNow() {
+    const e = this.economy;
+    const worn = e.equipped.frog === CHAMPION.frogs;
+    if (worn && e.owns('frogs', CHAMPION.frogs)) return CHAMPION_MARK;
+    return eclipseFound(e) ? ECLIPSE_TITLE : null;
   }
 
   /** Throw away the shadow-clone model so it is rebuilt with fresh skins. */
@@ -3898,6 +3922,42 @@ class Game {
       b.forceCombo(name);
       this._cheatNote('Combo: ' + name);
     };
+    /**
+     * ═══ THE TOURNAMENT KEY — J, L, M, 3, THEN P, THEN Q ═══════════════════
+     *
+     * J L M 3 opens this panel, as it always has. With it open, P then Q
+     * awards KEYSTONE and CAPSTONE — the one-of-one — to whoever is playing.
+     *
+     * ── why there is no button for it ─────────────────────────────────────
+     * Every other developer action here is a button, and this one deliberately
+     * is not. The panel is one chord away from any player who reads a forum
+     * post, and a button labelled GIVE ME THE 1/1 would be found in a week and
+     * pressed by everybody — at which point the item is worthless, because the
+     * ONLY thing it is made of is the fact that one person has it. A second
+     * sequence, unlabelled and undocumented in the UI, is what keeps the
+     * tournament host's award an award.
+     *
+     * ── listened for on the document, not through Input ───────────────────
+     * While the panel is open the game is frozen and the pointer lock is
+     * released, so `Input` is suspended and `consume` returns false for
+     * everything. The panel is DOM, so its keys are read from the DOM.
+     *
+     * The two keys must land within two seconds of each other, and anything
+     * else typed in between resets it — so P and Q pressed a minute apart
+     * while poking around cannot hand out the rarest item in the game.
+     */
+    document.addEventListener('keydown', (e) => {
+      if (!this.cheatsOpen) { this._champSeq = 0; return; }
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      if (this._champSeq === 1 && e.code === 'KeyQ' && now - this._champAt < 2000) {
+        this._champSeq = 0;
+        this._grantChampion();
+        return;
+      }
+      this._champSeq = e.code === 'KeyP' ? 1 : 0;
+      this._champAt = now;
+    });
+
     $('cheat-divine').onclick = () => {
       this.economy.unlock('frogs', 'frog_divine');
       this.economy.unlock('swords', 'sword_divine');
@@ -4056,6 +4116,39 @@ class Game {
     const name = room === CFG.dungeon.rooms - 1
       ? 'FROGATH' : (GUARDIAN_NAMES[room] || '');
     return this._cheatNote(`Jumped to room ${room + 1} — ${name}`);
+  }
+
+  /**
+   * ═══ AWARD THE ONE OF ONE ═══════════════════════════════════════════════
+   *
+   * Both halves at once. KEYSTONE and CAPSTONE are one item in two slots —
+   * a champion holding the frog but not the blade is a half-award, and
+   * `isChampion` asks for both.
+   *
+   * The OWNER'S NAME is recorded here and nowhere else. That is what the
+   * collection screen prints, and recording it at the moment of the award is
+   * the only point at which the game knows who won: afterwards there is just
+   * a save file with a skin in it, which is true of every other skin too.
+   */
+  _grantChampion() {
+    const e = this.economy;
+    const already = isChampion(e);
+    e.unlock('frogs', CHAMPION.frogs);
+    e.unlock('swords', CHAMPION.swords);
+    const who = (this.player && this.player.name)
+      || (this.profile && this.profile.name) || 'CHAMPION';
+    e.championOwner = String(who).slice(0, 24);
+    e.save();
+    this._cheatRefresh();
+    if (already) {
+      this._cheatNote(`Already awarded. Owner is now ${e.championOwner}.`);
+      return;
+    }
+    this._cheatNote(
+      `★ KEYSTONE awarded to ${e.championOwner} — 1 OF 1. `
+      + 'Equip it in CUSTOMISE.');
+    this.hud.announce('ONE OF ONE', 'good', true);
+    this.hud.toast(`KEYSTONE — awarded to ${e.championOwner}`, 6);
   }
 
   _cheatNote(msg) { $('cheat-note').textContent = msg; }
@@ -5062,10 +5155,46 @@ class Game {
    */
   _updateHideWindow(p) {
     const R = this.round;
-    if (!R.isPropHunt || !R.playing) return;
+    if (!R.isPropHunt || !R.playing) { this._reveal = null; return; }
     const spent = (CFG.rounds.duration.prophunt || 300) - R.timer;
     const left = CFG.prophunt.hideTime - spent;
     const hunter = R.isHunter(p.id);
+
+    /**
+     * ═══ THE REVEAL, EVERY THIRTY SECONDS ═══════════════════════════════
+     *
+     * Worked out from the round clock — see `revealAt` — so every client
+     * fires it on the same frame without a byte crossing the wire.
+     *
+     * Both sides are told, and told different things. A hunter gets "THEY
+     * ARE LIT" because it is a call to move; a prop gets a countdown,
+     * because the decision the mechanic exists to force is whether to run
+     * while everyone is looking or sit still and hope. A prop who does not
+     * know they are glowing cannot make that decision.
+     */
+    const P = CFG.prophunt;
+    const rv = revealAt(spent - P.hideTime, P.revealEvery, P.revealFor);
+    this._reveal = rv;
+    if (rv.on !== this._revealWas) {
+      this._revealWas = rv.on;
+      if (rv.on) {
+        if (R.isProp(p.id)) {
+          this.hud.announce('REVEALED', 'danger', true);
+          this.followCam.shake(0.25);
+        } else if (hunter) {
+          this.hud.announce('THEY ARE LIT', 'good', true);
+        }
+      }
+    }
+    if (rv.on && R.isProp(p.id)) {
+      const s = Math.ceil(rv.left);
+      if (s !== this._revealHint) {
+        this._revealHint = s;
+        this.hud.toast(`Revealed — ${s}`, 1.1);
+      }
+    } else {
+      this._revealHint = 0;
+    }
 
     if (hunter && left > 0) {
       p.cinematic = true;
@@ -5134,6 +5263,27 @@ class Game {
       held.group.visible = true;
       held.group.position.set(
         pos.x, pos.y + propBob(held.def, this._propT, locked), pos.z);
+
+      /**
+       * The reveal marker, built once per prop and then just shown or
+       * hidden. It rides ABOVE the prop's own height so a five-unit
+       * lamppost and a one-unit bicycle both put their marker somewhere a
+       * hunter is actually looking, and it spins slowly so it reads as a
+       * marker rather than as part of the scenery it is giving away.
+       */
+      const lit = !!(this._reveal && this._reveal.on);
+      if (lit && !held.mark) {
+        held.mark = buildRevealMark();
+        this.scene.add(held.mark);
+      }
+      if (held.mark) {
+        held.mark.visible = lit;
+        if (lit) {
+          held.mark.position.set(
+            pos.x, pos.y + (held.def ? held.def.h : 2) + 1.1, pos.z);
+          held.mark.rotation.y = this._propT * 1.6;
+        }
+      }
       /**
        * A LOCKED PROP DOES NOT TURN, and this is where that is enforced for
        * the things that are not symmetrical — a ramen cart, a shrine hut, a
@@ -5151,9 +5301,12 @@ class Game {
     }
 
     // Anyone who stopped being a prop — found, left, or the round ended.
+    // The marker goes with them, or a found prop leaves a beacon hanging
+    // over the spot it died on for the rest of the round.
     for (const [id, held] of this._propGroups) {
       if (seen.has(id)) continue;
       this.scene.remove(held.group);
+      if (held.mark) this.scene.remove(held.mark);
       this._propGroups.delete(id);
     }
     // The local frog is hidden whenever it is wearing something else.

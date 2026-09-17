@@ -28,7 +28,7 @@
  * the spending and the telling.
  */
 
-import { MODES } from './rounds.js?v=v151';
+import { MODES } from './rounds.js?v=v152';
 
 /** What is being played for. */
 export const PRIZE = { FROGLETS: 'froglets', SKIN: 'skin' };

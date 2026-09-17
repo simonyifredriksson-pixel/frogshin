@@ -85,11 +85,39 @@ export const RARITY = {
    * yours — see `secret` on a skin and `Shop.hidden`.
    */
   secret:    { id: 'secret',    name: 'Secret',    color: '#efe6ff', odds: ONE_IN(2000) },
+  /**
+   * ═══ 1 OF 1 ═══════════════════════════════════════════════════════════
+   *
+   * A tier with NO ODDS, because it is not a thing that can be rolled.
+   *
+   * Zero is the honest number here and it costs nothing: `cratePool`
+   * already drops anything flagged `reward`, so a one-of-one never enters a
+   * pool, never appears on an odds board, and `tierChances` renormalises
+   * over the tiers a crate actually HOLDS — so the seven tiers above still
+   * add up to a hundred with this sitting on top of them.
+   *
+   * It exists as a tier rather than as a flag on a Secret because every
+   * screen in the game reads the tier to decide how to present something:
+   * the card border, the reveal, the collection sort. A 1/1 shown as
+   * "Secret" would be the rarest object in the game wearing the second
+   * rarest label.
+   */
+  oneofone:  { id: 'oneofone',  name: '1 of 1',    color: '#d8cfa8', odds: 0 },
 };
 
 export const RARITY_ORDER = [
   'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'secret',
+  'oneofone',
 ];
+
+/**
+ * The tiers a CRATE can deal from — the ladder that has to sum to 100.
+ *
+ * `RARITY_ORDER` is the display order and now ends in a tier nothing can
+ * roll, so the two are no longer the same list. Anything doing odds
+ * arithmetic wants this one.
+ */
+export const CRATE_TIERS = RARITY_ORDER.filter((r) => RARITY[r].odds > 0);
 
 /**
  * ═══ WHAT A DUPLICATE IS WORTH ═══════════════════════════════════════════
@@ -1011,33 +1039,27 @@ export const CRATES = [
    * the only way to the title — see `eclipseFound`.
    *
    * ── the price is the point ────────────────────────────────────────
-   * 96,000 / 114,000 / 132,000, against 8,600 for the dearest case in the
-   * whole of the rest of the shop. That is not a rung above the Divine Sun,
-   * it is a different kind of purchase: the Forbidden Frog Crate costs more
-   * than fifteen Sun crates and is the last thing anybody buys.
-   *
-   * IT IS A BAD DEAL IN DUPLICATES, DELIBERATELY. Every other case hands
-   * back 17–53% of its own price once your collection is full; these hand
-   * back about one per cent, because what is bought here is the title and
-   * three items nothing else in the game looks like — not a payout. The
-   * anti-farm ceiling in test_dupe guards the other direction, so this end
-   * is safe by construction, and the shop card is what has to be honest
-   * about it.
+   * 9,600 / 10,800 / 12,000, against 8,600 for the dearest case in the
+   * whole of the rest of the shop. The Forbidden Frog Crate is the most
+   * expensive thing in the game and the last case anybody buys, and the
+   * three of them sit above EVERYTHING else — which is the relationship
+   * test_crates asserts, rather than the numbers, so repricing the Divine
+   * Sun upward cannot quietly take the crown back.
    */
   {
-    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 96000,
+    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 9600,
     name: 'Eclipse Kunai Crate',
     blurb: 'Nine blades cut from the dark. One of them is not a blade.',
     color: '#a87aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 114000,
+    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 10800,
     name: 'Eclipse Sword Crate',
     blurb: 'Nightsteel, void and corona — and something with no name yet.',
     color: '#8f6aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 132000,
+    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 12000,
     name: 'Forbidden Frog Crate',
     blurb: 'An old power nobody was supposed to dig back up.',
     color: '#ffb43a', anim: 'eclipse',
@@ -1899,6 +1921,161 @@ for (const c of COLLECTIONS) {
   );
 }
 
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ═══ KEYSTONE — THE ONE OF ONE ═════════════════════════════════════════════
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * One frog skin and one katana, awarded to a single tournament winner. There
+ * will only ever be one owner of these two items in the entire game.
+ *
+ * ── THE CONCEPT, AND WHY IT IS NOT "GOLD ARMOUR" ────────────────────────
+ * A keystone is the single wedge at the crown of an arch. Remove it and the
+ * arch falls; there is no second one, and it cannot be substituted. That is
+ * THE ONE WHO COULD NOT BE REPLACED stated as an object rather than as a
+ * slogan, and it gives the skin an emblem that looks like it came off an
+ * ancient building instead of out of a logo pack.
+ *
+ * The blade is CAPSTONE — the other stone that finishes a structure. A
+ * matched pair, named the same way, from the same idea.
+ *
+ * ── WHAT MAKES IT READ AT A DISTANCE ────────────────────────────────────
+ * Two silhouette elements and no more:
+ *
+ *   1. THE CREST. A single curved fin sweeping up and back off the skull —
+ *      the arch again, seen edge-on. Nothing else in the game has anything
+ *      coming off the back of the head except the Forgotten One's wings,
+ *      and those are torn and enormous. This is one clean curve.
+ *   2. THE MANTLE, over ONE shoulder. Asymmetry is the cheapest and
+ *      strongest recognition cue there is: every other frog in the game is
+ *      bilaterally symmetrical, so a lopsided outline is identifiable at
+ *      any range, at any speed, from any angle, in any lighting.
+ *
+ * Everything else — the armour, the belt, the seams — is detail you only
+ * get at conversational distance. That is the intended reading order.
+ *
+ * ── THE PALETTE IS FIVE COLOURS AND IT IS MOSTLY DARK ───────────────────
+ *   obsidian       0x121418  the cloth. Not black; it still takes light.
+ *   dark emerald   0x16241f  the hide, and 0x123a2c for the mantle.
+ *   antique gold   0xb9974e  the metal. MUTED — this is old gold that has
+ *                            been handled, not a gold skin.
+ *   pale ivory     0xe8e2d0  the emblem, the seams, the blade.
+ *   celestial blue 0x8fbcd8  the eyes and the lit centre of the emblem.
+ *                            The ONLY bright colour, and there is very
+ *                            little of it.
+ *
+ * Gold is trim and ivory is line work. Neither is a field colour, which is
+ * the difference between this and every "legendary gold" skin ever made.
+ *
+ * ── EFFECTS ARE FOUR THINGS AND THEY ARE ALL SMALL ──────────────────────
+ * A restrained iris glow, a slow pulse in the emblem's centre, a handful of
+ * motes that only appear when standing still, and a single clean flash down
+ * the blade on the draw. No aura, no orbit, no wings, no embers, no halo —
+ * every one of those is deliberately absent, and `test_champion` asserts
+ * their absence rather than trusting it. Turn every particle in the game
+ * off and this skin is unchanged in everything that matters.
+ */
+export const CHAMPION = {
+  frogs: 'frog_keystone',
+  swords: 'sword_capstone',
+};
+
+/** Shown under the skin wherever it is presented. */
+export const CHAMPION_LABEL = 'ONE OF ONE';
+export const CHAMPION_TITLE = 'TOURNAMENT CHAMPION';
+/** The discreet marker worn next to the name while it is equipped. */
+export const CHAMPION_MARK = '★ ONE OF ONE ★';
+
+/** Is this specific item the one-of-one? */
+export function isOneOfOne(kind, id) {
+  return CHAMPION[kind] === id;
+}
+
+/**
+ * Does this player hold the 1/1?
+ *
+ * Asks the collection rather than reading a saved flag, for the same reason
+ * `eclipseFound` does: the honest answer to "are they the champion" is "do
+ * they own it", and a flag alongside it is a thing that can drift.
+ */
+export function isChampion(economy) {
+  return !!economy && economy.owns('frogs', CHAMPION.frogs)
+    && economy.owns('swords', CHAMPION.swords);
+}
+
+FROG_SKINS.push({
+  id: 'frog_keystone',
+  name: 'KEYSTONE',
+  rarity: 'oneofone',
+  /**
+   * `reward` is what keeps it out of every crate in the game — `cratePool`
+   * filters on it — so this one word is the whole of "not obtainable from
+   * crates, not purchasable". The shop has no path to an item it cannot
+   * find in a pool.
+   */
+  reward: true,
+  oneOfOne: true,
+  skin: 0x16241f,        // dark emerald hide
+  belly: 0xd9d3bd,       // pale ivory
+  cloth: 0x121418,       // obsidian
+  scarf: 0x0f3a2e,       // deep emerald sash
+  fx: {
+    // The two silhouette pieces.
+    diadem: 0xb9974e,
+    mantle: 0x123a2c,
+    /**
+     * NO `plates`.
+     *
+     * The shared armour set is a domed breastplate and two round pauldrons,
+     * and on this rig it inflates the frog into the same barrel every other
+     * armoured skin is. The brief asked for armour that is refined and
+     * light enough to make sense at Frogshin's speed, and for the frog not
+     * to be bulky — so Keystone builds its own: a flat chest piece, a thin
+     * collar, and ONE pauldron, on the shoulder the mantle does not cover.
+     * See `_buildEmblem`.
+     */
+    // Line work: ivory seams, ivory emblem, one cold blue light in it.
+    trim: 0xe8e2d0,
+    emblem: 0xe8e2d0,
+    emblemGlow: 0x8fbcd8,
+    /**
+     * `iris`, NOT `eyeGlow`. The difference is the whole face: eyeGlow
+     * lights the entire eyeball and gives the frog two headlights, which is
+     * the opposite of the calm, confident expression this was asked for.
+     */
+    iris: 0x8fd4ee,
+  },
+});
+
+SWORD_SKINS.push({
+  id: 'sword_capstone',
+  name: 'CAPSTONE',
+  rarity: 'oneofone',
+  reward: true,
+  oneOfOne: true,
+  blade: 0xe4e8e0,       // pale ivory steel
+  edge: 0xffffff,        // the hamon, and the only pure white on it
+  guard: 0xb9974e,       // antique gold
+  grip: 0x12281f,        // deep emerald wrap
+  fx: {
+    /**
+     * Its own blade profile and its own guard, used by nothing else. See
+     * `buildKatana` — `keystone` is a long, narrow, perfectly straight
+     * blade with an angled tip, and the guard IS the emblem.
+     *
+     * NO glow, NO runes, NO aura, NO orbit. The most expensive-looking
+     * sword in the game is the one that does not need to be lit to be
+     * recognised.
+     */
+    shape: 'keystone',
+    tsuba: 'keystone',
+    long: 1.06,
+    trim: 0xe8e2d0,
+    emblem: 0xe8e2d0,
+    emblemGlow: 0x8fbcd8,
+  },
+});
 
 export const ECLIPSE_SET = {
   frogs: 'frog_ecl_secret',
