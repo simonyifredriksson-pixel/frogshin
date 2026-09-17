@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v149';
-import { CFG } from './config.js?v=v149';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v149';
+import * as THREE from '../lib/three.module.js?v=v150';
+import { CFG } from './config.js?v=v150';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v150';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -3129,11 +3129,29 @@ export class FrogModel {
       return;
     }
 
-    // Mouth, root-local. `_lift` is added because the rig it belongs to was
-    // raised to put the soles on the ground â€” without it the tongue would
-    // still fire from where the mouth used to be.
-    const from = new THREE.Vector3(0, 1.42 + this._lift, 0.30);
-    this.root.localToWorld(from);
+    /**
+     * THE MOUTH, TAKEN FROM THE RIG — not assumed.
+     *
+     * This used to be a constant offset from the root, `(0, 1.42 + _lift,
+     * 0.30)`, which is where the mouth is when the frog is standing
+     * perfectly square and looking straight ahead. It is almost never doing
+     * that while grappling: the head TILTS to look along the tongue (see
+     * `headTiltX/Y` in `update`), the body bobs and leans, and the jaw drops
+     * open as the tongue fires. The constant follows none of it.
+     *
+     * Measured against the real rig, the gap ran from 0.41 units to 0.78 —
+     * on a frog 1.75 tall that is a third to nearly half its height, always
+     * too high and never turning with the head. On screen the tongue left
+     * from somewhere around the shoulder.
+     *
+     * Reading the jaw's own world matrix fixes all of it at once and cannot
+     * drift again: if the head moves, the mouth moves, because it IS the
+     * mouth. `updateWorldMatrix` because this runs inside the animation
+     * update, before the renderer has refreshed the graph — without it the
+     * tongue would lag the head by a frame.
+     */
+    this.jaw.updateWorldMatrix(true, false);
+    const from = new THREE.Vector3(0, -0.02, 0.20).applyMatrix4(this.jaw.matrixWorld);
     const to = s.tongueTo;
 
     const dir = new THREE.Vector3().subVectors(to, from);
