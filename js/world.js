@@ -9,12 +9,12 @@
  * single InstancedMesh. The whole map is roughly a dozen draw calls.
  */
 
-import * as THREE from '../lib/three.module.js?v=v156';
-import { CFG } from './config.js?v=v156';
-import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v156';
-import { findMap } from './maps.js?v=v156';
-import { Terrain, CollisionWorld } from './collision.js?v=v156';
-import { Shark } from './shark.js?v=v156';
+import * as THREE from '../lib/three.module.js?v=v157';
+import { CFG } from './config.js?v=v157';
+import { ValueNoise, mulberry32, clamp, lerp, smoothstep } from './util.js?v=v157';
+import { findMap } from './maps.js?v=v157';
+import { Terrain, CollisionWorld } from './collision.js?v=v157';
+import { Shark } from './shark.js?v=v157';
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();

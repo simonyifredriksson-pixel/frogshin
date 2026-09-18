@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v156';
-import { CFG } from './config.js?v=v156';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v156';
+import * as THREE from '../lib/three.module.js?v=v157';
+import { CFG } from './config.js?v=v157';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v157';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -40,6 +40,16 @@ const LID_SHUT = 0.216;
 
 /** Held for the one-of-one's draw flash, so it allocates nothing per frame. */
 const WHITE = new THREE.Color(0xffffff);
+
+/**
+ * The cable bundle's palette — see `fx.cables`.
+ *
+ * Fixed rather than taken from the skin. A bundle of loose optical cable is
+ * recognisable BECAUSE no two strands match; give a skin control over it and
+ * the first thing anyone does is set them all to one colour, at which point
+ * it is a ponytail.
+ */
+const CABLE_COLORS = [0xff3fa8, 0x3fe0d0, 0x8a3fd0, 0x9cff4a, 0xff9a3c, 0x4a9eff];
 
 /**
  * The ninja idle stance: a low guard held whenever the frog is standing
@@ -678,6 +688,34 @@ export class FrogModel {
      */
     if (ffx.emblemGlow) {
       this.mats.emblemLit = new THREE.MeshBasicMaterial({ color: ffx.emblemGlow });
+    }
+    /**
+     * ═══ NEON WARD — the cyberpunk set's own two effects ════════════════
+     *
+     * `cables` is the signature: a bundle of loose optical cables coming
+     * out of the back of the skull, each a different colour. It is the one
+     * feature in that set nothing else in the game has, and it does the
+     * same job the Keystone crest does — it changes the OUTLINE, which is
+     * what makes a skin recognisable at range rather than in a card.
+     *
+     * The colours are fixed here rather than taken from the skin, and that
+     * is the point of them: a bundle where every cable is the same colour
+     * is a ponytail. The mess IS the look.
+     */
+    if (ffx.cables) {
+      this.mats.cable = CABLE_COLORS.map(
+        (c) => new THREE.MeshBasicMaterial({ color: c }));
+    }
+    /**
+     * `thrusters` is the other: a nozzle on each ankle with a cone of
+     * exhaust under it. Lit, and translucent at the tip so it reads as
+     * thrust rather than as a spike.
+     */
+    if (ffx.thrusters) {
+      this.mats.thrust = new THREE.MeshBasicMaterial({ color: ffx.thrusters });
+      this.mats.thrustGlow = new THREE.MeshBasicMaterial({
+        color: ffx.thrusters, transparent: true, opacity: 0.34, depthWrite: false,
+      });
     }
     if (ffx.moss) this.mats.moss = new THREE.MeshLambertMaterial({ color: ffx.moss });
     if (ffx.hood) {
@@ -1330,6 +1368,8 @@ export class FrogModel {
     if (M.diadem) this._buildDiadem(F, M);
     if (M.mantle) this._buildChampionArm(F, M);
     if (M.emblem) this._buildEmblem(F, M);
+    if (M.cable) this._buildCables(F, M);
+    if (M.thrust) this._buildThrusters(F, M);
 
     // Moss: tufts around the torso and over the crown, each pushed out to
     // the body's own surface at its height so it sits ON the frog.
@@ -2131,6 +2171,94 @@ export class FrogModel {
    */
   flashDraw() {
     if (this.fx && this.fx.emblem) this._drawT = 0.2;
+  }
+
+  /**
+   * ═══ NEON WARD'S CABLES ═════════════════════════════════════════════════
+   *
+   * A bundle of optical cable coming out of the back of the skull, arching
+   * up and then falling away behind — the set's silhouette piece, and the
+   * one thing in the game that changes the shape of a frog's HEAD without
+   * being a hat.
+   *
+   * ── where they can go ──────────────────────────────────────────────────
+   * The same arithmetic as every other headpiece on this rig, and the same
+   * trap: the eyes are radius-0.23 mounds at (±0.28, 0.26, 0.10) reaching up
+   * to y 0.49, while the skull only reaches 0.36. So the sockets sit on the
+   * BACK of the crown, from z −0.02 backwards, where there is nothing to
+   * hit at any angle. The cables then travel further back still.
+   *
+   * Each cable is four segments on a falling arc rather than one bar,
+   * because a straight cable is a spike and the whole read here is that
+   * they are heavy and loose.
+   */
+  _buildCables(F, M) {
+    const h = this.head;
+    const n = clamp(typeof F.cables === 'number' ? F.cables : 7, 4, 10);
+    const socket = M.plateDark || this.mats.clothDark;
+    for (let i = 0; i < n; i++) {
+      /**
+       * Spread across the back of the crown rather than around it: a full
+       * ring would put a cable in front of each eye. `-0.25..0.25` of a
+       * turn, centred on straight back.
+       */
+      const a = Math.PI + ((i / (n - 1)) - 0.5) * 2.1;
+      const bx = Math.cos(a) * 0.20;
+      const bz = Math.sin(a) * 0.16 - 0.10;
+      const mat = M.cable[i % M.cable.length];
+      h.add(mesh(G.cyl, socket, 0.042, 0.055, 0.042, bx, 0.345, bz));
+      /**
+       * Up, over, and away. `y` peaks a third of the way along and then
+       * drops; `z` accelerates backwards the whole time, so the bundle
+       * splays as it falls instead of staying a tidy sheaf.
+       */
+      for (let s = 0; s < 4; s++) {
+        const t = (s + 1) / 4;
+        const y = 0.40 + t * 0.30 - t * t * 0.34;
+        const z = bz - t * 0.20 - t * t * 0.26;
+        const x = bx * (1 + t * 0.55);
+        h.add(mesh(G.box, mat, 0.030, 0.115, 0.030, x, y, z, -0.45 - t * 0.95));
+      }
+    }
+  }
+
+  /**
+   * ═══ NEON WARD'S THRUSTERS ══════════════════════════════════════════════
+   *
+   * A nozzle on each ankle and a cone of exhaust under it.
+   *
+   * Parented to the FOOT, so they swing with the leg and point wherever it
+   * is pointing. On the body they would sit in the air behind a running
+   * frog, which is the same mistake the mantle made.
+   *
+   * The flame is a cone with its point DOWN and a translucent shell over
+   * it. That shell is what stops it reading as a spike: a solid cone under
+   * a foot is a stilt, and the same cone with a soft edge is thrust.
+   */
+  _buildThrusters(F, M) {
+    for (const leg of this.legs) {
+      const f = leg.foot;
+      if (!f) continue;
+      // The housing, at the heel where a boot's sole would be thickest.
+      f.add(mesh(G.cyl, M.plateDark || this.mats.clothDark,
+        0.085, 0.10, 0.085, 0, -0.045, -0.02));
+      f.add(mesh(G.cyl, M.thrust, 0.062, 0.030, 0.062, 0, -0.100, -0.02));
+      /**
+       * The exhaust: bright core, soft shell — and SHORT.
+       *
+       * The first pass was a 0.34 shell over a 0.20 core, which put a
+       * triangle longer than the frog's shin under each foot and read as
+       * stilts rather than as thrust. A jet is a thing that is brightest
+       * where it leaves the nozzle and gone almost immediately; the length
+       * is what made it a spike.
+       */
+      const cone = mesh(G.cone, M.thrust, 0.046, 0.115, 0.046, 0, -0.175, -0.02, Math.PI);
+      cone.castShadow = false;
+      f.add(cone);
+      const shell = mesh(G.cone, M.thrustGlow, 0.092, 0.195, 0.092, 0, -0.200, -0.02, Math.PI);
+      shell.castShadow = false;
+      f.add(shell);
+    }
   }
 
   _buildWings(F, M, b) {
@@ -4174,7 +4302,17 @@ export class FrogModel {
         m.dispose();
       }
     });
-    for (const k in this.mats) this.mats[k].dispose();
+    /**
+     * `mats` is mostly one material per key, but not entirely: `cable` is an
+     * ARRAY of them, one per strand colour — see `fx.cables`. A bare
+     * `this.mats[k].dispose()` threw on it, which took down every caller of
+     * `dispose()` the moment a Neon Ward skin was built and torn down.
+     */
+    for (const k in this.mats) {
+      const m = this.mats[k];
+      if (Array.isArray(m)) { for (const one of m) one.dispose(); }
+      else if (m && m.dispose) m.dispose();
+    }
     if (this.plateTex) this.plateTex.dispose();
   }
 }

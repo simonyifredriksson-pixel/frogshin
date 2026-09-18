@@ -1014,19 +1014,19 @@ export const CRATES = [
    * Mythic — the only Mythic in the game.
    */
   {
-    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 3200,
+    id: 'crate_sky_kunai', kind: 'kunai', set: 'celestial', price: 2900,
     name: 'Celestial Kunai Case',
     blurb: 'Dark metal and starlight. Nothing common has ever been in one.',
     color: '#7fbcff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 4200,
+    id: 'crate_sky_sword', kind: 'swords', set: 'celestial', price: 3800,
     name: 'Celestial Sword Case',
     blurb: 'Nine blades of heavenly metal — and one that is not quite a blade.',
     color: '#8fd8ff', anim: 'celestial',
   },
   {
-    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 5000,
+    id: 'crate_sky_frog', kind: 'frogs', set: 'celestial', price: 4600,
     name: 'Celestial Forge Crate',
     blurb: 'Ancient gold, blue fire, and the rarest frog anybody owns.',
     color: '#ffd24a', anim: 'celestial',
@@ -1047,19 +1047,19 @@ export const CRATES = [
    * Sun upward cannot quietly take the crown back.
    */
   {
-    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 9600,
+    id: 'crate_ecl_kunai', kind: 'kunai', set: 'eclipse', price: 8000,
     name: 'Eclipse Kunai Crate',
     blurb: 'Nine blades cut from the dark. One of them is not a blade.',
     color: '#a87aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 10800,
+    id: 'crate_ecl_sword', kind: 'swords', set: 'eclipse', price: 8600,
     name: 'Eclipse Sword Crate',
     blurb: 'Nightsteel, void and corona — and something with no name yet.',
     color: '#8f6aff', anim: 'eclipse',
   },
   {
-    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 12000,
+    id: 'crate_ecl_frog', kind: 'frogs', set: 'eclipse', price: 9200,
     name: 'Forbidden Frog Crate',
     blurb: 'An old power nobody was supposed to dig back up.',
     color: '#ffb43a', anim: 'eclipse',
@@ -1100,33 +1100,58 @@ export const CRATES = [
 const COLLECTIONS = [
   {
     id: 'verdant', name: 'Verdant Samurai', color: '#6aa832',
-    price: { frogs: 4400, swords: 3400, kunai: 2400 },
+    price: { frogs: 4000, swords: 3100, kunai: 2200 },
     blurb: 'Bamboo, moss and old jade. Everything in here grew before it '
       + 'was forged.',
   },
   {
     id: 'frost', name: 'Frostveil', color: '#8fd8ff',
-    price: { frogs: 5400, swords: 4000, kunai: 3000 },
+    price: { frogs: 4800, swords: 3600, kunai: 2700 },
     blurb: 'Nine things out of the deep winter, and one that was already '
       + 'there when it arrived.',
   },
   {
     id: 'ember', name: 'Emberborn', color: '#ff8a3c',
-    price: { frogs: 6400, swords: 5000, kunai: 3600 },
+    price: { frogs: 5700, swords: 4500, kunai: 3300 },
     blurb: 'Ash, cinder and the things that walk out of a fire still '
       + 'burning.',
   },
   {
     id: 'dragon', name: 'Dragon Ascension', color: '#d94a4a',
-    price: { frogs: 7400, swords: 6000, kunai: 4400 },
+    price: { frogs: 6600, swords: 5400, kunai: 4000 },
     blurb: 'Scale, bone and gold. The ladder here ends somewhere that was '
       + 'never a frog.',
   },
   {
     id: 'sun', name: 'Divine Sun', color: '#ffd76b',
-    price: { frogs: 8600, swords: 7000, kunai: 5400 },
-    blurb: 'The dearest case outside the Eclipse, and the brightest thing '
-      + 'in it does not set.',
+    price: { frogs: 7700, swords: 6300, kunai: 4900 },
+    blurb: 'Temple brass through to the thing itself. Nine of them worship '
+      + 'the sun and the tenth has looked at it.',
+  },
+  /**
+   * ═══ NEON WARD — SHIZUKA WARD, LATER ══════════════════════════════════
+   *
+   * The most expensive set in the game, and the only one set in the future.
+   *
+   * It is the CITY's set. Shizuka Ward is a Japanese city map full of ramen
+   * carts and vending machines and lampposts that are all still switched on
+   * in an empty town; this is what is walking around in it a century later.
+   * That is why it belongs here rather than being a generic chrome theme —
+   * the game already has the place, and this is its population.
+   *
+   * ── the ladder is an AMOUNT OF MACHINE ───────────────────────────────
+   * Commons are people with a cheap visor and a work jacket. By Rare the
+   * plating has arrived; by Legendary the frog is more hardware than frog;
+   * and the ??? is a pilot inside a suit. Every other set in the game
+   * escalates by getting grander. This one escalates by replacing you,
+   * which is the only honest way to do cyberpunk as a progression.
+   */
+  {
+    id: 'cyber', name: 'Neon Ward', color: '#3fe0d0',
+    price: { frogs: 12000, swords: 10800, kunai: 9600 },
+    blurb: 'Shizuka Ward a century on, still lit and still empty. Ten '
+      + 'things that live there now, and the last one is not wearing a '
+      + 'suit — it is piloting one.',
   },
 ];
 
@@ -1482,6 +1507,109 @@ const FROG_CONCEPTS = {
         plates: 0x1a1610, aura: 0xffe08a,
       } },
   ],
+
+  /**
+   * ── ⚡ NEON WARD — the ladder is an amount of MACHINE ─────────────────
+   *
+   * Every other collection climbs by getting grander. This one climbs by
+   * replacing the frog: a courier with a cheap visor at the bottom, and at
+   * the top something that is not wearing a suit so much as sitting inside
+   * one. The `plates` colour is the tell — dark workwear grey at the
+   * beginning, brass by the end.
+   *
+   * ── the palette ───────────────────────────────────────────────────────
+   *   gunmetal      0x2a2e33  the jackets, and the cheap plating
+   *   brass         0xb08d4a  what the expensive hardware is made of
+   *   sick green    0x6a8f5a  the hide, and the iridescence on the plate
+   *   signal teal   0x3fe0d0  panel lines and honest machinery
+   *   hot magenta   0xff3fa8  lenses, and anything running too hot
+   *   violet        0x8a3fd0  the exotic end — thrust, and the ???
+   *
+   * Teal and magenta are the whole neon budget and they mean different
+   * things: teal is a thing working as designed, magenta is a thing being
+   * pushed. The two climb past each other up the ladder, which is why
+   * Overclock is almost entirely magenta and the Rare below it is teal.
+   */
+  cyber: [
+    // Not a warrior. Somebody on a late shift, in a jacket, with nothing on
+    // them that cost money — the floor the rest of the set is measured from.
+    { name: 'Dayshift', skin: 0x5c6a58, belly: 0xc4c8b4, cloth: 0x2a2e33,
+      scarf: 0xb8322e, fx: {} },
+    { name: 'Noodle Runner', skin: 0x68785a, belly: 0xd0d0bc, cloth: 0x24282e,
+      scarf: 0x3fe0d0, fx: {} },
+    // The first hardware anybody buys: a second-hand visor and a light in it.
+    { name: 'Visorhead', skin: 0x5f7058, belly: 0xc8ccb8, cloth: 0x1e222a,
+      scarf: 0x3fe0d0, fx: { hood: 0x1a1e26, pattern: 0x3fe0d0 } },
+    // Implants rather than gear. The glow is under the skin, not over it.
+    { name: 'Splice Tech', skin: 0x6a7a5e, belly: 0xccd0bc, cloth: 0x2a2430,
+      scarf: 0xff3fa8, fx: {
+        pattern: 0xff3fa8, iris: 0xff3fa8, emissive: 0x2a0a1e,
+      } },
+    // Plate arrives, and it is cheap grey plate bolted over a jacket.
+    { name: 'Chrome Ronin', skin: 0x66765c, belly: 0xc4c8b4, cloth: 0x22262e,
+      scarf: 0x3fe0d0, fx: {
+        plates: 0x8a8f96, pattern: 0x3fe0d0, iris: 0x3fe0d0, spikes: 3,
+      } },
+    // The set's one mystic: no armour at all, and a field around it.
+    { name: 'Static Monk', skin: 0x5a6a64, belly: 0xc0c8c4, cloth: 0x241e30,
+      scarf: 0x8a3fd0, fx: {
+        hood: 0x1e1828, pattern: 0x8a3fd0, aura: 0x8a3fd0,
+        iris: 0xbf8fff, emissive: 0x180a2a, stars: 0xbf8fff,
+      } },
+    // Riot gear: the first silhouette in the set that is not frog-shaped.
+    { name: 'Riot Frame', skin: 0x4e5a4a, belly: 0xa8b09a, cloth: 0x1a1e24,
+      scarf: 0xb8322e, fx: {
+        plates: 0x6a6f76, spikes: 6, horns: 2, shield: 0x7a8088,
+        pattern: 0xff3fa8, iris: 0xff3fa8, emissive: 0x2a1018,
+      } },
+    /**
+     * The first one with CABLES, and that is the whole reason it is the
+     * Legendary. The bundle changes the outline of the head — see
+     * `_buildCables` — and nothing below this rung in any set does that.
+     */
+    { name: 'Blackout', skin: 0x3a4440, belly: 0x8a9490, cloth: 0x16191e,
+      scarf: 0x3fe0d0, fx: {
+        plates: 0x2a2e33, cables: 6, thrusters: 0x3fe0d0,
+        pattern: 0x3fe0d0, iris: 0x3fe0d0, emissive: 0x062028,
+      } },
+    /**
+     * Mythic: brass, and running far too hot. Everything on it that was
+     * teal further down the ladder is magenta here, which is the palette
+     * saying the same thing the name does.
+     */
+    { name: 'Overclock', skin: 0x4a4436, belly: 0xb8a878, cloth: 0x1e1a14,
+      scarf: 0xff3fa8, fx: {
+        plates: 0xb08d4a, cables: 8, thrusters: 0xff3fa8,
+        halo: 0xff3fa8, orbit: 0xff3fa8, orbitN: 9,
+        pattern: 0xff3fa8, iris: 0xff3fa8, spikes: 6,
+        emissive: 0x3a0a22, embers: 0xff6ac0,
+      } },
+    /**
+     * ── ??? WETWARE ───────────────────────────────────────────────────
+     *
+     * The reference the set was drawn from, and the only skin in the game
+     * where the frog is the PASSENGER.
+     *
+     * "Wetware" is the cyberpunk word for the organic brain still sitting
+     * inside the machine, which is exactly what this is and exactly why it
+     * is not called Mech Frog. Brass plate over a sick green hide, a full
+     * bundle of cable off the skull, violet thrust at the ankles, magenta
+     * lenses where the eyes were, and a ring of debris turning around it.
+     *
+     * It is the most loaded skin in the game and that is deliberate: it is
+     * the opposite end of the argument from the one-of-one, which is the
+     * cleanest. A set about being replaced by hardware should end in
+     * something that is almost entirely hardware.
+     */
+    { name: 'Wetware', skin: 0x3f4a3a, belly: 0x8a9478, cloth: 0x14181c,
+      scarf: 0xb8322e, secret: true, fx: {
+        plates: 0xb08d4a, cables: 10, thrusters: 0xbf5fff,
+        pattern: 0x3fe0d0, iris: 0xff3fa8,
+        orbit: 0xff3fa8, orbitN: 11, halo: 0x3fe0d0, halo2: true,
+        spikes: 6, horns: 4, shield: 0x8a6f38,
+        emissive: 0x1a2a2a, embers: 0x3fe0d0, stars: 0xff3fa8,
+      } },
+  ],
 };
 
 /**
@@ -1717,6 +1845,49 @@ const SWORD_CONCEPTS = {
         aura: 0xffe08a, long: 1.45, orbit: 0xfff3c4, orbitN: 12,
       } },
   ],
+
+  // ── ⚡ NEON WARD — improvised at the bottom, powered at the top ───────
+  //
+  // The ladder is the same one the frogs climb: the commons are things
+  // somebody picked up, the middle is issued equipment, and the top two are
+  // powered. Nothing here is forged — it is manufactured, salvaged or
+  // printed, which is why there is not a single "blade" name in the list.
+  cyber: [
+    { name: 'Boxcutter', blade: 0xb8bcc2, edge: 0xe8ecf0, guard: 0x2a2e33,
+      grip: 0x1a1d22, fx: { shape: 'dagger', tsuba: 'none' } },
+    { name: 'Beat Cop', blade: 0x8a9096, edge: 0xc4cad0, guard: 0x3a4046,
+      grip: 0x1e2228, fx: { shape: 'katana', tsuba: 'disc' } },
+    { name: 'Breaching Axe', blade: 0x9aa0a6, edge: 0xd0d6dc, guard: 0xb8322e,
+      grip: 0x22262c, fx: { shape: 'axe', tsuba: 'none', tassel: 0xb8322e } },
+    { name: 'Cattle Prod', blade: 0x6a7076, edge: 0x3fe0d0, guard: 0x2a2e33,
+      grip: 0x1a1d22, fx: { shape: 'spear', tsuba: 'none', tassel: 0x3fe0d0 } },
+    { name: 'Sawblade', blade: 0x7a8086, edge: 0xc8ced4, guard: 0x4a5056,
+      grip: 0x1e2228, fx: { shape: 'serrated', tsuba: 'square', runes: 0x3fe0d0 } },
+    { name: 'Neon Sabre', blade: 0x5a6a72, edge: 0x6afff0, guard: 0x2f3a42,
+      grip: 0x16242a, fx: { shape: 'curved', tsuba: 'disc', runes: 0x3fe0d0 } },
+    { name: 'Riot Hammer', blade: 0x6a6f76, edge: 0xa8aeb4, guard: 0xb8322e,
+      grip: 0x1a1e24, fx: {
+        shape: 'hammer', tsuba: 'none', runes: 0xff3fa8, aura: 0xb8322e,
+      } },
+    { name: 'Streetsweeper', blade: 0x4a5258, edge: 0x8affe8, guard: 0x3fe0d0,
+      grip: 0x14181c, glow: 0x3fe0d0, fx: {
+        shape: 'broad', tsuba: 'cross', runes: 0x3fe0d0, aura: 0x3fe0d0,
+        glow: true, long: 1.1,
+      } },
+    // Mythic: brass, and running hot. Same story the frog tier tells.
+    { name: 'Arc Fang', blade: 0xff3fa8, edge: 0xffb0e0, guard: 0xb08d4a,
+      grip: 0x2a1020, glow: 0xff3fa8, fx: {
+        shape: 'fang', tsuba: 'ring', glow: true, runes: 0xffffff,
+        aura: 0xff3fa8, tassel: 0xb08d4a, long: 1.2,
+        orbit: 0xff3fa8, orbitN: 8,
+      } },
+    // ??? Not a blade at all — a violet cut in the air, on a brass handle.
+    { name: 'Zero Day', blade: 0x1a1020, edge: 0xdfa8ff, guard: 0xb08d4a,
+      grip: 0x0c0810, glow: 0xbf5fff, fx: {
+        shape: 'light', tsuba: 'ring', glow: true, runes: 0x3fe0d0,
+        aura: 0xbf5fff, long: 1.4, orbit: 0xbf5fff, orbitN: 11,
+      } },
+  ],
 };
 
 /** The sword at rung `i` of a collection — read from SWORD_CONCEPTS. */
@@ -1872,6 +2043,35 @@ const KUNAI_CONCEPTS = {
       ring: 0x5a4408, fx: { shape: 'needle', ribbon: 0xffd76b, glow: true, big: 1.2 } },
     { name: 'Lastlight', blade: 0x120e08, facet: 0xffffff, wrap: 0x5a4a20,
       ring: 0x080604, fx: { shape: 'crystal', ribbon: 0xfff3c4, glow: true, big: 1.35 } },
+  ],
+
+  // ── ⚡ NEON WARD ─────────────────────────────────────────────────────
+  //
+  // Same pairing rule as every other set: each of the five profiles twice,
+  // the two that share one at opposite ends of the ladder. Here that lands
+  // particularly well — the Common needle is a shim somebody filed down and
+  // the Mythic needle is the same object machined and lit.
+  cyber: [
+    { name: 'Shim', blade: 0x7a8086, facet: 0xb8bec4, wrap: 0x2a2e33,
+      ring: 0x1a1d22, fx: { shape: 'classic' } },
+    { name: 'Data Star', blade: 0x6a7076, facet: 0xa8aeb4, wrap: 0x24282e,
+      ring: 0x16191e, fx: { shape: 'star' } },
+    { name: 'Jack Needle', blade: 0x5f6870, facet: 0xa0aab2, wrap: 0x1e222a,
+      ring: 0x14171c, fx: { shape: 'needle', ribbon: 0x3fe0d0 } },
+    { name: 'Panel Shard', blade: 0x8a9096, facet: 0xc8ced4, wrap: 0xb8322e,
+      ring: 0x1a1d22, fx: { shape: 'broad', ribbon: 0xb8322e } },
+    { name: 'Static Kunai', blade: 0x4a5a5e, facet: 0x8fd8d0, wrap: 0x1e2a2e,
+      ring: 0x121a1c, fx: { shape: 'classic', ribbon: 0x3fe0d0 } },
+    { name: 'Cryocell', blade: 0x3f6a72, facet: 0x6afff0, wrap: 0x16282c,
+      ring: 0x0e1a1e, fx: { shape: 'crystal', ribbon: 0x3fe0d0 } },
+    { name: 'Spike Driver', blade: 0x6a4a5a, facet: 0xff8fd0, wrap: 0x2a1424,
+      ring: 0x180c14, fx: { shape: 'needle', ribbon: 0xff3fa8, glow: true } },
+    { name: 'Riot Chip', blade: 0x8a5a3a, facet: 0xffb070, wrap: 0x2a1810,
+      ring: 0x18100a, fx: { shape: 'broad', ribbon: 0xff9a3c, glow: true } },
+    { name: 'Arc Star', blade: 0xff3fa8, facet: 0xffc0e8, wrap: 0xb08d4a,
+      ring: 0x2a1020, fx: { shape: 'star', ribbon: 0xff3fa8, glow: true, big: 1.2 } },
+    { name: 'Zero Shard', blade: 0x1a1020, facet: 0xdfa8ff, wrap: 0x4a3a20,
+      ring: 0x0c0810, fx: { shape: 'crystal', ribbon: 0xbf5fff, glow: true, big: 1.35 } },
   ],
 };
 
