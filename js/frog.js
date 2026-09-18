@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v158';
-import { CFG } from './config.js?v=v158';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v158';
+import * as THREE from '../lib/three.module.js?v=v159';
+import { CFG } from './config.js?v=v159';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v159';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -740,7 +740,17 @@ export class FrogModel {
         brass: lam(0xc9a04a, 0x2a2008),
         brassLit: lam(0xe0bb63, 0x3a2c0c),
         bronze: lam(0x7a5f2c),
-        green: lam(0x6f8a4a, 0x141c0a),
+        /**
+         * THE IRIDESCENT GREEN, IN TWO VALUES.
+         *
+         * The reference's plate is not gold — it is a green-gold sheen with
+         * warm brass only at the EDGES. Built entirely out of brass it came
+         * out as a uniform yellow blob, which is the "make it cleaner" note:
+         * a surface with no value contrast on it has no panels, however many
+         * panels are modelled into it. These two are what put the seams back.
+         */
+        green: lam(0x7a9450, 0x14200c),
+        greenDark: lam(0x4a5c30),
         steel: lam(0x3a4048),
         dark: lam(0x24282e),
         red: lam(0xa8322c, 0x200606),
@@ -2311,9 +2321,17 @@ export class FrogModel {
      * this rig — see `_buildTorso`. The belly's nose is at z 0.53, so the
      * cuirass front sits at 0.55 to clear it.
      */
-    g.add(mesh(G.lowSphere, K.brass, 0.50, 0.30, 0.46, 0, 0.640, 0.090));
-    g.add(mesh(G.box, K.green, 0.56, 0.115, 0.30, 0, 0.455, 0.290));
+    // The shell is GREEN, with brass only as edging. See the palette note.
+    g.add(mesh(G.lowSphere, K.green, 0.50, 0.30, 0.46, 0, 0.640, 0.090));
+    // Brass rim around the top of the cuirass, and a dark seam under it.
+    g.add(mesh(G.wrap, K.brass, 0.492, 0.042, 0.452, 0, 0.870, 0.020));
+    g.add(mesh(G.wrap, K.greenDark, 0.486, 0.026, 0.448, 0, 0.820, 0.020));
+    // A lower band, so the torso is two plates rather than one dome.
+    g.add(mesh(G.lowSphere, K.greenDark, 0.505, 0.130, 0.465, 0, 0.470, 0.080));
+    g.add(mesh(G.box, K.brass, 0.56, 0.055, 0.28, 0, 0.455, 0.300));
+    // The central chest plate, in brass, with the two lit slots.
     g.add(mesh(G.box, K.brass, 0.34, 0.26, 0.10, 0, 0.640, 0.490));
+    g.add(mesh(G.box, K.bronze, 0.355, 0.028, 0.105, 0, 0.760, 0.492));
     for (const sx of [-1, 1]) {
       g.add(mesh(G.box, K.teal, 0.075, 0.130, 0.040, sx * 0.105, 0.665, 0.545));
     }
@@ -2345,18 +2363,36 @@ export class FrogModel {
      * of that joint, and a covered knee reads as a boot.
      */
     for (const arm of this.arms) {
-      arm.shoulder.add(mesh(G.lowSphere, K.brass, 0.275, 0.190, 0.265, 0, -0.010, 0));
-      arm.shoulder.add(mesh(G.box, K.green, 0.250, 0.055, 0.240, 0, -0.130, 0));
-      arm.fore.add(mesh(G.box, K.brass, 0.150, 0.180, 0.150, 0, -0.150, 0));
+      // Green pauldron with a brass rim — the reference's every joint.
+      arm.shoulder.add(mesh(G.lowSphere, K.green, 0.275, 0.190, 0.265, 0, -0.010, 0));
+      arm.shoulder.add(mesh(G.wrap, K.brass, 0.268, 0.040, 0.258, 0, -0.115, 0));
+      arm.shoulder.add(mesh(G.box, K.greenDark, 0.235, 0.060, 0.225, 0, -0.175, 0));
+      arm.fore.add(mesh(G.box, K.green, 0.150, 0.180, 0.150, 0, -0.150, 0));
+      arm.fore.add(mesh(G.box, K.brass, 0.160, 0.032, 0.160, 0, -0.035, 0));
       arm.hand.add(mesh(G.lowSphere, K.brass, 0.135, 0.115, 0.135, 0, 0, 0));
     }
     for (const leg of this.legs) {
-      leg.hip.add(mesh(G.lowSphere, K.brass, 0.215, 0.195, 0.215,
+      leg.hip.add(mesh(G.lowSphere, K.green, 0.215, 0.195, 0.215,
         leg.side * 0.045, -0.145, -0.015));
+      leg.hip.add(mesh(G.wrap, K.brass, 0.205, 0.038, 0.205,
+        leg.side * 0.045, -0.290, -0.015));
+      /**
+       * A CRIMSON KNEE PAD over the exposed joint. The reference gives the
+       * leg joint its own inset panel and the pad is the loudest thing in
+       * it — red is the only colour on this frog that is neither brass nor
+       * green, so it is what the eye lands on down there.
+       */
       leg.shin.add(mesh(G.cyl, K.steel, 0.095, 0.130, 0.095, 0, 0.020, 0, 0, 0, HALF));
-      leg.shin.add(mesh(G.box, K.brass, 0.145, 0.170, 0.150, 0, -0.145, 0.015));
+      leg.shin.add(mesh(G.lowSphere, K.red, 0.115, 0.105, 0.105, 0, 0.010, 0.080));
+      leg.shin.add(mesh(G.box, K.green, 0.145, 0.170, 0.150, 0, -0.145, 0.015));
+      leg.shin.add(mesh(G.box, K.brass, 0.155, 0.030, 0.158, 0, -0.245, 0.015));
       if (leg.foot) {
         leg.foot.add(mesh(G.lowSphere, K.brass, 0.165, 0.070, 0.275, 0, -0.015, 0.110));
+        // Individual toe caps, as the reference draws them.
+        for (let t = 0; t < 3; t++) {
+          leg.foot.add(mesh(G.lowSphere, K.bronze, 0.052, 0.045, 0.085,
+            (t - 1) * 0.10, -0.012, 0.300));
+        }
       }
     }
 
@@ -2373,23 +2409,70 @@ export class FrogModel {
      * edge, and a lit tip. Mounted on the BODY: it is part of the machine,
      * not something the arm swings.
      */
-    const N = 11;
-    for (let i = 0; i < N; i++) {
-      const t = i / (N - 1);
-      const x = 0.30 + t * 0.52;
-      const y = 0.92 + t * 0.95 - t * t * 0.12;
-      const z = -0.26 - t * 0.30 - t * t * 0.22;
-      const r = 0.115 - t * 0.080;
-      b.add(mesh(G.cyl, i % 2 ? K.bronze : K.brass, r, 0.135, r, x, y, z, -0.55, 0, -0.42));
-      // Barbs, from the third segment on, alternating side to side.
-      if (i >= 2 && i < N - 1) {
-        const sx = i % 2 ? 1 : -1;
-        b.add(mesh(G.cone, K.green, r * 0.75, 0.145, r * 0.75,
-          x + sx * r * 1.05, y + 0.03, z + 0.02, -0.55, 0, -0.42 + sx * 1.1));
+    /**
+     * ── IT IS A LEAF, NOT A TAIL ───────────────────────────────────────
+     *
+     * The first version read the front view of the reference and built what
+     * it looked like there: a long thin segmented tail with barbs poking
+     * off alternate sides. The SIDE view shows what it actually is — a
+     * broad flat blade, wide at the base and tapering to a point, with
+     * scallops cut down both edges like a saw or a stegosaurus plate.
+     *
+     * Those are very different objects, and the difference only shows from
+     * one angle. Built as a tail it is a stick; built as a leaf it has a
+     * face that catches the light, which is what makes it read as armour
+     * plate rather than as a spine.
+     *
+     * ── built in its own group ─────────────────────────────────────────
+     * Everything below is laid out along +Y in blade space and the whole
+     * group is then aimed. Building it in body space would mean carrying
+     * the same two rotations on all thirty pieces, and any edit to the
+     * angle would have to be made thirty times.
+     */
+    const blade = new THREE.Group();
+    blade.position.set(0.24, 0.98, -0.40);
+    blade.rotation.set(-0.50, 0, -0.46);
+    b.add(blade);
+
+    const SEG = 9, LEN = 1.16;
+    const step = LEN / SEG;
+    for (let i = 0; i < SEG; i++) {
+      const t = i / (SEG - 1);
+      const y = 0.08 + t * LEN;
+      /**
+       * Wide front-to-back, thin side-to-side: a plate, seen edge-on from
+       * the front and face-on from the side, exactly as the reference is.
+       *
+       * 0.38 at the base against 1.16 of length — a LEAF, roughly a third
+       * as broad as it is long. At 0.30 over 1.30 it was still closer to a
+       * blade of grass than to the plate in the drawing.
+       */
+      const deep = 0.38 * (1 - t * 0.88);
+      const thick = 0.086 * (1 - t * 0.55);
+      blade.add(mesh(G.box, i % 2 ? K.green : K.greenDark,
+        thick, step + 0.02, deep, 0, y, 0));
+      // A brass spine down the centre of the face.
+      blade.add(mesh(G.box, K.brass, thick * 1.12, step * 0.55, deep * 0.24, 0, y, 0));
+      /**
+       * The scallops: a tooth on each edge, angled up the blade so they
+       * rake backwards. This is the whole read — a smooth taper is a
+       * spike, and a toothed one is a weapon.
+       */
+      if (i < SEG - 1) {
+        for (const sz of [-1, 1]) {
+          blade.add(mesh(G.cone, K.brass, thick * 0.92, 0.115, thick * 0.92,
+            0, y + 0.020, sz * (deep * 0.5 + 0.030), sz * HALF * 0.72));
+        }
       }
     }
-    b.add(mesh(G.cone, K.magenta, 0.075, 0.230, 0.075, 0.885, 1.815, -0.800, -0.55, 0, -0.42));
-    b.add(mesh(G.lowSphere, K.violet, 0.115, 0.115, 0.115, 0.845, 1.735, -0.775));
+    // The tip, and the charge sitting on it.
+    blade.add(mesh(G.cone, K.green, 0.038, 0.170, 0.075, 0, 0.08 + LEN + 0.075, 0));
+    blade.add(mesh(G.cone, K.magenta, 0.030, 0.150, 0.058, 0, 0.08 + LEN + 0.125, 0));
+    blade.add(mesh(G.lowSphere, K.violet, 0.072, 0.072, 0.072, 0, 0.08 + LEN + 0.040, 0));
+    // The mount it pivots on, so it is bolted to the back rather than
+    // growing out of it.
+    b.add(mesh(G.lowSphere, K.brass, 0.130, 0.110, 0.130, 0.235, 0.975, -0.395));
+    b.add(mesh(G.cyl, K.steel, 0.075, 0.190, 0.075, 0.235, 0.975, -0.395, 0, 0, HALF));
   }
 
   /**
