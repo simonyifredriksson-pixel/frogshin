@@ -1947,10 +1947,17 @@ for (const c of COLLECTIONS) {
  *      the arch again, seen edge-on. Nothing else in the game has anything
  *      coming off the back of the head except the Forgotten One's wings,
  *      and those are torn and enormous. This is one clean curve.
- *   2. THE MANTLE, over ONE shoulder. Asymmetry is the cheapest and
- *      strongest recognition cue there is: every other frog in the game is
- *      bilaterally symmetrical, so a lopsided outline is identifiable at
- *      any range, at any speed, from any angle, in any lighting.
+ *   2. THE ARMOURED LEFT ARM. Asymmetry is the cheapest and strongest
+ *      recognition cue there is: every other frog in the game is bilaterally
+ *      symmetrical, so a lopsided outline is identifiable at any range, at
+ *      any speed, from any angle, in any lighting.
+ *
+ *      It is a real arm, not a cape. An earlier version hung cloth panels
+ *      off the shoulder to get the same outline, and because they were
+ *      parented to the body rather than the limb they never moved with it —
+ *      which read as a dead robotic arm bolted to the side of a frog. The
+ *      plate now sits on the rig's own arm groups and swings with it. See
+ *      `_buildChampionArm`.
  *
  * Everything else — the armour, the belt, the seams — is detail you only
  * get at conversational distance. That is the intended reading order.

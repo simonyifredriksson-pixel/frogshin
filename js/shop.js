@@ -11,10 +11,10 @@ import {
   CRATES, rollCrate, rollMany, cratePool, crateOdds, findSkin, cratesFor, setOf,
   ECLIPSE_TITLE, eclipseProgress, dupeValue,
   CHAMPION_LABEL, CHAMPION_TITLE,
-} from './skins.js?v=v154';
-import { Audio } from './audio.js?v=v154';
-import { PX } from './icons.js?v=v154';
-import { CFG } from './config.js?v=v154';
+} from './skins.js?v=v155';
+import { Audio } from './audio.js?v=v155';
+import { PX } from './icons.js?v=v155';
+import { CFG } from './config.js?v=v155';
 
 const $ = (id) => document.getElementById(id);
 

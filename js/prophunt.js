@@ -47,7 +47,7 @@
  * one is arithmetically still.
  */
 
-import * as THREE from '../lib/three.module.js?v=v154';
+import * as THREE from '../lib/three.module.js?v=v155';
 
 // ---------------------------------------------------------------- geometry
 

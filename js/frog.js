@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v154';
-import { CFG } from './config.js?v=v154';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v154';
+import * as THREE from '../lib/three.module.js?v=v155';
+import { CFG } from './config.js?v=v155';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v155';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -665,12 +665,19 @@ export class FrogModel {
         emissive: new THREE.Color(ffx.emblem).multiplyScalar(0.12),
       });
     }
+    /**
+     * NO MOTES.
+     *
+     * There were three of these — small lit cubes drifting past the chest
+     * while standing still, meant as a "the skin is alive" detail. On screen
+     * they are white boxes floating in front of the frog, which is the same
+     * complaint as every other small pale thing this skin has shed. A detail
+     * that has to be explained is not a detail.
+     *
+     * The emblem's slow breath is the whole of the standing-still life now.
+     */
     if (ffx.emblemGlow) {
       this.mats.emblemLit = new THREE.MeshBasicMaterial({ color: ffx.emblemGlow });
-      // The motes that appear only while standing still. Faint, and few.
-      this.mats.mote = new THREE.MeshBasicMaterial({
-        color: ffx.emblemGlow, transparent: true, opacity: 0.55, depthWrite: false,
-      });
     }
     if (ffx.moss) this.mats.moss = new THREE.MeshLambertMaterial({ color: ffx.moss });
     if (ffx.hood) {
@@ -1307,10 +1314,9 @@ export class FrogModel {
      * ═══ KEYSTONE — THE ONE OF ONE ═════════════════════════════════════
      * ═══════════════════════════════════════════════════════════════════
      *
-     * Four pieces, built in the order they are meant to be read:
-     * the CREST (from across the map), the MANTLE (from across a street),
-     * the EMBLEM (from a duel's distance), and the SEAMS (from nowhere at
-     * all — they are for the person who owns it).
+     * Three pieces, built in the order they are meant to be read: the CREST
+     * (from across the map), the ARMOURED LEFT ARM (from across a street),
+     * and the EMBLEM (from a duel's distance).
      *
      * Every offset below is checked against the rig it sits on. The skull
      * is a 0.44 × 0.36 × 0.42 ellipsoid at the head's origin, the eye
@@ -1322,7 +1328,7 @@ export class FrogModel {
      * eyeballs because nobody measured.
      */
     if (M.diadem) this._buildDiadem(F, M);
-    if (M.mantle) this._buildMantle(F, M);
+    if (M.mantle) this._buildChampionArm(F, M);
     if (M.emblem) this._buildEmblem(F, M);
 
     // Moss: tufts around the torso and over the crown, each pushed out to
@@ -1663,96 +1669,82 @@ export class FrogModel {
   }
 
   /**
-   * ═══ KEYSTONE'S MANTLE — AND WHY IT IS ONLY ON ONE SHOULDER ═════════════
+   * ═══ THE LEFT ARM IS ARMOUR, AND IT IS A REAL ARM ═══════════════════════
    *
    * Every other frog in this game is bilaterally symmetrical. Every one.
    * That makes asymmetry the cheapest and by far the strongest recognition
-   * cue available: a lopsided outline is identifiable at any range, at any
-   * speed, from any angle and in any lighting, and it costs four boxes.
+   * cue there is — a lopsided outline is identifiable at any range, at any
+   * speed, from any angle and in any lighting.
    *
-   * It hangs off the LEFT shoulder and is parented to the BODY rather than
-   * to the arm. A cape on the shoulder joint swings with every punch and
-   * reads as a flag tied to the wrist; on the body it leans and squashes
-   * with the torso, which is what cloth does.
+   * ── WHAT THIS REPLACED, AND WHY ────────────────────────────────────────
+   * It used to be a MANTLE: five cloth panels hanging off the left shoulder,
+   * parented to the BODY so they leaned with the torso instead of swinging
+   * with the arm. The silhouette worked. Nothing else did — at x −0.66 and
+   * falling to the ankle, a segmented green slab beside a frog does not read
+   * as a cape, it reads as a big robotic arm that is strangely dead. It was
+   * called one on sight.
+   *
+   * So it IS one now. The frog's own left arm is stripped out and replaced
+   * with plate, hung on the rig's own `shoulder`, `fore` and `hand` groups —
+   * which means it swings, punches, throws and hangs exactly as the right
+   * arm does, because it is driven by the same animation. The asymmetry is
+   * unchanged and it costs nothing: one armoured limb against one bare one
+   * reads as lopsided from just as far away as a cape did.
    */
-  _buildMantle(F, M) {
-    const b = this.body;
+  _buildChampionArm(F, M) {
+    const arm = this.arms[0];
+    if (!arm) return;
     const D = M.mantleDark || M.mantle;
 
     /**
-     * ── AND IT HAS TO STAND PROUD OF THE BODY ──────────────────────────
+     * STRIP THE ORIGINAL. This replaces the arm rather than covering it —
+     * plate over a frog arm leaves green fingers poking out of a gauntlet
+     * and a pale elbow showing through at every angle the armour does not
+     * quite reach.
      *
-     * Same lesson as the crest. The first mantle hung flat against the
-     * back at x −0.40, inside the frog's own width — so it changed the
-     * colour of the shoulder and nothing else, and the silhouette was a
-     * default frog. A cape that does not break the outline is paint.
-     *
-     * It now reaches x −0.62, clear of the torso's own 0.52 half-width, and
-     * falls to the knee. That overhang is the entire point: one side of
-     * this frog is a straight draped edge and the other is a frog, and THAT
-     * is what somebody recognises across an arena.
+     * Only the MESHES go. `shoulder` also holds the `fore` group and `fore`
+     * holds `hand`, and removing those would take the whole limb with them
+     * — including the pivots everything below is about to be hung on.
      */
-    b.add(mesh(G.lowSphere, M.mantle, 0.42, 0.28, 0.40, -0.46, 0.80, -0.02));
-    /**
-     * ── AND IT HANGS DOWN THE SIDE, NOT DOWN THE BACK ──────────────────
-     *
-     * The second version of this hung the fall behind the frog at z −0.40
-     * to −0.46. From the side and from behind it was a cape; FROM THE
-     * FRONT it was nothing at all, because it was directly behind a body
-     * wider than it was. Half the time you see another player in this game
-     * you are looking at their front.
-     *
-     * The fall is therefore centred on z −0.10 — beside the torso rather
-     * than behind it — and pushed out to x −0.66, clear of the 0.52 body
-     * and the 0.46 shoulder. What that buys is the thing the whole skin is
-     * for: from straight on, one side of this frog is a long straight
-     * draped edge falling to the ankle and the other side is an ordinary
-     * round frog. Nothing else in the game is lopsided, so the outline
-     * alone identifies it, at any range and from any angle.
-     */
-    const FALL = [
-      [-0.56, 0.68, -0.08, 0.30, 0.26, 0.40],
-      [-0.63, 0.46, -0.10, 0.26, 0.26, 0.46],
-      [-0.66, 0.24, -0.11, 0.22, 0.26, 0.48],
-      [-0.64, 0.02, -0.11, 0.20, 0.24, 0.44],
-      [-0.58, -0.16, -0.10, 0.18, 0.20, 0.36],
-    ];
-    for (const [x, y, z, w, hgt, depth] of FALL) {
-      b.add(mesh(G.box, M.mantle, w, hgt, depth, x, y, z, 0, 0, 0.16));
-    }
-    // An ivory hem along the bottom edge, and a darker lining showing at it.
-    b.add(mesh(G.box, D, 0.19, 0.06, 0.37, -0.57, -0.27, -0.10, 0, 0, 0.16));
-    if (M.trim) {
-      b.add(mesh(G.box, M.trim, 0.20, 0.022, 0.38, -0.572, -0.24, -0.10, 0, 0, 0.16));
+    for (const g of [arm.shoulder, arm.fore, arm.hand]) {
+      for (const o of g.children.slice()) if (o.isMesh) g.remove(o);
     }
 
     /**
-     * The clasp: the one piece of metal holding the whole thing on, at the
-     * collarbone where it can actually be seen from the front. Without it
-     * the mantle reads as a towel.
+     * The pauldron. Deliberately bigger than the right one — this is the
+     * side that carries the silhouette, and the two have to be obviously
+     * different or the frog is symmetrical again.
      */
-    b.add(mesh(G.lowSphere, M.diadem || D, 0.090, 0.090, 0.064, -0.40, 0.855, 0.15));
-    /**
-     * No ivory stud on it. It was a 0.04 cube, which is the smallest and
-     * therefore the worst of the white blocks — see the note on where the
-     * ivory is allowed to be, in `_buildEmblem`. The clasp is gold, and
-     * gold on a dark green cape is contrast enough.
-     */
+    arm.shoulder.add(mesh(G.lowSphere, M.mantle, 0.30, 0.23, 0.29, -0.02, -0.02, 0));
+    if (M.diadem) {
+      arm.shoulder.add(mesh(G.wrap, M.diadem, 0.275, 0.026, 0.265, -0.02, -0.14, 0));
+    }
+    // The upper arm: a plate over the humerus, and a narrower cuff at the
+    // elbow so the joint reads as a joint rather than as one long box.
+    arm.shoulder.add(mesh(G.box, D, 0.21, 0.30, 0.21, 0, -0.22, 0));
+    arm.shoulder.add(mesh(G.box, M.mantle, 0.175, 0.10, 0.175, 0, -0.345, 0));
+
+    // The forearm, banded at the wrist.
+    arm.fore.add(mesh(G.box, M.mantle, 0.195, 0.26, 0.195, 0, -0.15, 0));
+    arm.fore.add(mesh(G.box, D, 0.165, 0.09, 0.165, 0, -0.30, 0));
+    if (M.diadem) {
+      arm.fore.add(mesh(G.box, M.diadem, 0.205, 0.028, 0.205, 0, -0.03, 0));
+    }
 
     /**
-     * ── THE MARK ON THE BACK IS GONE ────────────────────────────────────
-     *
-     * It was three 0.03-unit ivory wedges on the shoulder of the cape — a
-     * maker's mark, and in principle the nicest detail on the skin. In
-     * practice it was three white cubes on a dark cape, and it was the
-     * clearest example of the problem the whole skin kept running into:
-     * ivory detail below about 0.05 units does not read as detail, it
-     * reads as litter.
-     *
-     * The emblem lives on the chest and on the katana's guard. Two places,
-     * both large enough to be a shape. That is enough.
+     * The gauntlet. Three plated fingers rather than the frog's three
+     * rounded toes, in the same places — so it grips the katana at the same
+     * point and the swing animation needs no special case.
      */
+    arm.hand.add(mesh(G.lowSphere, M.mantle, 0.150, 0.135, 0.150, 0, 0, 0));
+    if (M.diadem) {
+      arm.hand.add(mesh(G.box, M.diadem, 0.155, 0.024, 0.155, 0, 0.095, 0));
+    }
+    for (let f = 0; f < 3; f++) {
+      arm.hand.add(mesh(G.box, D, 0.056, 0.080, 0.080, (f - 1) * 0.098, -0.105, 0.03));
+    }
   }
+
 
   /**
    * ═══ THE EMBLEM — "THE ONE WHO COULD NOT BE REPLACED" ══════════════════
@@ -2004,40 +1996,6 @@ export class FrogModel {
       const k = 0.45 + (0.5 + Math.sin(t * 1.45) * 0.5) * 0.55;
       if (!this._emblemBase) this._emblemBase = lit.color.clone();
       lit.color.copy(this._emblemBase).multiplyScalar(k);
-    }
-
-    /**
-     * Three motes, and they only exist while the frog is standing still.
-     *
-     * Built on first use rather than in the constructor: most frogs wearing
-     * this skin will be the only one in the lobby, and every OTHER frog
-     * would otherwise carry three unused meshes for the whole match.
-     */
-    if (this.mats.mote) {
-      if (!this.motes) {
-        this.motes = [];
-        for (let i = 0; i < 3; i++) {
-          const m = mesh(G.box, this.mats.mote, 0.035, 0.035, 0.035, 0, 0, 0);
-          m.castShadow = false;
-          this.body.add(m);
-          this.motes.push({ mesh: m, t: i / 3, a: i * 2.1, r: 0.30 + i * 0.07 });
-        }
-      }
-      // Fades with movement rather than switching off, so breaking into a
-      // walk does not make three specks vanish on the same frame.
-      const still = clamp(1 - speed * 0.7, 0, 1) * (stance ? 1 : 0.25);
-      for (const m of this.motes) {
-        m.t += dt * 0.32;
-        if (m.t >= 1) m.t -= 1;
-        m.a += dt * 0.55;
-        m.mesh.position.set(
-          Math.cos(m.a) * m.r, 0.45 + m.t * 0.62, Math.sin(m.a) * m.r * 0.6 + 0.30);
-        // Fade in at the bottom, out at the top, and out entirely if moving.
-        const fade = Math.sin(m.t * Math.PI);
-        m.mesh.visible = still > 0.05;
-        m.mesh.scale.setScalar(0.6 + fade * 0.7);
-        this.mats.mote.opacity = 0.50 * still;
-      }
     }
 
     /**
