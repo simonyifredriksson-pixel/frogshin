@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v155';
-import { CFG } from './config.js?v=v155';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v155';
+import * as THREE from '../lib/three.module.js?v=v156';
+import { CFG } from './config.js?v=v156';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v156';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -1711,37 +1711,90 @@ export class FrogModel {
     }
 
     /**
-     * The pauldron. Deliberately bigger than the right one — this is the
-     * side that carries the silhouette, and the two have to be obviously
-     * different or the frog is symmetrical again.
+     * ═══ AND IT IS A MACHINE ════════════════════════════════════════════
+     *
+     * Four things make a limb read as mechanical rather than as armour, and
+     * none of them is "more plates":
+     *
+     *   1. A VISIBLE AXIS. A cylinder lying along the joint's own rotation
+     *      axis, with a capped end you can see from outside. This is the
+     *      single strongest cue there is — a hinge you can point at.
+     *   2. GAPS. Armour is continuous; a machine is segments with daylight
+     *      between them, because the segments have to move past each other.
+     *   3. THINGS SPANNING THE GAPS. Pistons. They are what tells you the
+     *      gaps are travel rather than damage.
+     *   4. SOMETHING POWERED. One small light, at the axis.
+     *
+     * The light is `emblemLit` — the SAME material as the keystone on the
+     * chest, not a second one. So the arm's joints breathe in time with the
+     * emblem for free, they cost nothing extra, and the skin still has
+     * exactly one emitting material on it. Two cores and a chest stone, all
+     * one colour, all one pulse.
+     *
+     * The working parts are in the diadem's DARK bronze rather than steel.
+     * A grey mech arm on this palette would be a sixth colour and would
+     * read as salvage; bronze reads as something built by whoever built the
+     * arch on its chest, which is the skin.
      */
-    arm.shoulder.add(mesh(G.lowSphere, M.mantle, 0.30, 0.23, 0.29, -0.02, -0.02, 0));
-    if (M.diadem) {
-      arm.shoulder.add(mesh(G.wrap, M.diadem, 0.275, 0.026, 0.265, -0.02, -0.14, 0));
-    }
-    // The upper arm: a plate over the humerus, and a narrower cuff at the
-    // elbow so the joint reads as a joint rather than as one long box.
-    arm.shoulder.add(mesh(G.box, D, 0.21, 0.30, 0.21, 0, -0.22, 0));
-    arm.shoulder.add(mesh(G.box, M.mantle, 0.175, 0.10, 0.175, 0, -0.345, 0));
+    const HALF = Math.PI / 2;
+    const PLATE = M.mantle;
+    const METAL = M.diadem || D;
+    const WORKS = M.diademDark || METAL;
+    const CORE = M.emblemLit;
 
-    // The forearm, banded at the wrist.
-    arm.fore.add(mesh(G.box, M.mantle, 0.195, 0.26, 0.195, 0, -0.15, 0));
-    arm.fore.add(mesh(G.box, D, 0.165, 0.09, 0.165, 0, -0.30, 0));
-    if (M.diadem) {
-      arm.fore.add(mesh(G.box, M.diadem, 0.205, 0.028, 0.205, 0, -0.03, 0));
+    // ---- the shoulder: a spaulder of three lames over a servo ----------
+    // The axle lies along X, which IS the arm's swing axis, so it reads as
+    // the thing the arm turns on rather than as a pipe laid across it.
+    arm.shoulder.add(mesh(G.wrap, WORKS, 0.155, 0.34, 0.155, 0, -0.02, 0, 0, 0, HALF));
+    arm.shoulder.add(mesh(G.wrap, METAL, 0.175, 0.05, 0.175, -0.17, -0.02, 0, 0, 0, HALF));
+    if (CORE) {
+      arm.shoulder.add(mesh(G.wrap, CORE, 0.070, 0.055, 0.070, -0.196, -0.02, 0, 0, 0, HALF));
     }
+    // Three lames, each smaller than the one above it.
+    arm.shoulder.add(mesh(G.lowSphere, PLATE, 0.30, 0.16, 0.29, -0.02, 0.04, 0));
+    arm.shoulder.add(mesh(G.box, D, 0.275, 0.070, 0.265, -0.015, -0.085, 0));
+    arm.shoulder.add(mesh(G.box, PLATE, 0.240, 0.060, 0.230, 0, -0.165, 0));
+
+    // ---- the upper arm: a plate, a gap, and two pistons across it ------
+    arm.shoulder.add(mesh(G.box, PLATE, 0.185, 0.145, 0.185, 0, -0.268, 0));
+    for (const z of [-0.108, 0.108]) {
+      arm.shoulder.add(mesh(G.cyl, WORKS, 0.030, 0.230, 0.030, 0, -0.275, z));
+    }
+    // Louvres on the outer face — the detail you only get up close.
+    for (let i = 0; i < 3; i++) {
+      arm.shoulder.add(mesh(G.box, WORKS, 0.022, 0.020, 0.100,
+        -0.098, -0.218 - i * 0.048, 0));
+    }
+
+    // ---- the elbow: the same servo again, smaller ----------------------
+    arm.fore.add(mesh(G.wrap, WORKS, 0.135, 0.29, 0.135, 0, 0.005, 0, 0, 0, HALF));
+    arm.fore.add(mesh(G.wrap, METAL, 0.150, 0.042, 0.150, -0.146, 0.005, 0, 0, 0, HALF));
+    if (CORE) {
+      arm.fore.add(mesh(G.wrap, CORE, 0.060, 0.046, 0.060, -0.168, 0.005, 0, 0, 0, HALF));
+    }
+
+    // ---- the forearm: two segments and a piston down the back ----------
+    arm.fore.add(mesh(G.box, PLATE, 0.185, 0.185, 0.185, 0, -0.165, 0));
+    arm.fore.add(mesh(G.box, D, 0.165, 0.085, 0.170, 0, -0.300, 0));
+    arm.fore.add(mesh(G.cyl, WORKS, 0.028, 0.200, 0.028, 0, -0.175, -0.112));
+    arm.fore.add(mesh(G.box, METAL, 0.195, 0.026, 0.195, 0, -0.350, 0));
 
     /**
-     * The gauntlet. Three plated fingers rather than the frog's three
-     * rounded toes, in the same places — so it grips the katana at the same
-     * point and the swing animation needs no special case.
+     * ── THE GAUNTLET ───────────────────────────────────────────────────
+     *
+     * Three fingers, in the same places as the frog's three toes — so it
+     * grips the katana at the same point and the swing needs no special
+     * case — but each one is TWO segments with a knuckle bar behind them
+     * rather than a single rounded pad. Jointed fingers are the cheapest
+     * way to say "this hand is built".
      */
-    arm.hand.add(mesh(G.lowSphere, M.mantle, 0.150, 0.135, 0.150, 0, 0, 0));
-    if (M.diadem) {
-      arm.hand.add(mesh(G.box, M.diadem, 0.155, 0.024, 0.155, 0, 0.095, 0));
-    }
+    arm.hand.add(mesh(G.box, PLATE, 0.155, 0.110, 0.148, 0, -0.01, 0));
+    arm.hand.add(mesh(G.box, METAL, 0.162, 0.026, 0.155, 0, 0.068, 0));
+    arm.hand.add(mesh(G.wrap, WORKS, 0.048, 0.270, 0.048, 0, -0.070, 0.030, 0, 0, HALF));
     for (let f = 0; f < 3; f++) {
-      arm.hand.add(mesh(G.box, D, 0.056, 0.080, 0.080, (f - 1) * 0.098, -0.105, 0.03));
+      const x = (f - 1) * 0.098;
+      arm.hand.add(mesh(G.box, PLATE, 0.050, 0.062, 0.062, x, -0.120, 0.036));
+      arm.hand.add(mesh(G.box, D, 0.042, 0.052, 0.052, x, -0.176, 0.056));
     }
   }
 

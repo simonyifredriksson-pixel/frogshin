@@ -38,9 +38,9 @@
  * height function at build time, and the charge is not exempt from it.
  */
 
-import * as THREE from '../lib/three.module.js?v=v155';
-import { CFG } from './config.js?v=v155';
-import { clamp } from './util.js?v=v155';
+import * as THREE from '../lib/three.module.js?v=v156';
+import { CFG } from './config.js?v=v156';
+import { clamp } from './util.js?v=v156';
 
 const _v = new THREE.Vector3();
 

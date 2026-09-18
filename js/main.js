@@ -5,63 +5,63 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v155';
+import * as THREE from '../lib/three.module.js?v=v156';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v155';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v155';
-import { Input } from './input.js?v=v155';
-import { Audio } from './audio.js?v=v155';
-import { World } from './world.js?v=v155';
-import { Effects } from './effects.js?v=v155';
-import { Atmosphere } from './atmosphere.js?v=v155';
-import { FollowCamera } from './camera.js?v=v155';
-import { Player } from './player.js?v=v155';
+} from './config.js?v=v156';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v156';
+import { Input } from './input.js?v=v156';
+import { Audio } from './audio.js?v=v156';
+import { World } from './world.js?v=v156';
+import { Effects } from './effects.js?v=v156';
+import { Atmosphere } from './atmosphere.js?v=v156';
+import { FollowCamera } from './camera.js?v=v156';
+import { Player } from './player.js?v=v156';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v155';
+} from './tournament.js?v=v156';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v155';
-import { RemotePlayer } from './remote.js?v=v155';
-import { HUD } from './hud.js?v=v155';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v155';
-import { FrogModel } from './frog.js?v=v155';
-import { DummyField } from './dummy.js?v=v155';
+import { coneHit } from './combat.js?v=v156';
+import { RemotePlayer } from './remote.js?v=v156';
+import { HUD } from './hud.js?v=v156';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v156';
+import { FrogModel } from './frog.js?v=v156';
+import { DummyField } from './dummy.js?v=v156';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, MODE_ORDER, maxTaggers,
-} from './rounds.js?v=v155';
+} from './rounds.js?v=v156';
 import {
   propsFor, propAt, buildProp, propBob, revealAt, buildRevealMark,
   buildRevealOutline,
-} from './prophunt.js?v=v155';
-import { ToadModel } from './npc.js?v=v155';
+} from './prophunt.js?v=v156';
+import { ToadModel } from './npc.js?v=v156';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
   CHAMPION, CHAMPION_MARK, isChampion,
-} from './skins.js?v=v155';
-import { DungeonRun } from './dungeon.js?v=v155';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v155';
-import { JudgmentRun } from './judgment.js?v=v155';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v155';
-import { COMBO_NAMES } from './ascended.js?v=v155';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v155';
-import { MenuScene } from './menu.js?v=v155';
-import { Economy } from './economy.js?v=v155';
-import { Shop } from './shop.js?v=v155';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v155';
-import { Overworld } from './overworld.js?v=v155';
-import { InventoryScreen } from './inventoryui.js?v=v155';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v155';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v155';
-import { Cine } from './cinema.js?v=v155';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v155';
-import { MEMORIES } from './flashbacks.js?v=v155';
-import { GUARDIANS } from './guardians.js?v=v155';
-import { gearOfTier } from './gear.js?v=v155';
-import { Chat } from './chat.js?v=v155';
+} from './skins.js?v=v156';
+import { DungeonRun } from './dungeon.js?v=v156';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v156';
+import { JudgmentRun } from './judgment.js?v=v156';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v156';
+import { COMBO_NAMES } from './ascended.js?v=v156';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v156';
+import { MenuScene } from './menu.js?v=v156';
+import { Economy } from './economy.js?v=v156';
+import { Shop } from './shop.js?v=v156';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v156';
+import { Overworld } from './overworld.js?v=v156';
+import { InventoryScreen } from './inventoryui.js?v=v156';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v156';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v156';
+import { Cine } from './cinema.js?v=v156';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v156';
+import { MEMORIES } from './flashbacks.js?v=v156';
+import { GUARDIANS } from './guardians.js?v=v156';
+import { gearOfTier } from './gear.js?v=v156';
+import { Chat } from './chat.js?v=v156';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
