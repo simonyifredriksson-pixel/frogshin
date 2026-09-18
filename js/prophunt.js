@@ -47,7 +47,7 @@
  * one is arithmetically still.
  */
 
-import * as THREE from '../lib/three.module.js?v=v153';
+import * as THREE from '../lib/three.module.js?v=v154';
 
 // ---------------------------------------------------------------- geometry
 
@@ -386,27 +386,39 @@ export const PROPS = {
  * and a Lambert marker would go dark in the shadow of the building it is
  * meant to be giving away.
  */
+/**
+ * THROUGH WALLS. `depthTest: false` is the whole trick — the marker is drawn
+ * ignoring the depth buffer, so a building in front of it does not occlude
+ * it, and `renderOrder` puts it after the world so it lands on top.
+ *
+ * ── ITS OWN MATERIALS, NOT THE SHARED CACHE ─────────────────────────────
+ * This used to build the marker with `part()` and then walk it turning
+ * depth testing off. `part()` hands out materials from `mat()`, which
+ * caches BY COLOUR and shares them with every prop on the map — so that
+ * loop was reaching into the cache and permanently disabling depth testing
+ * on whatever else happened to use those two colours. Nothing does today,
+ * which is the only reason it was not already a bug where lampposts drew
+ * through buildings.
+ */
+const _markMat = [0xffe08a, 0xfff4d0].map((color) => new THREE.MeshBasicMaterial({
+  color, depthTest: false, depthWrite: false,
+}));
+
+function markPiece(mat, sx, sy, sz, y) {
+  const m = new THREE.Mesh(G.cone, mat);
+  m.scale.set(sx, sy, sz);
+  m.position.set(0, y, 0);
+  m.rotation.z = Math.PI;
+  m.renderOrder = 998;
+  m.castShadow = false;
+  m.receiveShadow = false;
+  return m;
+}
+
 export function buildRevealMark() {
   const g = new THREE.Group();
-  g.add(part(G.cone, 0xffe08a, 0.55, 0.60, 0.55, 0, 0.30, 0, 0, Math.PI, true));
-  g.add(part(G.cone, 0xfff4d0, 0.34, 0.34, 0.34, 0, 0.46, 0, 0, Math.PI, true));
-  /**
-   * THROUGH WALLS. `depthTest: false` is the whole trick — the marker is
-   * drawn ignoring the depth buffer, so a building in front of it does not
-   * occlude it. `renderOrder` puts it after the world so it lands on top
-   * rather than being overwritten.
-   *
-   * Without this the reveal only worked on props a hunter could already
-   * see, which is not a reveal.
-   */
-  g.traverse((o) => {
-    if (!o.isMesh) return;
-    o.material.depthTest = false;
-    o.material.depthWrite = false;
-    o.renderOrder = 998;
-    o.castShadow = false;
-    o.receiveShadow = false;
-  });
+  g.add(markPiece(_markMat[0], 0.55, 0.60, 0.55, 0.30));
+  g.add(markPiece(_markMat[1], 0.34, 0.34, 0.34, 0.46));
   return g;
 }
 
@@ -454,6 +466,12 @@ export function buildRevealOutline(mapId, index) {
    * see the rim where the shell passes behind the silhouette's edge.
    */
   g.scale.setScalar(1.05);
+  /**
+   * Marked as an outline. It is built by `buildProp`, so it carries that
+   * prop's `userData.prop` and is otherwise indistinguishable from the real
+   * thing — which matters to anything counting what is in the scene.
+   */
+  g.userData.outline = true;
   return g;
 }
 
@@ -513,20 +531,22 @@ export function buildProp(mapId, index) {
  *
  * @param sinceHide seconds since the hunters were let go — negative while
  *                  the props are still scattering, which is never a reveal.
+ * @param gap       DARK seconds between pulses.
+ * @param forSecs   how long a pulse lasts. The cycle is gap + forSecs.
  * @returns { on, left, next } — whether it is firing, how long is left of
  *          it, and how long until the next one starts.
  */
-export function revealAt(sinceHide, every, forSecs) {
-  const E = every || 30;
-  const F = Math.min(forSecs || 5, E);
+export function revealAt(sinceHide, gap, forSecs) {
+  const GAP = gap > 0 ? gap : 30;
+  const F = forSecs > 0 ? forSecs : 5;
+  const CYCLE = GAP + F;
   if (!(sinceHide >= 0)) {
-    // Still hiding. The first pulse is a full cycle away.
-    return { on: false, left: 0, next: E - F + Math.max(0, -(sinceHide || 0)) };
+    // Still hiding. The first pulse is a full gap away from the release.
+    return { on: false, left: 0, next: GAP + Math.max(0, -(sinceHide || 0)) };
   }
-  const phase = sinceHide % E;
-  const from = E - F;
-  if (phase >= from) return { on: true, left: E - phase, next: 0 };
-  return { on: false, left: 0, next: from - phase };
+  const phase = sinceHide % CYCLE;
+  if (phase >= GAP) return { on: true, left: CYCLE - phase, next: 0 };
+  return { on: false, left: 0, next: GAP - phase };
 }
 
 /**

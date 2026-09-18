@@ -5,63 +5,63 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v153';
+import * as THREE from '../lib/three.module.js?v=v154';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v153';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v153';
-import { Input } from './input.js?v=v153';
-import { Audio } from './audio.js?v=v153';
-import { World } from './world.js?v=v153';
-import { Effects } from './effects.js?v=v153';
-import { Atmosphere } from './atmosphere.js?v=v153';
-import { FollowCamera } from './camera.js?v=v153';
-import { Player } from './player.js?v=v153';
+} from './config.js?v=v154';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v154';
+import { Input } from './input.js?v=v154';
+import { Audio } from './audio.js?v=v154';
+import { World } from './world.js?v=v154';
+import { Effects } from './effects.js?v=v154';
+import { Atmosphere } from './atmosphere.js?v=v154';
+import { FollowCamera } from './camera.js?v=v154';
+import { Player } from './player.js?v=v154';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v153';
+} from './tournament.js?v=v154';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v153';
-import { RemotePlayer } from './remote.js?v=v153';
-import { HUD } from './hud.js?v=v153';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v153';
-import { FrogModel } from './frog.js?v=v153';
-import { DummyField } from './dummy.js?v=v153';
+import { coneHit } from './combat.js?v=v154';
+import { RemotePlayer } from './remote.js?v=v154';
+import { HUD } from './hud.js?v=v154';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v154';
+import { FrogModel } from './frog.js?v=v154';
+import { DummyField } from './dummy.js?v=v154';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, MODE_ORDER, maxTaggers,
-} from './rounds.js?v=v153';
+} from './rounds.js?v=v154';
 import {
   propsFor, propAt, buildProp, propBob, revealAt, buildRevealMark,
   buildRevealOutline,
-} from './prophunt.js?v=v153';
-import { ToadModel } from './npc.js?v=v153';
+} from './prophunt.js?v=v154';
+import { ToadModel } from './npc.js?v=v154';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
   CHAMPION, CHAMPION_MARK, isChampion,
-} from './skins.js?v=v153';
-import { DungeonRun } from './dungeon.js?v=v153';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v153';
-import { JudgmentRun } from './judgment.js?v=v153';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v153';
-import { COMBO_NAMES } from './ascended.js?v=v153';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v153';
-import { MenuScene } from './menu.js?v=v153';
-import { Economy } from './economy.js?v=v153';
-import { Shop } from './shop.js?v=v153';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v153';
-import { Overworld } from './overworld.js?v=v153';
-import { InventoryScreen } from './inventoryui.js?v=v153';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v153';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v153';
-import { Cine } from './cinema.js?v=v153';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v153';
-import { MEMORIES } from './flashbacks.js?v=v153';
-import { GUARDIANS } from './guardians.js?v=v153';
-import { gearOfTier } from './gear.js?v=v153';
-import { Chat } from './chat.js?v=v153';
+} from './skins.js?v=v154';
+import { DungeonRun } from './dungeon.js?v=v154';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v154';
+import { JudgmentRun } from './judgment.js?v=v154';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v154';
+import { COMBO_NAMES } from './ascended.js?v=v154';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v154';
+import { MenuScene } from './menu.js?v=v154';
+import { Economy } from './economy.js?v=v154';
+import { Shop } from './shop.js?v=v154';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v154';
+import { Overworld } from './overworld.js?v=v154';
+import { InventoryScreen } from './inventoryui.js?v=v154';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v154';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v154';
+import { Cine } from './cinema.js?v=v154';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v154';
+import { MEMORIES } from './flashbacks.js?v=v154';
+import { GUARDIANS } from './guardians.js?v=v154';
+import { gearOfTier } from './gear.js?v=v154';
+import { Chat } from './chat.js?v=v154';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -5174,7 +5174,7 @@ class Game {
      * know they are glowing cannot make that decision.
      */
     const P = CFG.prophunt;
-    const rv = revealAt(spent - P.hideTime, P.revealEvery, P.revealFor);
+    const rv = revealAt(spent - P.hideTime, P.revealGap, P.revealFor);
     this._reveal = rv;
     if (rv.on !== this._revealWas) {
       this._revealWas = rv.on;
@@ -5266,13 +5266,45 @@ class Game {
     const show = (id, disguise, locked, pos, yaw) => {
       if (disguise < 0) return;
       seen.add(id);
+      /**
+       * ═══ THE RECORD IS KEPT, ONLY ITS MESHES ARE SWAPPED ══════════════
+       *
+       * This used to REPLACE the whole `held` object when somebody changed
+       * disguise: `held = { index, group, def }`. The new record had no
+       * `mark` and no `ghost`, so the old marker and the old outline were
+       * dropped on the floor — still parented to the scene, still visible,
+       * still sitting at the position the player was standing at when they
+       * pressed C.
+       *
+       * That is the "revealed props never go away" bug, and it compounded:
+       * every press of C during a round left another lit shell behind, so
+       * by the second pulse the map was full of glowing props that were not
+       * anybody. Only `held.group` was ever removed.
+       *
+       * The record now persists for as long as the player is a prop, and
+       * the meshes hanging off it are swapped in place — which also means
+       * there is exactly one place that owns each of them.
+       */
       let held = this._propGroups.get(id);
-      if (!held || held.index !== disguise) {
-        if (held) this.scene.remove(held.group);
-        const group = buildProp(this.mapId, disguise);
-        this.scene.add(group);
-        held = { index: disguise, group, def: group.userData.prop };
+      if (!held) {
+        held = {
+          index: -1, group: null, def: null,
+          mark: null, ghost: null, ghostIndex: -1,
+        };
         this._propGroups.set(id, held);
+      }
+      if (held.index !== disguise) {
+        if (held.group) this.scene.remove(held.group);
+        // The outline is built FROM the prop, so a new prop makes it stale.
+        if (held.ghost) {
+          this.scene.remove(held.ghost);
+          held.ghost = null;
+          held.ghostIndex = -1;
+        }
+        held.group = buildProp(this.mapId, disguise);
+        held.def = held.group.userData.prop;
+        held.index = disguise;
+        this.scene.add(held.group);
       }
       held.group.visible = true;
       held.group.position.set(
@@ -5301,17 +5333,13 @@ class Game {
         held.ghostIndex = disguise;
         this.scene.add(held.ghost);
       }
-      if (held.mark) {
-        held.mark.visible = lit;
-        if (lit) {
+      if (lit) {
+        if (held.mark) {
           held.mark.position.set(
             pos.x, pos.y + (held.def ? held.def.h : 2) + 1.1, pos.z);
           held.mark.rotation.y = this._propT * 1.6;
         }
-      }
-      if (held.ghost) {
-        held.ghost.visible = lit;
-        if (lit) {
+        if (held.ghost) {
           held.ghost.position.copy(held.group.position);
           held.ghost.rotation.y = held.group.rotation.y;
         }
@@ -5332,12 +5360,32 @@ class Game {
       show(r.id, r.disguise, r.propLocked, r.pos, r.yaw);
     }
 
+    /**
+     * ═══ ONE PLACE DECIDES WHAT IS LIT ══════════════════════════════════
+     *
+     * Visibility is set here, for every record, from two facts: is the
+     * pulse on, and was this player drawn this frame. Nothing above may
+     * leave a marker showing.
+     *
+     * Doing it in the per-player branch was not enough. That branch only
+     * runs for players who are STILL props, so anything that stopped being
+     * one between frames — found, disconnected, respawned, or mid-swap —
+     * kept whatever visibility it last had, which during a pulse is
+     * "visible". A sweep that runs over every record cannot miss one.
+     */
+    const lit = !!(this._reveal && this._reveal.on);
+    for (const [id, held] of this._propGroups) {
+      const show = lit && seen.has(id);
+      if (held.mark) held.mark.visible = show;
+      if (held.ghost) held.ghost.visible = show;
+    }
+
     // Anyone who stopped being a prop — found, left, or the round ended.
     // The marker goes with them, or a found prop leaves a beacon hanging
     // over the spot it died on for the rest of the round.
     for (const [id, held] of this._propGroups) {
       if (seen.has(id)) continue;
-      this.scene.remove(held.group);
+      if (held.group) this.scene.remove(held.group);
       if (held.mark) this.scene.remove(held.mark);
       if (held.ghost) this.scene.remove(held.ghost);
       this._propGroups.delete(id);
@@ -6357,6 +6405,46 @@ class Game {
       }
       return;
     }
+    /**
+     * ═══ THE MOUSE FOLLOWS THE VOTE SCREEN ══════════════════════════════
+     *
+     * A panel you have to click at needs a cursor, and the game hides the
+     * cursor behind a pointer lock. So the lock is released for as long as
+     * the vote screen is up and taken back the moment it comes down — no
+     * Escape, no click on the canvas.
+     *
+     * ── WHY THIS IS PER-FRAME AND NOT ON THE PHASE EDGE ────────────────
+     * `_onPhaseChange` already released the lock when VOTING began, and it
+     * was not enough. Entering a match runs `_enterGame`, which requests
+     * the lock AFTER the round manager has announced its first phase — so
+     * on the first vote of every match the release happened and was then
+     * immediately undone, and the only way to get a cursor back was Esc.
+     * An edge cannot defend against something that happens after it.
+     *
+     * Asked every frame, it cannot lose that race: whatever grabs the lock,
+     * it is given up again on the next tick for as long as the screen is
+     * up. Both calls are no-ops when the state already matches.
+     */
+    /**
+     * A forced (tournament) round never shows the screen, so it never takes
+     * the mouse either — see `_onPhaseChange`. Practice has no vote at all.
+     */
+    const voting = R.phase === PHASE.VOTING && !R.forced && !R.practice;
+    if (voting) {
+      if (this.input.locked) this.input.releaseLock();
+      this._voteHadMouse = true;
+    } else if (this._voteHadMouse) {
+      /**
+       * Voting is over: take the mouse back, exactly as clicking the canvas
+       * would. Latched, so it is requested once per vote rather than on
+       * every frame of the countdown — and written as "any phase that is
+       * not VOTING" rather than "STARTING", so a round that ends or is
+       * abandoned out of the vote also gives the mouse back.
+       */
+      this._voteHadMouse = false;
+      if (!this.input.locked) this.input.requestLock();
+    }
+
     if (R.phase === PHASE.VOTING) {
       const players = this._playerIds().length;
       this.hud.updateVote(R, players, this.myVote, this.myTaggerCount, maxTaggers(players));

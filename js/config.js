@@ -11,7 +11,7 @@
  * the other but not vice versa, for instance — so a mismatch is surfaced
  * loudly instead of being left to look like a game bug.
  */
-export const BUILD = 'v153';
+export const BUILD = 'v154';
 
 export const CFG = {
   // ---------------------------------------------------------------- world
@@ -984,8 +984,18 @@ export const CFG = {
      * computes the same window from `RoundManager.timer`, so a pulse cannot
      * fire on one screen and not another, and it costs nothing on the wire.
      * See `revealAt` in js/prophunt.js.
+     *
+     * ── THESE ARE A GAP AND A LENGTH, NOT A PERIOD ────────────────────
+     * `revealGap` is the DARK time between pulses and `revealFor` is how
+     * long a pulse lasts, so the cycle is the two added together — 35
+     * seconds, of which 30 are dark.
+     *
+     * It used to be `revealEvery: 30`, a period, which made the dark time
+     * 25 rather than 30 and meant changing the pulse length silently
+     * changed the gap as well. Two independent numbers, each meaning the
+     * thing it is named after.
      */
-    revealEvery: 30,
+    revealGap: 30,
     revealFor: 5,
   },
 
