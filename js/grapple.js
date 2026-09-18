@@ -11,9 +11,9 @@
  *      aggressive rather than like a slow winch.
  */
 
-import * as THREE from '../lib/three.module.js?v=v152';
-import { CFG } from './config.js?v=v152';
-import { clamp } from './util.js?v=v152';
+import * as THREE from '../lib/three.module.js?v=v153';
+import { CFG } from './config.js?v=v153';
+import { clamp } from './util.js?v=v153';
 
 export const GrappleState = {
   IDLE: 0,

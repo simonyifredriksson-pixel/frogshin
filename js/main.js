@@ -5,62 +5,63 @@
  * paused), and the glue between the gameplay systems and the network layer.
  */
 
-import * as THREE from '../lib/three.module.js?v=v152';
+import * as THREE from '../lib/three.module.js?v=v153';
 import {
   CFG, BUILD, FROG_COLORS, NINJA_NAMES, dungeonPayout,
-} from './config.js?v=v152';
-import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v152';
-import { Input } from './input.js?v=v152';
-import { Audio } from './audio.js?v=v152';
-import { World } from './world.js?v=v152';
-import { Effects } from './effects.js?v=v152';
-import { Atmosphere } from './atmosphere.js?v=v152';
-import { FollowCamera } from './camera.js?v=v152';
-import { Player } from './player.js?v=v152';
+} from './config.js?v=v153';
+import { clamp, pick, roomCode as makeRoomCode } from './util.js?v=v153';
+import { Input } from './input.js?v=v153';
+import { Audio } from './audio.js?v=v153';
+import { World } from './world.js?v=v153';
+import { Effects } from './effects.js?v=v153';
+import { Atmosphere } from './atmosphere.js?v=v153';
+import { FollowCamera } from './camera.js?v=v153';
+import { Player } from './player.js?v=v153';
 import {
   PRIZE, SPLIT, SIZES, TOURNEY_MODES, blankTournament,
   escrowCost, validate, payouts, refundable, describePrize, teamSize,
-} from './tournament.js?v=v152';
+} from './tournament.js?v=v153';
 // The shadow clone swings with the same geometry a player does — see
 // `_cloneSwing`. It has no swing state, so it uses the bare cone test.
-import { coneHit } from './combat.js?v=v152';
-import { RemotePlayer } from './remote.js?v=v152';
-import { HUD } from './hud.js?v=v152';
-import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v152';
-import { FrogModel } from './frog.js?v=v152';
-import { DummyField } from './dummy.js?v=v152';
+import { coneHit } from './combat.js?v=v153';
+import { RemotePlayer } from './remote.js?v=v153';
+import { HUD } from './hud.js?v=v153';
+import { KunaiSystem, PickupSystem, setKunaiSkin } from './items.js?v=v153';
+import { FrogModel } from './frog.js?v=v153';
+import { DummyField } from './dummy.js?v=v153';
 import {
   RoundManager, PHASE, MODES, MODE_INFO, MODE_ORDER, maxTaggers,
-} from './rounds.js?v=v152';
+} from './rounds.js?v=v153';
 import {
   propsFor, propAt, buildProp, propBob, revealAt, buildRevealMark,
-} from './prophunt.js?v=v152';
-import { ToadModel } from './npc.js?v=v152';
+  buildRevealOutline,
+} from './prophunt.js?v=v153';
+import { ToadModel } from './npc.js?v=v153';
 import {
   findSkin, DEFAULT_SKIN, CATALOG, RARITY,
   ECLIPSE_SET, ECLIPSE_TITLE, eclipseFound,
   CHAMPION, CHAMPION_MARK, isChampion,
-} from './skins.js?v=v152';
-import { DungeonRun } from './dungeon.js?v=v152';
-import { GUARDIAN_NAMES } from './dungeonboss.js?v=v152';
-import { JudgmentRun } from './judgment.js?v=v152';
-import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v152';
-import { COMBO_NAMES } from './ascended.js?v=v152';
-import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v152';
-import { MenuScene } from './menu.js?v=v152';
-import { Economy } from './economy.js?v=v152';
-import { Shop } from './shop.js?v=v152';
-import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v152';
-import { Overworld } from './overworld.js?v=v152';
-import { InventoryScreen } from './inventoryui.js?v=v152';
-import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v152';
-import { Prologue, HERO_LOADOUT } from './prologue.js?v=v152';
-import { Cine } from './cinema.js?v=v152';
-import { SaveSlots, playtime, stamp } from './saves.js?v=v152';
-import { MEMORIES } from './flashbacks.js?v=v152';
-import { GUARDIANS } from './guardians.js?v=v152';
-import { gearOfTier } from './gear.js?v=v152';
-import { Chat } from './chat.js?v=v152';
+} from './skins.js?v=v153';
+import { DungeonRun } from './dungeon.js?v=v153';
+import { GUARDIAN_NAMES } from './dungeonboss.js?v=v153';
+import { JudgmentRun } from './judgment.js?v=v153';
+import { TutorialIsland, TUTORIAL_WATER } from './tutorial.js?v=v153';
+import { COMBO_NAMES } from './ascended.js?v=v153';
+import { MAPS, DEFAULT_MAP, findMap, mapName } from './maps.js?v=v153';
+import { MenuScene } from './menu.js?v=v153';
+import { Economy } from './economy.js?v=v153';
+import { Shop } from './shop.js?v=v153';
+import { Network, NetRole, cleanSkins, cleanTitle } from './net.js?v=v153';
+import { Overworld } from './overworld.js?v=v153';
+import { InventoryScreen } from './inventoryui.js?v=v153';
+import { HeavenLevel, HEAVEN, VOID_Y } from './heaven.js?v=v153';
+import { Prologue, HERO_LOADOUT } from './prologue.js?v=v153';
+import { Cine } from './cinema.js?v=v153';
+import { SaveSlots, playtime, stamp } from './saves.js?v=v153';
+import { MEMORIES } from './flashbacks.js?v=v153';
+import { GUARDIANS } from './guardians.js?v=v153';
+import { gearOfTier } from './gear.js?v=v153';
+import { Chat } from './chat.js?v=v153';
 
 const $ = (id) => document.getElementById(id);
 const now = () => performance.now() / 1000;
@@ -4147,7 +4148,7 @@ class Game {
     this._cheatNote(
       `★ KEYSTONE awarded to ${e.championOwner} — 1 OF 1. `
       + 'Equip it in CUSTOMISE.');
-    this.hud.announce('ONE OF ONE', 'good', true);
+    this.hud.announce('ONE OF ONE', 'good');
     this.hud.toast(`KEYSTONE — awarded to ${e.championOwner}`, 6);
   }
 
@@ -5142,7 +5143,7 @@ class Game {
       p.health.setMaxScale(CFG.prophunt.healthScale);
       const def = propAt(this.mapId, 0);
       this.hud.toast(`You are a ${def.name} — C changes it, SHIFT holds you still`, 5.5);
-      this.hud.announce('HIDE', 'good', true);
+      this.hud.announce('HIDE', 'good');
     }
   }
 
@@ -5178,12 +5179,25 @@ class Game {
     if (rv.on !== this._revealWas) {
       this._revealWas = rv.on;
       if (rv.on) {
+        /**
+         * `hold: false`, and that third argument is the whole bug this
+         * replaced. `announce(text, tone, true)` adds the `hold` class,
+         * which has no animation on it and no timer behind it — it is for
+         * a state that lasts until something else clears it, like being
+         * the juggernaut. The reveal is a five-second PULSE that fires ten
+         * times a round, so held text simply stayed on screen forever and
+         * then had a second line stacked on it at the next pulse.
+         */
         if (R.isProp(p.id)) {
-          this.hud.announce('REVEALED', 'danger', true);
+          this.hud.announce('REVEALED', 'danger');
           this.followCam.shake(0.25);
         } else if (hunter) {
-          this.hud.announce('THEY ARE LIT', 'good', true);
+          this.hud.announce('THEY ARE LIT', 'good');
         }
+      } else {
+        // And taken down on the falling edge, so it cannot outlive the
+        // pulse even if the animation is interrupted.
+        this.hud.clearAnnounce();
       }
     }
     if (rv.on && R.isProp(p.id)) {
@@ -5207,7 +5221,7 @@ class Game {
     } else if (this._propHeld) {
       p.cinematic = false;
       this._propHeld = false;
-      if (hunter) this.hud.announce('HUNT', 'danger', true);
+      if (hunter) this.hud.announce('HUNT', 'danger');
     }
   }
 
@@ -5276,12 +5290,30 @@ class Game {
         held.mark = buildRevealMark();
         this.scene.add(held.mark);
       }
+      /**
+       * The outline is built lazily and keyed to the disguise, so cycling
+       * props mid-reveal does not leave a lamppost-shaped shell standing
+       * over a ramen cart.
+       */
+      if (lit && (!held.ghost || held.ghostIndex !== disguise)) {
+        if (held.ghost) this.scene.remove(held.ghost);
+        held.ghost = buildRevealOutline(this.mapId, disguise);
+        held.ghostIndex = disguise;
+        this.scene.add(held.ghost);
+      }
       if (held.mark) {
         held.mark.visible = lit;
         if (lit) {
           held.mark.position.set(
             pos.x, pos.y + (held.def ? held.def.h : 2) + 1.1, pos.z);
           held.mark.rotation.y = this._propT * 1.6;
+        }
+      }
+      if (held.ghost) {
+        held.ghost.visible = lit;
+        if (lit) {
+          held.ghost.position.copy(held.group.position);
+          held.ghost.rotation.y = held.group.rotation.y;
         }
       }
       /**
@@ -5307,6 +5339,7 @@ class Game {
       if (seen.has(id)) continue;
       this.scene.remove(held.group);
       if (held.mark) this.scene.remove(held.mark);
+      if (held.ghost) this.scene.remove(held.ghost);
       this._propGroups.delete(id);
     }
     // The local frog is hidden whenever it is wearing something else.

@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v152';
-import { CFG } from './config.js?v=v152';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v152';
+import * as THREE from '../lib/three.module.js?v=v153';
+import { CFG } from './config.js?v=v153';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v153';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -1587,16 +1587,22 @@ export class FrogModel {
       [-0.090, 0.445, 0.048, 0.100],
       [-0.235, 0.405, 0.045, 0.095],
     ];
+    /**
+     * NO IVORY ON THE HEAD.
+     *
+     * Each of these plates used to carry an ivory hairline along its top,
+     * and the brow terminal had an ivory cap. At head scale a 0.05-unit
+     * ivory box is not a hairline — it is a white cube, and there were six
+     * of them in a row down the middle of the skull. The headpiece is one
+     * material now, which is also what makes it read as a single forged
+     * object rather than as a row of beads.
+     */
     for (const [z, y, w, len] of RIDGE) {
       h.add(mesh(G.box, M.diadem, w, 0.05, len, 0, y, z));
-      // A hairline of ivory down the top of it, which is the only place on
-      // the head the trim colour appears.
-      if (M.trim) h.add(mesh(G.box, M.trim, w * 0.34, 0.052, len * 0.8, 0, y + 0.012, z));
     }
-    // The brow terminal: a small keystone wedge where the ridge meets the
-    // face, wider at the top than the bottom like the stone it is named for.
+    // The brow terminal: a keystone wedge where the ridge meets the face,
+    // wider at the top than the bottom like the stone it is named for.
     h.add(mesh(G.box, M.diadem, 0.085, 0.10, 0.045, 0, 0.145, 0.375));
-    if (M.trim) h.add(mesh(G.box, M.trim, 0.050, 0.030, 0.050, 0, 0.175, 0.378));
 
     /**
      * ── THE CREST ───────────────────────────────────────────────────────
@@ -1640,10 +1646,6 @@ export class FrogModel {
       // nearly horizontal and the whole thing sweeps rather than spikes.
       const lean = 0.30 + t * 0.78;
       h.add(mesh(G.box, M.diadem, wide, tall, 0.26 - t * 0.07, 0, y, z, lean));
-      if (M.trim && i > 1) {
-        h.add(mesh(G.box, M.trim, wide * 0.30, tall * 0.92, 0.265 - t * 0.07,
-          0, y + 0.005, z, lean));
-      }
     }
     // The crest's root, covering the join so it does not look posted on.
     h.add(mesh(G.lowSphere, M.diademDark || M.diadem, 0.085, 0.075, 0.115,
@@ -1729,29 +1731,27 @@ export class FrogModel {
      * collarbone where it can actually be seen from the front. Without it
      * the mantle reads as a towel.
      */
-    b.add(mesh(G.lowSphere, M.diadem || D, 0.085, 0.085, 0.060, -0.40, 0.855, 0.15));
-    if (M.trim) {
-      b.add(mesh(G.box, M.trim, 0.040, 0.040, 0.030, -0.40, 0.875, 0.185));
-    }
+    b.add(mesh(G.lowSphere, M.diadem || D, 0.090, 0.090, 0.064, -0.40, 0.855, 0.15));
+    /**
+     * No ivory stud on it. It was a 0.04 cube, which is the smallest and
+     * therefore the worst of the white blocks — see the note on where the
+     * ivory is allowed to be, in `_buildEmblem`. The clasp is gold, and
+     * gold on a dark green cape is contrast enough.
+     */
 
     /**
-     * ── THE MARK ON THE BACK ────────────────────────────────────────────
+     * ── THE MARK ON THE BACK IS GONE ────────────────────────────────────
      *
-     * Three wedges, 0.05 across, on the shoulder of the cape. The emblem
-     * proper is on the chest; this is a maker's mark, and it is the reward
-     * for being the one person who ever walks behind the champion.
+     * It was three 0.03-unit ivory wedges on the shoulder of the cape — a
+     * maker's mark, and in principle the nicest detail on the skin. In
+     * practice it was three white cubes on a dark cape, and it was the
+     * clearest example of the problem the whole skin kept running into:
+     * ivory detail below about 0.05 units does not read as detail, it
+     * reads as litter.
      *
-     * Three rather than five on purpose — the full arch is the chest's, and
-     * repeating it whole would be the "put the logo everywhere" failure.
+     * The emblem lives on the chest and on the katana's guard. Two places,
+     * both large enough to be a shape. That is enough.
      */
-    if (M.emblem) {
-      for (let i = 0; i < 3; i++) {
-        const a = Math.PI - (i / 2) * Math.PI;
-        b.add(mesh(G.box, M.emblem, 0.030, 0.038, 0.020,
-          -0.40 + Math.cos(a) * 0.075, 0.70 + Math.sin(a) * 0.075, -0.50,
-          0, 0, a - Math.PI / 2));
-      }
-    }
   }
 
   /**
@@ -1815,9 +1815,17 @@ export class FrogModel {
     this.mats.champPlate = plate;
     // The chest panel: a flat slab across the pectorals, edged in ivory.
     g.add(mesh(G.box, plate, 0.60, 0.38, 0.12, 0, 0.600, 0.490));
+    /**
+     * Two thin edges, top and bottom, and nothing down the sides.
+     *
+     * With vertical seams as well this was a closed ivory rectangle — a
+     * white picture frame around the emblem, which is the same "too much
+     * pale detail" problem the cubes were, just in line form. Two
+     * horizontal edges read as the lip of a plate; four read as a border.
+     */
     if (M.trim) {
-      g.add(mesh(G.box, M.trim, 0.615, 0.016, 0.125, 0, 0.785, 0.492));
-      g.add(mesh(G.box, M.trim, 0.615, 0.016, 0.125, 0, 0.415, 0.492));
+      g.add(mesh(G.box, M.trim, 0.612, 0.012, 0.124, 0, 0.787, 0.492));
+      g.add(mesh(G.box, M.trim, 0.612, 0.012, 0.124, 0, 0.413, 0.492));
     }
     // A thin collar, sitting in the gap between the torso and the skull.
     b.add(mesh(G.wrap, plate, 0.455, 0.075, 0.425, 0, 0.885, 0));
@@ -1830,12 +1838,29 @@ export class FrogModel {
      * says the armour was made for this frog and made around the mantle,
      * which is the difference between a costume and a commission.
      */
+    /**
+     * ── IT IS A PAULDRON, NOT A LIMB ────────────────────────────────────
+     *
+     * The first version was four stacked boxes hanging off the joint, and
+     * from the front it read as a THIRD ARM: a squared-off grey thing
+     * sticking out beside the frog's actual right arm, so the silhouette
+     * had two arms on one side.
+     *
+     * The upper arm is a 0.11 capsule. A pauldron has to be wider than
+     * that to read as armour over it, and must not be so wide or so LONG
+     * that it stops being a cap and starts being a shape of its own — the
+     * old one reached 0.28 across and hung 0.19 down the arm, which is as
+     * long as the arm.
+     *
+     * One rounded cap, 0.24 across and 0.13 deep, sitting ON the joint:
+     * wide enough to be plate, short enough that the arm it belongs to
+     * comes out from under it.
+     */
     const right = this.arms[1];
     if (right) {
-      right.shoulder.add(mesh(G.box, plate, 0.26, 0.12, 0.28, 0.02, -0.03, 0));
-      right.shoulder.add(mesh(G.box, plate, 0.23, 0.09, 0.25, 0.03, -0.14, 0));
+      right.shoulder.add(mesh(G.lowSphere, plate, 0.24, 0.16, 0.23, 0, -0.02, 0));
       if (M.diadem) {
-        right.shoulder.add(mesh(G.box, M.diadem, 0.265, 0.020, 0.285, 0.02, 0.035, 0));
+        right.shoulder.add(mesh(G.wrap, M.diadem, 0.225, 0.022, 0.215, 0, -0.10, 0));
       }
     }
 
@@ -1861,39 +1886,43 @@ export class FrogModel {
      * each other up. That is the whole idea of the emblem.
      */
     /**
-     * The stones are sized against the ARC they sit on, not by eye.
+     * ── ONE CONTINUOUS ARCH, NOT FIVE LOOSE STONES ──────────────────────
      *
-     * Five stones over a half-circle of radius R are 0.785·R apart along
-     * it. At R 0.15 with 0.044-wide stones the gaps were bigger than the
-     * stones and the emblem read as five scattered tiles; at R 0.20 with
-     * 0.09 stones they touched and it read as a solid hoop. 0.075 on a
-     * 0.145 arc leaves a joint about a third of a stone wide, which is
-     * what masonry looks like and what makes the eye read five pieces
-     * holding each other up rather than one painted shape.
+     * This was five separate wedges with visible joints, on the theory that
+     * the gaps are what make masonry read as masonry. At the size an emblem
+     * actually sits at on a chest they did not read as masonry — they read
+     * as white cubes stuck to the armour, which is what they were called.
+     *
+     * It is now a BAND: thirteen segments around the arc, each wider than
+     * the step between them, so they overlap into one smooth ivory curve.
+     * The only break in it is the keystone at the crown, and that break is
+     * the entire symbol — one piece, at the top, that the rest depends on.
+     *
+     * Fewer and bigger shapes. That is the whole lesson of this skin, and
+     * it is the same note as the crest and the mantle before it.
      */
-    const R = 0.145;
-    for (let i = 0; i < 5; i++) {
-      const a = Math.PI - (i / 4) * Math.PI;
-      const keystone = i === 2;
-      const mat = keystone && M.emblemLit ? M.emblemLit : M.emblem;
-      g.add(mesh(G.box, mat,
-        keystone ? 0.090 : 0.075,
-        keystone ? 0.112 : 0.085,
-        keystone ? 0.034 : 0.028,
+    const R = 0.150;
+    const N = 13;
+    for (let i = 0; i < N; i++) {
+      // The crown slot is left empty for the keystone itself, below.
+      if (i === (N - 1) / 2) continue;
+      const a = Math.PI - (i / (N - 1)) * Math.PI;
+      g.add(mesh(G.box, M.emblem, 0.054, 0.046, 0.026,
         Math.cos(a) * R, 0.600 + Math.sin(a) * R, 0.565,
         0, 0, a - Math.PI / 2));
-      /**
-       * The keystone gets a shadow-wedge behind it in the solid colour, so
-       * that when the light is off — and it does go off; see `_updateAlive`
-       * — there is still a wedge there rather than a gap in the arch.
-       */
-      if (keystone) {
-        g.add(mesh(G.box, M.emblem, 0.074, 0.108, 0.020,
-          0, 0.600 + R, 0.552, 0, 0, a - Math.PI / 2));
-      }
     }
-    /** Held for the pulse. See `_updateKeystone`. */
-    this.keystoneLit = M.emblemLit ? g.children[g.children.length - 2] : null;
+    /**
+     * THE KEYSTONE. The only piece of the arch that is a different shape
+     * from its neighbours, and the only lit thing on the frog.
+     *
+     * It gets a solid wedge behind it, so when the light fades — and it
+     * does; see `_animateKeystone` — there is a stone in the slot rather
+     * than a hole in the arch.
+     */
+    g.add(mesh(G.box, M.emblem, 0.086, 0.100, 0.020, 0, 0.600 + R, 0.556));
+    if (M.emblemLit) {
+      g.add(mesh(G.box, M.emblemLit, 0.068, 0.084, 0.032, 0, 0.600 + R, 0.568));
+    }
 
     /**
      * ── THE WAIST ───────────────────────────────────────────────────────
@@ -1919,15 +1948,20 @@ export class FrogModel {
      * the brief asked for detail that rewards looking closely, and detail
      * that is visible from across the arena is not detail, it is pattern.
      */
-    if (M.trim) {
-      for (const sx of [-1, 1]) {
-        g.add(mesh(G.box, M.trim, 0.015, 0.28, 0.124, sx * 0.238, 0.600, 0.492));
-      }
-      // And one across the pauldron, on the side that has one.
-      if (right) {
-        right.shoulder.add(mesh(G.box, M.trim, 0.235, 0.012, 0.26, 0.03, -0.088, 0));
-      }
-    }
+    /**
+     * ── WHERE THE IVORY ACTUALLY IS, NOW ────────────────────────────────
+     *
+     * Three places on the entire frog: the emblem, the chest plate's top
+     * and bottom edges, and the mantle's hem. That is the end state of a
+     * long argument with this skin — every attempt to add ivory detail
+     * below about 0.05 units came back from the render as white litter,
+     * whether it was shaped as cubes (the back mark, the head hairlines,
+     * the five loose stones) or as lines (the vertical chest seams, which
+     * closed the plate's edging into a picture frame).
+     *
+     * The rule that survived: ivory marks EDGES and carries the emblem.
+     * It never decorates a surface.
+     */
   }
 
   /**
@@ -2019,14 +2053,36 @@ export class FrogModel {
     } else {
       this._calm = damp(this._calm === undefined ? 0 : this._calm, 0, 8, dt);
     }
+    /**
+     * ═══ THE SWAY IS APPLIED AS A DELTA, AND THAT IS NOT A DETAIL ═══════
+     *
+     * This used to be three `+=` on `body.rotation` and `head.rotation`.
+     * That is only safe if something else writes those values absolutely
+     * every frame, and NOTHING DOES: `_updateFacing` writes the root's yaw,
+     * not the body's, and the pose chain damps `body.rotation.z` but leaves
+     * `body.rotation.y` and `head.rotation.z` alone.
+     *
+     * So the offsets accumulated. A few hundredths of a radian per frame at
+     * sixty frames a second is a frog that slowly rotates on the spot and a
+     * head that keeps turning — which is exactly what it did.
+     *
+     * The previous frame's contribution is therefore REMOVED before the new
+     * one is added, so the total on those axes is always just this frame's
+     * sway. Stored per-axis rather than recomputed from `t`, because `calm`
+     * is damped and last frame's value cannot be re-derived.
+     */
     const calm = this._calm || 0;
-    if (calm > 0.01) {
-      this.body.rotation.z += Math.sin(t * 0.42) * 0.030 * calm;
-      this.body.rotation.y += Math.sin(t * 0.27) * 0.045 * calm;
-      // The head lags the body, which is what makes it read as weight
-      // moving rather than as the whole frog rotating.
-      this.head.rotation.z += Math.sin(t * 0.42 - 0.6) * 0.022 * calm;
-    }
+    if (!this._sway) this._sway = { bz: 0, by: 0, hz: 0 };
+    const s0 = this._sway;
+    const bz = Math.sin(t * 0.42) * 0.030 * calm;
+    const by = Math.sin(t * 0.27) * 0.045 * calm;
+    // The head lags the body, which is what makes it read as weight
+    // moving rather than as the whole frog rotating.
+    const hz = Math.sin(t * 0.42 - 0.6) * 0.022 * calm;
+    this.body.rotation.z += bz - s0.bz;
+    this.body.rotation.y += by - s0.by;
+    this.head.rotation.z += hz - s0.hz;
+    s0.bz = bz; s0.by = by; s0.hz = hz;
 
     /**
      * THE DRAW. One clean pulse down the hamon as the blade comes round.

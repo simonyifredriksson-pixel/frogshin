@@ -47,7 +47,7 @@
  * one is arithmetically still.
  */
 
-import * as THREE from '../lib/three.module.js?v=v152';
+import * as THREE from '../lib/three.module.js?v=v153';
 
 // ---------------------------------------------------------------- geometry
 
@@ -390,6 +390,70 @@ export function buildRevealMark() {
   const g = new THREE.Group();
   g.add(part(G.cone, 0xffe08a, 0.55, 0.60, 0.55, 0, 0.30, 0, 0, Math.PI, true));
   g.add(part(G.cone, 0xfff4d0, 0.34, 0.34, 0.34, 0, 0.46, 0, 0, Math.PI, true));
+  /**
+   * THROUGH WALLS. `depthTest: false` is the whole trick — the marker is
+   * drawn ignoring the depth buffer, so a building in front of it does not
+   * occlude it. `renderOrder` puts it after the world so it lands on top
+   * rather than being overwritten.
+   *
+   * Without this the reveal only worked on props a hunter could already
+   * see, which is not a reveal.
+   */
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material.depthTest = false;
+    o.material.depthWrite = false;
+    o.renderOrder = 998;
+    o.castShadow = false;
+    o.receiveShadow = false;
+  });
+  return g;
+}
+
+/**
+ * ═══ THE OUTLINE ════════════════════════════════════════════════════════
+ *
+ * The revealed prop itself, drawn THROUGH everything in one flat colour.
+ *
+ * A marker floating above a prop tells a hunter which direction to walk. It
+ * does not tell them the thing behind that wall is a ramen cart rather than
+ * a lamppost, and it does not survive the prop being inside a building —
+ * which in Shizuka Ward is most of them.
+ *
+ * So the prop is rebuilt as a shell: every material replaced with one
+ * unlit translucent colour, depth testing off, and scaled up 5% so it sits
+ * just outside the real prop and reads as an OUTLINE around it rather than
+ * as a solid blob replacing it. Seen with no wall in the way you get the
+ * real prop with a glowing edge; seen through a wall you get the shape.
+ *
+ * One shared material for the whole thing, on purpose: an outline is a
+ * silhouette, and silhouettes do not have colour detail. It also means a
+ * revealed prop costs one material however many pieces it has.
+ */
+const _outlineMat = new THREE.MeshBasicMaterial({
+  color: 0xffd98a,
+  transparent: true,
+  opacity: 0.42,
+  depthTest: false,
+  depthWrite: false,
+  side: THREE.BackSide,
+});
+
+export function buildRevealOutline(mapId, index) {
+  const g = buildProp(mapId, index);
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.material = _outlineMat;
+    o.renderOrder = 997;
+    o.castShadow = false;
+    o.receiveShadow = false;
+  });
+  /**
+   * BackSide plus a 5% swell is what makes it an outline rather than a
+   * wash over the prop: only the far faces are drawn, so from outside you
+   * see the rim where the shell passes behind the silhouette's edge.
+   */
+  g.scale.setScalar(1.05);
   return g;
 }
 
