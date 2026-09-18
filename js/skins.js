@@ -1601,13 +1601,26 @@ const FROG_CONCEPTS = {
      * cleanest. A set about being replaced by hardware should end in
      * something that is almost entirely hardware.
      */
-    { name: 'Wetware', skin: 0x3f4a3a, belly: 0x8a9478, cloth: 0x14181c,
-      scarf: 0xb8322e, secret: true, fx: {
-        plates: 0xb08d4a, cables: 10, thrusters: 0xbf5fff,
-        pattern: 0x3fe0d0, iris: 0xff3fa8,
-        orbit: 0xff3fa8, orbitN: 11, halo: 0x3fe0d0, halo2: true,
-        spikes: 6, horns: 4, shield: 0x8a6f38,
-        emissive: 0x1a2a2a, embers: 0x3fe0d0, stars: 0xff3fa8,
+    { name: 'Wetware', skin: 0x3f4a3a, belly: 0x8a9478, cloth: 0x1a1d22,
+      scarf: 0xa8322c, secret: true, fx: {
+        /**
+         * ONE KEY, AND IT BUILDS THE WHOLE THING. See `_buildMech`.
+         *
+         * This used to be a pile of general-purpose keys — plates, halo,
+         * orbit, spikes, horns, shield, stars, embers — on the theory that
+         * enough effects add up to a reference. They do not: none of those
+         * builds anything that is actually IN the picture, so what came out
+         * was a dark green frog with a glowing ring and some floating
+         * cubes. Every one of them is gone.
+         *
+         * `mech` builds the lens eyes, the brass helmet, the layered
+         * cuirass, the crimson belt, the plated legs and the segmented
+         * shoulder spike, because those are the things in the drawing.
+         */
+        mech: true,
+        cables: 10,
+        thrusters: 0xbf5fff,
+        emissive: 0x141c14,
       } },
   ],
 };

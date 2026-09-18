@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v157';
-import { CFG } from './config.js?v=v157';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v157';
+import * as THREE from '../lib/three.module.js?v=v158';
+import { CFG } from './config.js?v=v158';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v158';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -717,6 +717,39 @@ export class FrogModel {
         color: ffx.thrusters, transparent: true, opacity: 0.34, depthWrite: false,
       });
     }
+    /**
+     * ═══ THE CYBER-AMPHIBIAN'S OWN PALETTE ══════════════════════════════
+     *
+     * One skin, nine materials, and they are built here rather than derived
+     * from the skin's four colours because this is not a recolour of
+     * anything — it is a specific object, drawn from a specific reference,
+     * and every one of these is a thing in that picture. See `_buildMech`.
+     *
+     * Brass dominates. That was the mistake in the first attempt: it was
+     * built out of the set's dark green and read as a green frog with some
+     * glow on it, when the reference is overwhelmingly WARM — brass and
+     * bronze, with green only as an iridescent sheen on the plate edges and
+     * crimson at the belt.
+     */
+    if (ffx.mech) {
+      const lit = (c) => new THREE.MeshBasicMaterial({ color: c });
+      const lam = (c, e) => new THREE.MeshLambertMaterial({
+        color: c, emissive: e === undefined ? 0x000000 : e,
+      });
+      this.mats.mech = {
+        brass: lam(0xc9a04a, 0x2a2008),
+        brassLit: lam(0xe0bb63, 0x3a2c0c),
+        bronze: lam(0x7a5f2c),
+        green: lam(0x6f8a4a, 0x141c0a),
+        steel: lam(0x3a4048),
+        dark: lam(0x24282e),
+        red: lam(0xa8322c, 0x200606),
+        teal: lit(0x3fe0d0),
+        magenta: lit(0xff3fa8),
+        violet: lit(0x7a3fd0),
+        blue: lit(0x3f6fd0),
+      };
+    }
     if (ffx.moss) this.mats.moss = new THREE.MeshLambertMaterial({ color: ffx.moss });
     if (ffx.hood) {
       this.mats.hood = new THREE.MeshLambertMaterial({ color: ffx.hood });
@@ -1368,6 +1401,7 @@ export class FrogModel {
     if (M.diadem) this._buildDiadem(F, M);
     if (M.mantle) this._buildChampionArm(F, M);
     if (M.emblem) this._buildEmblem(F, M);
+    if (M.mech) this._buildMech(F, M);
     if (M.cable) this._buildCables(F, M);
     if (M.thrust) this._buildThrusters(F, M);
 
@@ -2171,6 +2205,191 @@ export class FrogModel {
    */
   flashDraw() {
     if (this.fx && this.fx.emblem) this._drawT = 0.2;
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ═══ WETWARE — THE CYBER-AMPHIBIAN, BUILT ══════════════════════════════
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Its own builder, the way the Eclipse and the Divine have theirs, and
+   * for the same reason: this is a drawn object rather than a combination
+   * of effects, and the first attempt at it proved the difference. That one
+   * declared `plates + halo + orbit + spikes + horns` — every generic key
+   * the rig has — and came out as a dark green frog with a glowing ring and
+   * some floating cubes. It looked nothing like the reference because none
+   * of those keys builds anything IN the reference.
+   *
+   * What is actually in the picture, in order of how much it matters:
+   *
+   *   1. THE LENS EYES. Huge concentric camera apertures — brass bezel,
+   *      violet, blue, a cyan iris and a magenta pupil. On a frog whose
+   *      eyes are already a third of its head, this is most of the design.
+   *   2. BRASS, EVERYWHERE. The reference is overwhelmingly warm. Green
+   *      appears only as an iridescent sheen on plate edges.
+   *   3. THE SHOULDER SPIKE. A long segmented tail rising back over the
+   *      right shoulder — the silhouette element, visible from any range.
+   *   4. A HELMET with a centre ridge and vent slits over the brow.
+   *   5. A CRIMSON BELT with lit pods on the hips.
+   *   6. Plate on the thighs with an exposed knee joint.
+   *
+   * Nothing here is a general-purpose key and nothing else in the game can
+   * ask for any of it, which is exactly right for a ???.
+   */
+  _buildMech(F, M) {
+    const K = M.mech;
+    const h = this.head;
+    const b = this.body;
+    const g = this.girth;
+    const HALF = Math.PI / 2;
+
+    /**
+     * ── THE HELMET ─────────────────────────────────────────────────────
+     *
+     * A brass cap over the cowl the rig already wears, very slightly
+     * larger so it encloses rather than z-fights it, plus a ridge front to
+     * back along the centreline and vents on the brow.
+     *
+     * The vents are 0.085 wide because that is ALL the room there is: the
+     * eye mounds are radius-0.23 spheres centred at x ±0.28, so the only
+     * clear channel on the front of this skull is the 0.10 between them.
+     * The reference has wide forehead louvres; on this head they have to be
+     * a narrow stack or they are inside an eyeball.
+     */
+    h.add(mesh(G.sphere, K.brass, 0.468, 0.315, 0.452, 0, 0.145, -0.012));
+    h.add(mesh(G.sphere, K.bronze, 0.478, 0.075, 0.462, 0, 0.055, -0.012));
+    // The centre ridge, following the crown from brow to nape.
+    const RIDGE = [[0.30, 0.255], [0.14, 0.400], [-0.04, 0.445],
+      [-0.22, 0.425], [-0.38, 0.345]];
+    for (const [z, y] of RIDGE) {
+      h.add(mesh(G.box, K.brassLit, 0.075, 0.055, 0.155, 0, y, z));
+    }
+    // Brow vents.
+    for (let i = 0; i < 3; i++) {
+      h.add(mesh(G.box, K.teal, 0.085, 0.022, 0.030, 0, 0.115 + i * 0.048, 0.368));
+    }
+    // The jaw guard: a brass band over the mask, open at the mouth line.
+    h.add(mesh(G.sphere, K.brass, 0.448, 0.150, 0.428, 0, -0.155, 0.018));
+    h.add(mesh(G.sphere, K.bronze, 0.452, 0.040, 0.432, 0, -0.058, 0.018));
+
+    /**
+     * ── THE LENS EYES ──────────────────────────────────────────────────
+     *
+     * Concentric discs facing forward, on the rig's own eye groups so they
+     * still track and still blink — the lid is left alone and closes over
+     * the whole stack.
+     *
+     * The frog's white, pupil and highlight are hidden rather than removed:
+     * `FrogModel.update` writes to `white` and `pupil` every frame for the
+     * blink and the look-at, and removing them from the group would leave
+     * those writes pointing at meshes with no parent.
+     */
+    for (const e of this.eyes) {
+      const kids = e.group.children;
+      // [0] is the eyelid mound, [1] white, [2] pupil, [3] highlight.
+      if (kids[0]) kids[0].material = K.bronze;
+      for (const i of [1, 2, 3]) if (kids[i]) kids[i].visible = false;
+      // Bezel, then the stack: violet, blue, cyan iris, magenta pupil.
+      e.group.add(mesh(G.torus, K.brass, 0.215, 0.215, 0.215, 0, 0.01, 0.105));
+      e.group.add(mesh(G.cyl, K.violet, 0.190, 0.030, 0.190, 0, 0.01, 0.140, HALF));
+      e.group.add(mesh(G.cyl, K.blue, 0.140, 0.032, 0.140, 0, 0.01, 0.158, HALF));
+      e.group.add(mesh(G.cyl, K.teal, 0.088, 0.034, 0.088, 0, 0.01, 0.176, HALF));
+      e.group.add(mesh(G.cyl, K.magenta, 0.042, 0.036, 0.042, 0, 0.01, 0.194, HALF));
+      // The two off-centre pinlights the reference has in each lens.
+      e.group.add(mesh(G.cyl, K.teal, 0.030, 0.030, 0.030, -0.085, -0.075, 0.170, HALF));
+      e.group.add(mesh(G.cyl, K.magenta, 0.024, 0.030, 0.024, 0.075, -0.095, 0.166, HALF));
+    }
+
+    /**
+     * ── THE TORSO ──────────────────────────────────────────────────────
+     *
+     * Layered plate rather than one shell: a brass cuirass, a green
+     * iridescent band under it where the reference's plates overlap, and
+     * two lit slots on the chest.
+     *
+     * In `girth`, so it breathes with the body like every other garment on
+     * this rig — see `_buildTorso`. The belly's nose is at z 0.53, so the
+     * cuirass front sits at 0.55 to clear it.
+     */
+    g.add(mesh(G.lowSphere, K.brass, 0.50, 0.30, 0.46, 0, 0.640, 0.090));
+    g.add(mesh(G.box, K.green, 0.56, 0.115, 0.30, 0, 0.455, 0.290));
+    g.add(mesh(G.box, K.brass, 0.34, 0.26, 0.10, 0, 0.640, 0.490));
+    for (const sx of [-1, 1]) {
+      g.add(mesh(G.box, K.teal, 0.075, 0.130, 0.040, sx * 0.105, 0.665, 0.545));
+    }
+    g.add(mesh(G.box, K.bronze, 0.36, 0.030, 0.105, 0, 0.510, 0.492));
+    // The collar, filling the gap between the cuirass and the jaw.
+    b.add(mesh(G.wrap, K.brass, 0.470, 0.090, 0.440, 0, 0.885, 0));
+    b.add(mesh(G.wrap, K.bronze, 0.455, 0.030, 0.425, 0, 0.945, 0));
+
+    /**
+     * ── THE BELT ───────────────────────────────────────────────────────
+     *
+     * Crimson, thick, and segmented, with a lit pod on each hip. It is the
+     * one warm-but-not-brass thing in the reference and it is what stops
+     * the whole frog reading as a single brass blob.
+     */
+    g.add(mesh(G.wrap, K.red, 0.505, 0.105, 0.470, 0, 0.360, 0.030));
+    g.add(mesh(G.box, K.brass, 0.190, 0.130, 0.090, 0, 0.360, 0.470));
+    g.add(mesh(G.box, K.teal, 0.090, 0.040, 0.040, 0, 0.360, 0.520));
+    for (const sx of [-1, 1]) {
+      g.add(mesh(G.lowSphere, K.brass, 0.110, 0.095, 0.110, sx * 0.435, 0.355, 0.060));
+      g.add(mesh(G.cyl, K.magenta, 0.062, 0.070, 0.062, sx * 0.495, 0.355, 0.060, 0, 0, HALF));
+    }
+
+    /**
+     * ── THE SHOULDERS AND THE LEGS ─────────────────────────────────────
+     *
+     * Pauldrons on the arm groups so they swing, and thigh plates on the
+     * hips with the knee joint left exposed — the reference makes a point
+     * of that joint, and a covered knee reads as a boot.
+     */
+    for (const arm of this.arms) {
+      arm.shoulder.add(mesh(G.lowSphere, K.brass, 0.275, 0.190, 0.265, 0, -0.010, 0));
+      arm.shoulder.add(mesh(G.box, K.green, 0.250, 0.055, 0.240, 0, -0.130, 0));
+      arm.fore.add(mesh(G.box, K.brass, 0.150, 0.180, 0.150, 0, -0.150, 0));
+      arm.hand.add(mesh(G.lowSphere, K.brass, 0.135, 0.115, 0.135, 0, 0, 0));
+    }
+    for (const leg of this.legs) {
+      leg.hip.add(mesh(G.lowSphere, K.brass, 0.215, 0.195, 0.215,
+        leg.side * 0.045, -0.145, -0.015));
+      leg.shin.add(mesh(G.cyl, K.steel, 0.095, 0.130, 0.095, 0, 0.020, 0, 0, 0, HALF));
+      leg.shin.add(mesh(G.box, K.brass, 0.145, 0.170, 0.150, 0, -0.145, 0.015));
+      if (leg.foot) {
+        leg.foot.add(mesh(G.lowSphere, K.brass, 0.165, 0.070, 0.275, 0, -0.015, 0.110));
+      }
+    }
+
+    /**
+     * ── THE SHOULDER SPIKE ─────────────────────────────────────────────
+     *
+     * The long segmented tail rising back and up over the right shoulder.
+     * This is the silhouette element — the thing that makes the skin
+     * identifiable at a range where none of the lens work is visible — and
+     * it is the single biggest miss in the first attempt, which had nothing
+     * coming off the body at all.
+     *
+     * Eleven tapering segments on a curve, each with a barb on its outer
+     * edge, and a lit tip. Mounted on the BODY: it is part of the machine,
+     * not something the arm swings.
+     */
+    const N = 11;
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const x = 0.30 + t * 0.52;
+      const y = 0.92 + t * 0.95 - t * t * 0.12;
+      const z = -0.26 - t * 0.30 - t * t * 0.22;
+      const r = 0.115 - t * 0.080;
+      b.add(mesh(G.cyl, i % 2 ? K.bronze : K.brass, r, 0.135, r, x, y, z, -0.55, 0, -0.42));
+      // Barbs, from the third segment on, alternating side to side.
+      if (i >= 2 && i < N - 1) {
+        const sx = i % 2 ? 1 : -1;
+        b.add(mesh(G.cone, K.green, r * 0.75, 0.145, r * 0.75,
+          x + sx * r * 1.05, y + 0.03, z + 0.02, -0.55, 0, -0.42 + sx * 1.1));
+      }
+    }
+    b.add(mesh(G.cone, K.magenta, 0.075, 0.230, 0.075, 0.885, 1.815, -0.800, -0.55, 0, -0.42));
+    b.add(mesh(G.lowSphere, K.violet, 0.115, 0.115, 0.115, 0.845, 1.735, -0.775));
   }
 
   /**
