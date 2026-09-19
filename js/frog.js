@@ -8,9 +8,9 @@
  * every networked remote player.
  */
 
-import * as THREE from '../lib/three.module.js?v=v159';
-import { CFG } from './config.js?v=v159';
-import { clamp, lerp, damp, dampAngle } from './util.js?v=v159';
+import * as THREE from '../lib/three.module.js?v=v160';
+import { CFG } from './config.js?v=v160';
+import { clamp, lerp, damp, dampAngle } from './util.js?v=v160';
 
 const CLOTH = 0x24242e;        // ninja gi
 const CLOTH_DARK = 0x16161d;
@@ -737,9 +737,21 @@ export class FrogModel {
         color: c, emissive: e === undefined ? 0x000000 : e,
       });
       this.mats.mech = {
-        brass: lam(0xc9a04a, 0x2a2008),
-        brassLit: lam(0xe0bb63, 0x3a2c0c),
-        bronze: lam(0x7a5f2c),
+        /**
+         * BRIGHTER THAN IT WAS, ON PURPOSE.
+         *
+         * The first two passes used 0xc9a04a over 0x7a9450 and rendered as
+         * mustard over dark olive — a muddy pair, because under Lambert
+         * shading every surface facing away from the key light drops most of
+         * its value, and both of these started low enough that the shaded
+         * half went to mud. The reference is POLISHED: near-white highlights
+         * on the gold and a light jade on the plate. Raising both base
+         * colours means the lit face reads as metal and the shaded face
+         * still has colour left in it.
+         */
+        brass: lam(0xd8b25e, 0x33280c),
+        brassLit: lam(0xf2d68d, 0x453413),
+        bronze: lam(0x8a6c32),
         /**
          * THE IRIDESCENT GREEN, IN TWO VALUES.
          *
@@ -749,8 +761,8 @@ export class FrogModel {
          * a surface with no value contrast on it has no panels, however many
          * panels are modelled into it. These two are what put the seams back.
          */
-        green: lam(0x7a9450, 0x14200c),
-        greenDark: lam(0x4a5c30),
+        green: lam(0x93b166, 0x1c2a10),
+        greenDark: lam(0x55683a),
         steel: lam(0x3a4048),
         dark: lam(0x24282e),
         red: lam(0xa8322c, 0x200606),
@@ -2266,8 +2278,16 @@ export class FrogModel {
      * The reference has wide forehead louvres; on this head they have to be
      * a narrow stack or they are inside an eyeball.
      */
-    h.add(mesh(G.sphere, K.brass, 0.468, 0.315, 0.452, 0, 0.145, -0.012));
-    h.add(mesh(G.sphere, K.bronze, 0.478, 0.075, 0.462, 0, 0.055, -0.012));
+    /**
+     * The crown is GREEN with a brass band under it, not solid brass. Built
+     * all in brass the head rendered as one bright yellow ball with two
+     * yellow housings on it and no shape at all — the same no-value-contrast
+     * failure the torso had. The reference's skull is plated the same green
+     * as the body and only the band, the ridge and the jaw are gold.
+     */
+    h.add(mesh(G.sphere, K.green, 0.468, 0.315, 0.452, 0, 0.145, -0.012));
+    h.add(mesh(G.sphere, K.brass, 0.478, 0.080, 0.462, 0, 0.055, -0.012));
+    h.add(mesh(G.sphere, K.greenDark, 0.472, 0.030, 0.456, 0, 0.118, -0.012));
     // The centre ridge, following the crown from brow to nape.
     const RIDGE = [[0.30, 0.255], [0.14, 0.400], [-0.04, 0.445],
       [-0.22, 0.425], [-0.38, 0.345]];
@@ -2278,9 +2298,26 @@ export class FrogModel {
     for (let i = 0; i < 3; i++) {
       h.add(mesh(G.box, K.teal, 0.085, 0.022, 0.030, 0, 0.115 + i * 0.048, 0.368));
     }
-    // The jaw guard: a brass band over the mask, open at the mouth line.
-    h.add(mesh(G.sphere, K.brass, 0.448, 0.150, 0.428, 0, -0.155, 0.018));
-    h.add(mesh(G.sphere, K.bronze, 0.452, 0.040, 0.432, 0, -0.058, 0.018));
+    /**
+     * ── THE JAW ────────────────────────────────────────────────────────
+     *
+     * A brass muzzle with a vent grille, sized to SWALLOW the rig's own
+     * face mask rather than sit under it.
+     *
+     * At 0.150 tall it did not: the mask is a 0.435 sphere squashed to 0.20
+     * at y -0.14, so it reached y -0.04 while the guard stopped at -0.08,
+     * and the 4cm of dark cloth left showing between them drew a letterbox
+     * slot straight across the frog's face. 0.205 covers it, and covering it
+     * is the point — this face is meant to be metal all the way to the
+     * housings, with the only break being a grille that is meant to be there.
+     */
+    h.add(mesh(G.sphere, K.brass, 0.452, 0.205, 0.432, 0, -0.140, 0.018));
+    h.add(mesh(G.sphere, K.bronze, 0.458, 0.042, 0.438, 0, -0.012, 0.018));
+    // The grille: four bronze bars over a dark recess, on the muzzle front.
+    h.add(mesh(G.box, K.dark, 0.230, 0.130, 0.040, 0, -0.140, 0.395));
+    for (let i = 0; i < 4; i++) {
+      h.add(mesh(G.box, K.bronze, 0.245, 0.016, 0.030, 0, -0.085 - i * 0.037, 0.404));
+    }
 
     /**
      * ── THE LENS EYES ──────────────────────────────────────────────────
@@ -2296,18 +2333,62 @@ export class FrogModel {
      */
     for (const e of this.eyes) {
       const kids = e.group.children;
-      // [0] is the eyelid mound, [1] white, [2] pupil, [3] highlight.
-      if (kids[0]) kids[0].material = K.bronze;
-      for (const i of [1, 2, 3]) if (kids[i]) kids[i].visible = false;
-      // Bezel, then the stack: violet, blue, cyan iris, magenta pupil.
-      e.group.add(mesh(G.torus, K.brass, 0.215, 0.215, 0.215, 0, 0.01, 0.105));
-      e.group.add(mesh(G.cyl, K.violet, 0.190, 0.030, 0.190, 0, 0.01, 0.140, HALF));
-      e.group.add(mesh(G.cyl, K.blue, 0.140, 0.032, 0.140, 0, 0.01, 0.158, HALF));
-      e.group.add(mesh(G.cyl, K.teal, 0.088, 0.034, 0.088, 0, 0.01, 0.176, HALF));
-      e.group.add(mesh(G.cyl, K.magenta, 0.042, 0.036, 0.042, 0, 0.01, 0.194, HALF));
-      // The two off-centre pinlights the reference has in each lens.
-      e.group.add(mesh(G.cyl, K.teal, 0.030, 0.030, 0.030, -0.085, -0.075, 0.170, HALF));
-      e.group.add(mesh(G.cyl, K.magenta, 0.024, 0.030, 0.024, 0.075, -0.095, 0.166, HALF));
+      /**
+       * EVERY ONE OF THE FROG'S OWN EYE PARTS GOES.
+       *
+       * [0] mound, [1] white, [2] pupil, [3] highlight, [4] blink lid.
+       *
+       * Two renders were lost to leaving [0] in place. It is a sphere scaled
+       * 0.23 about the group origin, so its front surface stands at z 0.23 —
+       * ahead of every disc in this block — and a recoloured mound does not
+       * become a housing, it becomes a lid that swallows one. The eye came
+       * back as a blank brass disc both times.
+       *
+       * [4] goes for a different reason: it is the blink lid, it is skinned
+       * in `mats.skin`, and `update` swells it to 0.21 whenever this frog
+       * blinks. On a face made of glass and brass that is a green ball
+       * erupting out of the lens twice a minute. The lid is left in the
+       * array and still written to — just never drawn.
+       */
+      for (const i of [0, 1, 2, 3, 4]) if (kids[i]) kids[i].visible = false;
+      /**
+       * A CAN, A RIM, AND GLASS SUNK BEHIND THE RIM.
+       *
+       * The previous build stacked five discs of falling radius at rising z,
+       * 0.105 out to 0.194. On a 0.23 mound that is a stack standing 19cm
+       * PROUD of a 23cm ball — a telescope barrel screwed to a frog's eye,
+       * which is the single ugliest thing in the render and nothing like the
+       * reference, where the lens is sunk INSIDE a housing.
+       *
+       * Sinking it is not as simple as pulling z back, because there is no
+       * CSG here and a cylinder is CAPPED: the first attempt at a fix put
+       * the glass at z 0.150 inside a can whose front face was at 0.170, and
+       * the cap simply painted over the whole lens — the render came back
+       * with two blank brass discs for a face.
+       *
+       * So the depth is carried by the RIM instead. The can ends at z 0.105,
+       * the lens sits 7mm proud of it at 0.112, and a bronze torus of larger
+       * radius rides at 0.118 — a ring, so it occludes nothing, standing
+       * around and slightly ahead of the glass. The eye is flush with the
+       * housing and the lip throws the shadow that reads as inset, without
+       * anything being buried.
+       *
+       * The can is also 0.170 rather than 0.215. At 0.215 on a 0.44-wide
+       * skull the two housings met over the nose and the frog had mouse
+       * ears.
+       *
+       * The four concentric neons went with it. The reference has one cold
+       * lens colour per eye; violet, blue, cyan and magenta ringed together
+       * was a dartboard.
+       */
+      e.group.add(mesh(G.lowSphere, K.green, 0.205, 0.205, 0.140, 0, 0, -0.055));
+      e.group.add(mesh(G.cyl, K.brass, 0.200, 0.260, 0.200, 0, 0, 0, HALF));
+      e.group.add(mesh(G.cyl, K.dark, 0.168, 0.020, 0.168, 0, 0, 0.142, HALF));
+      e.group.add(mesh(G.cyl, K.teal, 0.100, 0.022, 0.100, 0, 0, 0.152, HALF));
+      e.group.add(mesh(G.cyl, K.dark, 0.054, 0.024, 0.054, 0, 0, 0.158, HALF));
+      e.group.add(mesh(G.torus, K.bronze, 0.198, 0.198, 0.198, 0, 0, 0.148));
+      // One warm pinlight off-centre, the catchlight the reference draws.
+      e.group.add(mesh(G.cyl, K.brassLit, 0.032, 0.026, 0.032, -0.052, 0.058, 0.162, HALF));
     }
 
     /**
@@ -2498,6 +2579,17 @@ export class FrogModel {
     const h = this.head;
     const n = clamp(typeof F.cables === 'number' ? F.cables : 7, 4, 10);
     const socket = M.plateDark || this.mats.clothDark;
+    /**
+     * A MECH'S CABLES ARE LOOM, NOT BUNTING.
+     *
+     * `M.cable` is the six-colour neon array the other Neon Ward skins use,
+     * and cycling it gave this one ten cables in pink, cyan, violet, lime,
+     * orange and blue sprouting off the crown — a fistful of drinking straws
+     * where the reference has a dark swept bundle with a couple of live
+     * lines in it. So when the skin is a mech the bundle is dark, and only
+     * every third cable is lit.
+     */
+    const K = M.mech;
     for (let i = 0; i < n; i++) {
       /**
        * Spread across the back of the crown rather than around it: a full
@@ -2507,8 +2599,10 @@ export class FrogModel {
       const a = Math.PI + ((i / (n - 1)) - 0.5) * 2.1;
       const bx = Math.cos(a) * 0.20;
       const bz = Math.sin(a) * 0.16 - 0.10;
-      const mat = M.cable[i % M.cable.length];
-      h.add(mesh(G.cyl, socket, 0.042, 0.055, 0.042, bx, 0.345, bz));
+      const mat = K
+        ? (i % 3 === 1 ? K.teal : (i % 2 ? K.dark : K.steel))
+        : M.cable[i % M.cable.length];
+      h.add(mesh(G.cyl, K ? K.bronze : socket, 0.042, 0.055, 0.042, bx, 0.345, bz));
       /**
        * Up, over, and away. `y` peaks a third of the way along and then
        * drops; `z` accelerates backwards the whole time, so the bundle

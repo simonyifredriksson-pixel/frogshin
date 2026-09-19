@@ -24,17 +24,17 @@
  * and close it knowing which way to walk.
  */
 
-import * as THREE from '../lib/three.module.js?v=v159';
+import * as THREE from '../lib/three.module.js?v=v160';
 import { Citizen, pickCitizen, citizenHeight, disposeCitizenMats,
-  disposeCitizenGeos } from './citizen.js?v=v159';
-import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v159';
+  disposeCitizenGeos } from './citizen.js?v=v160';
+import { dampAngle, clamp, mulberry32, lerp } from './util.js?v=v160';
 import { QUESTS, QUEST_BY_ID, MAIN, NPCS, npcSays, questProgress,
-  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v159';
-import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v159';
-import { ROADS, RIVERS } from './roads.js?v=v159';
-import { GEAR_BY_ID } from './gear.js?v=v159';
-import { GUARDIAN_BY_ID } from './guardians.js?v=v159';
-import { LORE_COUNT, loreRead } from './lore.js?v=v159';
+  mainObjective, SECRETS, SECRET_IDS } from './quests.js?v=v160';
+import { REGIONS, REGION_BY_ID, REALM_HALF, SEA, regionOpen } from './regions.js?v=v160';
+import { ROADS, RIVERS } from './roads.js?v=v160';
+import { GEAR_BY_ID } from './gear.js?v=v160';
+import { GUARDIAN_BY_ID } from './guardians.js?v=v160';
+import { LORE_COUNT, loreRead } from './lore.js?v=v160';
 
 const $ = (id) => document.getElementById(id);
 

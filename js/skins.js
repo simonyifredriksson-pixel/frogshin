@@ -1601,7 +1601,23 @@ const FROG_CONCEPTS = {
      * cleanest. A set about being replaced by hardware should end in
      * something that is almost entirely hardware.
      */
-    { name: 'Wetware', skin: 0x3f4a3a, belly: 0x8a9478, cloth: 0x1a1d22,
+    /**
+     * ── THE FOUR BASE COLOURS ARE PART OF THE MACHINE ──────────────────
+     *
+     * These were a dark green hide, a pale belly and a near-black ninja
+     * jacket, with the mech plate added on top. That was the real reason it
+     * looked wrong: underneath everything this rig still wears a cowl, a
+     * face mask, a headband, a gi and an obi, and leaving those dark meant
+     * the plate sat on a black frog and the whole thing read as muddy
+     * clutter rather than as one object.
+     *
+     * So the frog's OWN garments are dressed in the mech's palette: `skin`
+     * is plate green so the limbs read as armour, `belly` is brass because
+     * the reference's underside is brass, `cloth` is the dark green of a
+     * recess, and `scarf` is the crimson of the belt. Nothing on the model
+     * is now a colour that is not in the drawing.
+     */
+    { name: 'Wetware', skin: 0x8aa85e, belly: 0xd8b25e, cloth: 0x4a5c30,
       scarf: 0xa8322c, secret: true, fx: {
         /**
          * ONE KEY, AND IT BUILDS THE WHOLE THING. See `_buildMech`.
